@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import scipy.stats
 import emcee
 import corner
 
@@ -8,24 +9,6 @@ import multiprocessing as mp
 
 from .data import A_SPACE, get_dataset
 from .likelihoods import log_probability
-
-
-# Generate a list of gaussian distributions with sigma coresponding
-# to the error on the pulsar az measurements.
-def pregen_pulsar_error(a_space, a_los_err):
-    # TODO this can be vectorized easily (80)
-
-    def gaussian(x, sigma, mu):
-        '''Simple gaussian implementation'''
-        norm = 1 / (sigma * np.sqrt(2 * np.pi))
-        exponent = np.exp(-0.5 * (((x - mu) / sigma) ** 2))
-        return norm * exponent
-
-    dists = []
-    for i in range(len(a_los_err)):
-        dist = gaussian(x=a_space, sigma=a_los_err[i], mu=0)
-        dists.append(dist)
-    return dists
 
 
 def main():
@@ -53,9 +36,10 @@ def main():
 
     # Generate the error distributions a single time instead of for every model
     # given that they are constants.
-    # TODO is this really the only thing that can be "pre"generated?
+
     print("preGenerating pulsar error distributions")
-    pulsar_edist = pregen_pulsar_error(A_SPACE, get_dataset('pulsar/Δa_los'))
+    a_width = np.abs(get_dataset('M62', 'pulsar/Δa_los'))
+    pulsar_edist = scipy.stats.norm.pdf(A_SPACE, 0, np.c_[a_width])
 
     print("Starting sampler")
 

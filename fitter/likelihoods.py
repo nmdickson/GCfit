@@ -122,8 +122,7 @@ def likelihood_pulsars(model, pulsars, error_dist):
         # evaluate at the measured a_los
         probs[i] = interpolated(pulsars['a_los'][i])
 
-    # Multiply all the probabilities and return the total probability.
-    # TODO isnt log(prod) == sum
+    # Multiply all the probabilities and return the total log probability.
     return np.log(np.prod(probs))
 
 

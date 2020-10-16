@@ -4,6 +4,8 @@ import setuptools
 
 here = os.path.abspath(os.path.dirname(__file__))
 
+# TODO get this all setup right, and add bin cmdline scripts to run model
+
 # Package information
 NAME = 'GCfit'
 VERSION = "0.1.0"
@@ -17,7 +19,8 @@ AUTHOR = 'Nolan Dickson'
 CONTACT_EMAIL = 'ndickson@ap.smu.ca'
 
 # Installation information
-REQUIRED = ['corner', 'h5py', 'emcee', 'ssptools']
+REQUIRED = ['corner', 'limepy', 'emcee', 'ssptools',
+            'matplotlib', 'numpy', 'scipy', 'h5py']
 REQUIRES_PYTHON = '>=3.7'
 
 # setup parameters

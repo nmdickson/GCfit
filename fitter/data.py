@@ -65,42 +65,14 @@ class Observations:
                     self._datasets[group] = Dataset(file[group])
 
 
-# TODO this whole shebang not needed but maybe a method for single get b useful?
-def get_dataset(key, indices=None, cluster='M62', return_err=False):
+def get_dataset(cluster, key):
     '''get a dataset corresponding to a key
 
     indices is either a slice or a tuple for making a slice or a nparray mask
         mathcing the size of the data. None will return everything (:)
     '''
 
-    if isinstance(indices, (tuple, list)):
-        slc = slice(*indices)
-
-    elif isinstance(indices, np.ndarray):
-        slc = indices.astype(bool)
-
-    elif isinstance(indices, slice):
-        pass
-
-    else:
-        slc = slice(None)
-
     with resources.path('fitter', 'resources') as datadir:
         with h5py.File(f'{datadir}/{cluster}.hdf5', 'r') as file:
 
-            data = file[key]
-
-            # err = None
-
-            # try:
-            #     # TODO deal with the 'up/down' errors
-            #     if 'Δ' not in key:
-            #         err = file[f'Δ{key}']
-
-            # except KeyError:
-            #     pass
-
-            # if return_err:
-            #     return data[slc], err[slc]
-            # else:
-            return data[slc]
+            return file[key][:]
