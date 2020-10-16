@@ -1,0 +1,1 @@
+Model fitting of globular cluster observational data to a multi-mass analytic Limepy model, using an MCMC suite and data on pulsars, proper motions, velocity dispersions, number density profiles and mass functions.
