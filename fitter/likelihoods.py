@@ -174,11 +174,11 @@ def likelihood_pm_tot(model, pm, mass_bin, d):
     # TODO is v2j what I should use for tot?
 
     # Build asymmetric error, if exists
-    if 'ΔPM_tot' in pm:
-        obs_err = pm['ΔPM_tot']
-    else:
+    try:
         obs_err = build_asym_err(model, pm['r'], pm['PM_tot'],
                                  pm['ΔPM_tot,up'], pm['ΔPM_tot,down'], d)
+    except KeyError:
+        obs_err = pm['ΔPM_tot']
 
     # Interpolated model at data locations
     interpolated = np.interp(
@@ -198,11 +198,11 @@ def likelihood_pm_ratio(model, pm, mass_bin, d):
     model_ratio = np.sqrt(model.v2Tj[mass_bin] / model.v2Rj[mass_bin])
 
     # Build asymmetric error, if exists
-    if 'ΔPM_tot' in pm:
-        obs_err = pm['ΔPM_tot']
-    else:
-        obs_err = build_asym_err(model, pm['r'], pm['PM_tot'],
-                                 pm['ΔPM_tot,up'], pm['ΔPM_tot,down'], d)
+    try:
+        obs_err = build_asym_err(model, pm['r'], pm['PM_ratio'],
+                                 pm['ΔPM_ratio,up'], pm['ΔPM_ratio,down'], d)
+    except KeyError:
+        obs_err = pm['ΔPM_ratio']
 
     # Interpolated model at data locations
     interpolated = np.interp(
@@ -222,11 +222,11 @@ def likelihood_pm_T(model, r, pm, mass_bin, d):
     # TODO try/excepts on these error conditionals, and other error checking
 
     # Build asymmetric error, if exists
-    if 'ΔPM_T' in pm:
-        obs_err = pm['ΔPM_T']
-    else:
+    try:
         obs_err = build_asym_err(model, pm['r'], pm['PM_T'],
                                  pm['ΔPM_T,up'], pm['ΔPM_T,down'], d)
+    except KeyError:
+        obs_err = pm['ΔPM_T']
 
     # Interpolated model at data locations
     interpolated = np.interp(
@@ -244,11 +244,11 @@ def likelihood_pm_T(model, r, pm, mass_bin, d):
 def likelihood_pm_R(model, r, pm, mass_bin, d):
 
     # Build asymmetric error, if exists
-    if 'ΔPM_R' in pm:
-        obs_err = pm['ΔPM_R']
-    else:
+    try:
         obs_err = build_asym_err(model, pm['r'], pm['PM_R'],
                                  pm['ΔPM_R,up'], pm['ΔPM_R,down'], d)
+    except KeyError:
+        obs_err = pm['ΔPM_R']
 
     # Interpolated model at data locations
     interpolated = np.interp(
@@ -267,11 +267,11 @@ def likelihood_LOS(model, vlos, mass_bin, d):
     # most massive main-sequence bin, mass_bin
 
     # Build asymmetric error, if exists
-    if 'Δσ' in vlos:
-        obs_err = vlos['Δσ']
-    else:
+    try:
         obs_err = build_asym_err(model, vlos['r'], vlos['σ'],
                                  vlos['Δσ_up'], vlos['Δσ_down'], d)
+    except KeyError:
+        obs_err = vlos['Δσ']
 
     # Interpolated model at data locations
     interpolated = np.interp(
