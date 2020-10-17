@@ -11,12 +11,12 @@ from .data import A_SPACE, get_dataset
 from .likelihoods import log_probability
 
 
-def main():
+def main(cluster, Niters, Nwalkers, Ncpu,
+         priors, cont_run, verbose, savedir, outdir):
 
-    print("Starting")
+    Ndim = 13
 
-    nwalkers, ndim = 32, 13
-
+    # TODO these parameters, and other prior stuff should be stored with data
     pos = [
         6.1,    # W0
         1.06,   # M
@@ -32,55 +32,40 @@ def main():
         0.5,    # BHret
         4.45,   # d
     ]
-    pos += 1e-4 * np.random.randn(nwalkers, ndim)
+    pos += 1e-4 * np.random.randn(Nwalkers, Ndim)
 
     # Generate the error distributions a single time instead of for every model
     # given that they are constants.
 
-    print("preGenerating pulsar error distributions")
-    a_width = np.abs(get_dataset('M62', 'pulsar/Δa_los'))
+    a_width = np.abs(get_dataset(cluster, 'pulsar/Δa_los'))
     pulsar_edist = scipy.stats.norm.pdf(A_SPACE, 0, np.c_[a_width])
 
-    print("Starting sampler")
-
     # HDF file saving
-    backend = emcee.backends.HDFBackend("sample_multi.hdf")
+    backend = emcee.backends.HDFBackend(f"{savedir}/{cluster}_sampler.hdf")
     # Comment this line out if resuming from previous run, also change initial
     #   state to None
     # where the sampler is run.
-    backend.reset(nwalkers, ndim)
+    backend.reset(Nwalkers, Ndim)
 
     # Initialize the sampler
     sampler = emcee.EnsembleSampler(
-        nwalkers,
-        ndim,
+        Nwalkers,
+        Ndim,
         log_probability,
         args=(pulsar_edist,),
-        pool=mp.Pool(2),
+        pool=mp.Pool(Ncpu),
         backend=backend,
     )
 
     # Star the sampler
     # Need to change initial_state to None if resuming from previous run.
 
-    # Backup counter, we want to have 2 copies just in case but no
-    # more than 2 to preserve disk space
-    current_backup = 0
+    for _ in sampler.sample(pos, iterations=Niters, progress=verbose):
 
-    print('starting sampling iterations')
+        if sampler.iteration % 10 == 0:
+            shutil.copyfile(f"{savedir}/{cluster}_sampler.hdf",
+                            f"{savedir}/.backup_{cluster}_sampler.hdf")
 
-    for _ in sampler.sample(initial_state=pos, iterations=10, progress=True):
-
-        try:
-            if sampler.iteration % 10 == 0:
-                if current_backup == 0:
-                    shutil.copyfile("sample_multi.hdf", "./backup/sampler0.hdf")
-                    current_backup = 1
-                else:
-                    shutil.copyfile("sample_multi.hdf", "./backup/sampler1.hdf")
-                    current_backup = 0
-        except Exception:
-            pass
     # Attempt to print autocorrelation time
     try:
         tau = sampler.get_autocorr_time()
@@ -90,7 +75,6 @@ def main():
         print(" WARN: May not have reached full autocorrelation time")
 
     # Plot Walkers
-    print("Plotting walkers")
 
     fig, axes = plt.subplots(13, figsize=(10, 20), sharex=True)
     samples = sampler.get_chain()
@@ -109,7 +93,7 @@ def main():
         r"BH_ret",
         r"d",
     ]
-    for i in range(ndim):
+    for i in range(Ndim):
         ax = axes[i]
         ax.plot(samples[:, :, i], "k", alpha=0.3)
         ax.set_xlim(0, len(samples))
@@ -118,7 +102,7 @@ def main():
 
     axes[-1].set_xlabel("step number")
     fig.tight_layout()
-    plt.savefig("walkers.png", dpi=600)
+    plt.savefig(f"{outdir}/{cluster}_walkers.png", dpi=600)
 
     # Corner Plots
     print("Plotting corner plots")
@@ -142,13 +126,12 @@ def main():
             r"d",
         ],
     )
-    plt.savefig("corner.png", dpi=600)
+    plt.savefig(f"{outdir}/{cluster}_corner.png", dpi=600)
 
     # Print results
-    print("Results: ")
 
     # This is an absolute mess but it works.
-    for i in range(ndim):
+    for i in range(Ndim):
         # Just use simple labels here for printing
         labels = [
             "W0",
@@ -179,7 +162,3 @@ def main():
             txt.split("_")[1].split("^")[0].split("{")[1].split("}")[0],
             ")"
         )
-
-
-if __name__ == "__main__":
-    main()

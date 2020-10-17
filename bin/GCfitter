@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+
+import fitter
+
+import pathlib
+import argparse
+
+
+default_dir = f"{pathlib.Path.home()}/.GCfit"
+pathlib.Path(default_dir).mkdir(exist_ok=True)
+
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser(description='fit some GCs')
+
+    parser.add_argument('cluster', help='Common name of the cluster to model')
+    parser.add_argument('--continue', dest='cont_run', action='store_true',
+                        help='Continue from previous saved run')
+    parser.add_argument('--savedir', default=default_dir,
+                        help='location of saved sampling runs')
+    parser.add_argument('-o', '--outdir', default=default_dir,
+                        help='location to store output plots and data')
+    parser.add_argument('-p', '--priors',
+                        help='alternative config file with different priors')
+    parser.add_argument('-N', '--Niters', nargs=1, default=3000, type=int,
+                        help='Number of sampling iterations')
+    parser.add_argument('--Nwalkers', nargs=1, default=32, type=int,
+                        help='Number of walkers for MCMC sampler')
+    parser.add_argument('--Ncpu', nargs=1, default=2, type=int,
+                        help='Number of CPUs to pool sampling on')
+    parser.add_argument('--verbose', action='store_true')
+
+    args = parser.parse_args()
+
+    if args.priors:
+        raise NotImplementedError
+
+    print(vars(args))
+
+    # fitter.main(**vars(args))

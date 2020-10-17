@@ -219,8 +219,6 @@ def likelihood_pm_ratio(model, pm, mass_bin, d):
 
 def likelihood_pm_T(model, r, pm, mass_bin, d):
 
-    # TODO try/excepts on these error conditionals, and other error checking
-
     # Build asymmetric error, if exists
     try:
         obs_err = build_asym_err(model, pm['r'], pm['PM_T'],

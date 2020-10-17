@@ -38,6 +38,6 @@ setuptools.setup(
     python_requires=REQUIRES_PYTHON,
 
     packages=['fitter'],
-    # scripts=['bin/pVault'],
+    scripts=['bin/GCfitter'],
     # entry_points={},
 )
