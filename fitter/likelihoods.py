@@ -388,13 +388,21 @@ def log_likelihood(theta, pulsar_edist):
     tout = np.array([11000])
 
     # Integration settings
+    # N0 = 5e5  # Normalization of stars
+    # Ndot = 0  # Regulates low mass objects depletion, default -20, 0 for 47 Tuc
+    # tcc = 0  # Core collapse time
+    # NS_ret = 0.1  # Initial neutron star retention
+    # BH_ret_int = 1  # Initial Black Hole retention
+    # BH_ret_dyn = BHret / 100  # Dynamical Black Hole retention
+    # FeHe = -0.7  # Metallicity
+
     N0 = 5e5  # Normalization of stars
     Ndot = 0  # Regulates low mass objects depletion, default -20, 0 for 47 Tuc
     tcc = 0  # Core collapse time
     NS_ret = 0.1  # Initial neutron star retention
     BH_ret_int = 1  # Initial Black Hole retention
     BH_ret_dyn = BHret / 100  # Dynamical Black Hole retention
-    FeHe = -0.7  # Metallicity
+    FeHe = -1.02  # Metallicity
 
     # Generate the mass function
     mass_func = emf3.evolve_mf(
@@ -426,11 +434,12 @@ def log_likelihood(theta, pulsar_edist):
     nms = len(mass_func.ms[-1][cs])
 
     # Add in bin of 0.38 MSol to model Heyl data
-    mj = np.append(mj, 0.38)
-    Mj = np.append(Mj, 0.1)
+    # mj = np.append(mj, 0.38)
+    # Mj = np.append(Mj, 0.1)
 
     # Add in bin of 1.6 MSol to use to model MSPs
-    mj = np.append(mj, 1.6)
+    # mj = np.append(mj, 1.6)
+    mj = np.append(mj, 1.4)  # for M62 (See lynch, table3)
     Mj = np.append(Mj, 0.1)
 
     # In the event that a limepy model does not converge, return -inf.

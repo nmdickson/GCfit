@@ -23,11 +23,11 @@ if __name__ == '__main__':
                         help='location to store output plots and data')
     parser.add_argument('-p', '--priors',
                         help='alternative config file with different priors')
-    parser.add_argument('-N', '--Niters', nargs=1, default=3000, type=int,
+    parser.add_argument('-N', '--Niters', default=3000, type=int,
                         help='Number of sampling iterations')
-    parser.add_argument('--Nwalkers', nargs=1, default=32, type=int,
+    parser.add_argument('--Nwalkers', default=32, type=int,
                         help='Number of walkers for MCMC sampler')
-    parser.add_argument('--Ncpu', nargs=1, default=2, type=int,
+    parser.add_argument('--Ncpu', default=2, type=int,
                         help='Number of CPUs to pool sampling on')
     parser.add_argument('--verbose', action='store_true')
 
@@ -36,6 +36,6 @@ if __name__ == '__main__':
     if args.priors:
         raise NotImplementedError
 
-    print(vars(args))
+    print('args:', vars(args))
 
-    # fitter.main(**vars(args))
+    fitter.main(**vars(args))
