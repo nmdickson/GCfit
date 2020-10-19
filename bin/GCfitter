@@ -6,6 +6,7 @@ import pathlib
 import argparse
 
 
+# TODO this shouldn't be mkdir'd if they dont use it
 default_dir = f"{pathlib.Path.home()}/.GCfit"
 pathlib.Path(default_dir).mkdir(exist_ok=True)
 
@@ -15,21 +16,28 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='fit some GCs')
 
     parser.add_argument('cluster', help='Common name of the cluster to model')
-    parser.add_argument('--continue', dest='cont_run', action='store_true',
-                        help='Continue from previous saved run')
+
     parser.add_argument('--savedir', default=default_dir,
                         help='location of saved sampling runs')
     parser.add_argument('-o', '--outdir', default=default_dir,
                         help='location to store output plots and data')
     parser.add_argument('-p', '--priors',
                         help='alternative config file with different priors')
+
     parser.add_argument('-N', '--Niters', default=3000, type=int,
                         help='Number of sampling iterations')
     parser.add_argument('--Nwalkers', default=32, type=int,
                         help='Number of walkers for MCMC sampler')
-    parser.add_argument('--Ncpu', default=2, type=int,
-                        help='Number of CPUs to pool sampling on')
+
+    parser.add_argument('--continue', dest='cont_run', action='store_true',
+                        help='Continue from previous saved run')
     parser.add_argument('--verbose', action='store_true')
+
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--Ncpu", default=2,
+                       type=int, help="Number of `multiprocessing` processes")
+    group.add_argument("--mpi", action="store_true",
+                       help="Run with MPI, rather than multiprocessing")
 
     args = parser.parse_args()
 

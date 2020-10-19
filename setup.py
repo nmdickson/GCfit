@@ -17,8 +17,8 @@ AUTHOR = 'Nolan Dickson'
 CONTACT_EMAIL = 'ndickson@ap.smu.ca'
 
 # Installation information
-REQUIRED = ['corner', 'astro-limepy', 'emcee', 'ssptools',
-            'matplotlib', 'numpy', 'scipy', 'h5py']
+REQUIRED = ['corner', 'astro-limepy', 'emcee', 'ssptools', 'schwimmbad',
+            'matplotlib', 'numpy', 'scipy', 'h5py', 'tqdm']
 REQUIRES_PYTHON = '>=3.7'
 
 # setup parameters

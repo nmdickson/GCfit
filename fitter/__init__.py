@@ -3,15 +3,16 @@ import matplotlib.pyplot as plt
 import scipy.stats
 import emcee
 import corner
+import schwimmbad
 
 import shutil
-import multiprocessing as mp
 
 from .data import A_SPACE, get_dataset
 from .likelihoods import log_probability
 
 
-def main(cluster, Niters, Nwalkers, Ncpu,
+# TODO this should have some defaults probably
+def main(cluster, Niters, Nwalkers, Ncpu, mpi,
          priors, cont_run, verbose, savedir, outdir):
 
     Ndim = 13
@@ -47,32 +48,34 @@ def main(cluster, Niters, Nwalkers, Ncpu,
     # where the sampler is run.
     backend.reset(Nwalkers, Ndim)
 
-    # Initialize the sampler
-    sampler = emcee.EnsembleSampler(
-        Nwalkers,
-        Ndim,
-        log_probability,
-        args=(pulsar_edist,),
-        pool=mp.Pool(Ncpu),
-        backend=backend,
-    )
+    with schwimmbad.choose_pool(mpi=mpi, processes=Ncpu) as pool:
 
-    # Star the sampler
-    # Need to change initial_state to None if resuming from previous run.
+        # Initialize the sampler
+        sampler = emcee.EnsembleSampler(
+            Nwalkers,
+            Ndim,
+            log_probability,
+            args=(pulsar_edist,),
+            pool=pool,
+            backend=backend,
+        )
 
-    for _ in sampler.sample(pos, iterations=Niters, progress=verbose):
+        # Star the sampler
+        # Need to change initial_state to None if resuming from previous run.
 
-        if sampler.iteration % 10 == 0:
-            shutil.copyfile(f"{savedir}/{cluster}_sampler.hdf",
-                            f"{savedir}/.backup_{cluster}_sampler.hdf")
+        for _ in sampler.sample(pos, iterations=Niters, progress=verbose):
 
-    # Attempt to print autocorrelation time
-    try:
-        tau = sampler.get_autocorr_time()
-        print("Tau = " + str(tau))
-    except Exception:
-        # Usually can't print
-        print(" WARN: May not have reached full autocorrelation time")
+            if sampler.iteration % 10 == 0:
+                shutil.copyfile(f"{savedir}/{cluster}_sampler.hdf",
+                                f"{savedir}/.backup_{cluster}_sampler.hdf")
+
+        # Attempt to print autocorrelation time
+        try:
+            tau = sampler.get_autocorr_time()
+            print("Tau = " + str(tau))
+        except Exception:
+            # Usually can't print
+            print(" WARN: May not have reached full autocorrelation time")
 
     # Plot Walkers
 
