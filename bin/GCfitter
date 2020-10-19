@@ -8,7 +8,6 @@ import argparse
 
 # TODO this shouldn't be mkdir'd if they dont use it
 default_dir = f"{pathlib.Path.home()}/.GCfit"
-pathlib.Path(default_dir).mkdir(exist_ok=True)
 
 
 if __name__ == '__main__':
@@ -34,8 +33,8 @@ if __name__ == '__main__':
     parser.add_argument('--verbose', action='store_true')
 
     group = parser.add_mutually_exclusive_group()
-    group.add_argument("--Ncpu", default=2,
-                       type=int, help="Number of `multiprocessing` processes")
+    group.add_argument("--Ncpu", default=2, type=int,
+                       help="Number of `multiprocessing` processes")
     group.add_argument("--mpi", action="store_true",
                        help="Run with MPI, rather than multiprocessing")
 
@@ -43,6 +42,10 @@ if __name__ == '__main__':
 
     if args.priors:
         raise NotImplementedError
+
+    # TODO strip trailing / from dirs
+    pathlib.Path(args.outdir).mkdir(exist_ok=True)
+    pathlib.Path(args.savedir).mkdir(exist_ok=True)
 
     print('args:', vars(args))
 
