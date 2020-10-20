@@ -6,7 +6,6 @@ import pathlib
 import argparse
 
 
-# TODO this shouldn't be mkdir'd if they dont use it
 default_dir = f"{pathlib.Path.home()}/.GCfit"
 
 
@@ -40,7 +39,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    if args.priors:
+    if args.priors or args.cont_run:
         raise NotImplementedError
 
     # TODO strip trailing / from dirs
