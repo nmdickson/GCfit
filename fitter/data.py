@@ -1,6 +1,7 @@
 import numpy as np
 import h5py
 
+import logging
 from importlib import resources
 
 # TODO put all the units into the h5 file attributes
@@ -60,6 +61,8 @@ class Observations:
 
         with resources.path('fitter', 'resources') as datadir:
             with h5py.File(f'{datadir}/{cluster}.hdf5', 'r') as file:
+
+                logging.info(f"Loading cluster from {datadir}/{cluster}.hdf5")
 
                 for group in file:
                     self._datasets[group] = Dataset(file[group])
