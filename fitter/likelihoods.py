@@ -1,4 +1,4 @@
-from .data import A_SPACE, Observations
+from .data import A_SPACE
 from .new_Paz import vec_Paz
 
 import numpy as np
@@ -364,18 +364,18 @@ def log_prior(theta):
 
 
 # Combines the likelihood with the prior
-def log_probability(theta, error_dist):
+def log_probability(theta, observations, error_dist):
     lp = log_prior(theta)
     # This line was inserted while debugging, may not be needed anymore.
     if not np.isfinite(lp):
         return -np.inf
 
-    return lp + log_likelihood(theta, error_dist,)
+    return lp + log_likelihood(theta, observations, error_dist)
 
 
 # Main likelihood function, generates the model(theta) passes it to the
 # individual likelihood functions and collects their results.
-def log_likelihood(theta, pulsar_edist):
+def log_likelihood(theta, observations, pulsar_edist):
 
     # Construct the model with current theta (parameters)
     W0, M, rh, ra, g, delta, s, F, a1, a2, a3, BHret, d = theta
@@ -466,7 +466,6 @@ def log_likelihood(theta, pulsar_edist):
         return -np.inf
 
     # Calculate each log likelihood
-    observations = Observations('M62')
 
     # TODO need to change how calling all L, which ones used depends on cluster
 

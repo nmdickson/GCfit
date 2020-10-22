@@ -7,7 +7,7 @@ import schwimmbad
 
 import shutil
 
-from .data import A_SPACE, get_dataset
+from .data import A_SPACE, get_dataset, Observations
 from .likelihoods import log_probability
 
 
@@ -41,6 +41,9 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
     a_width = np.abs(get_dataset(cluster, 'pulsar/Δa_los'))
     pulsar_edist = scipy.stats.norm.pdf(A_SPACE, 0, np.c_[a_width])
 
+    # Load the observation data here once
+    observations = Observations('M62')
+
     # HDF file saving
     backend = emcee.backends.HDFBackend(f"{savedir}/{cluster}_sampler.hdf")
     # Comment this line out if resuming from previous run, also change initial
@@ -55,7 +58,7 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
             Nwalkers,
             Ndim,
             log_probability,
-            args=(pulsar_edist,),
+            args=(observations, pulsar_edist,),
             pool=pool,
             backend=backend,
         )
