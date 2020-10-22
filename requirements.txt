@@ -1,0 +1,10 @@
+corner
+astro-limepy
+emcee
+ssptools
+schwimmbad
+matplotlib
+numpy
+scipy
+h5py
+tqdm

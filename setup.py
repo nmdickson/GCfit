@@ -17,6 +17,7 @@ AUTHOR = 'Nolan Dickson'
 CONTACT_EMAIL = 'ndickson@ap.smu.ca'
 
 # Installation information
+# TODO should read this from requirements.txt preferably
 REQUIRED = ['corner', 'astro-limepy', 'emcee', 'ssptools', 'schwimmbad',
             'matplotlib', 'numpy', 'scipy', 'h5py', 'tqdm']
 REQUIRES_PYTHON = '>=3.7'
