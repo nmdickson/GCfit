@@ -77,6 +77,7 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
         logging.debug(f"Pool class: {pool}, with {mpi=}, {Ncpu=}")
 
         if mpi and not pool.is_master():
+            logging.debug("This process is master")
             pool.wait()
             sys.exit(0)
 
