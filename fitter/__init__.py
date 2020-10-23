@@ -5,6 +5,7 @@ import emcee
 import corner
 import schwimmbad
 
+import sys
 import shutil
 import logging
 
@@ -74,6 +75,10 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
     with schwimmbad.choose_pool(mpi=mpi, processes=Ncpu) as pool:
 
         logging.debug(f"Pool class: {pool}, with {mpi=}, {Ncpu=}")
+
+        if mpi and not pool.is_master():
+            pool.wait()
+            sys.exit(0)
 
         logging.info("Initializing sampler")
 
