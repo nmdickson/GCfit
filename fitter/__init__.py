@@ -68,7 +68,7 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
     backend = emcee.backends.HDFBackend(f"{savedir}/{cluster}_sampler.hdf")
     # Comment this line out if resuming from previous run, also change initial
     #   state to None where the sampler is run.
-    backend.reset(Nwalkers, Ndim)
+    # backend.reset(Nwalkers, Ndim)
 
     logging.info("Beginning pool")
 
@@ -77,7 +77,7 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
         logging.debug(f"Pool class: {pool}, with {mpi=}, {Ncpu=}")
 
         if mpi and not pool.is_master():
-            logging.debug("This process is master")
+            logging.debug("This process is not master")
             pool.wait()
             sys.exit(0)
 
