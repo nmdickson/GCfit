@@ -9,6 +9,7 @@ import scipy.interpolate as interp
 from ssptools import evolve_mf_3 as emf3
 
 import sys
+import logging
 
 
 # --------------------------------------------------------------------------
@@ -377,6 +378,8 @@ def log_probability(theta, observations, error_dist):
 # individual likelihood functions and collects their results.
 def log_likelihood(theta, observations, pulsar_edist):
 
+    logging.debug(f'Evaluating likelihood with θ={theta}')
+
     # Construct the model with current theta (parameters)
     W0, M, rh, ra, g, delta, s, F, a1, a2, a3, BHret, d = theta
 
@@ -388,14 +391,6 @@ def log_likelihood(theta, observations, pulsar_edist):
     tout = np.array([11000])
 
     # Integration settings
-    # N0 = 5e5  # Normalization of stars
-    # Ndot = 0  # Regulates low mass objects depletion, default -20, 0 for 47 Tuc
-    # tcc = 0  # Core collapse time
-    # NS_ret = 0.1  # Initial neutron star retention
-    # BH_ret_int = 1  # Initial Black Hole retention
-    # BH_ret_dyn = BHret / 100  # Dynamical Black Hole retention
-    # FeHe = -0.7  # Metallicity
-
     N0 = 5e5  # Normalization of stars
     Ndot = 0  # Regulates low mass objects depletion, default -20, 0 for 47 Tuc
     tcc = 0  # Core collapse time
@@ -428,7 +423,7 @@ def log_likelihood(theta, observations, pulsar_edist):
     Mj = np.r_[mass_func.Ms[-1][cs], mass_func.Mr[-1][cr]]
 
     # Collect bin-widths
-    mes_widths = mass_func.mes[-1][1:] - mass_func.mes[-1][:-1]
+    # mes_widths = mass_func.mes[-1][1:] - mass_func.mes[-1][:-1]
 
     # Get main-sequence turnoff bin
     nms = len(mass_func.ms[-1][cs])
