@@ -492,12 +492,12 @@ def log_likelihood(theta, observations, pulsar_edist):
         d,
     )
 
-    log_pm_ratio = likelihood_pm_ratio(
-        model,
-        observations['proper_motion'],
-        nms - 1,
-        d,
-    )
+    # log_pm_ratio = likelihood_pm_ratio(
+    #     model,
+    #     observations['proper_motion'],
+    #     nms - 1,
+    #     d,
+    # )
 
     # log_pmR_high = likelihood_pm_R(
     #     model,
@@ -541,7 +541,7 @@ def log_likelihood(theta, observations, pulsar_edist):
         + log_LOS
         + log_numdens
         + log_pm_tot
-        + log_pm_ratio
+        # + log_pm_ratio
         # + log_pmR_high
         # + log_pmT_high
         # + log_pmR_low
