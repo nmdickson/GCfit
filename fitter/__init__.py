@@ -33,7 +33,7 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
 
     # TODO these parameters, and other prior stuff should be stored with data
     pos = [
-        0.4,    # W0
+        4.0,    # W0
         0.69,   # M
         2.88,    # rh
         1.23,   # ra
