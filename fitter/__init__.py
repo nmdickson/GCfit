@@ -17,6 +17,7 @@ from .likelihoods import log_probability
 def main(cluster, Niters, Nwalkers, Ncpu, mpi,
          priors, cont_run, savedir, outdir, verbose, debug):
 
+    # TODO if not debug, only info if verbose
     logfile = f"{savedir}/fitter_{cluster}.log"
     loglvl = logging.DEBUG if debug else logging.INFO
     logfmt = ('%(process)s|%(asctime)s|'
@@ -32,9 +33,9 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
 
     # TODO these parameters, and other prior stuff should be stored with data
     pos = [
-        6.1,    # W0
-        1.06,   # M
-        8.1,    # rh
+        0.4,    # W0
+        0.69,   # M
+        2.88,    # rh
         1.23,   # ra
         0.7,    # g
         0.45,   # delta
@@ -44,7 +45,7 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
         1.3,    # a2
         2.5,    # a3
         0.5,    # BHret
-        4.45,   # d
+        6.405,   # d
     ]
     pos += 1e-4 * np.random.randn(Nwalkers, Ndim)
 
@@ -57,7 +58,7 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
     # Load the observation data here once
     logging.info(f"Loading {cluster} data")
 
-    observations = Observations('M62')
+    observations = Observations(cluster)
 
     logging.debug(f"Observation datasets: {observations}")
 
