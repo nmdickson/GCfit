@@ -33,7 +33,7 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
 
     # TODO these parameters, and other prior stuff should be stored with data
     pos = [
-        6.0,    # W0
+        6.0,    # W0  atleadt 6 is required for M6 pulsars to be valid at all
         0.69,   # M
         2.88,    # rh
         1.23,   # ra
@@ -130,19 +130,19 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
     fig, axes = plt.subplots(13, figsize=(10, 20), sharex=True)
 
     labels = [
-        r"W_{0}",
-        r"M/10^6 M_{\odot}",
-        r"r_h / pc",
-        r" log r_a / pc",
-        r"g",
-        r"\delta",
-        r"s^2",
-        r"F",
-        r"\alpha_1",
-        r"\alpha_2",
-        r"\alpha_3",
-        r"BH_{ret}",
-        r"d",
+        r"$W_{0}$",
+        r"$M/10^6 M_{\odot}$",
+        r"$r_h / pc$",
+        r"$ log r_a / pc$",
+        r"$g$",
+        r"$\delta$",
+        r"$s^2$",
+        r"$F$",
+        r"$\alpha_1$",
+        r"$\alpha_2$",
+        r"$\alpha_3$",
+        r"$BH_{ret}$",
+        r"$d$",
     ]
 
     for i in range(Ndim):

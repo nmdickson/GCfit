@@ -9,7 +9,6 @@ import scipy.interpolate as interp
 from ssptools import evolve_mf_3 as emf3
 
 import sys
-import logging
 
 
 # --------------------------------------------------------------------------
@@ -377,8 +376,6 @@ def log_probability(theta, observations, error_dist):
 # Main likelihood function, generates the model(theta) passes it to the
 # individual likelihood functions and collects their results.
 def log_likelihood(theta, observations, pulsar_edist):
-
-    logging.debug(f'Evaluating likelihood with θ={theta}')
 
     # Construct the model with current theta (parameters)
     W0, M, rh, ra, g, delta, s, F, a1, a2, a3, BHret, d = theta
