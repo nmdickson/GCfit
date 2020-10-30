@@ -29,26 +29,6 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
     logging.getLogger('matplotlib').setLevel(logging.WARNING)
     logging.info("BEGIN")
 
-    Ndim = 13
-
-    # TODO these parameters, and other prior stuff should be stored with data
-    pos = [
-        6.0,    # W0  atleadt 6 is required for M6 pulsars to be valid at all
-        0.69,   # M
-        2.88,    # rh
-        1.23,   # ra
-        0.75,    # g
-        0.45,   # delta
-        0.1,    # s
-        0.45,   # F
-        0.5,    # a1
-        1.3,    # a2
-        2.5,    # a3
-        0.5,    # BHret
-        6.405,   # d
-    ]
-    pos += 1e-4 * np.random.randn(Nwalkers, Ndim)
-
     # Generate the error distributions a single time instead of for every model
     # given that they are constants.
 
@@ -61,6 +41,11 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
     observations = Observations(cluster)
 
     logging.debug(f"Observation datasets: {observations}")
+
+    Ndim = 13
+
+    init_pos = np.fromiter(observations.priors.values(), np.float64)
+    init_pos = 1e-4 * np.random.randn(Nwalkers, Ndim) + init_pos
 
     # HDF file saving
     # TODO sometimes I think this gives issues, maybe should give unique fn
@@ -101,7 +86,7 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
 
         logging.info(f"Iterating sampler ({Niters} iterations)")
 
-        for _ in sampler.sample(pos, iterations=Niters, progress=verbose):
+        for _ in sampler.sample(init_pos, iterations=Niters, progress=verbose):
 
             if sampler.iteration % 10 == 0:
                 logging.debug(f"{sampler.iteration=}: Creating backup")
@@ -147,7 +132,7 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
 
     for i in range(Ndim):
         ax = axes[i]
-        ax.plot(samples[:, :, i], "k", alpha=0.3)
+        ax.plot(samples[:, :, i], alpha=0.3)
         ax.set_xlim(0, len(samples))
         ax.set_ylabel(labels[i])
         ax.yaxis.set_label_coords(-0.1, 0.5)

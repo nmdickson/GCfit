@@ -12,6 +12,23 @@ from importlib import resources
 # A_SPACE = np.linspace(-15e-9, 15e-9, 300)
 A_SPACE = np.linspace(-5e-8, 5e-8, 300)
 
+# The order of this is important!
+DEFAULT_PRIORS = {
+    'W0': 6.0,
+    'M': 0.69,
+    'rh': 2.88,
+    'ra': 1.23,
+    'g': 0.75,
+    'delta': 0.45,
+    's': 0.1,
+    'F': 0.45,
+    'a1': 0.5,
+    'a2': 1.3,
+    'a3': 2.5,
+    'BHret': 0.5,
+    'd': 6.405,
+}
+
 
 class Dataset:
     '''each group of observations, like mass_function, proper_motions, etc
@@ -58,14 +75,23 @@ class Observations:
     def __init__(self, cluster):
 
         self._datasets = {}
+        self.priors = DEFAULT_PRIORS.copy()
 
         with resources.path('fitter', 'resources') as datadir:
             with h5py.File(f'{datadir}/{cluster}.hdf5', 'r') as file:
 
                 logging.info(f"Observations read from {datadir}/{cluster}.hdf5")
 
-                for group in file:
+                for group in (file.keys() - {'priors'}):
                     self._datasets[group] = Dataset(file[group])
+
+                try:
+                    # This updates defaults with data while keeping default sort
+                    self.priors = {**self.priors, **file['priors'].attrs}
+
+                except KeyError:
+                    logging.info("No priors stored in datafile, using defaults")
+                    pass
 
 
 def get_dataset(cluster, key):

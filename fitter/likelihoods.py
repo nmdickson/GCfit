@@ -128,7 +128,6 @@ def likelihood_pulsars(model, pulsars, error_dist):
 
 # Calculates likelihood from number density data.
 def likelihood_number_density(model, ndensity, mass_bin, s, d):
-    # TODO what is s parameter again? needs better name
 
     # Interpolated the model data at the measurement locations
     interpolated = np.interp(
