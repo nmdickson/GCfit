@@ -149,37 +149,14 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
 
     # Print results
 
-    # This is an absolute mess but it works.
-    for i in range(Ndim):
-        # Just use simple labels here for printing
-        labels = [
-            "W0",
-            "M",
-            "rh",
-            "ra",
-            "g",
-            "delta",
-            "s",
-            "F",
-            "a1",
-            "a2",
-            "a3",
-            "BHret",
-            "d",
-        ]
-        mcmc = np.percentile(flat_samples[:, i], [16, 50, 84])
-        q = np.diff(mcmc)
-        txt = r"\mathrm{{{3}}} = {0:.3f}_{{-{1:.3f}}}^{{{2:.3f}}}"
-        txt = txt.format(mcmc[1], q[0], q[1], labels[i])
-        print(
-            txt.split("{")[1].split("}")[0],
-            " =",
-            txt.split("=")[1].split("_")[0],
-            " (+",
-            txt.split("^")[1].split("{")[1].split("}")[0],
-            " ",
-            txt.split("_")[1].split("^")[0].split("{")[1].split("}")[0],
-            ")"
-        )
+    if verbose:
+        mssg = ''
+        for ind, key in enumerate(observations.priors):
+            perc = np.percentile(flat_samples[:, ind], [16, 50, 84])
+            qnt = np.diff(perc)
+
+            mssg += f'{key:>5} = {perc[1]:.3f} (+{qnt[0]:.3f}/-{qnt[1]:.3f})\n'
+
+        sys.stdout.write(mssg)
 
     logging.info("FINISHED")
