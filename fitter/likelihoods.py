@@ -9,6 +9,9 @@ import scipy.interpolate as interp
 from ssptools import evolve_mf_3 as emf3
 
 import sys
+import logging
+
+# TODO figure out all these mass bins and why functions choose certain ones
 
 
 # --------------------------------------------------------------------------
@@ -61,7 +64,7 @@ def build_asym_err(model, r, quantity, sigmaup, sigmalow, d):
 # --------------------------------------------------------------------------
 
 # Calculates the likelihood from pulsars
-def likelihood_pulsars(model, pulsars, error_dist):
+def likelihood_pulsars(model, pulsars, error_dist, return_dist=False):
 
     # Generate the probability distributions
     def gen_prob_dists(model, a_space, r_data, jns):
@@ -122,8 +125,11 @@ def likelihood_pulsars(model, pulsars, error_dist):
         # evaluate at the measured a_los
         probs[i] = interpolated(pulsars['a_los'][i])
 
-    # Multiply all the probabilities and return the total log probability.
-    return np.log(np.prod(probs))
+    if return_dist:
+        return prob_dist
+    else:
+        # Multiply all the probabilities and return the total log probability.
+        return np.log(np.prod(probs))
 
 
 # Calculates likelihood from number density data.
@@ -131,7 +137,7 @@ def likelihood_number_density(model, ndensity, mass_bin, s, d):
 
     # Interpolated the model data at the measurement locations
     interpolated = np.interp(
-        ndensity['r'], pc2arcsec(model.r, d) / 60,  # TODO rather this be arcsec
+        ndensity['r'], pc2arcsec(model.r, d) / 60,
         model.Sigmaj[mass_bin] / model.mj[mass_bin],
     )
 
@@ -147,9 +153,8 @@ def likelihood_number_density(model, ndensity, mass_bin, s, d):
     # Divided by sum of model**2 / observed**2
 
     # Calculate scaling factor
-    K = np.sum(
-        ndensity['Σ'] * interpolated / ndensity['Σ'] ** 2
-    ) / np.sum(interpolated ** 2 / ndensity['Σ'] ** 2)
+    K = (np.sum(ndensity['Σ'] * interpolated / ndensity['Σ'] ** 2)
+         / np.sum(interpolated ** 2 / ndensity['Σ'] ** 2))
 
     # Apply scaling factor to interpolated points
     interpolated *= K
@@ -338,6 +343,7 @@ def likelihood_mf_tot(model, mf, N_ms, mes_widths, F, d):
 
 # Log prior is what we use to define what regions of parameter space we
 #   will consider valid.
+# TODO how do we know these ranges, do they change per cluster, are they good
 def log_prior(theta):
     W0, M, rh, ra, g, delta, s, F, a1, a2, a3, BHret, d = theta
     if (
@@ -377,7 +383,7 @@ def log_probability(theta, observations, error_dist):
 def log_likelihood(theta, observations, pulsar_edist):
 
     # Construct the model with current theta (parameters)
-    W0, M, rh, ra, g, delta, s, F, a1, a2, a3, BHret, d = theta
+    W0, M, rh, ra, g, delta, s2, F, a1, a2, a3, BHret, d = theta
 
     m123 = [0.1, 0.5, 1.0, 100]  # Slope breakpoints for initial mass function
     a12 = [-a1, -a2, -a3]  # Slopes for initial mass function
@@ -454,6 +460,7 @@ def log_likelihood(theta, observations, pulsar_edist):
 
     # If the model does not converge return -np.inf
     if not model.converged:
+        logging.debug("Model ({model}) did not converge")
         return -np.inf
 
     # Calculate each log likelihood
@@ -477,7 +484,7 @@ def log_likelihood(theta, observations, pulsar_edist):
         model,
         observations['number_density'],
         nms - 1,
-        s,
+        s2,
         d
     )
 
