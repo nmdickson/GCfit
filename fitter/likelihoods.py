@@ -139,7 +139,7 @@ def likelihood_number_density(model, ndensity):
 
     # Interpolated the model data at the measurement locations
     interpolated = np.interp(
-        ndensity['r'], pc2arcsec(model.r, model.d) / 60,
+        ndensity['r'][:100], pc2arcsec(model.r, model.d) / 60,
         model.Sigmaj[mass_bin] / model.mj[mass_bin],
     )
 
@@ -155,8 +155,8 @@ def likelihood_number_density(model, ndensity):
     # Divided by sum of model**2 / observed**2
 
     # Calculate scaling factor
-    K = (np.sum(ndensity['Σ'] * interpolated / ndensity['Σ'] ** 2)
-         / np.sum(interpolated ** 2 / ndensity['Σ'] ** 2))
+    K = (np.sum(ndensity['Σ'][:100] * interpolated / ndensity['Σ'][:100] ** 2)
+         / np.sum(interpolated ** 2 / ndensity['Σ'][:100] ** 2))
 
     # Apply scaling factor to interpolated points
     interpolated *= K
@@ -165,14 +165,14 @@ def likelihood_number_density(model, ndensity):
     # This allows us to add a constant error component to the data which
     # allows us to fit on the data while not worrying too much about the
     # outermost points where background effects are most prominent.
-    yerr = np.zeros(len(ndensity['ΔΣ']))
+    yerr = np.zeros(len(ndensity['ΔΣ'[:100]]))
 
     # Add the nuisance parameter in quadrature
-    for i in range(len(ndensity['ΔΣ'])):
-        yerr[i] = np.sqrt(ndensity['ΔΣ'][i] ** 2 + model.s2)
+    for i in range(len(ndensity['ΔΣ'[:100]])):
+        yerr[i] = np.sqrt(ndensity['ΔΣ'[:100]][i] ** 2 + model.s2)
 
     # Now regular gaussian likelihood
-    return -0.5 * np.sum((ndensity['Σ'] - interpolated) ** 2 / yerr ** 2
+    return -0.5 * np.sum((ndensity['Σ'][:100] - interpolated) ** 2 / yerr ** 2
                          + np.log(yerr ** 2))
 
 
