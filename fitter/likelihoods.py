@@ -133,11 +133,13 @@ def likelihood_pulsars(model, pulsars, error_dist, return_dist=False):
 
 
 # Calculates likelihood from number density data.
-def likelihood_number_density(model, ndensity, mass_bin, s, d):
+def likelihood_number_density(model, ndensity):
+
+    mass_bin = model.nms - 1
 
     # Interpolated the model data at the measurement locations
     interpolated = np.interp(
-        ndensity['r'], pc2arcsec(model.r, d) / 60,
+        ndensity['r'], pc2arcsec(model.r, model.d) / 60,
         model.Sigmaj[mass_bin] / model.mj[mass_bin],
     )
 
@@ -167,27 +169,29 @@ def likelihood_number_density(model, ndensity, mass_bin, s, d):
 
     # Add the nuisance parameter in quadrature
     for i in range(len(ndensity['ΔΣ'])):
-        yerr[i] = np.sqrt(ndensity['ΔΣ'][i] ** 2 + s)
+        yerr[i] = np.sqrt(ndensity['ΔΣ'][i] ** 2 + model.s2)
 
     # Now regular gaussian likelihood
     return -0.5 * np.sum((ndensity['Σ'] - interpolated) ** 2 / yerr ** 2
                          + np.log(yerr ** 2))
 
 
-def likelihood_pm_tot(model, pm, mass_bin, d):
+def likelihood_pm_tot(model, pm):
     # TODO is v2j what I should use for tot?
+
+    mass_bin = model.nms - 1
 
     # Build asymmetric error, if exists
     try:
         obs_err = build_asym_err(model, pm['r'], pm['PM_tot'],
-                                 pm['ΔPM_tot,up'], pm['ΔPM_tot,down'], d)
+                                 pm['ΔPM_tot,up'], pm['ΔPM_tot,down'], model.d)
     except KeyError:
         obs_err = pm['ΔPM_tot']
 
     # Interpolated model at data locations
     interpolated = np.interp(
-        pm['r'], pc2arcsec(model.r, d),
-        kms2masyr(np.sqrt(model.v2j[mass_bin]), d)
+        pm['r'], pc2arcsec(model.r, model.d),
+        kms2masyr(np.sqrt(model.v2j[mass_bin]), model.d)
     )
 
     # Gaussian likelihood
@@ -197,20 +201,23 @@ def likelihood_pm_tot(model, pm, mass_bin, d):
     )
 
 
-def likelihood_pm_ratio(model, pm, mass_bin, d):
+def likelihood_pm_ratio(model, pm):
+
+    mass_bin = model.nms - 1
 
     model_ratio = np.sqrt(model.v2Tj[mass_bin] / model.v2Rj[mass_bin])
 
     # Build asymmetric error, if exists
     try:
         obs_err = build_asym_err(model, pm['r'], pm['PM_ratio'],
-                                 pm['ΔPM_ratio,up'], pm['ΔPM_ratio,down'], d)
+                                 pm['ΔPM_ratio,up'], pm['ΔPM_ratio,down'],
+                                 model.d)
     except KeyError:
         obs_err = pm['ΔPM_ratio']
 
     # Interpolated model at data locations
     interpolated = np.interp(
-        pm['r'], pc2arcsec(model.r, d),
+        pm['r'], pc2arcsec(model.r, model.d),
         model_ratio
     )
 
@@ -221,19 +228,21 @@ def likelihood_pm_ratio(model, pm, mass_bin, d):
     )
 
 
-def likelihood_pm_T(model, r, pm, mass_bin, d):
+def likelihood_pm_T(model, r, pm):
+
+    mass_bin = model.nms - 1
 
     # Build asymmetric error, if exists
     try:
         obs_err = build_asym_err(model, pm['r'], pm['PM_T'],
-                                 pm['ΔPM_T,up'], pm['ΔPM_T,down'], d)
+                                 pm['ΔPM_T,up'], pm['ΔPM_T,down'], model.d)
     except KeyError:
         obs_err = pm['ΔPM_T']
 
     # Interpolated model at data locations
     interpolated = np.interp(
-        pm['r'], pc2arcsec(model.r, d),
-        kms2masyr(np.sqrt(model.v2Tj[mass_bin]), d)
+        pm['r'], pc2arcsec(model.r, model.d),
+        kms2masyr(np.sqrt(model.v2Tj[mass_bin]), model.d)
     )
 
     # Gaussian likelihood
@@ -243,19 +252,21 @@ def likelihood_pm_T(model, r, pm, mass_bin, d):
     )
 
 
-def likelihood_pm_R(model, r, pm, mass_bin, d):
+def likelihood_pm_R(model, r, pm):
+
+    mass_bin = model.nms - 1
 
     # Build asymmetric error, if exists
     try:
         obs_err = build_asym_err(model, pm['r'], pm['PM_R'],
-                                 pm['ΔPM_R,up'], pm['ΔPM_R,down'], d)
+                                 pm['ΔPM_R,up'], pm['ΔPM_R,down'], model.d)
     except KeyError:
         obs_err = pm['ΔPM_R']
 
     # Interpolated model at data locations
     interpolated = np.interp(
-        pm['r'], pc2arcsec(model.r, d),
-        kms2masyr(np.sqrt(model.v2Rj[mass_bin]), d)
+        pm['r'], pc2arcsec(model.r, model.d),
+        kms2masyr(np.sqrt(model.v2Rj[mass_bin]), model.d)
     )
 
     # Gaussian likelihood
@@ -265,19 +276,20 @@ def likelihood_pm_R(model, r, pm, mass_bin, d):
     )
 
 
-def likelihood_LOS(model, vlos, mass_bin, d):
+def likelihood_LOS(model, vlos):
     # most massive main-sequence bin, mass_bin
+    mass_bin = model.nms - 1
 
     # Build asymmetric error, if exists
     try:
         obs_err = build_asym_err(model, vlos['r'], vlos['σ'],
-                                 vlos['Δσ_up'], vlos['Δσ_down'], d)
+                                 vlos['Δσ_up'], vlos['Δσ_down'], model.d)
     except KeyError:
         obs_err = vlos['Δσ']
 
     # Interpolated model at data locations
     interpolated = np.interp(
-        vlos['r'], pc2arcsec(model.r, d),
+        vlos['r'], pc2arcsec(model.r, model.d),
         np.sqrt(model.v2pj[mass_bin])
     )
 
@@ -341,49 +353,18 @@ def likelihood_mf_tot(model, mf, N_ms, mes_widths, F, d):
 # Composite likelihood functions
 # --------------------------------------------------------------------------
 
-# Log prior is what we use to define what regions of parameter space we
-#   will consider valid.
-# TODO how do we know these ranges, do they change per cluster, are they good
-def log_prior(theta):
-    W0, M, rh, ra, g, delta, s, F, a1, a2, a3, BHret, d = theta
-    if (
-        3 < W0 < 20
-        and 0.5 < rh < 15
-        and 0.01 < M < 10
-        and 0 < ra < 5
-        and 0 < g < 2.3
-        and 0.3 < delta < 0.5
-        and 0 < s < 10
-        and 0.1 < F < 0.5
-        and -2 < a1 < 6
-        and -2 < a2 < 6
-        and -2 < a3 < 6
-        and 0 < BHret < 100
-        and 4 < d < 7
-    ):
-        # If its within the valid space don't add anything
-        return 0.0
-    # If its outside the valid space add -inf to prevent further movement
-    #   in that direction
-    return -np.inf
 
-
-# Combines the likelihood with the prior
-def log_probability(theta, observations, error_dist):
-    lp = log_prior(theta)
-    # This line was inserted while debugging, may not be needed anymore.
-    if not np.isfinite(lp):
-        return -np.inf
-
-    return lp + log_likelihood(theta, observations, error_dist)
-
-
-# Main likelihood function, generates the model(theta) passes it to the
-# individual likelihood functions and collects their results.
-def log_likelihood(theta, observations, pulsar_edist):
+def create_model(theta):
 
     # Construct the model with current theta (parameters)
-    W0, M, rh, ra, g, delta, s2, F, a1, a2, a3, BHret, d = theta
+    if isinstance(theta, dict):
+        W0, M, rh, ra, g, delta, s2, F, a1, a2, a3, BHret, d = (
+            theta['W0'], theta['M'], theta['rh'], theta['ra'], theta['g'],
+            theta['delta'], theta['s'], theta['F'],
+            theta['a1'], theta['a2'], theta['a3'], theta['BHret'], theta['d']
+        )
+    else:
+        W0, M, rh, ra, g, delta, s, F, a1, a2, a3, BHret, d = theta
 
     m123 = [0.1, 0.5, 1.0, 100]  # Slope breakpoints for initial mass function
     a12 = [-a1, -a2, -a3]  # Slopes for initial mass function
@@ -426,9 +407,8 @@ def log_likelihood(theta, observations, pulsar_edist):
 
     # Collect bin-widths
     # mes_widths = mass_func.mes[-1][1:] - mass_func.mes[-1][:-1]
-
     # Get main-sequence turnoff bin
-    nms = len(mass_func.ms[-1][cs])
+    # nms = len(mass_func.ms[-1][cs])
 
     # Add in bin of 0.38 MSol to model Heyl data
     # mj = np.append(mj, 0.38)
@@ -436,6 +416,7 @@ def log_likelihood(theta, observations, pulsar_edist):
 
     # Add in bin of 1.6 MSol to use to model MSPs
     # mj = np.append(mj, 1.6)
+
     mj = np.append(mj, 1.4)  # for M62 (See lynch, table3)
     Mj = np.append(Mj, 0.1)
 
@@ -454,9 +435,50 @@ def log_likelihood(theta, observations, pulsar_edist):
             verbose=False,
         )
     except Exception:
+        # TODO better error handling, returning inf here will be weird
         e = str(sys.exc_info()[0]) + " : " + str(sys.exc_info()[1])
         print("INFO: Exception raised by limepy, returning -np.inf. ", e)
         return -np.inf
+
+    model.nms = len(mass_func.ms[-1][cs])
+    model.s2 = s2
+    model.d = d
+
+    return model
+
+
+# Log prior is what we use to define what regions of parameter space we
+#   will consider valid.
+# TODO how do we know these ranges, do they change per cluster, are they good
+def log_prior(theta):
+    W0, M, rh, ra, g, delta, s, F, a1, a2, a3, BHret, d = theta
+    if (
+        3 < W0 < 20
+        and 0.5 < rh < 15
+        and 0.01 < M < 10
+        and 0 < ra < 5
+        and 0 < g < 2.3
+        and 0.3 < delta < 0.5
+        and 0 < s < 10
+        and 0.1 < F < 0.5
+        and -2 < a1 < 6
+        and -2 < a2 < 6
+        and -2 < a3 < 6
+        and 0 < BHret < 100
+        and 4 < d < 7
+    ):
+        # If its within the valid space don't add anything
+        return 0.0
+    # If its outside the valid space add -inf to prevent further movement
+    #   in that direction
+    return -np.inf
+
+
+# Main likelihood function, generates the model(theta) passes it to the
+# individual likelihood functions and collects their results.
+def log_likelihood(theta, observations, pulsar_edist):
+
+    model = create_model(theta)
 
     # If the model does not converge return -np.inf
     if not model.converged:
@@ -476,30 +498,21 @@ def log_likelihood(theta, observations, pulsar_edist):
     log_LOS = likelihood_LOS(
         model,
         observations['velocity_dispersion'],
-        nms - 1,
-        d
     )
 
     log_numdens = likelihood_number_density(
         model,
         observations['number_density'],
-        nms - 1,
-        s2,
-        d
     )
 
     log_pm_tot = likelihood_pm_tot(
         model,
         observations['proper_motion'],
-        nms - 1,
-        d,
     )
 
     log_pm_ratio = likelihood_pm_ratio(
         model,
         observations['proper_motion'],
-        nms - 1,
-        d,
     )
 
     # log_pmR_high = likelihood_pm_R(
@@ -519,14 +532,14 @@ def log_likelihood(theta, observations, pulsar_edist):
     # log_pmR_low = likelihood_pm_R(
     #     model,
     #     observations['proper_motion/low_mass'],
-    #     -2,
+    #     mass_bin=-2,  # TODO I removed the mass_bin arg but need it here
     #     d,
     # )
 
     # log_pmT_low = likelihood_pm_T(
     #     model,
     #     observations['proper_motion/low_mass'],
-    #     -2,
+    #     mass_bin=-2,
     #     d,
     # )
 
@@ -551,3 +564,13 @@ def log_likelihood(theta, observations, pulsar_edist):
         # + log_pmT_low
         # + log_mf
     )
+
+
+# Combines the likelihood with the prior
+def log_probability(theta, observations, error_dist):
+    lp = log_prior(theta)
+    # This line was inserted while debugging, may not be needed anymore.
+    if not np.isfinite(lp):
+        return -np.inf
+
+    return lp + log_likelihood(theta, observations, error_dist)
