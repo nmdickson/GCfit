@@ -1,8 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+from .likelihoods import pc2arcsec, kms2masyr
 
-class visualizer:
+
+class Visualizer:
     '''
     class for making, showing, saving all the plots related to a model
     idk if a class is really necessary, but sue me
@@ -16,18 +18,19 @@ class visualizer:
     #   right now it just plots and shows stuff immediately, with no subplots
 
     # Pulsar max az vs measured az
-    def plot_pulsar(self):
+    def plot_pulsar(self, fig=None, ax=None):
+
+        fig, ax = self._setup_artist(fig, ax)
+
         obs_pulsar = self.obs['pulsar']
+        d = self.model.d
 
         # N_pulsars = obs_r.size
         # prob_dist = np.array([
-        #     vec_Paz(self.model, A_SPACE, obs_r[i], i) for i in range(N_pulsars)
+        #     vec_Paz(self.model, A_SPACE, obs_r[i], i)
+        #     for i in range(N_pulsars)
         # ])
         # max_probs = prob_dist.max(axis=1)
-
-        # better way to get this?
-        d = self.obs.priors['d']
-        mod_r = pc2arcsec(self.model.r, d) / 60.
 
         maz = []
         for r in self.model.r:
@@ -36,11 +39,15 @@ class visualizer:
 
         maz = np.array(maz)
 
-        plt.plot(mod_r, maz, c='b')
-        plt.plot(mod_r, -maz, c='b')
+        ax.set_title('Pulsar LOS Acceleration')
+        ax.set_xlabel('R')
+        ax.set_ylabel(r'$a_{los}$')
 
-        plt.scatter(obs_pulsar['r'], self.obs['pulsar/a_los'])
-        plt.show()
+        # TODO make these the same colour
+        ax.plot(pc2arcsec(self.model.r, d) / 60., maz)
+        ax.plot(pc2arcsec(self.model.r, d) / 60., -maz)
+
+        ax.scatter(obs_pulsar['r'], self.obs['pulsar/a_los'])
 
         # err = scipy.stats.norm.pdf(A_SPACE, 0, np.c_[obs_pulsar['Δa_los']])
 
@@ -53,63 +60,110 @@ class visualizer:
         #     plt.axvline(obs_pulsar['r'][ind], c=clr)
         #     plt.axhline(obs_pulsar['a_los'][ind], c=clr)
 
-        #     plt.show()
+        return fig
 
     # line of sight dispersion
-    def plot_LOS(self):
+    def plot_LOS(self, fig=None, ax=None):
+
+        fig, ax = self._setup_artist(fig, ax)
 
         mass_bin = self.model.nms - 1
         vel_disp = self.obs['velocity_dispersion']
         obs_err = (vel_disp['Δσ_down'], vel_disp['Δσ_up'])
 
-        plt.xscale("log")
-        plt.xlabel("R [arcsec]")
-        plt.ylabel(r"$\sigma_{los} \ [km \ s^{-1}]$")
-        plt.errorbar(vel_disp['r'], vel_disp['σ'], yerr=obs_err, fmt='.')
-        plt.plot(pc2arcsec(self.model.r, self.model.d),
-                 np.sqrt(self.model.v2pj[mass_bin]))
+        ax.set_xlabel("R [arcsec]")
+        ax.set_ylabel(r"$\sigma_{los} \ [km \ s^{-1}]$")
 
-        plt.show()
+        ax.set_xscale("log")
+
+        ax.errorbar(vel_disp['r'], vel_disp['σ'], yerr=obs_err, fmt='.')
+        ax.plot(pc2arcsec(self.model.r, self.model.d),
+                np.sqrt(self.model.v2pj[mass_bin]))
+
+        return fig
 
     # total proper motion
-    def plot_pm_tot(self):
+    def plot_pm_tot(self, fig=None, ax=None):
+
+        fig, ax = self._setup_artist(fig, ax)
 
         mass_bin = self.model.nms - 1
         pm = self.obs['proper_motion']
 
-        plt.xscale("log")
-        plt.xlabel("R [arcsec]")
-        plt.ylabel(r"$\sigma_{pm, total} \ [mas \ yr^{-1}]$")
+        ax.set_title("Total Proper Motion")
+        ax.set_xlabel("R [arcsec]")
+        ax.set_ylabel(r"$\sigma_{pm, total} \ [mas \ yr^{-1}]$")
 
-        plt.errorbar(pm['r'], pm['PM_tot'],
-                     xerr=pm['Δr'], yerr=pm['ΔPM_tot'], fmt='.')
+        ax.set_xscale("log")
 
-        plt.plot(pc2arcsec(self.model.r, self.model.d),
-                 kms2masyr(np.sqrt(self.model.v2Tj[mass_bin]), self.model.d))
+        ax.errorbar(pm['r'], pm['PM_tot'],
+                    xerr=pm['Δr'], yerr=pm['ΔPM_tot'], fmt='.')
 
-        plt.show()
+        ax.plot(pc2arcsec(self.model.r, self.model.d),
+                kms2masyr(np.sqrt(self.model.v2Tj[mass_bin]), self.model.d))
+
+        return fig
 
     # proper motion anisotropy (ratio)
-    def plot_pm_ratio(self):
+    def plot_pm_ratio(self, fig=None, ax=None):
+
+        fig, ax = self._setup_artist(fig, ax)
 
         mass_bin = self.model.nms - 1
         pm = self.obs['proper_motion']
         model_ratio = self.model.v2Tj[mass_bin] / self.model.v2Rj[mass_bin]
 
-        plt.xscale("log")
-        plt.xlabel("R [arcsec]")
-        plt.ylabel(r"$\sigma_{pm, ratio} \ [mas \ yr^{-1}]$")
+        ax.set_title("Proper Motion Ratio")
+        ax.set_xlabel("R [arcsec]")
+        ax.set_ylabel(r"$\sigma_{pm,T} / \sigma_{pm,R} \ [mas \ yr^{-1}]$")
 
-        plt.errorbar(pm['r'], pm['PM_ratio'],
-                     xerr=pm['Δr'], yerr=pm['ΔPM_ratio'], fmt='.')
+        ax.set_xscale("log")
 
-        plt.plot(pc2arcsec(self.model.r, self.model.d),
-                 model_ratio)
+        ax.errorbar(pm['r'], pm['PM_ratio'],
+                    xerr=pm['Δr'], yerr=pm['ΔPM_ratio'], fmt='.')
 
-        plt.show()
+        ax.plot(pc2arcsec(self.model.r, self.model.d),
+                model_ratio)
+
+        return fig
+
+    # number density
+    def plot_number_density(self, fig=None, ax=None):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        mass_bin = self.model.nms - 1
+        numdens = self.obs['number_density']
+
+        # interpolate number density to the observed data points r
+        interp_model = np.interp(
+            numdens['r'], pc2arcsec(self.model.r, self.model.d) / 60.,
+            self.model.Sigmaj[mass_bin] / self.model.mj[mass_bin]
+        )
+
+        K = (np.sum(numdens['Σ'] * interp_model / numdens["Σ"] ** 2)
+             / np.sum(interp_model ** 2 / numdens["Σ"] ** 2))
+
+        ax.set_title('Number Density')
+        ax.set_xlabel("R [arcsec]")
+        ax.set_ylabel(r"$\Sigma \  {[arcmin}^{-2}]$")
+
+        ax.loglog()
+
+        ax.errorbar(numdens['r'] * 60, numdens["Σ"],
+                    yerr=np.sqrt(numdens["ΔΣ"]**2 + self.model.s2), fmt=".")
+        ax.plot(pc2arcsec(self.model.r, self.model.d),
+                K * self.model.Sigmaj[mass_bin] / self.model.mj[mass_bin])
+
+        # TODO what to return from these methods? fig?, ax?, both?
+        return fig
+
+    # mass function
+    def plot_mf_tot(self):
+        pass
 
     # tangential proper motion
-    # def plot_pm_T(self):
+    # def plot_pm_T(self, fig=None, ax=None):
 
     #     plt.xscale("log")
     #     plt.xlabel("R [arcsec]")
@@ -124,7 +178,7 @@ class visualizer:
     #     plt.legend()
 
     # radial proper motion
-    # def plot_pm_R(self):
+    # def plot_pm_R(self, fig=None, ax=None):
 
     #     plt.xscale("log")
     #     plt.xlabel("R [arcsec]")
@@ -138,53 +192,41 @@ class visualizer:
     #     plt.plot(pc2arcsec(m.r),kms2masyr(np.sqrt(m.v2Rj[-2])),label=0.38)
     #     plt.legend()
 
-    # number density
-    def plot_number_density(self):
-
-        mass_bin = self.model.nms - 1
-        numdens = self.obs['number_density']
-
-        # interpolate number density to the observed data points r
-        interp_model = np.interp(
-            numdens['r'], pc2arcsec(self.model.r, self.model.d) / 60.,
-            self.model.Sigmaj[mass_bin] / self.model.mj[mass_bin]
-        )
-
-        K = (np.sum(numdens['Σ'] * interp_model / numdens["Σ"] ** 2)
-             / np.sum(interp_model ** 2 / numdens["Σ"] ** 2))
-
-        plt.loglog()
-        plt.xlabel("R [arcsec]")
-        plt.ylabel(r"$\Sigma \  {[arcmin}^{-2}]$")
-
-        plt.errorbar(numdens['r'] * 60, numdens["Σ"],
-                     yerr=np.sqrt(numdens["ΔΣ"]**2 + self.model.s2), fmt=".")
-
-        plt.plot(pc2arcsec(self.model.r, self.model.d),
-                 K * self.model.Sigmaj[mass_bin] / self.model.mj[mass_bin])
-
-        plt.show()
-
-    # mass function
-    def plot_mf_tot(self):
-        pass
-
-    def __init__(self, model, observations, nms=None, s2=None, d=None):
+    def __init__(self, model, observations):
         self.obs = observations
         self.model = model
 
-        # We'll expect these to either be in the model already or in the args
-        if nms is not None:
-            self.model.nms = nms
-        if s2 is not None:
-            self.model.s2 = s2
-        if d is not None:
-            self.model.d = d
+    def _setup_artist(self, fig, ax):
+        if ax is None:
+            if fig in None:
+                fig, ax = plt.subplots()
+            else:
+                # TODO how to handle the shapes of subplots here probs read fig
+                ax = fig.add_subplot()
+        else:
+            if fig is None:
+                fig = ax.get_figure()
+
+        return fig, ax
 
 
-def compare_models(*models):
+def compare_models(*models, observations, labels=None):
     '''
     create viz objects for all the models and plot them all on the same axes
     '''
 
-    pass
+    fig, axes = plt.subplots(3, 2)
+
+    visuals = [Visualizer(mod, observations) for mod in models]
+
+    for ind, viz in enumerate(visuals):
+        viz.plot_pulsar(fig=fig, ax=axes[0, 0])
+        viz.plot_number_density(fig=fig, ax=axes[1, 0])
+        viz.plot_LOS(fig=fig, ax=axes[0, 1])
+        viz.plot_pm_tot(fig=fig, ax=axes[1, 1])
+        viz.plot_pm_ratio(fig=fig, ax=axes[2, 1])
+
+    if labels:
+        fig.legend(labels)
+
+    plt.show()

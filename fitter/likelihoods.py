@@ -360,11 +360,11 @@ def create_model(theta):
     if isinstance(theta, dict):
         W0, M, rh, ra, g, delta, s2, F, a1, a2, a3, BHret, d = (
             theta['W0'], theta['M'], theta['rh'], theta['ra'], theta['g'],
-            theta['delta'], theta['s'], theta['F'],
+            theta['delta'], theta['s2'], theta['F'],
             theta['a1'], theta['a2'], theta['a3'], theta['BHret'], theta['d']
         )
     else:
-        W0, M, rh, ra, g, delta, s, F, a1, a2, a3, BHret, d = theta
+        W0, M, rh, ra, g, delta, s2, F, a1, a2, a3, BHret, d = theta
 
     m123 = [0.1, 0.5, 1.0, 100]  # Slope breakpoints for initial mass function
     a12 = [-a1, -a2, -a3]  # Slopes for initial mass function
