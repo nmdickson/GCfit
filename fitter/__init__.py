@@ -7,6 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import sys
+import time
 import shutil
 import logging
 
@@ -85,17 +86,24 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
 
         # The acceptance rate is unfortunately not auto-stored in the backend
         accept_rate = np.empty((Niters, Nwalkers))
+        iter_rate = np.empty(Niters)
 
         # Start the sampler
         # Need to change initial_state to None if resuming from previous run.
 
         logging.info(f"Iterating sampler ({Niters} iterations)")
 
+        t = time.time()
+
         for _ in sampler.sample(init_pos, iterations=Niters, progress=verbose):
+
+            t_i = time.time()
+            iter_rate[sampler.iteration - 1] = t_i - t
+            t = t_i
 
             accept_rate[sampler.iteration - 1, :] = sampler.acceptance_fraction
 
-            if sampler.iteration % 10 == 0:
+            if sampler.iteration % 100 == 0:
                 logging.debug(f"{sampler.iteration=}: Creating backup")
                 shutil.copyfile(f"{savedir}/{cluster}_sampler.hdf",
                                 f"{savedir}/.backup_{cluster}_sampler.hdf")
@@ -112,7 +120,9 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
 
     # First attempt, without worrying about MPI communication
     with h5py.File(backend_fn, 'r+') as backend_hdf:
-        stat_grp = backend_hdf.create_group(name='statistics')
+        stat_grp = backend_hdf.require_group(name='statistics')
+
+        stat_grp.create_dataset(name='iteration_rate', data=iter_rate)
         stat_grp.create_dataset(name='acceptance_rate', data=accept_rate)
 
     logging.debug(f"Final state: {sampler}")
