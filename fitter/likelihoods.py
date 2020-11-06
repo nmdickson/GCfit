@@ -435,9 +435,11 @@ def create_model(theta):
             verbose=False,
         )
     except Exception:
-        # TODO better error handling, returning inf here will be weird
+        # TODO better error handling, weird return
         e = str(sys.exc_info()[0]) + " : " + str(sys.exc_info()[1])
         print("INFO: Exception raised by limepy, returning -np.inf. ", e)
+
+        return None
 
     model.nms = len(mass_func.ms[-1][cs])
     model.s2 = s2
@@ -480,7 +482,7 @@ def log_likelihood(theta, observations, pulsar_edist):
     model = create_model(theta)
 
     # If the model does not converge return -np.inf
-    if not model.converged:
+    if model is None or not model.converged:
         logging.debug("Model ({model}) did not converge")
         return -np.inf
 
@@ -566,6 +568,7 @@ def log_likelihood(theta, observations, pulsar_edist):
 
 
 # Combines the likelihood with the prior
+# TODO make sure that passing obs here isn't super expensive (see emcee || docs)
 def log_probability(theta, observations, error_dist):
     lp = log_prior(theta)
     # This line was inserted while debugging, may not be needed anymore.
