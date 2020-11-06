@@ -1,9 +1,10 @@
-import numpy as np
-import matplotlib.pyplot as plt
-import scipy.stats
+import h5py
 import emcee
 import corner
 import schwimmbad
+import scipy.stats
+import numpy as np
+import matplotlib.pyplot as plt
 
 import sys
 import shutil
@@ -51,7 +52,8 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
     # TODO sometimes I think this gives issues, maybe should give unique fn
     logging.debug(f"Using hdf backend at {savedir}/{cluster}_sampler.hdf")
 
-    backend = emcee.backends.HDFBackend(f"{savedir}/{cluster}_sampler.hdf")
+    backend_fn = f"{savedir}/{cluster}_sampler.hdf"
+    backend = emcee.backends.HDFBackend(backend_fn)
     # Comment this line out if resuming from previous run, also change initial
     #   state to None where the sampler is run.
     # backend.reset(Nwalkers, Ndim)
@@ -81,6 +83,9 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
 
         logging.debug(f"Sampler class: {sampler}")
 
+        # The acceptance rate is unfortunately not auto-stored in the backend
+        accept_rate = np.empty((Niters, Nwalkers))
+
         # Start the sampler
         # Need to change initial_state to None if resuming from previous run.
 
@@ -88,20 +93,27 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
 
         for _ in sampler.sample(init_pos, iterations=Niters, progress=verbose):
 
+            accept_rate[sampler.iteration, :] = sampler.acceptance_fraction
+
             if sampler.iteration % 10 == 0:
                 logging.debug(f"{sampler.iteration=}: Creating backup")
                 shutil.copyfile(f"{savedir}/{cluster}_sampler.hdf",
                                 f"{savedir}/.backup_{cluster}_sampler.hdf")
 
-        # Attempt to print autocorrelation time
+        # Attempt to get autocorrelation time, chain may not be long enough
         try:
             tau = sampler.get_autocorr_time()
-            print("Tau = " + str(tau))
-        except Exception:
-            # Usually can't print
-            print(" WARN: May not have reached full autocorrelation time")
+        except emcee.autocorr.AutocorrError:
+            tau = np.nan
+
+    logging.info(f'Autocorrelation time: {tau}')
 
     logging.info("Finished iteration")
+
+    # First attempt, without worrying about MPI communication
+    with h5py.File(backend_fn, 'r+') as backend_hdf:
+        stat_grp = backend_hdf.create_group(name='statistics')
+        stat_grp.create_dataset(name='acceptance_rate', data=accept_rate)
 
     logging.debug(f"Final state: {sampler}")
 
@@ -137,7 +149,7 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
         ax.set_ylabel(labels[i])
         ax.yaxis.set_label_coords(-0.1, 0.5)
 
-    axes[-1].set_xlabel("step number")
+    axes[-1].set_xlabel("Iteration")
     fig.tight_layout()
     plt.savefig(f"{outdir}/{cluster}_walkers.png", dpi=600)
 
