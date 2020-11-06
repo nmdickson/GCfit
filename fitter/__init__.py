@@ -93,7 +93,7 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
 
         for _ in sampler.sample(init_pos, iterations=Niters, progress=verbose):
 
-            accept_rate[sampler.iteration, :] = sampler.acceptance_fraction
+            accept_rate[sampler.iteration - 1, :] = sampler.acceptance_fraction
 
             if sampler.iteration % 10 == 0:
                 logging.debug(f"{sampler.iteration=}: Creating backup")
