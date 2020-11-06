@@ -438,7 +438,6 @@ def create_model(theta):
         # TODO better error handling, returning inf here will be weird
         e = str(sys.exc_info()[0]) + " : " + str(sys.exc_info()[1])
         print("INFO: Exception raised by limepy, returning -np.inf. ", e)
-        return -np.inf
 
     model.nms = len(mass_func.ms[-1][cs])
     model.s2 = s2
