@@ -165,11 +165,11 @@ def likelihood_number_density(model, ndensity):
     # This allows us to add a constant error component to the data which
     # allows us to fit on the data while not worrying too much about the
     # outermost points where background effects are most prominent.
-    yerr = np.zeros(len(ndensity['ΔΣ'[:100]]))
+    yerr = np.zeros(len(ndensity['ΔΣ'][:100]))
 
     # Add the nuisance parameter in quadrature
-    for i in range(len(ndensity['ΔΣ'[:100]])):
-        yerr[i] = np.sqrt(ndensity['ΔΣ'[:100]][i] ** 2 + model.s2)
+    for i in range(len(ndensity['ΔΣ'][:100])):
+        yerr[i] = np.sqrt(ndensity['ΔΣ'][:100][i] ** 2 + model.s2)
 
     # Now regular gaussian likelihood
     return -0.5 * np.sum((ndensity['Σ'][:100] - interpolated) ** 2 / yerr ** 2
