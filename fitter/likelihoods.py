@@ -490,11 +490,11 @@ def log_likelihood(theta, observations, pulsar_edist):
 
     # TODO need to change how calling all L, which ones used depends on cluster
 
-    log_pulsar = likelihood_pulsars(
-        model,
-        observations['pulsar'],
-        pulsar_edist
-    )
+    # log_pulsar = likelihood_pulsars(
+    #     model,
+    #     observations['pulsar'],
+    #     pulsar_edist
+    # )
 
     log_LOS = likelihood_LOS(
         model,
@@ -554,8 +554,8 @@ def log_likelihood(theta, observations, pulsar_edist):
     # )
 
     return (
-        log_pulsar
-        + log_LOS
+        # log_pulsar
+        log_LOS
         + log_numdens
         + log_pm_tot
         + log_pm_ratio
