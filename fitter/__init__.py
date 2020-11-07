@@ -169,7 +169,7 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
     fig = corner.corner(flat_samples, labels=labels)
     plt.savefig(f"{outdir}/{cluster}_corner.png", dpi=600)
 
-    # Print results
+    # Print results to stdout
 
     if verbose:
         mssg = ''

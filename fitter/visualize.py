@@ -43,11 +43,11 @@ class Visualizer:
         ax.set_xlabel('R')
         ax.set_ylabel(r'$a_{los}$')
 
-        # TODO make these the same colour
-        ax.plot(pc2arcsec(self.model.r, d) / 60., maz)
-        ax.plot(pc2arcsec(self.model.r, d) / 60., -maz)
+        ax.errorbar(obs_pulsar['r'], self.obs['pulsar/a_los'],
+                    yerr=self.obs['pulsar/Δa_los'], fmt='k.')
 
-        ax.scatter(obs_pulsar['r'], self.obs['pulsar/a_los'])
+        upper_az, = ax.plot(pc2arcsec(self.model.r, d) / 60., maz)
+        ax.plot(pc2arcsec(self.model.r, d) / 60., -maz, c=upper_az.get_color())
 
         # err = scipy.stats.norm.pdf(A_SPACE, 0, np.c_[obs_pulsar['Δa_los']])
 
@@ -76,7 +76,7 @@ class Visualizer:
 
         ax.set_xscale("log")
 
-        ax.errorbar(vel_disp['r'], vel_disp['σ'], yerr=obs_err, fmt='.')
+        ax.errorbar(vel_disp['r'], vel_disp['σ'], yerr=obs_err, fmt='k.')
         ax.plot(pc2arcsec(self.model.r, self.model.d),
                 np.sqrt(self.model.v2pj[mass_bin]))
 
@@ -97,7 +97,7 @@ class Visualizer:
         ax.set_xscale("log")
 
         ax.errorbar(pm['r'], pm['PM_tot'],
-                    xerr=pm['Δr'], yerr=pm['ΔPM_tot'], fmt='.')
+                    xerr=pm['Δr'], yerr=pm['ΔPM_tot'], fmt='k.')
 
         ax.plot(pc2arcsec(self.model.r, self.model.d),
                 kms2masyr(np.sqrt(self.model.v2Tj[mass_bin]), self.model.d))
@@ -120,7 +120,7 @@ class Visualizer:
         ax.set_xscale("log")
 
         ax.errorbar(pm['r'], pm['PM_ratio'],
-                    xerr=pm['Δr'], yerr=pm['ΔPM_ratio'], fmt='.')
+                    xerr=pm['Δr'], yerr=pm['ΔPM_ratio'], fmt='k.')
 
         ax.plot(pc2arcsec(self.model.r, self.model.d),
                 model_ratio)
@@ -151,7 +151,7 @@ class Visualizer:
         ax.loglog()
 
         ax.errorbar(numdens['r'] * 60, numdens["Σ"],
-                    yerr=np.sqrt(numdens["ΔΣ"]**2 + self.model.s2), fmt=".")
+                    yerr=np.sqrt(numdens["ΔΣ"]**2 + self.model.s2), fmt='k.')
         ax.plot(pc2arcsec(self.model.r, self.model.d),
                 K * self.model.Sigmaj[mass_bin] / self.model.mj[mass_bin])
 
@@ -215,6 +215,7 @@ def compare_models(*models, observations, labels=None):
     create viz objects for all the models and plot them all on the same axes
     '''
 
+    # TODO data is being plotted every time unfortunately
     fig, axes = plt.subplots(3, 2)
 
     visuals = [Visualizer(mod, observations) for mod in models]
@@ -227,6 +228,7 @@ def compare_models(*models, observations, labels=None):
         viz.plot_pm_ratio(fig=fig, ax=axes[2, 1])
 
     if labels:
-        fig.legend(labels)
+        # getting handles is a bit fragile, requires obs being plotted first
+        fig.legend(plt.gca().lines[1::2], labels)
 
     plt.show()
