@@ -188,10 +188,12 @@ def likelihood_pm_tot(model, pm):
     except KeyError:
         obs_err = pm['ΔPM_tot']
 
+    model_tot = np.sqrt(model.v2Tj[mass_bin]**2 + model.v2Rj[mass_bin]**2)
+
     # Interpolated model at data locations
     interpolated = np.interp(
         pm['r'], pc2arcsec(model.r, model.d),
-        kms2masyr(np.sqrt(model.v2j[mass_bin]), model.d)
+        kms2masyr(model_tot, model.d)
     )
 
     # Gaussian likelihood
@@ -205,8 +207,6 @@ def likelihood_pm_ratio(model, pm):
 
     mass_bin = model.nms - 1
 
-    model_ratio = np.sqrt(model.v2Tj[mass_bin] / model.v2Rj[mass_bin])
-
     # Build asymmetric error, if exists
     try:
         obs_err = build_asym_err(model, pm['r'], pm['PM_ratio'],
@@ -214,6 +214,8 @@ def likelihood_pm_ratio(model, pm):
                                  model.d)
     except KeyError:
         obs_err = pm['ΔPM_ratio']
+
+    model_ratio = np.sqrt(model.v2Tj[mass_bin] / model.v2Rj[mass_bin])
 
     # Interpolated model at data locations
     interpolated = np.interp(
@@ -434,11 +436,7 @@ def create_model(theta):
             project=True,
             verbose=False,
         )
-    except Exception:
-        # TODO better error handling, weird return
-        e = str(sys.exc_info()[0]) + " : " + str(sys.exc_info()[1])
-        print("INFO: Exception raised by limepy, returning -np.inf. ", e)
-
+    except ValueError:
         return None
 
     model.nms = len(mass_func.ms[-1][cs])
@@ -483,7 +481,7 @@ def log_likelihood(theta, observations, pulsar_edist):
 
     # If the model does not converge return -np.inf
     if model is None or not model.converged:
-        logging.debug("Model ({model}) did not converge")
+        logging.debug(f"Model ({model}) did not converge")
         return -np.inf
 
     # Calculate each log likelihood

@@ -89,6 +89,7 @@ class Visualizer:
 
         mass_bin = self.model.nms - 1
         pm = self.obs['proper_motion']
+        model_tot2 = self.model.v2Tj[mass_bin]**2 + self.model.v2Rj[mass_bin]**2
 
         ax.set_title("Total Proper Motion")
         ax.set_xlabel("R [arcsec]")
@@ -100,7 +101,7 @@ class Visualizer:
                     xerr=pm['Δr'], yerr=pm['ΔPM_tot'], fmt='k.')
 
         ax.plot(pc2arcsec(self.model.r, self.model.d),
-                kms2masyr(np.sqrt(self.model.v2Tj[mass_bin]), self.model.d))
+                kms2masyr(np.sqrt(model_tot2), self.model.d))
 
         return fig
 
@@ -111,7 +112,7 @@ class Visualizer:
 
         mass_bin = self.model.nms - 1
         pm = self.obs['proper_motion']
-        model_ratio = self.model.v2Tj[mass_bin] / self.model.v2Rj[mass_bin]
+        model_ratio2 = self.model.v2Tj[mass_bin] / self.model.v2Rj[mass_bin]
 
         ax.set_title("Proper Motion Ratio")
         ax.set_xlabel("R [arcsec]")
@@ -123,7 +124,7 @@ class Visualizer:
                     xerr=pm['Δr'], yerr=pm['ΔPM_ratio'], fmt='k.')
 
         ax.plot(pc2arcsec(self.model.r, self.model.d),
-                model_ratio)
+                np.sqrt(model_ratio2))
 
         return fig
 

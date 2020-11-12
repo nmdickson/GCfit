@@ -34,6 +34,7 @@ class Dataset:
     '''each group of observations, like mass_function, proper_motions, etc
     init from a h5py group
     # TODO get attributes as well
+    # TODO add a 'keys' style method to list the available stuff
     '''
 
     def __contains__(self, key):
