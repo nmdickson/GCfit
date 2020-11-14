@@ -569,11 +569,12 @@ def log_probability(theta, observations, error_dist):
 
     # This line was inserted while debugging, may not be needed anymore.
     if not np.isfinite(priors):
-        return -np.inf, -np.inf
+        # TODO this will need to match the size of `individual` dynamically
+        return -np.inf, -np.inf * np.ones(5)
 
     probability, individuals = log_likelihood(theta, observations, error_dist)
 
     if not np.isfinite(probability):
-        return priors, -np.inf
+        return priors, individuals
 
     return priors + probability, individuals
