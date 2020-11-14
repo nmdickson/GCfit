@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from .likelihoods import pc2arcsec, kms2masyr
+from .likelihoods import pc2arcsec, kms2masyr, create_model
 
 
 class Visualizer:
@@ -10,12 +10,23 @@ class Visualizer:
     idk if a class is really necessary, but sue me
     '''
 
+    def _setup_artist(self, fig, ax):
+        # TODO should maybe attempt to use gcf, gca first
+        if ax is None:
+            if fig is None:
+                fig, ax = plt.subplots()
+            else:
+                # TODO how to handle the shapes of subplots here probs read fig
+                ax = fig.add_subplot()
+        else:
+            if fig is None:
+                fig = ax.get_figure()
+
+        return fig, ax
+
     # -----------------------------------------------------------------------
     # Plotting functions
     # -----------------------------------------------------------------------
-
-    # TODO figure out figs and axes and shared plots and stuff
-    #   right now it just plots and shows stuff immediately, with no subplots
 
     # Pulsar max az vs measured az
     def plot_pulsar(self, fig=None, ax=None):
@@ -71,6 +82,7 @@ class Visualizer:
         vel_disp = self.obs['velocity_dispersion']
         obs_err = (vel_disp['Δσ_down'], vel_disp['Δσ_up'])
 
+        ax.set_title('Line of Sight Velocity')
         ax.set_xlabel("R [arcsec]")
         ax.set_ylabel(r"$\sigma_{los} \ [km \ s^{-1}]$")
 
@@ -89,7 +101,7 @@ class Visualizer:
 
         mass_bin = self.model.nms - 1
         pm = self.obs['proper_motion']
-        model_tot2 = self.model.v2Tj[mass_bin]**2 + self.model.v2Rj[mass_bin]**2
+        model_tot2 = self.model.v2Tj[mass_bin] + self.model.v2Rj[mass_bin]
 
         ax.set_title("Total Proper Motion")
         ax.set_xlabel("R [arcsec]")
@@ -193,22 +205,42 @@ class Visualizer:
     #     plt.plot(pc2arcsec(m.r),kms2masyr(np.sqrt(m.v2Rj[-2])),label=0.38)
     #     plt.legend()
 
+    def plot_all(self):
+
+        fig, axes = plt.subplots(3, 2)
+
+        self.plot_pulsar(fig=fig, ax=axes[0, 0])
+        self.plot_number_density(fig=fig, ax=axes[1, 0])
+        self.plot_LOS(fig=fig, ax=axes[0, 1])
+        self.plot_pm_tot(fig=fig, ax=axes[1, 1])
+        self.plot_pm_ratio(fig=fig, ax=axes[2, 1])
+
+        return fig
+
+    @classmethod
+    def from_chain(cls, chain, observations, method='median'):
+        '''
+        create a Visualizer instance based on a chain, y taking the median
+        of the chain parameters
+        '''
+
+        if method == 'median':
+            reduc = np.median
+        elif method == 'mean':
+            reduc = np.mean
+
+        # if 3d (Niters, Nwalkers, Nparams)
+        # if 2d (Nwalkers, Nparams)
+        # if 1d (Nparams)
+        chain = chain.reshape((-1, chain.shape[-1]))
+
+        theta = reduc(chain, axis=0)
+
+        return cls(create_model(theta, strict=True), observations)
+
     def __init__(self, model, observations):
         self.obs = observations
         self.model = model
-
-    def _setup_artist(self, fig, ax):
-        if ax is None:
-            if fig in None:
-                fig, ax = plt.subplots()
-            else:
-                # TODO how to handle the shapes of subplots here probs read fig
-                ax = fig.add_subplot()
-        else:
-            if fig is None:
-                fig = ax.get_figure()
-
-        return fig, ax
 
 
 def compare_models(*models, observations, labels=None):
@@ -232,4 +264,4 @@ def compare_models(*models, observations, labels=None):
         # getting handles is a bit fragile, requires obs being plotted first
         fig.legend(plt.gca().lines[1::2], labels)
 
-    plt.show()
+    return fig
