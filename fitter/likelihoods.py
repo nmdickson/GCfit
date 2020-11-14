@@ -187,7 +187,7 @@ def likelihood_pm_tot(model, pm):
     except KeyError:
         obs_err = pm['ΔPM_tot']
 
-    model_tot = np.sqrt(model.v2Tj[mass_bin]**2 + model.v2Rj[mass_bin]**2)
+    model_tot = np.sqrt(model.v2Tj[mass_bin] + model.v2Rj[mass_bin])
 
     # Interpolated model at data locations
     interpolated = np.interp(
@@ -355,7 +355,7 @@ def likelihood_mf_tot(model, mf, N_ms, mes_widths, F, d):
 # --------------------------------------------------------------------------
 
 
-def create_model(theta):
+def create_model(theta, strict=False):
 
     # Construct the model with current theta (parameters)
     if isinstance(theta, dict):
@@ -435,8 +435,11 @@ def create_model(theta):
             project=True,
             verbose=False,
         )
-    except ValueError:
-        return None
+    except ValueError as err:
+        if strict:
+            raise ValueError(err)
+        else:
+            return None
 
     model.nms = len(mass_func.ms[-1][cs])
     model.s2 = s2
