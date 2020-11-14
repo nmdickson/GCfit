@@ -134,6 +134,7 @@ def likelihood_pulsars(model, pulsars, error_dist, return_dist=False):
 
 # Calculates likelihood from number density data.
 def likelihood_number_density(model, ndensity):
+    # TODO don't forget to revert or better compute this flatness cutoff
 
     mass_bin = model.nms - 1
 
@@ -553,26 +554,26 @@ def log_likelihood(theta, observations, pulsar_edist):
     #     d
     # )
 
-    return (
-        log_pulsar
-        + log_LOS
-        + log_numdens
-        + log_pm_tot
-        + log_pm_ratio
-        # + log_pmR_high
-        # + log_pmT_high
-        # + log_pmR_low
-        # + log_pmT_low
-        # + log_mf
-    )
+    probs = np.array([
+        log_pulsar, log_LOS, log_numdens, log_pm_tot, log_pm_ratio,
+        # log_pmR_high, log_pmT_high, log_pmR_low, log_pmT_low, log_mf
+    ])
+
+    return sum(probs), probs
 
 
 # Combines the likelihood with the prior
 # TODO make sure that passing obs here isn't super expensive (see emcee || docs)
 def log_probability(theta, observations, error_dist):
-    lp = log_prior(theta)
-    # This line was inserted while debugging, may not be needed anymore.
-    if not np.isfinite(lp):
-        return -np.inf
+    priors = log_prior(theta)
 
-    return lp + log_likelihood(theta, observations, error_dist)
+    # This line was inserted while debugging, may not be needed anymore.
+    if not np.isfinite(priors):
+        return -np.inf, -np.inf
+
+    probability, individuals = log_likelihood(theta, observations, error_dist)
+
+    if not np.isfinite(probability):
+        return priors, -np.inf
+
+    return priors + probability, individuals

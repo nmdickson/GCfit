@@ -55,9 +55,6 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
 
     backend_fn = f"{savedir}/{cluster}_sampler.hdf"
     backend = emcee.backends.HDFBackend(backend_fn)
-    # Comment this line out if resuming from previous run, also change initial
-    #   state to None where the sampler is run.
-    # backend.reset(Nwalkers, Ndim)
 
     logging.info("Beginning pool")
 
@@ -95,6 +92,7 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
 
         t = time.time()
 
+        # Set initial state to None if resuming run (`cont_run`)
         for _ in sampler.sample(init_pos, iterations=Niters, progress=verbose):
 
             t_i = time.time()
