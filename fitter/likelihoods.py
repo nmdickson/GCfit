@@ -485,7 +485,7 @@ def log_likelihood(theta, observations, pulsar_edist):
     # If the model does not converge return -np.inf
     if model is None or not model.converged:
         logging.debug(f"Model ({model}) did not converge")
-        return -np.inf
+        return -np.inf, -np.inf * np.ones(5)
 
     # Calculate each log likelihood
 
@@ -570,7 +570,7 @@ def log_probability(theta, observations, error_dist):
     # This line was inserted while debugging, may not be needed anymore.
     if not np.isfinite(priors):
         # TODO this will need to match the size of `individual` dynamically
-        return -np.inf, -np.inf * np.ones(5)
+        return -np.inf, -np.inf * np.ones(5)  # Same with above (ln488)
 
     probability, individuals = log_likelihood(theta, observations, error_dist)
 
