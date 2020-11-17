@@ -188,7 +188,7 @@ def likelihood_pm_tot(model, pm):
     except KeyError:
         obs_err = pm['ΔPM_tot']
 
-    model_tot = np.sqrt(model.v2Tj[mass_bin] + model.v2Rj[mass_bin])
+    model_tot = np.sqrt(0.5 * (model.v2Tj[mass_bin] + model.v2Rj[mass_bin]))
 
     # Interpolated model at data locations
     interpolated = np.interp(
@@ -570,10 +570,13 @@ def log_probability(theta, observations, error_dist):
     # This line was inserted while debugging, may not be needed anymore.
     if not np.isfinite(priors):
         # TODO this will need to match the size of `individual` dynamically
+        # TODO Reading emcee/#5 makes me wonder if returning -inf blob is right
         return -np.inf, -np.inf * np.ones(5)  # Same with above (ln488)
 
     probability, individuals = log_likelihood(theta, observations, error_dist)
 
+    # TODO Should priors be returned here? rather than -inf?
+    #   Also would be nice to be able to differentiate bad priors and this
     if not np.isfinite(probability):
         return priors, individuals
 
