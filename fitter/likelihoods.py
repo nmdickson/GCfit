@@ -133,10 +133,11 @@ def likelihood_pulsars(model, pulsars, error_dist, return_dist=False):
 
 
 # Calculates likelihood from number density data.
-def likelihood_number_density(model, ndensity):
+def likelihood_number_density(model, ndensity, mass_bin=None):
     # TODO don't forget to revert or better compute this flatness cutoff
 
-    mass_bin = model.nms - 1
+    if mass_bin is None:
+        mass_bin = model.nms - 1
 
     # Interpolated the model data at the measurement locations
     interpolated = np.interp(
@@ -177,9 +178,10 @@ def likelihood_number_density(model, ndensity):
                          + np.log(yerr ** 2))
 
 
-def likelihood_pm_tot(model, pm):
+def likelihood_pm_tot(model, pm, mass_bin=None):
 
-    mass_bin = model.nms - 1
+    if mass_bin is None:
+        mass_bin = model.nms - 1
 
     # Build asymmetric error, if exists
     try:
@@ -203,9 +205,10 @@ def likelihood_pm_tot(model, pm):
     )
 
 
-def likelihood_pm_ratio(model, pm):
+def likelihood_pm_ratio(model, pm, mass_bin=None):
 
-    mass_bin = model.nms - 1
+    if mass_bin is None:
+        mass_bin = model.nms - 1
 
     # Build asymmetric error, if exists
     try:
@@ -230,9 +233,10 @@ def likelihood_pm_ratio(model, pm):
     )
 
 
-def likelihood_pm_T(model, r, pm):
+def likelihood_pm_T(model, pm, mass_bin=None):
 
-    mass_bin = model.nms - 1
+    if mass_bin is None:
+        mass_bin = model.nms - 1
 
     # Build asymmetric error, if exists
     try:
@@ -254,9 +258,10 @@ def likelihood_pm_T(model, r, pm):
     )
 
 
-def likelihood_pm_R(model, r, pm):
+def likelihood_pm_R(model, pm, mass_bin=None):
 
-    mass_bin = model.nms - 1
+    if mass_bin is None:
+        mass_bin = model.nms - 1
 
     # Build asymmetric error, if exists
     try:
@@ -278,9 +283,10 @@ def likelihood_pm_R(model, r, pm):
     )
 
 
-def likelihood_LOS(model, vlos):
+def likelihood_LOS(model, vlos, mass_bin=None):
     # most massive main-sequence bin, mass_bin
-    mass_bin = model.nms - 1
+    if mass_bin is None:
+        mass_bin = model.nms - 1
 
     # Build asymmetric error, if exists
     try:
@@ -449,33 +455,6 @@ def create_model(theta, strict=False):
     return model
 
 
-# Log prior is what we use to define what regions of parameter space we
-#   will consider valid.
-# TODO how do we know these ranges, do they change per cluster, are they good
-def log_prior(theta):
-    W0, M, rh, ra, g, delta, s, F, a1, a2, a3, BHret, d = theta
-    if (
-        3 < W0 < 20
-        and 0.5 < rh < 15
-        and 0.01 < M < 10
-        and 0 < ra < 5
-        and 0 < g < 2.3
-        and 0.3 < delta < 0.5
-        and 0 < s < 10
-        and 0.1 < F < 0.5
-        and -2 < a1 < 6
-        and -2 < a2 < 6
-        and -2 < a3 < 6
-        and 0 < BHret < 100
-        and 4 < d < 7
-    ):
-        # If its within the valid space don't add anything
-        return 0.0
-    # If its outside the valid space add -inf to prevent further movement
-    #   in that direction
-    return -np.inf
-
-
 # Main likelihood function, generates the model(theta) passes it to the
 # individual likelihood functions and collects their results.
 def log_likelihood(theta, observations, pulsar_edist):
@@ -534,7 +513,7 @@ def log_likelihood(theta, observations, pulsar_edist):
     # log_pmR_low = likelihood_pm_R(
     #     model,
     #     observations['proper_motion/low_mass'],
-    #     mass_bin=-2,  # TODO I removed the mass_bin arg but need it here
+    #     mass_bin=-2,
     #     d,
     # )
 
@@ -565,19 +544,27 @@ def log_likelihood(theta, observations, pulsar_edist):
 # Combines the likelihood with the prior
 # TODO make sure that passing obs here isn't super expensive (see emcee || docs)
 def log_probability(theta, observations, error_dist):
-    priors = log_prior(theta)
 
-    # This line was inserted while debugging, may not be needed anymore.
-    if not np.isfinite(priors):
-        # TODO this will need to match the size of `individual` dynamically
-        # TODO Reading emcee/#5 makes me wonder if returning -inf blob is right
-        return -np.inf, -np.inf * np.ones(5)  # Same with above (ln488)
+    # TODO this will need to match the size of `individual` dynamically
+    #   Same with above (unconverged models in log_likelihood)
+    # TODO Reading emcee/#5 makes me wonder if returning -inf blob is right
+    W0, M, rh, ra, g, delta, s, F, a1, a2, a3, BHret, d = theta
+    # TODO make this prettier
+    if not (3 < W0 < 20
+            and 0.5 < rh < 15
+            and 0.01 < M < 10
+            and 0 < ra < 5
+            and 0 < g < 2.3
+            and 0.3 < delta < 0.5
+            and 0 < s < 10
+            and 0.1 < F < 0.5
+            and -2 < a1 < 6
+            and -2 < a2 < 6
+            and -2 < a3 < 6
+            and 0 < BHret < 100
+            and 4 < d < 7):
+        return -np.inf, -np.inf * np.ones(5)
 
     probability, individuals = log_likelihood(theta, observations, error_dist)
 
-    # TODO Should priors be returned here? rather than -inf?
-    #   Also would be nice to be able to differentiate bad priors and this
-    if not np.isfinite(probability):
-        return priors, individuals
-
-    return priors + probability, individuals
+    return probability, individuals
