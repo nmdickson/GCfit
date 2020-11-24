@@ -50,6 +50,10 @@ But if multiple "versions" of the datasets are to be used, then you can put
 everything under other groups under the key, which should be sorted out
 correctly under data.
 
+But, this MUST be done for everything in that group, all parent groups of
+subgroups will not be read in data, so there can be no shared space for groups
+and datasets. All datasets must go under the lowest level of subgroup.
+
 \section{Attributes}
 
 \input{DP_priors}

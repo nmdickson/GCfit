@@ -4,12 +4,16 @@ import h5py
 import logging
 from importlib import resources
 
-# TODO put all the units into the h5 file attributes
-# TODO auto unit conversions based on ^
-# TODO better error handling
+# TODO auto unit conversions based on attributes
+# TODO better exception handling
+
+# TODO this is probably where what likelihoods to compute is decided
+
 # TODO change all asym errors from _up _down to ,up ,down (so they all match)
+# TODO add "mass_bin" attribute to all groups? maybe optional?
 
 # Acceleration space for which we generate a probability distribution.
+# TODO generate this based on the data file probably
 # A_SPACE = np.linspace(-15e-9, 15e-9, 300)
 A_SPACE = np.linspace(-5e-8, 5e-8, 300)
 
@@ -34,9 +38,18 @@ DEFAULT_PRIORS = {
 class Dataset:
     '''each group of observations, like mass_function, proper_motions, etc
     init from a h5py group
+    not to be confused with h5py datasets, this is more analogous to a group
     # TODO get attributes as well
-    # TODO add a 'keys' style method to list the available stuff
     '''
+
+    def items(self):
+        return self._variables.items()
+
+    def keys(self):
+        return self._variables.keys()
+
+    def values(self):
+        return self._variables.values()
 
     def __contains__(self, key):
         return key in self._variables
@@ -66,13 +79,60 @@ class Dataset:
 class Observations:
     '''Collection of Datasets, read from a corresponding hdf5 file'''
 
-    def __getitem__(self, key):
-        if '/' in key:
-            group, key = key.split('/', maxsplit=1)
-            return self._datasets[group][key]
+    def items(self):
+        return self._datasets.items()
 
-        else:
+    def keys(self):
+        return self._datasets.keys()
+
+    def values(self):
+        return self._datasets.values()
+
+    def __getitem__(self, key):
+
+        try:
+            # return a dataset
             return self._datasets[key]
+        except KeyError:
+            try:
+                # return a variable within a dataset
+                group, name = key.rsplit('/', maxsplit=1)
+                return self._datasets[group][name]
+
+            except ValueError:
+                # not in _datasets, and no '/' to split on so not a variable
+                mssg = f"Dataset '{key}' does not exist"
+                raise KeyError(mssg)
+
+            except KeyError:
+                # looks like a "dataset/variable" but that variable don't exist
+                mssg = f"Dataset or variable '{key}' does not exist"
+                raise KeyError(mssg)
+
+    def _find_groups(self, root_group, exclude_priors=True):
+        '''lists pathnames to all groups under root_group, excluding priors'''
+
+        def _walker(key, obj):
+            if isinstance(obj, h5py.Group):
+
+                if exclude_priors and key == 'priors':
+                    return
+
+                # relies on visititems moving top-down
+                # this should theoretically remove all parent groups of groups
+                try:
+                    parent, name = key.rsplit('/', maxsplit=1)
+                    groups.remove(parent)
+
+                except ValueError:
+                    pass
+
+                groups.append(key)
+
+        groups = []
+        root_group.visititems(_walker)
+
+        return groups
 
     def __init__(self, cluster):
 
@@ -84,13 +144,12 @@ class Observations:
 
                 logging.info(f"Observations read from {datadir}/{cluster}.hdf5")
 
-                for group in (file.keys() - {'priors'}):
+                for group in self._find_groups(file):
                     self._datasets[group] = Dataset(file[group])
 
                 try:
                     # This updates defaults with data while keeping default sort
                     self.priors = {**self.priors, **file['priors'].attrs}
-
                 except KeyError:
                     logging.info("No priors stored in datafile, using defaults")
                     pass
