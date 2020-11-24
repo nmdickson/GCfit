@@ -7,6 +7,7 @@ from importlib import resources
 # TODO put all the units into the h5 file attributes
 # TODO auto unit conversions based on ^
 # TODO better error handling
+# TODO change all asym errors from _up _down to ,up ,down (so they all match)
 
 # Acceleration space for which we generate a probability distribution.
 # A_SPACE = np.linspace(-15e-9, 15e-9, 300)
