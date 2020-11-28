@@ -443,6 +443,7 @@ def create_model(theta, strict=False):
             verbose=False,
         )
     except ValueError as err:
+        logging.debug(f"Model did not converge with {theta=}")
         if strict:
             raise ValueError(err)
         else:
@@ -461,9 +462,9 @@ def log_likelihood(theta, observations, pulsar_edist):
 
     model = create_model(theta)
 
+    # TODO Having this as a try/excpt might be better than returning None
     # If the model does not converge return -np.inf
     if model is None or not model.converged:
-        logging.debug(f"Model ({model}) did not converge")
         return -np.inf, -np.inf * np.ones(5)
 
     # Calculate each log likelihood
@@ -547,8 +548,7 @@ def log_probability(theta, observations, error_dist):
 
     # TODO this will need to match the size of `individual` dynamically
     #   Same with above (unconverged models in log_likelihood)
-    # TODO Reading emcee/#5 makes me wonder if returning -inf blob is right
-    W0, M, rh, ra, g, delta, s, F, a1, a2, a3, BHret, d = theta
+    W0, M, rh, ra, g, delta, s2, F, a1, a2, a3, BHret, d = theta
     # TODO make this prettier
     if not (3 < W0 < 20
             and 0.5 < rh < 15
@@ -556,7 +556,7 @@ def log_probability(theta, observations, error_dist):
             and 0 < ra < 5
             and 0 < g < 2.3
             and 0.3 < delta < 0.5
-            and 0 < s < 10
+            and 0 < s2 < 10
             and 0.1 < F < 0.5
             and -2 < a1 < 6
             and -2 < a2 < 6
