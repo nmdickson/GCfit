@@ -465,7 +465,7 @@ def log_likelihood(theta, observations, pulsar_edist):
     # TODO Having this as a try/excpt might be better than returning None
     # If the model does not converge return -np.inf
     if model is None or not model.converged:
-        return -np.inf, -np.inf * np.ones(5)
+        return -np.inf, -np.inf * np.ones(4)
 
     # Calculate each log likelihood
 
@@ -535,7 +535,7 @@ def log_likelihood(theta, observations, pulsar_edist):
     # )
 
     probs = np.array([
-        log_pulsar, log_LOS, log_numdens, log_pm_tot, #log_pm_ratio,
+        log_pulsar, log_LOS, log_numdens, log_pm_tot,  # log_pm_ratio,
         # log_pmR_high, log_pmT_high, log_pmR_low, log_pmT_low, log_mf
     ])
 
@@ -563,7 +563,7 @@ def log_probability(theta, observations, error_dist):
             and -2 < a3 < 6
             and 0 < BHret < 100
             and 4 < d < 7):
-        return -np.inf, -np.inf * np.ones(5)
+        return -np.inf, -np.inf * np.ones(4)
 
     probability, individuals = log_likelihood(theta, observations, error_dist)
 
