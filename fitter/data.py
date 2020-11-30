@@ -1,3 +1,4 @@
+'''READONLY access to data in cluster resources files'''
 import numpy as np
 import h5py
 
@@ -39,34 +40,49 @@ class Dataset:
     '''each group of observations, like mass_function, proper_motions, etc
     init from a h5py group
     not to be confused with h5py datasets, this is more analogous to a group
-    # TODO get attributes as well
+
+    h5py attributes are called metadata here cause that is more descriptive
     '''
+    class _Variable(np.ndarray):
+        '''simple readonly subclass to allow metadata dict on the variable'''
+        def __new__(cls, input_array, mdata=None):
 
-    def items(self):
-        return self._variables.items()
+            obj = np.asarray(input_array).view(cls)
 
-    def keys(self):
-        return self._variables.keys()
+            if isinstance(mdata, dict):
+                obj.mdata = mdata
+            elif mdata is None:
+                obj.mdata = dict()
+            else:
+                raise TypeError('`mdata` must be a dict or None')
 
-    def values(self):
-        return self._variables.values()
+            obj.flags.writeable = False
+
+            return obj
 
     def __contains__(self, key):
-        return key in self._variables
+        return key in self._dict_variables
 
     def __getitem__(self, key):
-        return self._variables[key]
+        return self._dict_variables[key]
 
     def _init_variables(self, name, var):
         '''used by group.visit'''
 
         if isinstance(var, h5py.Dataset):
-            self._variables[name] = var[:]
+            mdata = dict(var.attrs)
+            self._dict_variables[name] = self._Variable(var[:], mdata=mdata)
 
     def __init__(self, group):
 
-        self._variables = {}
+        self._dict_variables = {}
         group.visititems(self._init_variables)
+
+        self.mdata = dict(group.attrs)
+
+    @property
+    def variables(self):
+        return self._dict_variables
 
     def compute_async_error(self, varname, quantity):
         '''TODO this is where the async error stuff should go'''
@@ -79,28 +95,23 @@ class Dataset:
 class Observations:
     '''Collection of Datasets, read from a corresponding hdf5 file'''
 
-    def items(self):
-        return self._datasets.items()
-
-    def keys(self):
-        return self._datasets.keys()
-
-    def values(self):
-        return self._datasets.values()
+    @property
+    def datasets(self):
+        return self._dict_datasets
 
     def __getitem__(self, key):
 
         try:
             # return a dataset
-            return self._datasets[key]
+            return self._dict_datasets[key]
         except KeyError:
             try:
                 # return a variable within a dataset
                 group, name = key.rsplit('/', maxsplit=1)
-                return self._datasets[group][name]
+                return self._dict_datasets[group][name]
 
             except ValueError:
-                # not in _datasets, and no '/' to split on so not a variable
+                # not in _dict_datasets and no '/' to split on so not a variable
                 mssg = f"Dataset '{key}' does not exist"
                 raise KeyError(mssg)
 
@@ -136,7 +147,7 @@ class Observations:
 
     def __init__(self, cluster):
 
-        self._datasets = {}
+        self._dict_datasets = {}
         self.priors = DEFAULT_PRIORS.copy()
 
         with resources.path('fitter', 'resources') as datadir:
@@ -145,7 +156,7 @@ class Observations:
                 logging.info(f"Observations read from {datadir}/{cluster}.hdf5")
 
                 for group in self._find_groups(file):
-                    self._datasets[group] = Dataset(file[group])
+                    self._dict_datasets[group] = Dataset(file[group])
 
                 try:
                     # This updates defaults with data while keeping default sort
