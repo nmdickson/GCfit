@@ -65,7 +65,8 @@ def build_asym_err(model, r, quantity, sigmaup, sigmalow, d):
 # --------------------------------------------------------------------------
 
 
-def likelihood_pulsar(model, pulsars, error_dist, return_dist=False):
+def likelihood_pulsar(model, pulsars, error_dist,
+                      mass_bin=None, return_dist=False):
 
     # Generate the probability distributions
     def gen_prob_dists(model, a_space, r_data, jns):
@@ -103,9 +104,16 @@ def likelihood_pulsar(model, pulsars, error_dist, return_dist=False):
             dists.append(conved)
         return dists
 
+    if mass_bin is None:
+        if 'm' in pulsars.mdata:
+            mass_bin = np.where(model.mj == pulsars.mdata['m'])[0][0]
+        else:
+            logging.debug("No mass bin provided for pulsars, using -1")
+            mass_bin = -1
+
     # Generate the probability distributions that we will convolve with the
     #   pre-generated error distributions
-    pre_prob_dist = gen_prob_dists(model, A_SPACE, pulsars['r'], -1)
+    pre_prob_dist = gen_prob_dists(model, A_SPACE, pulsars['r'], mass_bin)
 
     # The ordering of the arrays here is actually important: In the case of a
     # z2 interpolation error the probability value will be dropped so in some
@@ -137,7 +145,10 @@ def likelihood_number_density(model, ndensity, mass_bin=None):
     # TODO don't forget to revert or better compute this flatness cutoff
 
     if mass_bin is None:
-        mass_bin = model.nms - 1
+        if 'm' in ndensity.mdata:
+            mass_bin = np.where(model.mj == ndensity.mdata['m'])[0][0]
+        else:
+            mass_bin = model.nms - 1
 
     # Interpolated the model data at the measurement locations
     interpolated = np.interp(
@@ -181,7 +192,10 @@ def likelihood_number_density(model, ndensity, mass_bin=None):
 def likelihood_pm_tot(model, pm, mass_bin=None):
 
     if mass_bin is None:
-        mass_bin = model.nms - 1
+        if 'm' in pm.mdata:
+            mass_bin = np.where(model.mj == pm.mdata['m'])[0][0]
+        else:
+            mass_bin = model.nms - 1
 
     # Build asymmetric error, if exists
     try:
@@ -208,7 +222,10 @@ def likelihood_pm_tot(model, pm, mass_bin=None):
 def likelihood_pm_ratio(model, pm, mass_bin=None):
 
     if mass_bin is None:
-        mass_bin = model.nms - 1
+        if 'm' in pm.mdata:
+            mass_bin = np.where(model.mj == pm.mdata['m'])[0][0]
+        else:
+            mass_bin = model.nms - 1
 
     # Build asymmetric error, if exists
     try:
@@ -236,7 +253,10 @@ def likelihood_pm_ratio(model, pm, mass_bin=None):
 def likelihood_pm_T(model, pm, mass_bin=None):
 
     if mass_bin is None:
-        mass_bin = model.nms - 1
+        if 'm' in pm.mdata:
+            mass_bin = np.where(model.mj == pm.mdata['m'])[0][0]
+        else:
+            mass_bin = model.nms - 1
 
     # Build asymmetric error, if exists
     try:
@@ -261,7 +281,10 @@ def likelihood_pm_T(model, pm, mass_bin=None):
 def likelihood_pm_R(model, pm, mass_bin=None):
 
     if mass_bin is None:
-        mass_bin = model.nms - 1
+        if 'm' in pm.mdata:
+            mass_bin = np.where(model.mj == pm.mdata['m'])[0][0]
+        else:
+            mass_bin = model.nms - 1
 
     # Build asymmetric error, if exists
     try:
@@ -284,9 +307,12 @@ def likelihood_pm_R(model, pm, mass_bin=None):
 
 
 def likelihood_LOS(model, vlos, mass_bin=None):
-    # most massive main-sequence bin, mass_bin
+
     if mass_bin is None:
-        mass_bin = model.nms - 1
+        if 'm' in vlos.mdata:
+            mass_bin = np.where(model.mj == vlos.mdata['m'])[0][0]
+        else:
+            mass_bin = model.nms - 1
 
     # Build asymmetric error, if exists
     try:
@@ -363,7 +389,10 @@ def likelihood_mf_tot(model, mf):
 # --------------------------------------------------------------------------
 
 
-def create_model(theta, strict=False):
+def create_model(theta, observations=None, *, strict=False, verbose=False):
+    '''if observations are provided, will use it for a few parameters and
+    check if need to add any mass bins. Otherwise will just use defaults.
+    '''
 
     # Construct the model with current theta (parameters)
     if isinstance(theta, dict):
@@ -414,16 +443,17 @@ def create_model(theta, strict=False):
     mj = np.r_[mass_func.ms[-1][cs], mass_func.mr[-1][cr]]
     Mj = np.r_[mass_func.Ms[-1][cs], mass_func.Mr[-1][cr]]
 
-    # Add in bin of 0.38 MSol to model Heyl data
-    # mj = np.append(mj, 0.38)
-    # Mj = np.append(Mj, 0.1)
+    # append tracer mass bins (must be appended to end to not affect nms)
 
-    # Add in bin of 1.6 MSol to use to model MSPs
-    # mj = np.append(mj, 1.6)
-    # Mj = np.append(Mj, 0.1)
+    if observations is not None:
 
-    mj = np.append(mj, 1.4)  # for M62 (See lynch, table3)
-    Mj = np.append(Mj, 0.1)
+        tracer_mj = [
+            dataset.mdata['m'] for dataset in observations.datasets.values()
+            if 'm' in dataset.mdata
+        ]
+
+        mj = np.concatenate((mj, tracer_mj))
+        Mj = np.concatenate((Mj, 0.1 * np.ones_like(tracer_mj)))
 
     # In the event that a limepy model does not converge, return -inf.
     try:
@@ -432,12 +462,12 @@ def create_model(theta, strict=False):
             g=g,
             M=M * 1e6,
             rh=rh,
-            ra=10 ** ra,
+            ra=10**ra,
             delta=delta,
             mj=mj,
             Mj=Mj,
             project=True,
-            verbose=False,
+            verbose=verbose,
         )
     except ValueError as err:
         logging.debug(f"Model did not converge with {theta=}")

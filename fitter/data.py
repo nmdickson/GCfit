@@ -6,6 +6,7 @@ import logging
 from importlib import resources
 
 # TODO better exception handling
+# TODO __str__ methods, for better error messages
 
 # TODO this is probably where what likelihoods to compute is decided
 
