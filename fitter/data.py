@@ -5,7 +5,6 @@ import h5py
 import logging
 from importlib import resources
 
-# TODO auto unit conversions based on attributes
 # TODO better exception handling
 
 # TODO this is probably where what likelihoods to compute is decided
@@ -14,7 +13,7 @@ from importlib import resources
 # TODO add "mass_bin" attribute to all groups? maybe optional?
 
 # Acceleration space for which we generate a probability distribution.
-# TODO generate this based on the data file probably
+# TODO generate this based on the data (and do it in likelihoods probably)
 # A_SPACE = np.linspace(-15e-9, 15e-9, 300)
 A_SPACE = np.linspace(-5e-8, 5e-8, 300)
 
@@ -46,6 +45,7 @@ class Dataset:
     class _Variable(np.ndarray):
         '''simple readonly subclass to allow metadata dict on the variable'''
         def __new__(cls, input_array, mdata=None):
+            # TODO mdata doesn't carry over into views, might need _finalize_
 
             obj = np.asarray(input_array).view(cls)
 
@@ -89,6 +89,7 @@ class Dataset:
         pass
 
     def convert_units(self):
+        # TODO auto unit conversions based on attributes
         pass
 
 

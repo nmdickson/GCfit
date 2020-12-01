@@ -3,13 +3,14 @@ from .new_Paz import vec_Paz
 
 import numpy as np
 import limepy as lp
+import scipy.stats
 import scipy.signal
 import scipy.integrate as integ
 import scipy.interpolate as interp
 from ssptools import evolve_mf_3 as emf3
 
-import sys
 import logging
+import fnmatch
 
 # TODO figure out all these mass bins and why functions choose certain ones
 
@@ -63,8 +64,8 @@ def build_asym_err(model, r, quantity, sigmaup, sigmalow, d):
 # Component likelihood functions
 # --------------------------------------------------------------------------
 
-# Calculates the likelihood from pulsars
-def likelihood_pulsars(model, pulsars, error_dist, return_dist=False):
+
+def likelihood_pulsar(model, pulsars, error_dist, return_dist=False):
 
     # Generate the probability distributions
     def gen_prob_dists(model, a_space, r_data, jns):
@@ -85,7 +86,7 @@ def likelihood_pulsars(model, pulsars, error_dist, return_dist=False):
     def gen_convolved_dists(error, prob):
 
         # The ordering of the input arrays here is actually important:
-        # see comment in likelihood_pulsars()
+        # see comment in likelihood_pulsar()
         dists = []
         for i in range(len(prob)):
             conved = scipy.signal.convolve(error[i], prob[i], mode="same")
@@ -132,7 +133,6 @@ def likelihood_pulsars(model, pulsars, error_dist, return_dist=False):
         return np.log(np.prod(probs))
 
 
-# Calculates likelihood from number density data.
 def likelihood_number_density(model, ndensity, mass_bin=None):
     # TODO don't forget to revert or better compute this flatness cutoff
 
@@ -456,74 +456,66 @@ def create_model(theta, strict=False):
     return model
 
 
+def determine_components(obs):
+    '''from observations, determine which likelihood functions will be computed
+    and return a dict of the relevant obs dataset keys, and tuples of the
+    functions and any other required args
+    '''
+
+    L_components = {}
+    for key in obs.datasets:
+
+        # fnmatch is to correctly find subgroup stuff like pm/high_mass, etc
+        if fnmatch.fnmatch(key, '*pulsar*'):
+
+            a_width = np.abs(obs[key]['Δa_los'])
+            pulsar_edist = scipy.stats.norm.pdf(A_SPACE, 0, np.c_[a_width])
+
+            L_components[key] = (likelihood_pulsar, pulsar_edist)
+
+        elif fnmatch.fnmatch(key, '*velocity_dispersion*'):
+            L_components[key] = (likelihood_LOS, )
+
+        elif fnmatch.fnmatch(key, '*number_density*'):
+            L_components[key] = (likelihood_number_density, )
+
+        elif fnmatch.fnmatch(key, '*proper_motion*'):
+            if 'PM_tot' in obs[key]:
+                L_components[key] = (likelihood_pm_tot, )
+
+            if 'PM_ratio' in obs[key]:
+                L_components[key] = (likelihood_pm_ratio, )
+
+            if 'PM_R' in obs[key]:
+                L_components[key] = (likelihood_pm_R, )
+
+            if 'PM_tot' in obs[key]:
+                L_components[key] = (likelihood_pm_T, )
+
+        elif fnmatch.fnmatch(key, '*mass_function*'):
+            # TODO this func needs to be redone, may need some args passed here
+            L_components[key] = (likelihood_mf_tot, )
+
+    return L_components
+
+
 # Main likelihood function, generates the model(theta) passes it to the
 # individual likelihood functions and collects their results.
-def log_likelihood(theta, observations, pulsar_edist):
+def log_likelihood(theta, observations, L_components):
 
     model = create_model(theta)
 
     # TODO Having this as a try/excpt might be better than returning None
-    # If the model does not converge return -np.inf
+    # If the model does not converge, return -np.inf
     if model is None or not model.converged:
-        return -np.inf, -np.inf * np.ones(5)
+        return -np.inf, -np.inf * len(L_components)
 
     # Calculate each log likelihood
 
-    # TODO need to change how calling all L, which ones used depends on cluster
-
-    log_pulsar = likelihood_pulsars(
-        model,
-        observations['pulsar'],
-        pulsar_edist
-    )
-
-    log_LOS = likelihood_LOS(
-        model,
-        observations['velocity_dispersion'],
-    )
-
-    log_numdens = likelihood_number_density(
-        model,
-        observations['number_density'],
-    )
-
-    log_pm_tot = likelihood_pm_tot(
-        model,
-        observations['proper_motion'],
-    )
-
-    log_pm_ratio = likelihood_pm_ratio(
-        model,
-        observations['proper_motion'],
-    )
-
-    # log_pmR_high = likelihood_pm_R(
-    #     model,
-    #     observations['proper_motion/high_mass'],
-    #     nms - 1,
-    #     d,
-    # )
-
-    # log_pmT_high = likelihood_pm_T(
-    #     model,
-    #     observations['proper_motion/high_mass'],
-    #     nms - 1,
-    #     d,
-    # )
-
-    # log_pmR_low = likelihood_pm_R(
-    #     model,
-    #     observations['proper_motion/low_mass'],
-    #     mass_bin=-2,
-    #     d,
-    # )
-
-    # log_pmT_low = likelihood_pm_T(
-    #     model,
-    #     observations['proper_motion/low_mass'],
-    #     mass_bin=-2,
-    #     d,
-    # )
+    probs = np.array([
+        likelihood(model, observations[key], *args)
+        for key, (likelihood, *args) in L_components.items()
+    ])
 
     # log_mf = likelihood_mf_tot(
     #     model,
@@ -534,17 +526,13 @@ def log_likelihood(theta, observations, pulsar_edist):
     #     d
     # )
 
-    probs = np.array([
-        log_pulsar, log_LOS, log_numdens, log_pm_tot, log_pm_ratio,
-        # log_pmR_high, log_pmT_high, log_pmR_low, log_pmT_low, log_mf
-    ])
-
+    # TODO with the new dynamic probs, will need ordered names on the blobs
     return sum(probs), probs
 
 
 # Combines the likelihood with the prior
 # TODO make sure that passing obs here isn't super expensive (see emcee || docs)
-def log_probability(theta, observations, error_dist):
+def log_probability(theta, observations, L_components):
 
     # TODO this will need to match the size of `individual` dynamically
     #   Same with above (unconverged models in log_likelihood)
@@ -562,9 +550,9 @@ def log_probability(theta, observations, error_dist):
             and -2 < a2 < 6
             and -2 < a3 < 6
             and 0 < BHret < 100
-            and 4 < d < 7):
-        return -np.inf, -np.inf * np.ones(5)
+            and 4 < d < 8):
+        return -np.inf, -np.inf * len(L_components)
 
-    probability, individuals = log_likelihood(theta, observations, error_dist)
+    probability, individuals = log_likelihood(theta, observations, L_components)
 
     return probability, individuals

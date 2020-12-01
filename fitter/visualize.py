@@ -7,7 +7,6 @@ from .likelihoods import pc2arcsec, kms2masyr, create_model
 class Visualizer:
     '''
     class for making, showing, saving all the plots related to a model
-    idk if a class is really necessary, but sue me
     '''
 
     def _setup_artist(self, fig, ax):
@@ -222,6 +221,8 @@ class Visualizer:
         '''
         create a Visualizer instance based on a chain, y taking the median
         of the chain parameters
+
+        # TODO this supports 1-d chain arrays (theta) but not the same dicts
         '''
 
         if method == 'median':

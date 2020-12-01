@@ -2,7 +2,6 @@ import h5py
 import emcee
 import corner
 import schwimmbad
-import scipy.stats
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -11,8 +10,8 @@ import time
 import shutil
 import logging
 
-from .data import A_SPACE, get_dataset, Observations
-from .likelihoods import log_probability
+from .likelihoods import log_probability, determine_components
+from .data import Observations
 
 
 # TODO this should have some defaults probably
@@ -31,12 +30,6 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
     logging.getLogger('matplotlib').setLevel(logging.WARNING)
     logging.info("BEGIN")
 
-    # Generate the error distributions a single time instead of for every model
-    # given that they are constants.
-
-    a_width = np.abs(get_dataset(cluster, 'pulsar/Δa_los'))
-    pulsar_edist = scipy.stats.norm.pdf(A_SPACE, 0, np.c_[a_width])
-
     # Load the observation data here once
     logging.info(f"Loading {cluster} data")
 
@@ -44,8 +37,14 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
 
     logging.debug(f"Observation datasets: {observations}")
 
-    Ndim = 13
+    # determine which likelihoods to compute
+    L_components = determine_components(observations)
 
+    logging.debug(f"Likelihood components: {L_components}")
+
+    # Initialize the walker positions
+    # TODO i dont think its fair to vary all params by the same random range
+    Ndim = 13
     init_pos = np.fromiter(observations.priors.values(), np.float64)
     init_pos = 1e-4 * np.random.randn(Nwalkers, Ndim) + init_pos
 
@@ -74,7 +73,7 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
             Nwalkers,
             Ndim,
             log_probability,
-            args=(observations, pulsar_edist,),
+            args=(observations, L_components,),
             pool=pool,
             backend=backend,
         )
