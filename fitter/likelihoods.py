@@ -308,7 +308,7 @@ def likelihood_LOS(model, vlos, mass_bin=None):
     )
 
 
-def likelihood_mf_tot(model, mf, N_ms, mes_widths, F, d):
+def likelihood_mf_tot(model, mf):
 
     tot_likelihood = 0
 
@@ -317,11 +317,12 @@ def likelihood_mf_tot(model, mf, N_ms, mes_widths, F, d):
         # we only want to use the obs data for this r bin
         r_mask = (mf['bin'] == annulus_ind)
 
-        r1, r2 = as2pc(0.4 * annulus_ind, d), as2pc(0.4 * (annulus_ind + 1), d)
+        r1 = as2pc(0.4 * annulus_ind, model.d),
+        r2 = as2pc(0.4 * (annulus_ind + 1), model.d)
 
         # Get a binned version of N_model (an Nstars for each mbin)
-        binned_N_model = np.empty(N_ms)
-        for mbin_ind in range(N_ms):
+        binned_N_model = np.empty(model.nms)
+        for mbin_ind in range(model.nms):
 
             # Interpolate the model density at the data locations
             density = interp.interp1d(
@@ -332,12 +333,12 @@ def likelihood_mf_tot(model, mf, N_ms, mes_widths, F, d):
             # Convert density spline into Nstars
             binned_N_model[mbin_ind] = (
                 integ.quad(density, r1, r2)[0]
-                / (model.mj[mbin_ind] * mes_widths[mbin_ind])
+                / (model.mj[mbin_ind] * model.mes_widths[mbin_ind])
             )
 
         # interpolate a func N_model = f(mean mass) from the binned N_model
         interp_N_model = interp.interp1d(
-            model.mj[:N_ms], binned_N_model, fill_value="extrapolate"
+            model.mj[:model.nms], binned_N_model, fill_value="extrapolate"
         )
         # Grab the interpolated N_model's at the data mean masses
         N_model = interp_N_model(mf['mbin_mean'][r_mask])
@@ -348,9 +349,9 @@ def likelihood_mf_tot(model, mf, N_ms, mes_widths, F, d):
 
         # Compute δN_model from poisson error, and nuisance factor
         err = np.sqrt(mf['Δmbin'][r_mask]**2
-                      + (F * N_data / mf['mbin_width'][r_mask]**2))
+                      + (model.F * N_data / mf['mbin_width'][r_mask]**2))
 
-        # compute final gaussian (log?) likelihood
+        # compute final gaussian log likelihood
         tot_likelihood += (-0.5 * np.sum((N_data - N_model)**2
                                          / err**2 + np.log(err**2)))
 
@@ -413,17 +414,13 @@ def create_model(theta, strict=False):
     mj = np.r_[mass_func.ms[-1][cs], mass_func.mr[-1][cr]]
     Mj = np.r_[mass_func.Ms[-1][cs], mass_func.Mr[-1][cr]]
 
-    # Collect bin-widths
-    # mes_widths = mass_func.mes[-1][1:] - mass_func.mes[-1][:-1]
-    # Get main-sequence turnoff bin
-    # nms = len(mass_func.ms[-1][cs])
-
     # Add in bin of 0.38 MSol to model Heyl data
     # mj = np.append(mj, 0.38)
     # Mj = np.append(Mj, 0.1)
 
     # Add in bin of 1.6 MSol to use to model MSPs
     # mj = np.append(mj, 1.6)
+    # Mj = np.append(Mj, 0.1)
 
     mj = np.append(mj, 1.4)  # for M62 (See lynch, table3)
     Mj = np.append(Mj, 0.1)
@@ -449,9 +446,16 @@ def create_model(theta, strict=False):
         else:
             return None
 
+    # TODO not my favourite way to store this info
+
+    # store some necessary mass function info in the model
     model.nms = len(mass_func.ms[-1][cs])
-    model.s2 = s2
+    model.mes_widths = mass_func.mes[-1][1:] - mass_func.mes[-1][:-1]
+
+    # store some necessary theta parameters in the model
     model.d = d
+    model.F = F
+    model.s2 = s2
 
     return model
 
@@ -493,7 +497,6 @@ def determine_components(obs):
                 L_components[key] = (likelihood_pm_T, )
 
         elif fnmatch.fnmatch(key, '*mass_function*'):
-            # TODO this func needs to be redone, may need some args passed here
             L_components[key] = (likelihood_mf_tot, )
 
     return L_components
