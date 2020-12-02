@@ -408,17 +408,28 @@ def create_model(theta, observations=None, *, strict=False, verbose=False):
     a12 = [-a1, -a2, -a3]  # Slopes for initial mass function
     nbin12 = [5, 5, 20]
 
-    # Output times for the evolution
+    # Output times for the evolution (age)
     tout = np.array([11000])
 
+    # TODO figure out which of these are cluster dependant, store them in files
     # Integration settings
     N0 = 5e5  # Normalization of stars
-    Ndot = 0  # Regulates low mass objects depletion, default -20, 0 for 47 Tuc
     tcc = 0  # Core collapse time
     NS_ret = 0.1  # Initial neutron star retention
     BH_ret_int = 1  # Initial Black Hole retention
     BH_ret_dyn = BHret / 100  # Dynamical Black Hole retention
-    FeHe = -1.02  # Metallicity
+
+    # Metallicity
+    try:
+        FeHe = observations.mdata['FeHe']
+    except (AttributeError, KeyError):
+        FeHe = -1.02
+
+    # Regulates low mass objects depletion, default -20, 0 for 47 Tuc
+    try:
+        Ndot = observations.mdata['Ndot']
+    except (AttributeError, KeyError):
+        Ndot = 0
 
     # Generate the mass function
     mass_func = emf3.evolve_mf(
@@ -536,7 +547,7 @@ def determine_components(obs):
 # individual likelihood functions and collects their results.
 def log_likelihood(theta, observations, L_components):
 
-    model = create_model(theta)
+    model = create_model(theta, observations)
 
     # TODO Having this as a try/excpt might be better than returning None
     # If the model does not converge, return -np.inf

@@ -149,6 +149,7 @@ class Observations:
 
     def __init__(self, cluster):
 
+        self.mdata = {}
         self._dict_datasets = {}
         self.priors = DEFAULT_PRIORS.copy()
 
@@ -166,6 +167,8 @@ class Observations:
                 except KeyError:
                     logging.info("No priors stored in datafile, using defaults")
                     pass
+
+                self.mdata = dict(file.attrs)
 
 
 def get_dataset(cluster, key):
