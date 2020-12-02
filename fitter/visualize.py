@@ -167,7 +167,6 @@ class Visualizer:
         ax.plot(pc2arcsec(self.model.r, self.model.d),
                 K * self.model.Sigmaj[mass_bin] / self.model.mj[mass_bin])
 
-        # TODO what to return from these methods? fig?, ax?, both?
         return fig
 
     # mass function
@@ -267,6 +266,9 @@ def compare_models(*models, observations, labels=None):
 
     return fig
 
+
+# TODO add confidence intervals to plots
+# TODO add a "mass fucntion" plot, maybe like peters, maybe like limepy example
 
 # TODO corner plot should go in here too, and probably not bother being created
 #   after each run

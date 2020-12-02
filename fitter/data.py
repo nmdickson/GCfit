@@ -8,11 +8,6 @@ from importlib import resources
 # TODO better exception handling
 # TODO __str__ methods, for better error messages
 
-# TODO this is probably where what likelihoods to compute is decided
-
-# TODO change all asym errors from _up _down to ,up ,down (so they all match)
-# TODO add "mass_bin" attribute to all groups? maybe optional?
-
 # Acceleration space for which we generate a probability distribution.
 # TODO generate this based on the data (and do it in likelihoods probably)
 # A_SPACE = np.linspace(-15e-9, 15e-9, 300)

@@ -12,8 +12,6 @@ from ssptools import evolve_mf_3 as emf3
 import logging
 import fnmatch
 
-# TODO figure out all these mass bins and why functions choose certain ones
-
 
 # --------------------------------------------------------------------------
 # Unit conversions
@@ -317,7 +315,7 @@ def likelihood_LOS(model, vlos, mass_bin=None):
     # Build asymmetric error, if exists
     try:
         obs_err = build_asym_err(model, vlos['r'], vlos['σ'],
-                                 vlos['Δσ_up'], vlos['Δσ_down'], model.d)
+                                 vlos['Δσ,up'], vlos['Δσ,down'], model.d)
     except KeyError:
         obs_err = vlos['Δσ']
 
@@ -578,8 +576,6 @@ def log_likelihood(theta, observations, L_components):
 # TODO make sure that passing obs here isn't super expensive (see emcee || docs)
 def log_probability(theta, observations, L_components):
 
-    # TODO this will need to match the size of `individual` dynamically
-    #   Same with above (unconverged models in log_likelihood)
     W0, M, rh, ra, g, delta, s2, F, a1, a2, a3, BHret, d = theta
     # TODO make this prettier
     if not (3 < W0 < 20

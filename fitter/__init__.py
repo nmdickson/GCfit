@@ -43,13 +43,11 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
     logging.debug(f"Likelihood components: {L_components}")
 
     # Initialize the walker positions
-    # TODO i dont think its fair to vary all params by the same random range
     Ndim = 13
     init_pos = np.fromiter(observations.priors.values(), np.float64)
     init_pos = 1e-4 * np.random.randn(Nwalkers, Ndim) + init_pos
 
     # HDF file saving
-    # TODO sometimes I think this gives issues, maybe should give unique fn
     logging.debug(f"Using hdf backend at {savedir}/{cluster}_sampler.hdf")
 
     backend_fn = f"{savedir}/{cluster}_sampler.hdf"
