@@ -341,7 +341,7 @@ def likelihood_mf_tot(model, mf):
         # we only want to use the obs data for this r bin
         r_mask = (mf['bin'] == annulus_ind)
 
-        r1 = as2pc(0.4 * annulus_ind, model.d),
+        r1 = as2pc(0.4 * annulus_ind, model.d)
         r2 = as2pc(0.4 * (annulus_ind + 1), model.d)
 
         # Get a binned version of N_model (an Nstars for each mbin)
