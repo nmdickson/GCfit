@@ -372,8 +372,7 @@ def likelihood_mf_tot(model, mf):
         N_data = (mf['N'][r_mask] / mf['mbin_width'][r_mask])
 
         # Compute δN_model from poisson error, and nuisance factor
-        err = np.sqrt(mf['Δmbin'][r_mask]**2
-                      + (model.F * N_data / mf['mbin_width'][r_mask]**2))
+        err = np.sqrt(mf['Δmbin'][r_mask]**2 + (model.F * N_data)**2)
 
         # compute final gaussian log likelihood
         tot_likelihood += (-0.5 * np.sum((N_data - N_model)**2
