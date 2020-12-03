@@ -550,7 +550,7 @@ def log_likelihood(theta, observations, L_components):
     # TODO Having this as a try/excpt might be better than returning None
     # If the model does not converge, return -np.inf
     if model is None or not model.converged:
-        return -np.inf, -np.inf * len(L_components)
+        return -np.inf, -np.inf * np.ones(len(L_components))
 
     # Calculate each log likelihood
 
@@ -591,7 +591,7 @@ def log_probability(theta, observations, L_components):
             and -2 < a3 < 6
             and 0 < BHret < 100
             and 4 < d < 8):
-        return -np.inf, -np.inf * len(L_components)
+        return -np.inf, -np.inf * np.ones(len(L_components))
 
     probability, individuals = log_likelihood(theta, observations, L_components)
 
