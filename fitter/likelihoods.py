@@ -531,7 +531,7 @@ def determine_components(obs):
             if 'PM_R' in obs[key]:
                 L_components[key] = (likelihood_pm_R, )
 
-            if 'PM_tot' in obs[key]:
+            if 'PM_T' in obs[key]:
                 L_components[key] = (likelihood_pm_T, )
 
         elif fnmatch.fnmatch(key, '*mass_function*'):
