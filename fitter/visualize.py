@@ -55,7 +55,7 @@ class ModelVisualizer(_Visualizer):
     # -----------------------------------------------------------------------
 
     # Pulsar max az vs measured az
-    def plot_pulsar(self, fig=None, ax=None):
+    def plot_pulsar(self, fig=None, ax=None, show_obs=True):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -80,8 +80,9 @@ class ModelVisualizer(_Visualizer):
         ax.set_xlabel('R')
         ax.set_ylabel(r'$a_{los}$')
 
-        ax.errorbar(obs_pulsar['r'], self.obs['pulsar/a_los'],
-                    yerr=self.obs['pulsar/Δa_los'], fmt='k.')
+        if show_obs:
+            ax.errorbar(obs_pulsar['r'], self.obs['pulsar/a_los'],
+                        yerr=self.obs['pulsar/Δa_los'], fmt='k.')
 
         upper_az, = ax.plot(pc2arcsec(self.model.r, d) / 60., maz)
         ax.plot(pc2arcsec(self.model.r, d) / 60., -maz, c=upper_az.get_color())
@@ -100,7 +101,7 @@ class ModelVisualizer(_Visualizer):
         return fig
 
     # line of sight dispersion
-    def plot_LOS(self, fig=None, ax=None):
+    def plot_LOS(self, fig=None, ax=None, show_obs=True):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -118,14 +119,16 @@ class ModelVisualizer(_Visualizer):
 
         ax.set_xscale("log")
 
-        ax.errorbar(vel_disp['r'], vel_disp['σ'], yerr=obs_err, fmt='k.')
+        if show_obs:
+            ax.errorbar(vel_disp['r'], vel_disp['σ'], yerr=obs_err, fmt='k.')
+
         ax.plot(pc2arcsec(self.model.r, self.model.d),
                 np.sqrt(self.model.v2pj[mass_bin]))
 
         return fig
 
     # total proper motion
-    def plot_pm_tot(self, fig=None, ax=None):
+    def plot_pm_tot(self, fig=None, ax=None, show_obs=True):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -140,8 +143,9 @@ class ModelVisualizer(_Visualizer):
 
         ax.set_xscale("log")
 
-        ax.errorbar(pm['r'], pm['PM_tot'],
-                    xerr=pm['Δr'], yerr=pm['ΔPM_tot'], fmt='k.')
+        if show_obs:
+            ax.errorbar(pm['r'], pm['PM_tot'],
+                        xerr=pm['Δr'], yerr=pm['ΔPM_tot'], fmt='k.')
 
         ax.plot(pc2arcsec(self.model.r, self.model.d),
                 kms2masyr(np.sqrt(model_t2), self.model.d))
@@ -149,7 +153,7 @@ class ModelVisualizer(_Visualizer):
         return fig
 
     # proper motion anisotropy (ratio)
-    def plot_pm_ratio(self, fig=None, ax=None):
+    def plot_pm_ratio(self, fig=None, ax=None, show_obs=True):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -163,8 +167,9 @@ class ModelVisualizer(_Visualizer):
 
         ax.set_xscale("log")
 
-        ax.errorbar(pm['r'], pm['PM_ratio'],
-                    xerr=pm['Δr'], yerr=pm['ΔPM_ratio'], fmt='k.')
+        if show_obs:
+            ax.errorbar(pm['r'], pm['PM_ratio'],
+                        xerr=pm['Δr'], yerr=pm['ΔPM_ratio'], fmt='k.')
 
         ax.plot(pc2arcsec(self.model.r, self.model.d),
                 np.sqrt(model_ratio2))
@@ -172,7 +177,7 @@ class ModelVisualizer(_Visualizer):
         return fig
 
     # number density
-    def plot_number_density(self, fig=None, ax=None):
+    def plot_number_density(self, fig=None, ax=None, show_obs=True):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -194,15 +199,17 @@ class ModelVisualizer(_Visualizer):
 
         ax.loglog()
 
-        ax.errorbar(numdens['r'] * 60, numdens["Σ"],
-                    yerr=np.sqrt(numdens["ΔΣ"]**2 + self.model.s2), fmt='k.')
+        if show_obs:
+            ax.errorbar(numdens['r'] * 60, numdens["Σ"],
+                        yerr=np.sqrt(numdens["ΔΣ"]**2 + self.model.s2), fmt='k.')
+
         ax.plot(pc2arcsec(self.model.r, self.model.d),
                 K * self.model.Sigmaj[mass_bin] / self.model.mj[mass_bin])
 
         return fig
 
     # tangential proper motion
-    def plot_pm_T(self, fig=None, ax=None):
+    def plot_pm_T(self, fig=None, ax=None, show_obs=True):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -217,8 +224,9 @@ class ModelVisualizer(_Visualizer):
 
         ax.set_xscale("log")
 
-        ax.errorbar(pm['r'], pm["PM_T"],
-                    xerr=pm["Δr"], yerr=pm["ΔPM_T"], fmt='k.')
+        if show_obs:
+            ax.errorbar(pm['r'], pm["PM_T"],
+                        xerr=pm["Δr"], yerr=pm["ΔPM_T"], fmt='k.')
 
         ax.plot(pc2arcsec(self.model.r, self.model.d),
                 kms2masyr(np.sqrt(model_pm[mass_bin]), self.model.d))
@@ -226,7 +234,7 @@ class ModelVisualizer(_Visualizer):
         return fig
 
     # radial proper motion
-    def plot_pm_R(self, fig=None, ax=None):
+    def plot_pm_R(self, fig=None, ax=None, show_obs=True):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -241,8 +249,9 @@ class ModelVisualizer(_Visualizer):
 
         ax.set_xscale("log")
 
-        ax.errorbar(pm['r'], pm["PM_R"],
-                    xerr=pm["Δr"], yerr=pm["ΔPM_R"], fmt='k.')
+        if show_obs:
+            ax.errorbar(pm['r'], pm["PM_R"],
+                        xerr=pm["Δr"], yerr=pm["ΔPM_R"], fmt='k.')
 
         ax.plot(pc2arcsec(self.model.r, self.model.d),
                 kms2masyr(np.sqrt(model_pm[mass_bin]), self.model.d))
@@ -251,7 +260,7 @@ class ModelVisualizer(_Visualizer):
 
     # mass function
     # TODO add a "mass fucntion" plot, maybe like peters, or like limepy example
-    def plot_mf_tot(self, fig=None, ax=None):
+    def plot_mf_tot(self, fig=None, ax=None, show_obs=True):
 
         import scipy.integrate as integ
         import scipy.interpolate as interp
@@ -260,13 +269,15 @@ class ModelVisualizer(_Visualizer):
 
         mf = self.obs['mass_function']
 
+        scale = [10, 0.5, 0.05, 0.01]
+
         for annulus_ind in np.unique(mf['bin']):
 
             # we only want to use the obs data for this r bin
             r_mask = (mf['bin'] == annulus_ind)
 
-            r1 = as2pc(0.4 * annulus_ind, self.model.d)
-            r2 = as2pc(0.4 * (annulus_ind + 1), self.model.d)
+            r1 = as2pc(0.4 * 60 * annulus_ind, self.model.d)
+            r2 = as2pc(0.4 * 60 * (annulus_ind + 1), self.model.d)
 
             # Get a binned version of N_model (an Nstars for each mbin)
             binned_N_model = np.empty(self.model.nms)
@@ -292,13 +303,14 @@ class ModelVisualizer(_Visualizer):
             # Compute δN_model from poisson error, and nuisance factor
             err = np.sqrt(mf['Δmbin'][r_mask]**2 + (self.model.F * N_data)**2)
 
-            ax.errorbar(mf['mbin_mean'][r_mask], N_data, yerr=err, fmt='o')
+            ax.errorbar(mf['mbin_mean'][r_mask],
+                        N_data * scale[annulus_ind], yerr=err, fmt='o')
 
-            ax.plot(self.model.mj[:self.model.nms], binned_N_model, 'x--')
+            ax.plot(self.model.mj[:self.model.nms],
+                    binned_N_model * scale[annulus_ind], 'x--')
 
-            print(f"{binned_N_model=}")
-            print(f"{N_data=}")
-            break
+        ax.set_yscale("log")
+        ax.set_xscale("log")
 
         return fig
 

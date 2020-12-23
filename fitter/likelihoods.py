@@ -18,13 +18,11 @@ import fnmatch
 # --------------------------------------------------------------------------
 
 def pc2arcsec(r, d):
-    # d = 4.45 * 1000  # pc
     d *= 1000
     return 206265 * 2 * np.arctan(r / (2 * d))
 
 
 def as2pc(theta, d):
-    # d = 4.45 * 1000  # pc
     d *= 1000
     return np.tan(theta * 1 / 3600 * np.pi / 180 / 2) * 2 * d
 
@@ -341,8 +339,8 @@ def likelihood_mf_tot(model, mf):
         # we only want to use the obs data for this r bin
         r_mask = (mf['bin'] == annulus_ind)
 
-        r1 = as2pc(0.4 * annulus_ind, model.d)
-        r2 = as2pc(0.4 * (annulus_ind + 1), model.d)
+        r1 = as2pc(60 * 0.4 * annulus_ind, model.d)
+        r2 = as2pc(60 * 0.4 * (annulus_ind + 1), model.d)
 
         # Get a binned version of N_model (an Nstars for each mbin)
         binned_N_model = np.empty(model.nms)
@@ -485,6 +483,7 @@ def create_model(theta, observations=None, *, strict=False, verbose=False):
             return None
 
     # TODO not my favourite way to store this info
+    #   means models *have* to be created here for the most part
 
     # store some necessary mass function info in the model
     model.nms = len(mass_func.ms[-1][cs])
