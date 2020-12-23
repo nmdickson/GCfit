@@ -399,18 +399,18 @@ class RunVisualizer(_Visualizer):
         if not self.has_stats:
             raise AttributeError("No statistics stored in file")
 
-        # TODO blobs should have their own labels probably
-        labels = 'pulsar', 'LOS', 'numdens', 'pm_tot', #'pm_ratio'
-
-        fig, axes = self._setup_multi_artist(fig, (len(labels), ), sharex=True)
-
         probs = self.file[self._gname]['blobs'][self.iterations, self.walkers]
+
+        fig, axes = self._setup_multi_artist(fig, (len(probs.dtype), ),
+                                             sharex=True)
 
         for ind, ax in enumerate(axes.flatten()):
 
-            ax.plot(self._iteration_domain, probs[:, :, ind])
+            label = probs.dtype.names[ind]
 
-            ax.set_ylabel(labels[ind])
+            ax.plot(self._iteration_domain, probs[:, :][label])
+
+            ax.set_ylabel(label)
 
         axes[-1].set_xlabel('Iterations')
 

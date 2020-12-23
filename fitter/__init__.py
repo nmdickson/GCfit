@@ -38,6 +38,9 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
     # determine which likelihoods to compute
     L_components = determine_components(observations)
 
+    blobs_dtype = [(f'{key}/{func.__qualname__}', float)
+                   for (key, func, *_) in L_components]
+
     logging.debug(f"Likelihood components: {L_components}")
 
     # Initialize the walker positions
@@ -72,6 +75,7 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
             args=(observations, L_components,),
             pool=pool,
             backend=backend,
+            blobs_dtype=blobs_dtype
         )
 
         logging.debug(f"Sampler class: {sampler}")

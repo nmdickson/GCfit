@@ -558,16 +558,6 @@ def log_likelihood(theta, observations, L_components):
         for (key, likelihood, *args) in L_components
     ])
 
-    # log_mf = likelihood_mf_tot(
-    #     model,
-    #     observations['mass_function'],
-    #     nms,
-    #     mes_widths,
-    #     F,
-    #     d
-    # )
-
-    # TODO with the new dynamic probs, will need ordered names on the blobs
     return sum(probs), probs
 
 
