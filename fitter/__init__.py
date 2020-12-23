@@ -1,16 +1,14 @@
 import h5py
 import emcee
-import corner
 import schwimmbad
 import numpy as np
-import matplotlib.pyplot as plt
 
 import sys
 import time
 import shutil
 import logging
 
-from .likelihoods import log_probability, determine_components
+from .likelihoods import posterior, determine_components
 from .data import Observations
 
 
@@ -70,7 +68,7 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
         sampler = emcee.EnsembleSampler(
             Nwalkers,
             Ndim,
-            log_probability,
+            posterior,
             args=(observations, L_components,),
             pool=pool,
             backend=backend,
@@ -113,7 +111,6 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
 
     logging.info("Finished iteration")
 
-    # First attempt, without worrying about MPI communication
     with h5py.File(backend_fn, 'r+') as backend_hdf:
         stat_grp = backend_hdf.require_group(name='statistics')
 
@@ -122,51 +119,11 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
 
     logging.debug(f"Final state: {sampler}")
 
-    logging.info("Creating final plots and writing output")
-
-    # Plot Walkers
-
-    samples = sampler.get_chain()
-    logging.debug(f"Final chain parameters: {samples[-1]}")
-
-    fig, axes = plt.subplots(13, figsize=(10, 20), sharex=True)
-
-    labels = [
-        r"$W_{0}$",
-        r"$M/10^6 M_{\odot}$",
-        r"$r_h / pc$",
-        r"$ log r_a / pc$",
-        r"$g$",
-        r"$\delta$",
-        r"$s^2$",
-        r"$F$",
-        r"$\alpha_1$",
-        r"$\alpha_2$",
-        r"$\alpha_3$",
-        r"$BH_{ret}$",
-        r"$d$",
-    ]
-
-    for i in range(Ndim):
-        ax = axes[i]
-        ax.plot(samples[:, :, i], alpha=0.3)
-        ax.set_xlim(0, len(samples))
-        ax.set_ylabel(labels[i])
-        ax.yaxis.set_label_coords(-0.1, 0.5)
-
-    axes[-1].set_xlabel("Iteration")
-    fig.tight_layout()
-    plt.savefig(f"{outdir}/{cluster}_walkers.png", dpi=600)
-
-    # Corner Plots
-
-    flat_samples = sampler.get_chain(discard=0, thin=1, flat=True)
-    fig = corner.corner(flat_samples, labels=labels)
-    plt.savefig(f"{outdir}/{cluster}_corner.png", dpi=600)
-
     # Print results to stdout
 
     if verbose:
+        flat_samples = sampler.get_chain(discard=0, thin=1, flat=True)
+
         mssg = ''
         for ind, key in enumerate(observations.priors):
             perc = np.percentile(flat_samples[:, ind], [16, 50, 84])

@@ -501,9 +501,10 @@ def determine_components(obs):
     '''from observations, determine which likelihood functions will be computed
     and return a dict of the relevant obs dataset keys, and tuples of the
     functions and any other required args
+    I really don't love this
     '''
 
-    L_components = {}
+    L_components = []
     for key in obs.datasets:
 
         # fnmatch is to correctly find subgroup stuff like pm/high_mass, etc
@@ -512,29 +513,29 @@ def determine_components(obs):
             a_width = np.abs(obs[key]['Δa_los'])
             pulsar_edist = scipy.stats.norm.pdf(A_SPACE, 0, np.c_[a_width])
 
-            L_components[key] = (likelihood_pulsar, pulsar_edist)
+            L_components.append((key, likelihood_pulsar, pulsar_edist))
 
         elif fnmatch.fnmatch(key, '*velocity_dispersion*'):
-            L_components[key] = (likelihood_LOS, )
+            L_components.append((key, likelihood_LOS, ))
 
         elif fnmatch.fnmatch(key, '*number_density*'):
-            L_components[key] = (likelihood_number_density, )
+            L_components.append((key, likelihood_number_density, ))
 
         elif fnmatch.fnmatch(key, '*proper_motion*'):
             if 'PM_tot' in obs[key]:
-                L_components[key] = (likelihood_pm_tot, )
+                L_components.append((key, likelihood_pm_tot, ))
 
             if 'PM_ratio' in obs[key]:
-                L_components[key] = (likelihood_pm_ratio, )
+                L_components.append((key, likelihood_pm_ratio, ))
 
             if 'PM_R' in obs[key]:
-                L_components[key] = (likelihood_pm_R, )
+                L_components.append((key, likelihood_pm_R, ))
 
             if 'PM_T' in obs[key]:
-                L_components[key] = (likelihood_pm_T, )
+                L_components.append((key, likelihood_pm_T, ))
 
         elif fnmatch.fnmatch(key, '*mass_function*'):
-            L_components[key] = (likelihood_mf_tot, )
+            L_components.append((key, likelihood_mf_tot, ))
 
     return L_components
 
@@ -543,9 +544,9 @@ def determine_components(obs):
 # individual likelihood functions and collects their results.
 def log_likelihood(theta, observations, L_components):
 
+    # TODO Having this as a try/excpt might be better than returning None
     model = create_model(theta, observations)
 
-    # TODO Having this as a try/excpt might be better than returning None
     # If the model does not converge, return -np.inf
     if model is None or not model.converged:
         return -np.inf, -np.inf * np.ones(len(L_components))
@@ -554,7 +555,7 @@ def log_likelihood(theta, observations, L_components):
 
     probs = np.array([
         likelihood(model, observations[key], *args)
-        for key, (likelihood, *args) in L_components.items()
+        for (key, likelihood, *args) in L_components
     ])
 
     # log_mf = likelihood_mf_tot(
@@ -572,7 +573,7 @@ def log_likelihood(theta, observations, L_components):
 
 # Combines the likelihood with the prior
 # TODO make sure that passing obs here isn't super expensive (see emcee || docs)
-def log_probability(theta, observations, L_components):
+def posterior(theta, observations, L_components):
 
     W0, M, rh, ra, g, delta, s2, F, a1, a2, a3, BHret, d = theta
     # TODO make this prettier
