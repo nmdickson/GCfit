@@ -13,8 +13,9 @@ from .data import Observations
 
 
 # TODO this should have some defaults probably
-def main(cluster, Niters, Nwalkers, Ncpu, mpi,
-         priors, cont_run, savedir, outdir, verbose, debug):
+def main(cluster, Niters, Nwalkers, Ncpu, *,
+         mpi, priors, fixed_params,
+         cont_run, savedir, outdir, verbose, debug):
 
     # TODO if not debug, only info if verbose
     logfile = f"{savedir}/fitter_{cluster}.log"
@@ -44,9 +45,25 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
     logging.debug(f"Likelihood components: {L_components}")
 
     # Initialize the walker positions
-    Ndim = 13
-    init_pos = np.fromiter(observations.priors.values(), np.float64)
-    init_pos = 1e-4 * np.random.randn(Nwalkers, Ndim) + init_pos
+
+    priors = observations.priors
+
+    if extraneous_params := (fixed_params.keys() - priors.keys()):
+        raise ValueError(f"Invalid fixed parameters: {extraneous_params}")
+
+    if variable_params := (fixed_params.keys() - priors.keys()):
+        raise ValueError(f"No non-fixed parameters left, fix less parameters")
+
+    for (key, val) in fixed_params.items():
+
+        # if none use default, from obs
+        if val is None:
+            fixed_params[key] = priors[key]
+
+        del priors[key]
+
+    init_pos = np.fromiter(priors.values(), np.float64)
+    init_pos = 1e-4 * np.random.randn(*init_pos.shape) + init_pos
 
     # HDF file saving
     logging.debug(f"Using hdf backend at {savedir}/{cluster}_sampler.hdf")
@@ -70,9 +87,9 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
         # Initialize the sampler
         sampler = emcee.EnsembleSampler(
             Nwalkers,
-            Ndim,
+            init_pos.shape[-1],
             posterior,
-            args=(observations, L_components,),
+            args=(observations, fixed_params, L_components,),
             pool=pool,
             backend=backend,
             blobs_dtype=blobs_dtype
@@ -91,6 +108,7 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
 
         t = time.time()
 
+        # TODO implement cont_run
         # Set initial state to None if resuming run (`cont_run`)
         for _ in sampler.sample(init_pos, iterations=Niters, progress=verbose):
 
@@ -116,6 +134,13 @@ def main(cluster, Niters, Nwalkers, Ncpu, mpi,
     logging.info("Finished iteration")
 
     with h5py.File(backend_fn, 'r+') as backend_hdf:
+
+        # Store fixed parameters
+        fix_dset = backend_hdf.require_dataset("fixed_params", dtype="f")
+        for k, v in fixed_params.items():
+            fix_dset.attrs[k] = v
+
+        # Store run statistics
         stat_grp = backend_hdf.require_group(name='statistics')
 
         stat_grp.create_dataset(name='iteration_rate', data=iter_rate)

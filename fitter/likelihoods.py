@@ -1,4 +1,4 @@
-from .data import A_SPACE
+from .data import A_SPACE, DEFAULT_PRIORS
 from .new_Paz import vec_Paz
 
 import numpy as np
@@ -562,24 +562,31 @@ def log_likelihood(theta, observations, L_components):
 
 
 # Combines the likelihood with the prior
-# TODO make sure that passing obs here isn't super expensive (see emcee || docs)
-def posterior(theta, observations, L_components):
+def posterior(theta, observations, fixed_params, L_components):
 
-    W0, M, rh, ra, g, delta, s2, F, a1, a2, a3, BHret, d = theta
+    # There is absolutely a better way do this
+    params = DEFAULT_PRIORS.keys()
+    for key in params:
+        if key in fixed_params:
+            del params[key]
+
+    # Update to unions when 3.9 becomes enforced
+    theta = dict(zip(params, theta), **fixed_params)
+
     # TODO make this prettier
-    if not (3 < W0 < 20
-            and 0.5 < rh < 15
-            and 0.01 < M < 10
-            and 0 < ra < 5
-            and 0 < g < 2.3
-            and 0.3 < delta < 0.5
-            and 0 < s2 < 10
-            and 0.1 < F < 0.5
-            and -2 < a1 < 6
-            and -2 < a2 < 6
-            and -2 < a3 < 6
-            and 0 < BHret < 100
-            and 4 < d < 8):
+    if not (3 < theta['W0'] < 20
+            and 0.5 < theta['rh'] < 15
+            and 0.01 < theta['M'] < 10
+            and 0 < theta['ra'] < 5
+            and 0 < theta['g'] < 2.3
+            and 0.3 < theta['delta'] < 0.5
+            and 0 < theta['s2'] < 10
+            and 0.1 < theta['F'] < 0.5
+            and -2 < theta['a1'] < 6
+            and -2 < theta['a2'] < 6
+            and -2 < theta['a3'] < 6
+            and 0 < theta['BHret'] < 100
+            and 4 < theta['d'] < 8):
         return -np.inf, -np.inf * np.ones(len(L_components))
 
     probability, individuals = log_likelihood(theta, observations, L_components)
