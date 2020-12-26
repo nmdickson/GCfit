@@ -14,7 +14,7 @@ from .data import Observations
 
 # TODO this should have some defaults probably
 def main(cluster, Niters, Nwalkers, Ncpu, *,
-         mpi, priors, fixed_params,
+         mpi, initials, fixed_params,
          cont_run, savedir, outdir, verbose, debug):
 
     # TODO if not debug, only info if verbose
@@ -46,23 +46,23 @@ def main(cluster, Niters, Nwalkers, Ncpu, *,
 
     # Initialize the walker positions
 
-    priors = observations.priors
+    initials = observations.initials
 
-    if extraneous_params := (fixed_params.keys() - priors.keys()):
+    if extraneous_params := (fixed_params.keys() - initials.keys()):
         raise ValueError(f"Invalid fixed parameters: {extraneous_params}")
 
-    if variable_params := (fixed_params.keys() - priors.keys()):
+    if variable_params := (fixed_params.keys() - initials.keys()):
         raise ValueError(f"No non-fixed parameters left, fix less parameters")
 
     for (key, val) in fixed_params.items():
 
         # if none use default, from obs
         if val is None:
-            fixed_params[key] = priors[key]
+            fixed_params[key] = initials[key]
 
-        del priors[key]
+        del initials[key]
 
-    init_pos = np.fromiter(priors.values(), np.float64)
+    init_pos = np.fromiter(initials.values(), np.float64)
     init_pos = 1e-4 * np.random.randn(*init_pos.shape) + init_pos
 
     # HDF file saving
@@ -154,7 +154,7 @@ def main(cluster, Niters, Nwalkers, Ncpu, *,
         flat_samples = sampler.get_chain(discard=0, thin=1, flat=True)
 
         mssg = ''
-        for ind, key in enumerate(observations.priors):
+        for ind, key in enumerate(observations.initials):
             perc = np.percentile(flat_samples[:, ind], [16, 50, 84])
             qnt = np.diff(perc)
 

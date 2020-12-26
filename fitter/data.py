@@ -14,7 +14,7 @@ from importlib import resources
 A_SPACE = np.linspace(-5e-8, 5e-8, 300)
 
 # The order of this is important!
-DEFAULT_PRIORS = {
+DEFAULT_INITIALS = {
     'W0': 6.0,
     'M': 0.69,
     'rh': 2.88,
@@ -117,13 +117,13 @@ class Observations:
                 mssg = f"Dataset or variable '{key}' does not exist"
                 raise KeyError(mssg)
 
-    def _find_groups(self, root_group, exclude_priors=True):
-        '''lists pathnames to all groups under root_group, excluding priors'''
+    def _find_groups(self, root_group, exclude_initials=True):
+        '''lists pathnames to all groups under root_group, excluding initials'''
 
         def _walker(key, obj):
             if isinstance(obj, h5py.Group):
 
-                if exclude_priors and key == 'priors':
+                if exclude_initials and key == 'initials':
                     return
 
                 # relies on visititems moving top-down
@@ -146,7 +146,7 @@ class Observations:
 
         self.mdata = {}
         self._dict_datasets = {}
-        self.priors = DEFAULT_PRIORS.copy()
+        self.initials = DEFAULT_INITIALS.copy()
 
         with resources.path('fitter', 'resources') as datadir:
             with h5py.File(f'{datadir}/{cluster}.hdf5', 'r') as file:
@@ -158,9 +158,9 @@ class Observations:
 
                 try:
                     # This updates defaults with data while keeping default sort
-                    self.priors = {**self.priors, **file['priors'].attrs}
+                    self.initials = {**self.initials, **file['initials'].attrs}
                 except KeyError:
-                    logging.info("No priors stored in datafile, using defaults")
+                    logging.info("No initial state stored, using defaults")
                     pass
 
                 self.mdata = dict(file.attrs)

@@ -1,4 +1,4 @@
-from .data import A_SPACE, DEFAULT_PRIORS
+from .data import A_SPACE, DEFAULT_INITIALS
 from .new_Paz import vec_Paz
 
 import numpy as np
@@ -565,7 +565,7 @@ def log_likelihood(theta, observations, L_components):
 def posterior(theta, observations, fixed_params, L_components):
 
     # There is absolutely a better way do this
-    params = DEFAULT_PRIORS.keys()
+    params = DEFAULT_INITIALS.keys()
     for key in params:
         if key in fixed_params:
             del params[key]
@@ -574,6 +574,7 @@ def posterior(theta, observations, fixed_params, L_components):
     theta = dict(zip(params, theta), **fixed_params)
 
     # TODO make this prettier
+    # Prior probability function
     if not (3 < theta['W0'] < 20
             and 0.5 < theta['rh'] < 15
             and 0.01 < theta['M'] < 10

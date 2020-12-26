@@ -379,7 +379,7 @@ class RunVisualizer(_Visualizer):
 
     def plot_chains(self, fig=None):
 
-        labels = tuple(self.obs.priors)
+        labels = tuple(self.obs.initials)
 
         fig, axes = self._setup_multi_artist(fig, (len(labels), ), sharex=True)
 
@@ -421,7 +421,7 @@ class RunVisualizer(_Visualizer):
 
         fig, ax = self._setup_multi_artist(fig, shape=None)
 
-        labels = tuple(self.obs.priors)
+        labels = tuple(self.obs.initials)
 
         chain = self.file[self._gname]['chain'][self.iterations, self.walkers]
         chain = chain.reshape((-1, chain.shape[-1]))
@@ -461,6 +461,9 @@ class RunVisualizer(_Visualizer):
 
     def __init__(self, file, observations, group='mcmc'):
 
+        # TODO handle fized params, when creating models from chain
+
+        # TODO this needs to be closed properly, probably
         if isinstance(file, str):
             self.file = h5py.File(file, 'r')
         else:

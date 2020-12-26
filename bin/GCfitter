@@ -19,8 +19,8 @@ if __name__ == '__main__':
                         help='location of saved sampling runs')
     parser.add_argument('-o', '--outdir', default=default_dir,
                         help='location to store output plots and data')
-    parser.add_argument('-p', '--priors',
-                        help='alternative config file with different priors')
+    parser.add_argument('-i', '--intials',
+                        help='alternative config file with different intials')
 
     parser.add_argument('-N', '--Niters', default=3000, type=int,
                         help='Number of sampling iterations')
@@ -40,7 +40,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    if args.priors or args.cont_run:
+    if args.intials or args.cont_run:
         raise NotImplementedError
 
     # TODO strip trailing / from dirs
