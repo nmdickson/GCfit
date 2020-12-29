@@ -9,7 +9,14 @@ import shutil
 import logging
 
 from .likelihoods import posterior, determine_components
-from .data import Observations
+from .data import Observations, DEFAULT_INITIALS
+
+# TEST:
+# - named blobs
+# - Implement parameter fixing
+# - implement specific likelihood exclusion
+# IMPLEMENT:
+# - Try Multinest
 
 
 # TODO this should have some defaults probably
@@ -49,24 +56,27 @@ def main(cluster, Niters, Nwalkers, Ncpu, *,
     logging.debug(f"Likelihood components: {L_components}")
 
     # Initialize the walker positions
+    # *_params -> list of keys, *_initials -> dictionary
 
-    initials = observations.initials
+    # get manually supplied initials, or read them from the data files
+    if initials is None:
+        initials = observations.initials
+    else:
+        # fill manually supplied dict with defaults (change to unions in 3.9)
+        initials = {**observations.initials, **initials}
 
-    if extraneous_params := (fixed_params.keys() - initials.keys()):
+    if extraneous_params := (set(fixed_params) - initials.keys()):
         raise ValueError(f"Invalid fixed parameters: {extraneous_params}")
 
-    if fixed_params.keys() - initials.keys():
+    if variable_params := (initials.keys() - set(fixed_params)):
         raise ValueError(f"No non-fixed parameters left, fix less parameters")
 
-    for (key, val) in fixed_params.items():
+    # variable params sorting matters for setup of theta, but fixed does not
+    fixed_initials = {key: initials[key] for key in fixed_params}
+    variable_initials = {key: initials[key] for key in
+                         sorted(variable_params, key=list(initials).index)}
 
-        # if none use default, from obs
-        if val is None:
-            fixed_params[key] = initials[key]
-
-        del initials[key]
-
-    init_pos = np.fromiter(initials.values(), np.float64)
+    init_pos = np.fromiter(variable_initials.values(), np.float64)
     init_pos = 1e-4 * np.random.randn(*init_pos.shape) + init_pos
 
     # HDF file saving
@@ -93,7 +103,7 @@ def main(cluster, Niters, Nwalkers, Ncpu, *,
             Nwalkers,
             init_pos.shape[-1],
             posterior,
-            args=(observations, fixed_params, L_components,),
+            args=(observations, fixed_initials, L_components,),
             pool=pool,
             backend=backend,
             blobs_dtype=blobs_dtype

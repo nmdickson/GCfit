@@ -330,7 +330,7 @@ def likelihood_LOS(model, vlos, mass_bin=None):
     )
 
 
-def likelihood_mf_tot(model, mf):
+def likelihood_mass_func(model, mf):
 
     tot_likelihood = 0
 
@@ -535,7 +535,7 @@ def determine_components(obs):
                 L_components.append((key, likelihood_pm_T, ))
 
         elif fnmatch.fnmatch(key, '*mass_function*'):
-            L_components.append((key, likelihood_mf_tot, ))
+            L_components.append((key, likelihood_mass_func, ))
 
     return L_components
 
@@ -562,16 +562,14 @@ def log_likelihood(theta, observations, L_components):
 
 
 # Combines the likelihood with the prior
-def posterior(theta, observations, fixed_params, L_components):
+def posterior(theta, observations, fixed_initials, L_components):
 
-    # There is absolutely a better way do this
-    params = DEFAULT_INITIALS.keys()
-    for key in params:
-        if key in fixed_params:
-            del params[key]
+    # get a list of variable params, sorted for the unpacking of theta
+    variable_params = DEFAULT_INITIALS.keys() - fixed_initials.keys()
+    params = sorted(variable_params, key=list(DEFAULT_INITIALS).index)
 
     # Update to unions when 3.9 becomes enforced
-    theta = dict(zip(params, theta), **fixed_params)
+    theta = dict(zip(params, theta), **fixed_initials)
 
     # TODO make this prettier
     # Prior probability function
