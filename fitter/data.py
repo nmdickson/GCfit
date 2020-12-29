@@ -2,6 +2,8 @@
 import numpy as np
 import h5py
 
+import os
+import glob
 import logging
 from importlib import resources
 
@@ -177,3 +179,10 @@ def get_dataset(cluster, key):
         with h5py.File(f'{datadir}/{cluster}.hdf5', 'r') as file:
 
             return file[key][:]
+
+
+def cluster_list():
+    with resources.path('fitter', 'resources') as datadir:
+
+        return [os.path.splitext(os.path.basename(fn))[0]
+                for fn in glob.iglob(f'{datadir}/[!TEST]*.hdf5')]
