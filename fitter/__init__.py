@@ -14,7 +14,7 @@ from .data import Observations
 
 # TODO this should have some defaults probably
 def main(cluster, Niters, Nwalkers, Ncpu, *,
-         mpi, initials, fixed_params,
+         mpi, initials, fixed_params, excluded_likelihoods,
          cont_run, savedir, outdir, verbose, debug):
 
     # TODO if not debug, only info if verbose
@@ -36,8 +36,12 @@ def main(cluster, Niters, Nwalkers, Ncpu, *,
 
     logging.debug(f"Observation datasets: {observations}")
 
-    # determine which likelihoods to compute
-    L_components = determine_components(observations)
+    # determine which likelihoods to compute (given data and exclusions)
+    L_components = [
+        comp for comp in determine_components(observations)
+        if not (comp[0] in excluded_likelihoods
+                or comp[1].__name__ in excluded_likelihoods)
+    ]
 
     blobs_dtype = [(f'{key}/{func.__qualname__}', float)
                    for (key, func, *_) in L_components]
@@ -51,7 +55,7 @@ def main(cluster, Niters, Nwalkers, Ncpu, *,
     if extraneous_params := (fixed_params.keys() - initials.keys()):
         raise ValueError(f"Invalid fixed parameters: {extraneous_params}")
 
-    if variable_params := (fixed_params.keys() - initials.keys()):
+    if fixed_params.keys() - initials.keys():
         raise ValueError(f"No non-fixed parameters left, fix less parameters")
 
     for (key, val) in fixed_params.items():
