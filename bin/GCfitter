@@ -19,7 +19,7 @@ if __name__ == '__main__':
                         help='location of saved sampling runs')
     parser.add_argument('-o', '--outdir', default=default_dir,
                         help='location to store output plots and data')
-    parser.add_argument('-i', '--intials',
+    parser.add_argument('-i', '--initials',
                         help='alternative config file with different intials')
 
     parser.add_argument('-N', '--Niters', default=3000, type=int,
@@ -32,15 +32,21 @@ if __name__ == '__main__':
     parser.add_argument('--verbose', action='store_true')
     parser.add_argument('--debug', action='store_true')
 
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument("--Ncpu", default=2, type=int,
-                       help="Number of `multiprocessing` processes")
-    group.add_argument("--mpi", action="store_true",
-                       help="Run with MPI, rather than multiprocessing")
+    parallel_group = parser.add_mutually_exclusive_group()
+    parallel_group.add_argument("--Ncpu", default=2, type=int,
+                                help="Number of `multiprocessing` processes")
+    parallel_group.add_argument("--mpi", action="store_true",
+                                help="Run with MPI rather than multiprocessing")
+
+    parser.add_argument('--fix', dest='fixed_params', nargs='*',
+                        help='Parameters to fix, not estimate from the MCMC')
+
+    parser.add_argument('--exclude', dest='excluded_likelihoods', nargs='*',
+                        help='Likelihood components to exclude from posteriors')
 
     args = parser.parse_args()
 
-    if args.intials or args.cont_run:
+    if args.initials or args.cont_run:
         raise NotImplementedError
 
     # TODO strip trailing / from dirs

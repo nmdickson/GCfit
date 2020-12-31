@@ -9,7 +9,7 @@ import shutil
 import logging
 
 from .likelihoods import posterior, determine_components
-from .data import Observations, DEFAULT_INITIALS
+from .data import Observations
 
 # TEST:
 # - named blobs
@@ -68,7 +68,8 @@ def main(cluster, Niters, Nwalkers, Ncpu, *,
     if extraneous_params := (set(fixed_params) - initials.keys()):
         raise ValueError(f"Invalid fixed parameters: {extraneous_params}")
 
-    if variable_params := (initials.keys() - set(fixed_params)):
+    variable_params = (initials.keys() - set(fixed_params))
+    if not variable_params:
         raise ValueError(f"No non-fixed parameters left, fix less parameters")
 
     # variable params sorting matters for setup of theta, but fixed does not
