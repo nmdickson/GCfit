@@ -56,6 +56,7 @@ class ModelVisualizer(_Visualizer):
 
     # Pulsar max az vs measured az
     def plot_pulsar(self, fig=None, ax=None, show_obs=True):
+        # TODO this is out of date with the new pulsar probability code
 
         fig, ax = self._setup_artist(fig, ax)
 

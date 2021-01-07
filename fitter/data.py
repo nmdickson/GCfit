@@ -10,11 +10,6 @@ from importlib import resources
 # TODO better exception handling
 # TODO __str__ methods, for better error messages
 
-# Acceleration space for which we generate a probability distribution.
-# TODO generate this based on the data (and do it in likelihoods probably)
-# A_SPACE = np.linspace(-15e-9, 15e-9, 300)
-A_SPACE = np.linspace(-5e-8, 5e-8, 300)
-
 # The order of this is important!
 DEFAULT_INITIALS = {
     'W0': 6.0,

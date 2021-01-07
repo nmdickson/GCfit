@@ -1,4 +1,4 @@
-from .data import A_SPACE, DEFAULT_INITIALS
+from .data import DEFAULT_INITIALS
 from .new_Paz import vec_Paz
 
 import numpy as np
@@ -61,44 +61,13 @@ def build_asym_err(model, r, quantity, sigmaup, sigmalow, d):
 # --------------------------------------------------------------------------
 
 
-def likelihood_pulsar(model, pulsars, error_dist,
-                      mass_bin=None, return_dist=False):
+def likelihood_pulsar(model, pulsars, mass_bin=None):
 
-    # Generate the probability distributions
-    def gen_prob_dists(model, a_space, r_data, jns):
-        dists = []
-        # Create a distribution at each r value that we have a pulsar
-        for i in range(len(r_data)):
-            # vec_Paz allows us to run get_Paz() over an
-            # array of az points without looping through
-            # calculations that are specific only to the r point.
-            prob_dist = vec_Paz(
-                model=model, az_data=a_space, R_data=r_data[i],
-                jns=jns, current_pulsar=i,
-            )
-            dists.append(prob_dist)
-        return dists
-
-    # Convolve the gaussian errors and the generated probability distributions
-    def gen_convolved_dists(error, prob):
-
-        # The ordering of the input arrays here is actually important:
-        # see comment in likelihood_pulsar()
-        dists = []
-        for i in range(len(prob)):
-            conved = scipy.signal.convolve(error[i], prob[i], mode="same")
-
-            # The convolution method here keeps the same number of points which
-            # is important for our later interpolations but it doesn't normalize
-            # the resulting function. Here we set up a spline to manually
-            # normalize the area under the function to 1. This removes most of
-            # the effects of the somewhat inconsistent peaks in the probability
-            # distribution while maintaining the overall shape.
-            spl = interp.UnivariateSpline(A_SPACE, conved, k=3, s=0, ext=1)
-            conved /= spl.integral(-15e-9, 15e-9)
-
-            dists.append(conved)
-        return dists
+    # Simple gaussian implementation
+    def gaussian(x, sigma, mu):
+        norm = 1 / (sigma * np.sqrt(2 * np.pi))
+        exponent = np.exp(-0.5 * (((x - mu) / sigma) ** 2))
+        return norm * exponent
 
     if mass_bin is None:
         if 'm' in pulsars.mdata:
@@ -109,32 +78,45 @@ def likelihood_pulsar(model, pulsars, error_dist,
 
     # Generate the probability distributions that we will convolve with the
     #   pre-generated error distributions
-    pre_prob_dist = gen_prob_dists(model, A_SPACE, pulsars['r'], mass_bin)
+    # pre_prob_dist = gen_prob_dists(model, A_SPACE, pulsars['r'], mass_bin)
 
-    # The ordering of the arrays here is actually important: In the case of a
-    # z2 interpolation error the probability value will be dropped so in some
-    # cases the prob dist will be shorter than the a_space. This convolution
-    # returns an array of the same length as the first input so by supplying
-    # the error dist first (which is built with the a_space) we can ensure
-    # that the convolved dist will be the same length as the a_space. This
-    # is needed for the interpolation below.
-    prob_dist = gen_convolved_dists(error_dist, pre_prob_dist)
+    accel_domains, accel_prob_dists = zip(*[
+        vec_Paz(model=model, R=R, mass_bin=mass_bin) for R in pulsars['r']
+    ])
+
+    error_dists = [
+        gaussian(x=accel_domains[i], sigma=width, mu=0)
+        for i, width in enumerate(pulsars['Δa_los'])
+    ]
+
+    prob_dists = []
+    for i in range(len(accel_prob_dists)):
+        conved = scipy.signal.convolve(error_dists[i], accel_prob_dists[i],
+                                       mode="same")
+
+        spl = interp.UnivariateSpline(accel_domains[i], conved, k=3, s=0, ext=1)
+        conved /= spl.integral(accel_domains[i].min(), accel_domains[i].max())
+
+        prob_dists.append(conved)
 
     # For each distribution we want to interpolate the probability from the
     #   corresponding a_los measurement
     probs = np.zeros(len(pulsars['r']))
+
     # Select the corresponding distributions
     for i in range(len(pulsars['r'])):
+
         # Interpolate the probability value from the convolved distributions
-        interpolated = interp.interp1d(A_SPACE, prob_dist[i])
+        interpolated = interp.interp1d(
+            accel_domains[i], prob_dists[i], assume_sorted=True,
+            bounds_error=False, fill_value=0.0
+        )
+
         # evaluate at the measured a_los
         probs[i] = interpolated(pulsars['a_los'][i])
 
-    if return_dist:
-        return prob_dist
-    else:
-        # Multiply all the probabilities and return the total log probability.
-        return np.log(np.prod(probs))
+    # Multiply all the probabilities and return the total log probability.
+    return np.log(np.prod(probs))
 
 
 def likelihood_number_density(model, ndensity, mass_bin=None):
@@ -510,10 +492,13 @@ def determine_components(obs):
         # fnmatch is to correctly find subgroup stuff like pm/high_mass, etc
         if fnmatch.fnmatch(key, '*pulsar*'):
 
-            a_width = np.abs(obs[key]['Δa_los'])
-            pulsar_edist = scipy.stats.norm.pdf(A_SPACE, 0, np.c_[a_width])
+            # now that we need to do this every time, its actually quicker
+            # to just compute it manually
+            # Well actually this may change once we are also pulsar-vectorized
+            # a_width = np.abs(obs[key]['Δa_los'])
+            # pulsar_edist = scipy.stats.norm.pdf(A_SPACE, 0, np.c_[a_width])
 
-            L_components.append((key, likelihood_pulsar, pulsar_edist))
+            L_components.append((key, likelihood_pulsar))
 
         elif fnmatch.fnmatch(key, '*velocity_dispersion*'):
             L_components.append((key, likelihood_LOS, ))
