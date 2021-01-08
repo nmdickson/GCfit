@@ -3,6 +3,7 @@ import numpy as np
 from scipy.interpolate import interp1d, UnivariateSpline
 import matplotlib.pyplot as plt
 
+# TODO vectorize this along pulsar R's as well
 
 def vec_Paz(model, R, mass_bin):
     """ 
@@ -127,9 +128,9 @@ def vec_Paz(model, R, mass_bin):
 
     within_bounds = np.where(z2 < zt)
 
-    Paz += rhoz_spl(z2[within_bounds]) / abs(az_der(z2[within_bounds]))
+    Paz[outside_azt][within_bounds] += rhoz_spl(z2[within_bounds]) / abs(az_der(z2[within_bounds]))
 
-    Paz /= rhoz_spl.integral(0., zt)
+    Paz[outside_azt][within_bounds] /= rhoz_spl.integral(0., zt)
 
     Paz_dist[within_max] = Paz
 
