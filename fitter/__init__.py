@@ -19,7 +19,6 @@ from .data import Observations
 # - Try Multinest
 
 
-# TODO this should have some defaults probably
 def main(cluster, Niters, Nwalkers, Ncpu, *,
          mpi, initials, fixed_params, excluded_likelihoods,
          cont_run, savedir, outdir, verbose, debug):
@@ -36,6 +35,14 @@ def main(cluster, Niters, Nwalkers, Ncpu, *,
     logging.getLogger('matplotlib').setLevel(logging.WARNING)
     logging.info("BEGIN")
 
+    # TODO add argument defaults and error checks (including redo these ones)
+
+    if fixed_params is None:
+        fixed_params = []
+
+    if excluded_likelihoods is None:
+        excluded_likelihoods = []
+
     # Load the observation data here once
     logging.info(f"Loading {cluster} data")
 
@@ -43,6 +50,7 @@ def main(cluster, Niters, Nwalkers, Ncpu, *,
 
     logging.debug(f"Observation datasets: {observations}")
 
+    # TODO maybe exclusion should go into determine
     # determine which likelihoods to compute (given data and exclusions)
     L_components = [
         comp for comp in determine_components(observations)
