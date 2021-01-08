@@ -575,4 +575,4 @@ def posterior(theta, observations, fixed_initials, L_components):
 
     probability, individuals = log_likelihood(theta, observations, L_components)
 
-    return probability, individuals
+    return probability, *individuals
