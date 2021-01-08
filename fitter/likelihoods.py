@@ -571,7 +571,7 @@ def posterior(theta, observations, fixed_initials, L_components):
             and -2 < theta['a3'] < 6
             and 0 < theta['BHret'] < 100
             and 4 < theta['d'] < 8):
-        return -np.inf, -np.inf * np.ones(len(L_components))
+        return -np.inf, *(-np.inf * np.ones(len(L_components)))
 
     probability, individuals = log_likelihood(theta, observations, L_components)
 
