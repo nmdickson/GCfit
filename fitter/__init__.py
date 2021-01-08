@@ -86,7 +86,7 @@ def main(cluster, Niters, Nwalkers, Ncpu, *,
                          sorted(variable_params, key=list(initials).index)}
 
     init_pos = np.fromiter(variable_initials.values(), np.float64)
-    init_pos = 1e-4 * np.random.randn(*init_pos.shape) + init_pos
+    init_pos = 1e-4 * np.random.randn(Nwalkers, init_pos.size) + init_pos
 
     # HDF file saving
     logging.debug(f"Using hdf backend at {savedir}/{cluster}_sampler.hdf")
