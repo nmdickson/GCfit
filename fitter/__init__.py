@@ -159,7 +159,7 @@ def main(cluster, Niters, Nwalkers, Ncpu, *,
     with h5py.File(backend_fn, 'r+') as backend_hdf:
 
         # Store fixed parameters
-        fix_dset = backend_hdf.require_dataset("fixed_params", dtype="f")
+        fix_dset = backend_hdf.create_dataset("fixed_params", dtype="f")
         for k, v in fixed_params.items():
             fix_dset.attrs[k] = v
 
