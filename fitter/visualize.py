@@ -5,9 +5,12 @@ import matplotlib.pyplot as plt
 from .likelihoods import pc2arcsec, kms2masyr, as2pc, create_model
 
 # TODO add confidence intervals to plots
+# TODO fix spacings
 
 
 class _Visualizer:
+
+    _REDUC_METHODS = {'median': np.median, 'mean': np.mean}
 
     def _setup_artist(self, fig, ax):
         # TODO should maybe attempt to use gcf, gca first
@@ -317,6 +320,10 @@ class ModelVisualizer(_Visualizer):
 
     def plot_all(self):
 
+        # TODO base this on something like determine_components probably,
+        #   that is, if we only want stuff we can compare with obs, might need
+        #   a 'require obs' option
+
         fig, axes = plt.subplots(3, 2)
 
         fig.suptitle("cluster name")
@@ -338,10 +345,7 @@ class ModelVisualizer(_Visualizer):
         # TODO this supports 1-d chain arrays (theta) but not the same dicts
         '''
 
-        if method == 'median':
-            reduc = np.median
-        elif method == 'mean':
-            reduc = np.mean
+        reduc = cls._REDUC_METHODS[method]
 
         # if 3d (Niters, Nwalkers, Nparams)
         # if 2d (Nwalkers, Nparams)
@@ -364,7 +368,10 @@ class RunVisualizer(_Visualizer):
     based on an output file I guess?
     '''
     # Change these to change what iters/walkers to display
+    # terations must be a slice
     iterations = slice(None)
+
+    # walkers can also be a reduc method, like 'median', to reduce to one line
     walkers = slice(None)
 
     @property
@@ -384,11 +391,17 @@ class RunVisualizer(_Visualizer):
 
         fig, axes = self._setup_multi_artist(fig, (len(labels), ), sharex=True)
 
-        chain = self.file[self._gname]['chain'][self.iterations, self.walkers]
+        chain = self.file[self._gname]['chain'][self.iterations]
+
+        if isinstance(self.walkers, slice):
+            chain = chain[:, self.walkers]
+        else:
+            reduc = self._REDUC_METHODS[self.walkers]
+            chain = reduc(chain, axis=1)
 
         for ind, ax in enumerate(axes.flatten()):
 
-            ax.plot(self._iteration_domain, chain[:, :, ind])
+            ax.plot(self._iteration_domain, chain[..., ind])
 
             ax.set_xlabel('Iterations')
             ax.set_ylabel(labels[ind])
@@ -397,10 +410,16 @@ class RunVisualizer(_Visualizer):
 
     def plot_indiv(self, fig=None):
 
-        if not self.has_stats:
-            raise AttributeError("No statistics stored in file")
+        if not self.has_indiv:
+            raise AttributeError("No blobs stored in file")
 
-        probs = self.file[self._gname]['blobs'][self.iterations, self.walkers]
+        probs = self.file[self._gname]['blobs'][self.iterations]
+
+        if isinstance(self.walkers, slice):
+            probs = probs[:, self.walkers]
+        else:
+            reduc = self._REDUC_METHODS[self.walkers]
+            probs = reduc(probs, axis=1)
 
         fig, axes = self._setup_multi_artist(fig, (len(probs.dtype), ),
                                              sharex=True)
@@ -409,9 +428,9 @@ class RunVisualizer(_Visualizer):
 
             label = probs.dtype.names[ind]
 
-            ax.plot(self._iteration_domain, probs[:, :][label])
+            ax.plot(self._iteration_domain, probs[:][label])
 
-            ax.set_ylabel(label)
+            ax.set_title(label)
 
         axes[-1].set_xlabel('Iterations')
 
@@ -424,7 +443,14 @@ class RunVisualizer(_Visualizer):
 
         labels = tuple(self.obs.initials)
 
-        chain = self.file[self._gname]['chain'][self.iterations, self.walkers]
+        chain = self.file[self._gname]['chain'][self.iterations]
+
+        if isinstance(self.walkers, slice):
+            chain = chain[:, self.walkers]
+        else:
+            reduc = self._REDUC_METHODS[self.walkers]
+            chain = reduc(chain, axis=1)
+
         chain = chain.reshape((-1, chain.shape[-1]))
 
         return corner.corner(chain, labels=labels, fig=fig, **corner_kw)
@@ -438,7 +464,13 @@ class RunVisualizer(_Visualizer):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        acc = stat_grp['acceptance_rate'][self.iterations, self.walkers]
+        acc = stat_grp['acceptance_rate'][self.iterations]
+
+        if isinstance(self.walkers, slice):
+            acc = acc[:, self.walkers]
+        else:
+            reduc = self._REDUC_METHODS[self.walkers]
+            acc = reduc(acc, axis=1)
 
         ax.plot(self._iteration_domain, acc)
 
@@ -451,7 +483,13 @@ class RunVisualizer(_Visualizer):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        prob = self.file[self._gname]['log_prob'][self.iterations, self.walkers]
+        prob = self.file[self._gname]['log_prob'][self.iterations]
+
+        if isinstance(self.walkers, slice):
+            prob = prob[:, self.walkers]
+        else:
+            reduc = self._REDUC_METHODS[self.walkers]
+            prob = reduc(prob, axis=1)
 
         ax.plot(self._iteration_domain, prob)
 
@@ -462,7 +500,7 @@ class RunVisualizer(_Visualizer):
 
     def __init__(self, file, observations, group='mcmc'):
 
-        # TODO handle fized params, when creating models from chain
+        # TODO handle fixed params, when creating models from chain
 
         # TODO this needs to be closed properly, probably
         if isinstance(file, str):
@@ -474,8 +512,26 @@ class RunVisualizer(_Visualizer):
 
         self.obs = observations
 
-        self.has_indiv = 'blobs' in file[self._gname]
-        self.has_stats = 'statistics' in file
+        self.has_indiv = 'blobs' in self.file[self._gname]
+        self.has_stats = 'statistics' in self.file
+
+    def get_model(self, iterations=None, walkers=None, method='median'):
+        '''
+        if iterations, walkers is None, will use self.iterations, self.walkers
+        '''
+
+        iterations = self.iterations if iterations is None else iterations
+        walkers = self.walkers if walkers is None else walkers
+
+        chain = self.file[self._gname]['chain'][iterations]
+
+        if isinstance(walkers, slice):
+            chain = chain[:, walkers]
+        else:
+            reduc = self._REDUC_METHODS[walkers]
+            chain = reduc(chain, axis=1)
+
+        return ModelVisualizer.from_chain(chain, self.obs, method)
 
 
 def compare_models(*models, observations, labels=None):
