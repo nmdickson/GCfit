@@ -416,10 +416,9 @@ class RunVisualizer(_Visualizer):
         probs = self.file[self._gname]['blobs'][self.iterations]
 
         if isinstance(self.walkers, slice):
-            probs = probs[:, self.walkers]
+            reduc = None
         else:
             reduc = self._REDUC_METHODS[self.walkers]
-            probs = reduc(probs, axis=1)
 
         fig, axes = self._setup_multi_artist(fig, (len(probs.dtype), ),
                                              sharex=True)
@@ -428,7 +427,12 @@ class RunVisualizer(_Visualizer):
 
             label = probs.dtype.names[ind]
 
-            ax.plot(self._iteration_domain, probs[:][label])
+            indiv = probs[:][label]
+
+            if reduc:
+                indiv = reduc(indiv, axis=1)
+
+            ax.plot(self._iteration_domain, indiv)
 
             ax.set_title(label)
 
