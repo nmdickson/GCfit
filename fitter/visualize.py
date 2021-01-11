@@ -376,6 +376,7 @@ class RunVisualizer(_Visualizer):
 
     @property
     def _iteration_domain(self):
+        # TODO there might be some issue happening when a run is cut short?
         try:
             domain = np.arange(self.iterations.start,
                                self.iterations.stop,
@@ -387,9 +388,7 @@ class RunVisualizer(_Visualizer):
 
     def plot_chains(self, fig=None):
 
-        labels = tuple(self.obs.initials)
-
-        fig, axes = self._setup_multi_artist(fig, (len(labels), ), sharex=True)
+        labels = list(self.obs.initials)
 
         chain = self.file[self._gname]['chain'][self.iterations]
 
@@ -399,9 +398,28 @@ class RunVisualizer(_Visualizer):
             reduc = self._REDUC_METHODS[self.walkers]
             chain = reduc(chain, axis=1)
 
+        # Hanlde fixed parameters
+        if self.has_meta:
+
+            fixed = sorted(
+                ((k, v, labels.index(k)) for k, v in
+                 self.file['metadata']['fixed_params'].attrs.items()),
+                key=lambda item: labels.index(item[0])
+            )
+
+            for k, v, i in fixed:
+                labels[i] += ' (fixed)'
+                chain = np.insert(chain, i, v, axis=-1)
+
+        fig, axes = self._setup_multi_artist(fig, (len(labels), ), sharex=True)
+
         for ind, ax in enumerate(axes.flatten()):
 
-            ax.plot(self._iteration_domain, chain[..., ind])
+            try:
+                ax.plot(self._iteration_domain, chain[..., ind])
+            except IndexError as err:
+                mssg = 'reduced parameters, but no explanatory metadata stored'
+                raise err(mssg)
 
             ax.set_xlabel('Iterations')
             ax.set_ylabel(labels[ind])
@@ -445,7 +463,8 @@ class RunVisualizer(_Visualizer):
 
         fig, ax = self._setup_multi_artist(fig, shape=None)
 
-        labels = tuple(self.obs.initials)
+        labels = list(self.obs.initials)
+        ranges = [1.] * len(labels)
 
         chain = self.file[self._gname]['chain'][self.iterations]
 
@@ -455,9 +474,23 @@ class RunVisualizer(_Visualizer):
             reduc = self._REDUC_METHODS[self.walkers]
             chain = reduc(chain, axis=1)
 
+        if self.has_meta:
+
+            fixed = sorted(
+                ((k, v, labels.index(k)) for k, v in
+                 self.file['metadata']['fixed_params'].attrs.items()),
+                key=lambda item: labels.index(item[0])
+            )
+
+            for k, v, i in fixed:
+                labels[i] += ' (fixed)'
+                ranges[i] = (v - 1, v + 1)
+                chain = np.insert(chain, i, v, axis=-1)
+
         chain = chain.reshape((-1, chain.shape[-1]))
 
-        return corner.corner(chain, labels=labels, fig=fig, **corner_kw)
+        return corner.corner(chain, labels=labels, fig=fig,
+                             range=ranges, **corner_kw)
 
     def plot_acceptance(self, fig=None, ax=None):
 
@@ -518,6 +551,7 @@ class RunVisualizer(_Visualizer):
 
         self.has_indiv = 'blobs' in self.file[self._gname]
         self.has_stats = 'statistics' in self.file
+        self.has_meta = 'metadata' in self.file
 
     def get_model(self, iterations=None, walkers=None, method='median'):
         '''
