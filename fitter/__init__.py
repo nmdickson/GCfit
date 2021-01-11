@@ -158,10 +158,17 @@ def main(cluster, Niters, Nwalkers, Ncpu, *,
 
     with h5py.File(backend_fn, 'r+') as backend_hdf:
 
-        # Store fixed parameters
-        fix_dset = backend_hdf.create_dataset("fixed_params", dtype="f")
+        # Store run metadata
+        # TODO might need to store more info?
+        meta_grp = backend_hdf.require_group(name='metadata')
+
+        fix_dset = meta_grp.create_dataset("fixed_params", dtype="f")
         for k, v in fixed_params.items():
             fix_dset.attrs[k] = v
+
+        ex_dset = meta_grp.create_dataset("excluded_likelihoods", dtype='f')
+        for i, L in enumerate(excluded_likelihoods):
+            ex_dset.attrs[str(i)] = L
 
         # Store run statistics
         stat_grp = backend_hdf.require_group(name='statistics')
