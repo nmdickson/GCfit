@@ -569,6 +569,19 @@ class RunVisualizer(_Visualizer):
             reduc = self._REDUC_METHODS[walkers]
             chain = reduc(chain, axis=1)
 
+        if self.has_meta:
+
+            labels = list(self.obs.initials)
+
+            fixed = sorted(
+                ((k, v, labels.index(k)) for k, v in
+                 self.file['metadata']['fixed_params'].attrs.items()),
+                key=lambda item: labels.index(item[0])
+            )
+
+            for k, v, i in fixed:
+                chain = np.insert(chain, i, v, axis=-1)
+
         return ModelVisualizer.from_chain(chain, self.obs, method)
 
 
