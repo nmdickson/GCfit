@@ -11,13 +11,6 @@ import logging
 from .likelihoods import posterior, determine_components
 from .data import Observations
 
-# TEST:
-# - named blobs
-# - Implement parameter fixing
-# - implement specific likelihood exclusion
-# IMPLEMENT:
-# - Try Multinest
-
 
 def main(cluster, Niters, Nwalkers, Ncpu, *,
          mpi, initials, fixed_params, excluded_likelihoods,
@@ -163,7 +156,7 @@ def main(cluster, Niters, Nwalkers, Ncpu, *,
         meta_grp = backend_hdf.require_group(name='metadata')
 
         fix_dset = meta_grp.create_dataset("fixed_params", dtype="f")
-        for k, v in fixed_params.items():
+        for k, v in fixed_initials.items():
             fix_dset.attrs[k] = v
 
         ex_dset = meta_grp.create_dataset("excluded_likelihoods", dtype='f')
