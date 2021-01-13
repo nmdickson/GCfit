@@ -1,3 +1,5 @@
+import sys
+
 import h5py
 import numpy as np
 import matplotlib.pyplot as plt
@@ -533,9 +535,76 @@ class RunVisualizer(_Visualizer):
 
         return fig
 
-    def __init__(self, file, observations, group='mcmc'):
+    def print_summary(self, out=None, results_only=False, mathtext=False):
+        '''write a summary of the run results, to a `out` file-like or stdout'''
+        if out is None:
+            out = sys.stdout
 
-        # TODO handle fixed params, when creating models from chain
+        mssg = f'{self}'
+        mssg += f'\n{"=" * len(mssg)}\n'
+
+        # RESULTS
+
+        # median and 16, 84 percentiles of all params
+        labels, chain = self._get_chains()
+
+        chain = chain.reshape((-1, chain.shape[-1]))
+
+        p16, p50, p84 = np.percentile(chain, [16, 50, 84], axis=0)
+
+        uncert_minus, uncert_plus = p50 - p16, p84 - p50
+
+        for ind, param in enumerate(labels):
+
+            if 'fixed' in param:
+                mssg += (f'{param[:-8]:>5} = {p50[ind]:.3f} ({"fixed":^14})\n')
+            else:
+                mssg += (f'{param:>5} = {p50[ind]:.3f} '
+                         f'(+{uncert_plus[ind]:.3f}, '
+                         f'-{uncert_minus[ind]:.3f})\n')
+
+        if not results_only:
+
+            # INFO OF RUN
+            mssg += f'\nRun Metadata'
+            mssg += f'\n{"=" * 12}\n'
+
+            # number of iterations
+            Niter = self.file[self._gname].attrs['iteration']
+            mssg += f'Iterations = {Niter}\n'
+
+            # dimensions ndim, nwalkers
+            Ndim = self.file[self._gname].attrs['ndim']
+            Nwalkers = self.file[self._gname].attrs['nwalkers']
+            mssg += f'Dimensions = ({Nwalkers}, {Ndim})\n'
+
+            # has stats? if so ... idk
+            mssg += f'Has statistics = {self.has_stats}\n'
+
+            # has metadata? if so fixed and excluded
+            mssg += f'Has metadata = {self.has_meta}\n'
+            if self.has_meta:
+                mdata = self.file['metadata']
+
+                mssg += 'Fixed parameters:\n'
+                fixed = mdata['fixed_params'].attrs
+                if fixed:
+                    for k, v in fixed.items():
+                        mssg += f'    {k} = {v}\n'
+                else:
+                    mssg += '    None\n'
+
+                mssg += 'Excluded components:\n'
+                exc = mdata['excluded_likelihoods'].attrs
+                if exc:
+                    for i, v in exc.items():
+                        mssg += f'    ({i}) {v}\n'
+                else:
+                    mssg += '    None\n'
+
+        out.write(mssg)
+
+    def __init__(self, file, observations, group='mcmc'):
 
         # TODO this needs to be closed properly, probably
         if isinstance(file, str):
