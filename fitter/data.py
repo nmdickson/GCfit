@@ -8,7 +8,6 @@ import logging
 from importlib import resources
 
 # TODO better exception handling
-# TODO __str__ methods, for better error messages
 
 # The order of this is important!
 DEFAULT_INITIALS = {
@@ -89,6 +88,12 @@ class Dataset:
 class Observations:
     '''Collection of Datasets, read from a corresponding hdf5 file'''
 
+    def __repr__(self):
+        return f'Observations(cluster="{self.cluster}")'
+
+    def __str__(self):
+        return f'{self.cluster} Observations'
+
     @property
     def datasets(self):
         return self._dict_datasets
@@ -140,6 +145,8 @@ class Observations:
         return groups
 
     def __init__(self, cluster):
+
+        self.cluster = cluster
 
         self.mdata = {}
         self._dict_datasets = {}
