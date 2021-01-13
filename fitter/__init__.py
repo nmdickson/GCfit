@@ -150,9 +150,9 @@ def main(cluster, Niters, Nwalkers, Ncpu, *,
     logging.info("Finished iteration")
 
     with h5py.File(backend_fn, 'r+') as backend_hdf:
+        # TODO store some more info like pool info, run time
 
         # Store run metadata
-        # TODO might need to store more info?
         meta_grp = backend_hdf.require_group(name='metadata')
 
         fix_dset = meta_grp.create_dataset("fixed_params", dtype="f")

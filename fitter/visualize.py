@@ -374,9 +374,13 @@ class RunVisualizer(_Visualizer):
     # walkers can also be a reduc method, like 'median', to reduce to one line
     walkers = slice(None)
 
+    def __str__(self):
+        return f'{self.file.filename} - Run Results'
+
     @property
     def _iteration_domain(self):
         # TODO there might be some issue happening when a run is cut short?
+        #   also when changing iteration maybe
         try:
             domain = np.arange(self.iterations.start,
                                self.iterations.stop,
@@ -386,16 +390,21 @@ class RunVisualizer(_Visualizer):
 
         return domain
 
-    def plot_chains(self, fig=None):
+    def _get_chains(self, iterations=None, walkers=None):
+        '''get the chains, properly using the iterations and walkers set or
+        given, and accounting for fixed params'''
+
+        iterations = self.iterations if iterations is None else iterations
+        walkers = self.walkers if walkers is None else walkers
 
         labels = list(self.obs.initials)
 
-        chain = self.file[self._gname]['chain'][self.iterations]
+        chain = self.file[self._gname]['chain'][iterations]
 
-        if isinstance(self.walkers, slice):
-            chain = chain[:, self.walkers]
+        if isinstance(walkers, slice):
+            chain = chain[:, walkers]
         else:
-            reduc = self._REDUC_METHODS[self.walkers]
+            reduc = self._REDUC_METHODS[walkers]
             chain = reduc(chain, axis=1)
 
         # Hanlde fixed parameters
@@ -410,6 +419,12 @@ class RunVisualizer(_Visualizer):
             for k, v, i in fixed:
                 labels[i] += ' (fixed)'
                 chain = np.insert(chain, i, v, axis=-1)
+
+        return labels, chain
+
+    def plot_chains(self, fig=None):
+
+        labels, chain = self._get_chains()
 
         fig, axes = self._setup_multi_artist(fig, (len(labels), ), sharex=True)
 
@@ -463,31 +478,14 @@ class RunVisualizer(_Visualizer):
 
         fig, ax = self._setup_multi_artist(fig, shape=None)
 
-        labels = list(self.obs.initials)
-        ranges = [1.] * len(labels)
-
-        chain = self.file[self._gname]['chain'][self.iterations]
-
-        if isinstance(self.walkers, slice):
-            chain = chain[:, self.walkers]
-        else:
-            reduc = self._REDUC_METHODS[self.walkers]
-            chain = reduc(chain, axis=1)
-
-        if self.has_meta:
-
-            fixed = sorted(
-                ((k, v, labels.index(k)) for k, v in
-                 self.file['metadata']['fixed_params'].attrs.items()),
-                key=lambda item: labels.index(item[0])
-            )
-
-            for k, v, i in fixed:
-                labels[i] += ' (fixed)'
-                ranges[i] = (v - 1, v + 1)
-                chain = np.insert(chain, i, v, axis=-1)
+        labels, chain = self._get_chains()
 
         chain = chain.reshape((-1, chain.shape[-1]))
+
+        # ugly
+        ranges = [1. if 'fixed' not in lbl
+                  else (chain[0, i] - 1, chain[0, i] + 1)
+                  for i, lbl in enumerate(labels)]
 
         return corner.corner(chain, labels=labels, fig=fig,
                              range=ranges, **corner_kw)
@@ -557,54 +555,34 @@ class RunVisualizer(_Visualizer):
         '''
         if iterations, walkers is None, will use self.iterations, self.walkers
         '''
+        # TODO there should be a method for comparing models w/ diff chain inds
+        #   i.e. seeing how a model progresses over iterations
 
-        iterations = self.iterations if iterations is None else iterations
-        walkers = self.walkers if walkers is None else walkers
-
-        chain = self.file[self._gname]['chain'][iterations]
-
-        if isinstance(walkers, slice):
-            chain = chain[:, walkers]
-        else:
-            reduc = self._REDUC_METHODS[walkers]
-            chain = reduc(chain, axis=1)
-
-        if self.has_meta:
-
-            labels = list(self.obs.initials)
-
-            fixed = sorted(
-                ((k, v, labels.index(k)) for k, v in
-                 self.file['metadata']['fixed_params'].attrs.items()),
-                key=lambda item: labels.index(item[0])
-            )
-
-            for k, v, i in fixed:
-                chain = np.insert(chain, i, v, axis=-1)
+        labels, chain = self._get_chains(iterations, walkers)
 
         return ModelVisualizer.from_chain(chain, self.obs, method)
 
 
-def compare_models(*models, observations, labels=None):
-    '''
-    # TODO probably should make this a part of RunVisualizer
-    create viz objects for all the models and plot them all on the same axes
-    '''
+# def compare_runs(output_files, observations):
 
-    # TODO obs data is being plotted every time unfortunately
-    fig, axes = plt.subplots(3, 2)
+#     RV_list = [RunVisualizer(file, observations) for file in output_files]
+#     MV_list = [RV.get_model() for RV in RV_list]
 
-    visuals = [ModelVisualizer(mod, observations) for mod in models]
+#     # compare run stats, chains, etc
 
-    for ind, viz in enumerate(visuals):
-        viz.plot_pulsar(fig=fig, ax=axes[0, 0])
-        viz.plot_number_density(fig=fig, ax=axes[1, 0])
-        viz.plot_LOS(fig=fig, ax=axes[0, 1])
-        viz.plot_pm_tot(fig=fig, ax=axes[1, 1])
-        viz.plot_pm_ratio(fig=fig, ax=axes[2, 1])
+#     fig1 = plt.figure()
+#     fig2, axarr2 = plt.subplots(nrows=max number of likelihoods in the RVs, ncols=len(RV_list))
 
-    if labels:
-        # getting handles is a bit fragile, requires obs being plotted first
-        fig.legend(plt.gca().lines[1::2], labels)
+#     for RV in RV_list:
+#         RV.walkers = 'median'
+#         fig1 = RV.plot_chains(fig1)
 
-    return fig
+#         RV.walkers = slice(None)
+#         fig2 = ACTUALLY IM NOT SURE HOW TO DO THIS ONE USING PLOT_INDIV
+
+#     plot median chains for all runs in same figure
+#     plot indivs with full walkers for all runs in separate columns of same fig
+
+#    # compare model outputs
+
+#     do a plot all, with obs only being plots once, but all runs in same fig 
