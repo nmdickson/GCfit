@@ -275,7 +275,7 @@ class ModelVisualizer(_Visualizer):
 
         mf = self.obs['mass_function']
 
-        scale = [10, 0.5, 0.05, 0.01]
+        scale = [1000., 10., 0.1, 0.001]
 
         for annulus_ind in np.unique(mf['bin']):
 
@@ -306,6 +306,7 @@ class ModelVisualizer(_Visualizer):
             #                   dr of a bin (like average-interpolating almost))
             N_data = (mf['N'][r_mask] / mf['mbin_width'][r_mask])
 
+            # TODO in Peters notebooks this is actually computed differently
             # Compute δN_model from poisson error, and nuisance factor
             err = np.sqrt(mf['Δmbin'][r_mask]**2 + (self.model.F * N_data)**2)
 
@@ -320,21 +321,31 @@ class ModelVisualizer(_Visualizer):
 
         return fig
 
-    def plot_all(self):
+    # def plot_imf
+    # def plot_bhcontent
+
+    def plot_all(self, fig=None, axes=None):
 
         # TODO base this on something like determine_components probably,
         #   that is, if we only want stuff we can compare with obs, might need
         #   a 'require obs' option
 
-        fig, axes = plt.subplots(3, 2)
+        # TODO a better method for being able to overplot multiple show_alls
+        if fig is None:
+            fig, axes = plt.subplots(3, 2)
+            axes = axes.flatten()
+        else:
+            axes = fig.axes
 
         fig.suptitle("cluster name")
 
-        self.plot_pulsar(fig=fig, ax=axes[0, 0])
-        self.plot_number_density(fig=fig, ax=axes[1, 0])
-        self.plot_LOS(fig=fig, ax=axes[0, 1])
-        self.plot_pm_tot(fig=fig, ax=axes[1, 1])
-        self.plot_pm_ratio(fig=fig, ax=axes[2, 1])
+        self.plot_pulsar(fig=fig, ax=axes[0])
+        self.plot_number_density(fig=fig, ax=axes[1])
+        self.plot_LOS(fig=fig, ax=axes[2])
+        self.plot_pm_tot(fig=fig, ax=axes[3])
+        self.plot_pm_ratio(fig=fig, ax=axes[5])
+
+        # TODO maybe have some written info in one of the empty panels
 
         return fig
 
@@ -369,28 +380,90 @@ class RunVisualizer(_Visualizer):
 
     based on an output file I guess?
     '''
-    # Change these to change what iters/walkers to display
-    # terations must be a slice
-    iterations = slice(None)
-
-    # walkers can also be a reduc method, like 'median', to reduce to one line
-    walkers = slice(None)
 
     def __str__(self):
         return f'{self.file.filename} - Run Results'
 
+    def __init__(self, file, observations, group='mcmc'):
+
+        # TODO this needs to be closed properly, probably
+        if isinstance(file, str):
+            self.file = h5py.File(file, 'r')
+        else:
+            self.file = file
+
+        self._gname = group
+
+        self.obs = observations
+
+        self.has_indiv = 'blobs' in self.file[self._gname]
+        self.has_stats = 'statistics' in self.file
+        self.has_meta = 'metadata' in self.file
+
+    # ----------------------------------------------------------------------
+    # Dimensions - Walkers
+    # ----------------------------------------------------------------------
+
+    _walkers = slice(None)
+
+    @property
+    def walkers(self):
+        '''Walkers must be a slice, or a reduction method name, like "median"'''
+        return self._walkers
+
+    @walkers.setter
+    def walkers(self, value):
+        if not isinstance(value, slice) and value not in self._REDUC_METHODS:
+            mssg = (f"`walkers` must be slice or one of "
+                    f"{set(self._REDUC_METHODS)}, not {type(value)}")
+            raise TypeError(mssg)
+
+        self._walkers = value
+
+    # ----------------------------------------------------------------------
+    # Dimensions - Iterations
+    # ----------------------------------------------------------------------
+
+    _iterations = slice(None)
+
+    # cut the ending zeroed iterations, if a run was cut short
+    cut_incomplete = True
+
+    @property
+    def iterations(self):
+        '''Iterations must be a slice. if cut_incomplete is True, will default
+        to cutting the final empty iterations from everything
+        '''
+        return self._iterations
+
+    @iterations.setter
+    def iterations(self, value):
+        if not isinstance(value, slice):
+            mssg = f"`iteration` must be a slice, not {type(value)}"
+            raise TypeError(mssg)
+
+        if value.stop is None and self.cut_incomplete:
+            stop = self.file[self._gname].attrs['iteration'] + 1
+            value = slice(value.start, stop, value.step)
+
+        self._iterations = value
+
     @property
     def _iteration_domain(self):
-        # TODO there might be some issue happening when a run is cut short?
-        #   also when changing iteration maybe
-        try:
-            domain = np.arange(self.iterations.start,
-                               self.iterations.stop,
-                               self.iterations.step)
-        except TypeError:
-            domain = np.arange(1, self.file[self._gname].attrs['iteration'] + 1)
 
-        return domain
+        if (start := self.iterations.start) is None:
+            start = 1
+
+        if (stop := self.iterations.stop) is None:
+            stop = self.file[self._gname]['chain'].shape[0] + 1
+
+        step = self.iterations.step
+
+        return np.arange(start, stop, step)
+
+    # ----------------------------------------------------------------------
+    # Helpers
+    # ----------------------------------------------------------------------
 
     def _get_chains(self, iterations=None, walkers=None):
         '''get the chains, properly using the iterations and walkers set or
@@ -423,6 +496,21 @@ class RunVisualizer(_Visualizer):
                 chain = np.insert(chain, i, v, axis=-1)
 
         return labels, chain
+
+    def get_model(self, iterations=None, walkers=None, method='median'):
+        '''
+        if iterations, walkers is None, will use self.iterations, self.walkers
+        '''
+        # TODO there should be a method for comparing models w/ diff chain inds
+        #   i.e. seeing how a model progresses over iterations
+
+        labels, chain = self._get_chains(iterations, walkers)
+
+        return ModelVisualizer.from_chain(chain, self.obs, method)
+
+    # ----------------------------------------------------------------------
+    # Plots
+    # ----------------------------------------------------------------------
 
     def plot_chains(self, fig=None):
 
@@ -535,6 +623,10 @@ class RunVisualizer(_Visualizer):
 
         return fig
 
+    # ----------------------------------------------------------------------
+    # Summaries
+    # ----------------------------------------------------------------------
+
     def print_summary(self, out=None, results_only=False, mathtext=False):
         '''write a summary of the run results, to a `out` file-like or stdout'''
         if out is None:
@@ -604,34 +696,8 @@ class RunVisualizer(_Visualizer):
 
         out.write(mssg)
 
-    def __init__(self, file, observations, group='mcmc'):
 
-        # TODO this needs to be closed properly, probably
-        if isinstance(file, str):
-            self.file = h5py.File(file, 'r')
-        else:
-            self.file = file
-
-        self._gname = group
-
-        self.obs = observations
-
-        self.has_indiv = 'blobs' in self.file[self._gname]
-        self.has_stats = 'statistics' in self.file
-        self.has_meta = 'metadata' in self.file
-
-    def get_model(self, iterations=None, walkers=None, method='median'):
-        '''
-        if iterations, walkers is None, will use self.iterations, self.walkers
-        '''
-        # TODO there should be a method for comparing models w/ diff chain inds
-        #   i.e. seeing how a model progresses over iterations
-
-        labels, chain = self._get_chains(iterations, walkers)
-
-        return ModelVisualizer.from_chain(chain, self.obs, method)
-
-
+# TODO
 # def compare_runs(output_files, observations):
 
 #     RV_list = [RunVisualizer(file, observations) for file in output_files]

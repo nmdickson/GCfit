@@ -120,7 +120,7 @@ def likelihood_pulsar(model, pulsars, mass_bin=None):
 
 
 def likelihood_number_density(model, ndensity, mass_bin=None):
-    # TODO don't forget to revert or better compute this flatness cutoff
+    # TODO don't forget to revert or better compute this flatness cutoff [:100]
 
     if mass_bin is None:
         if 'm' in ndensity.mdata:
