@@ -400,11 +400,13 @@ class RunVisualizer(_Visualizer):
         self.has_stats = 'statistics' in self.file
         self.has_meta = 'metadata' in self.file
 
+        # Ensure the dimensions are initialized correctly
+        self.iterations = slice(None)
+        self.walkers = slice(None)
+
     # ----------------------------------------------------------------------
     # Dimensions - Walkers
     # ----------------------------------------------------------------------
-
-    _walkers = slice(None)
 
     @property
     def walkers(self):
@@ -424,8 +426,6 @@ class RunVisualizer(_Visualizer):
     # Dimensions - Iterations
     # ----------------------------------------------------------------------
 
-    _iterations = slice(None)
-
     # cut the ending zeroed iterations, if a run was cut short
     cut_incomplete = True
 
@@ -443,7 +443,7 @@ class RunVisualizer(_Visualizer):
             raise TypeError(mssg)
 
         if value.stop is None and self.cut_incomplete:
-            stop = self.file[self._gname].attrs['iteration'] + 1
+            stop = self.file[self._gname].attrs['iteration']
             value = slice(value.start, stop, value.step)
 
         self._iterations = value
@@ -452,14 +452,14 @@ class RunVisualizer(_Visualizer):
     def _iteration_domain(self):
 
         if (start := self.iterations.start) is None:
-            start = 1
+            start = 0
 
         if (stop := self.iterations.stop) is None:
-            stop = self.file[self._gname]['chain'].shape[0] + 1
+            stop = self.file[self._gname]['chain'].shape[0]
 
         step = self.iterations.step
 
-        return np.arange(start, stop, step)
+        return np.arange(start + 1, stop + 1, step)
 
     # ----------------------------------------------------------------------
     # Helpers
