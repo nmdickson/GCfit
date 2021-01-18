@@ -223,7 +223,7 @@ def likelihood_pm_ratio(model, pm, mass_bin=None):
 
     # Gaussian likelihood
     return -0.5 * np.sum(
-        (pm['PM_tot'] - interpolated) ** 2 / obs_err ** 2
+        (pm['PM_ratio'] - interpolated) ** 2 / obs_err ** 2
         + np.log(obs_err ** 2)
     )
 
