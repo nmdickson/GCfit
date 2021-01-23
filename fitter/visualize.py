@@ -221,54 +221,6 @@ class ModelVisualizer(_Visualizer):
 
         return fig
 
-    # number density
-    def plot_number_density(self, fig=None, ax=None, show_obs=True):
-
-        mass_bin = self.model.nms - 1
-
-        fig, ax = self._setup_artist(fig, ax)
-
-        ax.set_title('Number Density')
-        ax.set_xlabel("R [arcsec]")
-        ax.set_ylabel(r"$\Sigma \  {[arcmin}^{-2}]$")
-
-        ax.loglog()
-
-        # numdens is a bit different cause we want to compute K whenever
-        #   possible, even if we're not showing obs
-
-        try:
-            numdens = self.obs['number_density']
-
-            # interpolate number density to the observed data points r
-            interp_model = np.interp(
-                numdens['r'], pc2arcsec(self.model.r, self.model.d) / 60.,
-                self.model.Sigmaj[mass_bin] / self.model.mj[mass_bin]
-            )
-
-            K = (np.sum(numdens['Σ'] * interp_model / numdens["Σ"] ** 2)
-                 / np.sum(interp_model ** 2 / numdens["Σ"] ** 2))
-
-        except KeyError:
-            K = 1.
-
-        if show_obs:
-            try:
-
-                numdens = self.obs['number_density']
-
-                ax.errorbar(numdens['r'] * 60, numdens["Σ"], fmt='k.',
-                            yerr=np.sqrt(numdens["ΔΣ"]**2 + self.model.s2))
-
-            except KeyError as err:
-                if show_obs != 'attempt':
-                    raise err
-
-        ax.plot(pc2arcsec(self.model.r, self.model.d),
-                K * self.model.Sigmaj[mass_bin] / self.model.mj[mass_bin])
-
-        return fig
-
     # tangential proper motion
     def plot_pm_T(self, fig=None, ax=None, show_obs=True):
         # TODO capture all mass bins which have data (high_mass, low_mass, etc)
@@ -329,6 +281,54 @@ class ModelVisualizer(_Visualizer):
 
         ax.plot(pc2arcsec(self.model.r, self.model.d),
                 kms2masyr(np.sqrt(model_pm[mass_bin]), self.model.d))
+
+        return fig
+
+    # number density
+    def plot_number_density(self, fig=None, ax=None, show_obs=True):
+
+        mass_bin = self.model.nms - 1
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        ax.set_title('Number Density')
+        ax.set_xlabel("R [arcsec]")
+        ax.set_ylabel(r"$\Sigma \  {[arcmin}^{-2}]$")
+
+        ax.loglog()
+
+        # numdens is a bit different cause we want to compute K whenever
+        #   possible, even if we're not showing obs
+
+        try:
+            numdens = self.obs['number_density']
+
+            # interpolate number density to the observed data points r
+            interp_model = np.interp(
+                numdens['r'], pc2arcsec(self.model.r, self.model.d) / 60.,
+                self.model.Sigmaj[mass_bin] / self.model.mj[mass_bin]
+            )
+
+            K = (np.sum(numdens['Σ'] * interp_model / numdens["Σ"] ** 2)
+                 / np.sum(interp_model ** 2 / numdens["Σ"] ** 2))
+
+        except KeyError:
+            K = 1.
+
+        if show_obs:
+            try:
+
+                numdens = self.obs['number_density']
+
+                ax.errorbar(numdens['r'] * 60, numdens["Σ"], fmt='k.',
+                            yerr=np.sqrt(numdens["ΔΣ"]**2 + self.model.s2))
+
+            except KeyError as err:
+                if show_obs != 'attempt':
+                    raise err
+
+        ax.plot(pc2arcsec(self.model.r, self.model.d),
+                K * self.model.Sigmaj[mass_bin] / self.model.mj[mass_bin])
 
         return fig
 
