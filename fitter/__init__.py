@@ -43,7 +43,6 @@ def main(cluster, Niters, Nwalkers, Ncpu, *,
 
     logging.debug(f"Observation datasets: {observations}")
 
-    # TODO maybe exclusion should go into determine
     # determine which likelihoods to compute (given data and exclusions)
     L_components = [
         comp for comp in determine_components(observations)

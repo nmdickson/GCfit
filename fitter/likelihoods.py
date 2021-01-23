@@ -327,7 +327,7 @@ def likelihood_mass_func(model, mf):
 # --------------------------------------------------------------------------
 
 
-def create_model(theta, observations=None, *, strict=False, verbose=False):
+def create_model(theta, observations=None, *, verbose=False):
     '''if observations are provided, will use it for a few parameters and
     check if need to add any mass bins. Otherwise will just use defaults.
     '''
@@ -420,10 +420,7 @@ def create_model(theta, observations=None, *, strict=False, verbose=False):
         )
     except ValueError as err:
         logging.debug(f"Model did not converge with {theta=}")
-        if strict:
-            raise ValueError(err)
-        else:
-            return None
+        raise ValueError(err)
 
     # TODO not my favourite way to store this info
     #   means models *have* to be created here for the most part
@@ -490,15 +487,13 @@ def determine_components(obs):
 # individual likelihood functions and collects their results.
 def log_likelihood(theta, observations, L_components):
 
-    # TODO Having this as a try/excpt might be better than returning None
-    model = create_model(theta, observations)
-
-    # If the model does not converge, return -np.inf
-    if model is None or not model.converged:
+    try:
+        model = create_model(theta, observations)
+    except ValueError:
+        # Model did not converge
         return -np.inf, -np.inf * np.ones(len(L_components))
 
     # Calculate each log likelihood
-
     probs = np.array([
         likelihood(model, observations[key], *args)
         for (key, likelihood, *args) in L_components
