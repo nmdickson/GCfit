@@ -100,7 +100,6 @@ def likelihood_pulsar(model, pulsars, mass_bin=None):
 
 
 def likelihood_number_density(model, ndensity, mass_bin=None):
-    # TODO don't forget to revert or better compute this flatness cutoff [:100]
 
     if mass_bin is None:
         if 'm' in ndensity.mdata:
@@ -108,9 +107,16 @@ def likelihood_number_density(model, ndensity, mass_bin=None):
         else:
             mass_bin = model.nms - 1
 
+    # Set cutoff to avoid fitting flat end of data
+    valid = (ndensity['Σ'] > 0.1)
+
+    obs_Σ = ndensity['Σ'][valid]
+    obs_err = ndensity['ΔΣ'][valid]
+
     # Interpolated the model data at the measurement locations
+    # TODO the numdens data should be converted to arcsec in storage or data
     interpolated = np.interp(
-        ndensity['r'][:100], pc2arcsec(model.r, model.d) / 60,
+        ndensity['r'][valid], pc2arcsec(model.r, model.d) / 60,
         model.Sigmaj[mass_bin] / model.mj[mass_bin],
     )
 
@@ -126,10 +132,9 @@ def likelihood_number_density(model, ndensity, mass_bin=None):
     # Divided by sum of model**2 / observed**2
 
     # Calculate scaling factor
-    K = (np.sum(ndensity['Σ'][:100] * interpolated / ndensity['Σ'][:100] ** 2)
-         / np.sum(interpolated ** 2 / ndensity['Σ'][:100] ** 2))
+    K = (np.sum(obs_Σ * interpolated / obs_Σ ** 2)
+         / np.sum(interpolated ** 2 / obs_Σ ** 2))
 
-    # Apply scaling factor to interpolated points
     interpolated *= K
 
     # Now nuisance parameter
@@ -137,16 +142,12 @@ def likelihood_number_density(model, ndensity, mass_bin=None):
     # allows us to fit on the data while not worrying too much about the
     # outermost points where background effects are most prominent.
 
-    # TODO could ΔΣ ever be asymmetric? I doubt it right?
-    yerr = np.zeros(len(ndensity['ΔΣ'][:100]))
-
-    # Add the nuisance parameter in quadrature
-    for i in range(len(ndensity['ΔΣ'][:100])):
-        yerr[i] = np.sqrt(ndensity['ΔΣ'][:100][i] ** 2 + model.s2)
+    yerr = np.sqrt(obs_err ** 2 + model.s2)
 
     # Now regular gaussian likelihood
-    return -0.5 * np.sum((ndensity['Σ'][:100] - interpolated) ** 2 / yerr ** 2
-                         + np.log(yerr ** 2))
+    return -0.5 * np.sum(
+        (obs_Σ - interpolated) ** 2 / yerr ** 2 + np.log(yerr ** 2)
+    )
 
 
 def likelihood_pm_tot(model, pm, mass_bin=None):
