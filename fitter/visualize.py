@@ -28,6 +28,9 @@ class _Visualizer:
 
         return fig, ax
 
+    # TODO this shsould handle an axes arg as well
+    #   The whole point of these methods is so we can reuse the fig, but thats
+    #   not currenlty possible with the multi artist like it is for singles
     def _setup_multi_artist(self, fig, shape, **subplot_kw):
         '''setup a subplot with multiple axes, don't supply ax cause it doesnt
         really make sense in this case, you would need to supply the same
@@ -44,8 +47,15 @@ class _Visualizer:
             if fig is None:
                 fig, axarr = plt.subplots(*shape, **subplot_kw)
 
-            else:
+            elif not fig.axes:
                 fig, axarr = plt.subplots(*shape, num=fig.number, **subplot_kw)
+
+            else:
+                # TODO make sure this is using the correct order
+                axarr = np.array(fig.axes).reshape(shape)
+                # we shouldn't add axes to a fig that already has some
+                # maybe just warn or error if the shape doesn't match `shape`
+                pass
 
         return fig, axarr
 
@@ -59,21 +69,21 @@ class ModelVisualizer(_Visualizer):
     # Plotting functions
     # -----------------------------------------------------------------------
 
+    # TODO a better term than 'attempt' should be used
+    # TODO change all these to check data for mass bin like in likelihoods
+    # TODO the generation of obs_err should be generalized in all functions
+
     # Pulsar max az vs measured az
     def plot_pulsar(self, fig=None, ax=None, show_obs=True):
         # TODO this is out of date with the new pulsar probability code
 
         fig, ax = self._setup_artist(fig, ax)
 
-        obs_pulsar = self.obs['pulsar']
-        d = self.model.d
+        ax.set_title('Pulsar LOS Acceleration')
+        ax.set_xlabel('R')
+        ax.set_ylabel(r'$a_{los}$')
 
-        # N_pulsars = obs_r.size
-        # prob_dist = np.array([
-        #     vec_Paz(self.model, A_SPACE, obs_r[i], i)
-        #     for i in range(N_pulsars)
-        # ])
-        # max_probs = prob_dist.max(axis=1)
+        d = self.model.d
 
         maz = []
         for r in self.model.r:
@@ -82,16 +92,26 @@ class ModelVisualizer(_Visualizer):
 
         maz = np.array(maz)
 
-        ax.set_title('Pulsar LOS Acceleration')
-        ax.set_xlabel('R')
-        ax.set_ylabel(r'$a_{los}$')
-
         if show_obs:
-            ax.errorbar(obs_pulsar['r'], self.obs['pulsar/a_los'],
-                        yerr=self.obs['pulsar/Δa_los'], fmt='k.')
+            try:
+                obs_pulsar = self.obs['pulsar']
+
+                ax.errorbar(obs_pulsar['r'], self.obs['pulsar/a_los'],
+                            yerr=self.obs['pulsar/Δa_los'], fmt='k.')
+
+            except KeyError as err:
+                if show_obs != 'attempt':
+                    raise err
 
         upper_az, = ax.plot(pc2arcsec(self.model.r, d) / 60., maz)
         ax.plot(pc2arcsec(self.model.r, d) / 60., -maz, c=upper_az.get_color())
+
+        # N_pulsars = obs_r.size
+        # prob_dist = np.array([
+        #     vec_Paz(self.model, A_SPACE, obs_r[i], i)
+        #     for i in range(N_pulsars)
+        # ])
+        # max_probs = prob_dist.max(axis=1)
 
         # err = scipy.stats.norm.pdf(A_SPACE, 0, np.c_[obs_pulsar['Δa_los']])
 
@@ -109,15 +129,9 @@ class ModelVisualizer(_Visualizer):
     # line of sight dispersion
     def plot_LOS(self, fig=None, ax=None, show_obs=True):
 
-        fig, ax = self._setup_artist(fig, ax)
-
         mass_bin = self.model.nms - 1
-        vel_disp = self.obs['velocity_dispersion']
-        # TODO this should be more general
-        try:
-            obs_err = (vel_disp['Δσ,down'], vel_disp['Δσ,up'])
-        except KeyError:
-            obs_err = vel_disp['Δσ']
+
+        fig, ax = self._setup_artist(fig, ax)
 
         ax.set_title('Line of Sight Velocity')
         ax.set_xlabel("R [arcsec]")
@@ -126,7 +140,19 @@ class ModelVisualizer(_Visualizer):
         ax.set_xscale("log")
 
         if show_obs:
-            ax.errorbar(vel_disp['r'], vel_disp['σ'], yerr=obs_err, fmt='k.')
+            try:
+                veldisp = self.obs['velocity_dispersion']
+
+                try:
+                    obs_err = (veldisp['Δσ,down'], veldisp['Δσ,up'])
+                except KeyError:
+                    obs_err = veldisp['Δσ']
+
+                ax.errorbar(veldisp['r'], veldisp['σ'], yerr=obs_err, fmt='k.')
+
+            except KeyError as err:
+                if show_obs != 'attempt':
+                    raise err
 
         ax.plot(pc2arcsec(self.model.r, self.model.d),
                 np.sqrt(self.model.v2pj[mass_bin]))
@@ -136,12 +162,9 @@ class ModelVisualizer(_Visualizer):
     # total proper motion
     def plot_pm_tot(self, fig=None, ax=None, show_obs=True):
 
-        fig, ax = self._setup_artist(fig, ax)
-
-        # TODO change all these to check data for mass bin like in likelihoods
         mass_bin = self.model.nms - 1
-        pm = self.obs['proper_motion']
-        model_t2 = 0.5 * (self.model.v2Tj[mass_bin] + self.model.v2Rj[mass_bin])
+
+        fig, ax = self._setup_artist(fig, ax)
 
         ax.set_title("Total Proper Motion")
         ax.set_xlabel("R [arcsec]")
@@ -150,8 +173,17 @@ class ModelVisualizer(_Visualizer):
         ax.set_xscale("log")
 
         if show_obs:
-            ax.errorbar(pm['r'], pm['PM_tot'],
-                        xerr=pm['Δr'], yerr=pm['ΔPM_tot'], fmt='k.')
+            try:
+                pm = self.obs['proper_motion']
+
+                ax.errorbar(pm['r'], pm['PM_tot'],
+                            xerr=pm['Δr'], yerr=pm['ΔPM_tot'], fmt='k.')
+
+            except KeyError as err:
+                if show_obs != 'attempt':
+                    raise err
+
+        model_t2 = 0.5 * (self.model.v2Tj[mass_bin] + self.model.v2Rj[mass_bin])
 
         ax.plot(pc2arcsec(self.model.r, self.model.d),
                 kms2masyr(np.sqrt(model_t2), self.model.d))
@@ -161,11 +193,9 @@ class ModelVisualizer(_Visualizer):
     # proper motion anisotropy (ratio)
     def plot_pm_ratio(self, fig=None, ax=None, show_obs=True):
 
-        fig, ax = self._setup_artist(fig, ax)
-
         mass_bin = self.model.nms - 1
-        pm = self.obs['proper_motion']
-        model_ratio2 = self.model.v2Tj[mass_bin] / self.model.v2Rj[mass_bin]
+
+        fig, ax = self._setup_artist(fig, ax)
 
         ax.set_title("Proper Motion Ratio")
         ax.set_xlabel("R [arcsec]")
@@ -174,30 +204,29 @@ class ModelVisualizer(_Visualizer):
         ax.set_xscale("log")
 
         if show_obs:
-            ax.errorbar(pm['r'], pm['PM_ratio'],
-                        xerr=pm['Δr'], yerr=pm['ΔPM_ratio'], fmt='k.')
+            try:
 
-        ax.plot(pc2arcsec(self.model.r, self.model.d),
-                np.sqrt(model_ratio2))
+                pm = self.obs['proper_motion']
+
+                ax.errorbar(pm['r'], pm['PM_ratio'],
+                            xerr=pm['Δr'], yerr=pm['ΔPM_ratio'], fmt='k.')
+
+            except KeyError as err:
+                if show_obs != 'attempt':
+                    raise err
+
+        model_ratio2 = self.model.v2Tj[mass_bin] / self.model.v2Rj[mass_bin]
+
+        ax.plot(pc2arcsec(self.model.r, self.model.d), np.sqrt(model_ratio2))
 
         return fig
 
     # number density
     def plot_number_density(self, fig=None, ax=None, show_obs=True):
 
-        fig, ax = self._setup_artist(fig, ax)
-
         mass_bin = self.model.nms - 1
-        numdens = self.obs['number_density']
 
-        # interpolate number density to the observed data points r
-        interp_model = np.interp(
-            numdens['r'], pc2arcsec(self.model.r, self.model.d) / 60.,
-            self.model.Sigmaj[mass_bin] / self.model.mj[mass_bin]
-        )
-
-        K = (np.sum(numdens['Σ'] * interp_model / numdens["Σ"] ** 2)
-             / np.sum(interp_model ** 2 / numdens["Σ"] ** 2))
+        fig, ax = self._setup_artist(fig, ax)
 
         ax.set_title('Number Density')
         ax.set_xlabel("R [arcsec]")
@@ -205,9 +234,35 @@ class ModelVisualizer(_Visualizer):
 
         ax.loglog()
 
+        # numdens is a bit different cause we want to compute K whenever
+        #   possible, even if we're not showing obs
+
+        try:
+            numdens = self.obs['number_density']
+
+            # interpolate number density to the observed data points r
+            interp_model = np.interp(
+                numdens['r'], pc2arcsec(self.model.r, self.model.d) / 60.,
+                self.model.Sigmaj[mass_bin] / self.model.mj[mass_bin]
+            )
+
+            K = (np.sum(numdens['Σ'] * interp_model / numdens["Σ"] ** 2)
+                 / np.sum(interp_model ** 2 / numdens["Σ"] ** 2))
+
+        except KeyError:
+            K = 1.
+
         if show_obs:
-            ax.errorbar(numdens['r'] * 60, numdens["Σ"],
-                        yerr=np.sqrt(numdens["ΔΣ"]**2 + self.model.s2), fmt='k.')
+            try:
+
+                numdens = self.obs['number_density']
+
+                ax.errorbar(numdens['r'] * 60, numdens["Σ"], fmt='k.',
+                            yerr=np.sqrt(numdens["ΔΣ"]**2 + self.model.s2))
+
+            except KeyError as err:
+                if show_obs != 'attempt':
+                    raise err
 
         ax.plot(pc2arcsec(self.model.r, self.model.d),
                 K * self.model.Sigmaj[mass_bin] / self.model.mj[mass_bin])
@@ -216,13 +271,11 @@ class ModelVisualizer(_Visualizer):
 
     # tangential proper motion
     def plot_pm_T(self, fig=None, ax=None, show_obs=True):
+        # TODO capture all mass bins which have data (high_mass, low_mass, etc)
+
+        mass_bin = self.model.nms - 1
 
         fig, ax = self._setup_artist(fig, ax)
-
-        # TODO capture all mass bins which have data (high_mass, low_mass, etc)
-        mass_bin = self.model.nms - 1
-        pm = self.obs['proper_motion/high_mass']
-        model_pm = self.model.v2Tj
 
         ax.set_title("Tangential Proper Motion [High Mass]")
         ax.set_xlabel("R [arcsec]")
@@ -231,23 +284,28 @@ class ModelVisualizer(_Visualizer):
         ax.set_xscale("log")
 
         if show_obs:
-            ax.errorbar(pm['r'], pm["PM_T"],
-                        xerr=pm["Δr"], yerr=pm["ΔPM_T"], fmt='k.')
+            try:
+
+                pm = self.obs['proper_motion/high_mass']
+
+                ax.errorbar(pm['r'], pm["PM_T"],
+                            xerr=pm["Δr"], yerr=pm["ΔPM_T"], fmt='k.')
+
+            except KeyError as err:
+                if show_obs != 'attempt':
+                    raise err
 
         ax.plot(pc2arcsec(self.model.r, self.model.d),
-                kms2masyr(np.sqrt(model_pm[mass_bin]), self.model.d))
+                kms2masyr(np.sqrt(self.model.v2Tj[mass_bin]), self.model.d))
 
         return fig
 
     # radial proper motion
     def plot_pm_R(self, fig=None, ax=None, show_obs=True):
 
-        fig, ax = self._setup_artist(fig, ax)
-
-        # TODO capture all mass bins which have data (high_mass, low_mass, etc)
         mass_bin = self.model.nms - 1
-        pm = self.obs['proper_motion/high_mass']
-        model_pm = self.model.v2Rj
+
+        fig, ax = self._setup_artist(fig, ax)
 
         ax.set_title("Radial Proper Motion [High Mass]")
         ax.set_xlabel("R [arcsec]")
@@ -256,8 +314,18 @@ class ModelVisualizer(_Visualizer):
         ax.set_xscale("log")
 
         if show_obs:
-            ax.errorbar(pm['r'], pm["PM_R"],
-                        xerr=pm["Δr"], yerr=pm["ΔPM_R"], fmt='k.')
+            try:
+
+                pm = self.obs['proper_motion/high_mass']
+
+                ax.errorbar(pm['r'], pm["PM_R"],
+                            xerr=pm["Δr"], yerr=pm["ΔPM_R"], fmt='k.')
+
+            except KeyError as err:
+                if show_obs != 'attempt':
+                    raise err
+
+        model_pm = self.model.v2Rj
 
         ax.plot(pc2arcsec(self.model.r, self.model.d),
                 kms2masyr(np.sqrt(model_pm[mass_bin]), self.model.d))
@@ -324,28 +392,30 @@ class ModelVisualizer(_Visualizer):
     # def plot_imf
     # def plot_bhcontent
 
-    def plot_all(self, fig=None, axes=None):
+    def plot_all(self, fig=None, axes=None, show_obs=True):
 
-        # TODO base this on something like determine_components probably,
-        #   that is, if we only want stuff we can compare with obs, might need
-        #   a 'require obs' option
+        # TODO have a require_obs option, where if required we change to try
+        #   excepts and dont plot the ones that fail
 
         # TODO a better method for being able to overplot multiple show_alls
         if fig is None:
-            fig, axes = plt.subplots(3, 2)
+            fig, axes = plt.subplots(4, 2)
             axes = axes.flatten()
         else:
             axes = fig.axes
 
-        fig.suptitle("cluster name")
+        fig.suptitle(str(self.obs))
 
-        self.plot_pulsar(fig=fig, ax=axes[0])
-        self.plot_number_density(fig=fig, ax=axes[1])
-        self.plot_LOS(fig=fig, ax=axes[2])
-        self.plot_pm_tot(fig=fig, ax=axes[3])
-        self.plot_pm_ratio(fig=fig, ax=axes[5])
+        self.plot_pulsar(fig=fig, ax=axes[0], show_obs=show_obs)
+        self.plot_number_density(fig=fig, ax=axes[1], show_obs='attempt')
+        self.plot_pm_tot(fig=fig, ax=axes[2], show_obs=show_obs)
+        self.plot_pm_ratio(fig=fig, ax=axes[3], show_obs=show_obs)
+        self.plot_pm_T(fig=fig, ax=axes[4], show_obs=show_obs)
+        self.plot_pm_R(fig=fig, ax=axes[5], show_obs=show_obs)
 
-        # TODO maybe have some written info in one of the empty panels
+        self.plot_LOS(fig=fig, ax=axes[7], show_obs=show_obs)
+
+        # TODO maybe have some written info in one of the empty panels (ax6)
 
         return fig
 
@@ -578,7 +648,7 @@ class RunVisualizer(_Visualizer):
                   for i, lbl in enumerate(labels)]
 
         return corner.corner(chain, labels=labels, fig=fig,
-                             range=ranges, **corner_kw)
+                             range=ranges, plot_datapoints=False, **corner_kw)
 
     def plot_acceptance(self, fig=None, ax=None):
 
@@ -626,6 +696,24 @@ class RunVisualizer(_Visualizer):
     # ----------------------------------------------------------------------
     # Summaries
     # ----------------------------------------------------------------------
+
+    # def plot_params(self, fig=None, ax=None):
+
+    #     fig, axes = self._setup_artist(fig, ax)
+
+    #     labels, chain = self._get_chains()
+
+    #     chain = chain.reshape((-1, chain.shape[-1]))
+
+    #     gridspec to hspace, wspace = 0
+    #     subplot spacing to use more of grid
+    #     replace bottom ticks with labels
+
+    #     for i in range(chain.shape[-1]):
+    #         axes[i].boxplot(chain[..., i])
+    #         axes[i].tick_params(axis='y', direction='in', right=True)
+    #         pad=-18, labelrotation=90??
+
 
     def print_summary(self, out=None, results_only=False, mathtext=False):
         '''write a summary of the run results, to a `out` file-like or stdout'''
@@ -697,27 +785,38 @@ class RunVisualizer(_Visualizer):
         out.write(mssg)
 
 
-# TODO
-# def compare_runs(output_files, observations):
+def compare_runs(output_files, observations):
 
-#     RV_list = [RunVisualizer(file, observations) for file in output_files]
-#     MV_list = [RV.get_model() for RV in RV_list]
+    RV_list = [RunVisualizer(file, observations) for file in output_files]
+    MV_list = [RV.get_model() for RV in RV_list]
 
-#     # compare run stats, chains, etc
+    # compare run stats, chains, etc
 
-#     fig1 = plt.figure()
-#     fig2, axarr2 = plt.subplots(nrows=max number of likelihoods in the RVs, ncols=len(RV_list))
+    # plot median chains for all runs in same figure
 
-#     for RV in RV_list:
-#         RV.walkers = 'median'
-#         fig1 = RV.plot_chains(fig1)
+    # fig1 = plt.figure()
+    fig1 = None
 
-#         RV.walkers = slice(None)
-#         fig2 = ACTUALLY IM NOT SURE HOW TO DO THIS ONE USING PLOT_INDIV
+    # plot indivs with full walkers for all runs in separate columns of same fig
+    # TODO having trouble because you cant really comine figs in plt
+    fig2 = plt.figure()
+    # nrows=max number of likelihoods in the RVs, ncols=len(RV_list)
 
-#     plot median chains for all runs in same figure
-#     plot indivs with full walkers for all runs in separate columns of same fig
+    for ind, RV in enumerate(RV_list):
+        RV.walkers = 'median'
+        fig1 = RV.plot_chains(fig1)
 
-#    # compare model outputs
+        # RV.walkers = slice(None)
+        # indiv_axes = RV.plot_indiv().axes
 
-#     do a plot all, with obs only being plots once, but all runs in same fig 
+        # fig2.add_subplot()
+
+   # compare model outputs
+
+    # do a plot all, with obs only being plots once, but all runs in same fig 
+
+    # fig3 = plt.figure()
+    fig3 = None
+
+    for ind, MV in enumerate(MV_list):
+        fig3 = MV.plot_all(fig3, show_obs=(not ind))
