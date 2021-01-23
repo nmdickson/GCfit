@@ -159,20 +159,19 @@ def likelihood_pm_tot(model, pm, mass_bin=None):
 
     model_tot = np.sqrt(0.5 * (model.v2Tj[mass_bin] + model.v2Rj[mass_bin]))
 
+    # Convert model units
+    model_r = pc2arcsec(model.r, model.d)
+    model_tot = kms2masyr(model_tot, model.d)
+
     # Build asymmetric error, if exists
-    obs_err = pm.build_err(
-        'PM_tot', pc2arcsec(model.r, model.d), kms2masyr(model_tot, model.d)
-    )
+    obs_err = pm.build_err('PM_tot', model_r, model_tot)
 
     # Interpolated model at data locations
-    interpolated = np.interp(
-        pm['r'], pc2arcsec(model.r, model.d), kms2masyr(model_tot, model.d)
-    )
+    interpolated = np.interp(pm['r'], model_r, model_tot)
 
     # Gaussian likelihood
     return -0.5 * np.sum(
-        (pm['PM_tot'] - interpolated) ** 2 / obs_err ** 2
-        + np.log(obs_err ** 2)
+        (pm['PM_tot'] - interpolated) ** 2 / obs_err ** 2 + np.log(obs_err ** 2)
     )
 
 
@@ -184,17 +183,15 @@ def likelihood_pm_ratio(model, pm, mass_bin=None):
         else:
             mass_bin = model.nms - 1
 
+    # Convert model units
+    model_r = pc2arcsec(model.r, model.d)
     model_ratio = np.sqrt(model.v2Tj[mass_bin] / model.v2Rj[mass_bin])
 
     # Build asymmetric error, if exists
-    obs_err = pm.build_err(
-        'PM_ratio', pc2arcsec(model.r, model.d), model_ratio
-    )
+    obs_err = pm.build_err('PM_ratio', model_r, model_ratio)
 
     # Interpolated model at data locations
-    interpolated = np.interp(
-        pm['r'], pc2arcsec(model.r, model.d), model_ratio
-    )
+    interpolated = np.interp(pm['r'], model_r, model_ratio)
 
     # Gaussian likelihood
     return -0.5 * np.sum(
@@ -211,22 +208,19 @@ def likelihood_pm_T(model, pm, mass_bin=None):
         else:
             mass_bin = model.nms - 1
 
+    # Convert model units
+    model_r = pc2arcsec(model.r, model.d)
+    model_T = kms2masyr(np.sqrt(model.v2Tj[mass_bin]), model.d)
+
     # Build asymmetric error, if exists
-    obs_err = pm.build_err(
-        'PM_T', pc2arcsec(model.r, model.d),
-        kms2masyr(np.sqrt(model.v2Tj[mass_bin]), model.d)
-    )
+    obs_err = pm.build_err('PM_T', model_r, model_T)
 
     # Interpolated model at data locations
-    interpolated = np.interp(
-        pm['r'], pc2arcsec(model.r, model.d),
-        kms2masyr(np.sqrt(model.v2Tj[mass_bin]), model.d)
-    )
+    interpolated = np.interp(pm['r'], model_r, model_T)
 
     # Gaussian likelihood
     return -0.5 * np.sum(
-        (pm['PM_T'] - interpolated) ** 2 / obs_err ** 2
-        + np.log(obs_err ** 2)
+        (pm['PM_T'] - interpolated) ** 2 / obs_err ** 2 + np.log(obs_err ** 2)
     )
 
 
@@ -238,22 +232,19 @@ def likelihood_pm_R(model, pm, mass_bin=None):
         else:
             mass_bin = model.nms - 1
 
+    # Convert model units
+    model_r = pc2arcsec(model.r, model.d)
+    model_R = kms2masyr(np.sqrt(model.v2Rj[mass_bin]), model.d)
+
     # Build asymmetric error, if exists
-    obs_err = pm.build_err(
-        'PM_R', pc2arcsec(model.r, model.d),
-        kms2masyr(np.sqrt(model.v2Rj[mass_bin]), model.d)
-    )
+    obs_err = pm.build_err('PM_R', model_r, model_R)
 
     # Interpolated model at data locations
-    interpolated = np.interp(
-        pm['r'], pc2arcsec(model.r, model.d),
-        kms2masyr(np.sqrt(model.v2Rj[mass_bin]), model.d)
-    )
+    interpolated = np.interp(pm['r'], model_r, model_R)
 
     # Gaussian likelihood
     return -0.5 * np.sum(
-        (pm['PM_R'] - interpolated) ** 2 / obs_err ** 2
-        + np.log(obs_err ** 2)
+        (pm['PM_R'] - interpolated) ** 2 / obs_err ** 2 + np.log(obs_err ** 2)
     )
 
 
@@ -265,21 +256,19 @@ def likelihood_LOS(model, vlos, mass_bin=None):
         else:
             mass_bin = model.nms - 1
 
+    # Convert model units
+    model_r = pc2arcsec(model.r, model.d)
+    model_LOS = np.sqrt(model.v2pj[mass_bin])
+
     # Build asymmetric error, if exists
-    obs_err = vlos.build_err(
-        'σ', pc2arcsec(model.r, model.d), np.sqrt(model.v2pj[mass_bin])
-    )
+    obs_err = vlos.build_err('σ', model_r, model_LOS)
 
     # Interpolated model at data locations
-    interpolated = np.interp(
-        vlos['r'], pc2arcsec(model.r, model.d),
-        np.sqrt(model.v2pj[mass_bin])
-    )
+    interpolated = np.interp(vlos['r'], model_r, model_LOS)
 
     # Gaussian likelihood
     return -0.5 * np.sum(
-        (vlos['σ'] - interpolated) ** 2 / obs_err ** 2
-        + np.log(obs_err ** 2)
+        (vlos['σ'] - interpolated) ** 2 / obs_err ** 2 + np.log(obs_err ** 2)
     )
 
 

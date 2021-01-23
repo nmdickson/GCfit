@@ -76,7 +76,6 @@ class Dataset:
     def variables(self):
         return self._dict_variables
 
-    # def build_asym_err(model, r, quantity, sigmaup, sigmalow, d):
     def build_err(self, varname, model_r, model_val):
         '''
         varname is the variable we want to get the error for
