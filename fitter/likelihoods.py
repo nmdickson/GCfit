@@ -17,6 +17,7 @@ import fnmatch
 # Unit conversions
 # --------------------------------------------------------------------------
 
+
 def pc2arcsec(r, d):
     d *= 1000
     return 206265 * 2 * np.arctan(r / (2 * d))
@@ -33,27 +34,6 @@ def kms2masyr(kms, d):
     asyr = pc2arcsec(pcyr, d)
     masyr = 1000 * asyr
     return masyr
-
-
-# --------------------------------------------------------------------------
-# Asymmetric error constructions
-# --------------------------------------------------------------------------
-
-# TODO these should be build into data probably?
-# TODO be careful of the units here maybe
-
-# We have two datasets with asymmetric error, these functions allow us to choose
-# either the upper or lower error bound depending on where our test
-# point is in relation to the observed point.
-def build_asym_err(model, r, quantity, sigmaup, sigmalow, d):
-    sigma = np.zeros(len(sigmaup))
-    interpolated = np.interp(r, pc2arcsec(model.r, d), np.sqrt(model.v2p))
-    for i in range(len(r)):
-        if interpolated[i] > quantity[i]:
-            sigma[i] = sigmaup[i]
-        else:
-            sigma[i] = sigmalow[i]
-    return sigma
 
 
 # --------------------------------------------------------------------------
@@ -156,6 +136,8 @@ def likelihood_number_density(model, ndensity, mass_bin=None):
     # This allows us to add a constant error component to the data which
     # allows us to fit on the data while not worrying too much about the
     # outermost points where background effects are most prominent.
+
+    # TODO could ΔΣ ever be asymmetric? I doubt it right?
     yerr = np.zeros(len(ndensity['ΔΣ'][:100]))
 
     # Add the nuisance parameter in quadrature
@@ -175,19 +157,16 @@ def likelihood_pm_tot(model, pm, mass_bin=None):
         else:
             mass_bin = model.nms - 1
 
-    # Build asymmetric error, if exists
-    try:
-        obs_err = build_asym_err(model, pm['r'], pm['PM_tot'],
-                                 pm['ΔPM_tot,up'], pm['ΔPM_tot,down'], model.d)
-    except KeyError:
-        obs_err = pm['ΔPM_tot']
-
     model_tot = np.sqrt(0.5 * (model.v2Tj[mass_bin] + model.v2Rj[mass_bin]))
+
+    # Build asymmetric error, if exists
+    obs_err = pm.build_err(
+        'PM_tot', pc2arcsec(model.r, model.d), kms2masyr(model_tot, model.d)
+    )
 
     # Interpolated model at data locations
     interpolated = np.interp(
-        pm['r'], pc2arcsec(model.r, model.d),
-        kms2masyr(model_tot, model.d)
+        pm['r'], pc2arcsec(model.r, model.d), kms2masyr(model_tot, model.d)
     )
 
     # Gaussian likelihood
@@ -205,20 +184,16 @@ def likelihood_pm_ratio(model, pm, mass_bin=None):
         else:
             mass_bin = model.nms - 1
 
-    # Build asymmetric error, if exists
-    try:
-        obs_err = build_asym_err(model, pm['r'], pm['PM_ratio'],
-                                 pm['ΔPM_ratio,up'], pm['ΔPM_ratio,down'],
-                                 model.d)
-    except KeyError:
-        obs_err = pm['ΔPM_ratio']
-
     model_ratio = np.sqrt(model.v2Tj[mass_bin] / model.v2Rj[mass_bin])
+
+    # Build asymmetric error, if exists
+    obs_err = pm.build_err(
+        'PM_ratio', pc2arcsec(model.r, model.d), model_ratio
+    )
 
     # Interpolated model at data locations
     interpolated = np.interp(
-        pm['r'], pc2arcsec(model.r, model.d),
-        model_ratio
+        pm['r'], pc2arcsec(model.r, model.d), model_ratio
     )
 
     # Gaussian likelihood
@@ -237,11 +212,10 @@ def likelihood_pm_T(model, pm, mass_bin=None):
             mass_bin = model.nms - 1
 
     # Build asymmetric error, if exists
-    try:
-        obs_err = build_asym_err(model, pm['r'], pm['PM_T'],
-                                 pm['ΔPM_T,up'], pm['ΔPM_T,down'], model.d)
-    except KeyError:
-        obs_err = pm['ΔPM_T']
+    obs_err = pm.build_err(
+        'PM_T', pc2arcsec(model.r, model.d),
+        kms2masyr(np.sqrt(model.v2Tj[mass_bin]), model.d)
+    )
 
     # Interpolated model at data locations
     interpolated = np.interp(
@@ -265,11 +239,10 @@ def likelihood_pm_R(model, pm, mass_bin=None):
             mass_bin = model.nms - 1
 
     # Build asymmetric error, if exists
-    try:
-        obs_err = build_asym_err(model, pm['r'], pm['PM_R'],
-                                 pm['ΔPM_R,up'], pm['ΔPM_R,down'], model.d)
-    except KeyError:
-        obs_err = pm['ΔPM_R']
+    obs_err = pm.build_err(
+        'PM_R', pc2arcsec(model.r, model.d),
+        kms2masyr(np.sqrt(model.v2Rj[mass_bin]), model.d)
+    )
 
     # Interpolated model at data locations
     interpolated = np.interp(
@@ -293,11 +266,9 @@ def likelihood_LOS(model, vlos, mass_bin=None):
             mass_bin = model.nms - 1
 
     # Build asymmetric error, if exists
-    try:
-        obs_err = build_asym_err(model, vlos['r'], vlos['σ'],
-                                 vlos['Δσ,up'], vlos['Δσ,down'], model.d)
-    except KeyError:
-        obs_err = vlos['Δσ']
+    obs_err = vlos.build_err(
+        'σ', pc2arcsec(model.r, model.d), np.sqrt(model.v2pj[mass_bin])
+    )
 
     # Interpolated model at data locations
     interpolated = np.interp(

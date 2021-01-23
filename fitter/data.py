@@ -76,12 +76,43 @@ class Dataset:
     def variables(self):
         return self._dict_variables
 
-    def compute_async_error(self, varname, quantity):
-        '''TODO this is where the async error stuff should go'''
-        pass
+    # def build_asym_err(model, r, quantity, sigmaup, sigmalow, d):
+    def build_err(self, varname, model_r, model_val):
+        '''
+        varname is the variable we want to get the error for
+        quantity is the actual model data we will be comparing this with
+
+        model_r, _val must be in the right units already (this may be a
+        temporary requirement) so do the pc2arcsec conversion beforehand pls
+        '''
+
+        try:
+            return self[f'Δ{varname}']
+
+        except KeyError:
+
+            try:
+                err_up = self[f'Δ{varname},up']
+                err_down = self[f'Δ{varname},down']
+
+            except KeyError:
+                mssg = f"There are no error(Δ) values associated with {varname}"
+                raise ValueError(mssg)
+
+            quantity = self[varname]
+            err = np.zeros_like(quantity)
+
+            model_val = np.interp(self['r'], model_r, model_val)
+
+            gt_mask = (model_val > quantity)
+            err[gt_mask] = err_up[gt_mask]
+            err[~gt_mask] = err_down[~gt_mask]
+
+            return err
 
     def convert_units(self):
         # TODO auto unit conversions based on attributes
+        # This makes me dream about something like astropy units
         pass
 
 
