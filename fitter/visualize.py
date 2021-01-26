@@ -119,7 +119,7 @@ class ModelVisualizer(_Visualizer):
         # for ind in range(len(obs_pulsar['r'])):
         #     clr = f'C{ind + 1}'
         #     print(prob_dist[ind])
-        #     # TODO lots of nans?
+        #     # TO-DO lots of nans?
         #     plt.plot(A_SPACE, prob_dist[ind], c=clr)
         #     plt.axvline(obs_pulsar['r'][ind], c=clr)
         #     plt.axhline(obs_pulsar['a_los'][ind], c=clr)
@@ -392,7 +392,7 @@ class ModelVisualizer(_Visualizer):
     # def plot_imf
     # def plot_bhcontent
 
-    def plot_all(self, fig=None, axes=None, show_obs=True):
+    def plot_all(self, fig=None, axes=None, show_obs='attempt'):
 
         # TODO have a require_obs option, where if required we change to try
         #   excepts and dont plot the ones that fail
@@ -437,7 +437,7 @@ class ModelVisualizer(_Visualizer):
 
         theta = reduc(chain, axis=0)
 
-        return cls(create_model(theta, strict=True), observations)
+        return cls(create_model(theta, observations), observations)
 
     def __init__(self, model, observations):
         self.obs = observations
@@ -650,6 +650,32 @@ class RunVisualizer(_Visualizer):
         return corner.corner(chain, labels=labels, fig=fig,
                              range=ranges, plot_datapoints=False, **corner_kw)
 
+    def plot_params(self, params, fig=None, *, colors=None, math_labels=None):
+        # TODO handle colors in more plots, and handle iterator based colors
+
+        fig, ax = self._setup_multi_artist(fig, shape=(1, len(params)))
+
+        labels, chain = self._get_chains()
+
+        chain = chain.reshape((-1, chain.shape[-1]))
+
+        if colors is None:
+            colors = ['b'] * len(params)
+
+        for ind, key in enumerate(params):
+            vals = chain[..., labels.index(key)]
+
+            ax[ind].hist(vals, histtype='stepfilled', alpha=0.33,
+                         color=colors[ind])  # , ec=colors[ind], lw=1.2)
+
+            # TODO this is to make a clearer hist border, but should switch to
+            #   explicitly creating a color with alpha for facecolor only
+            ax[ind].hist(vals, histtype='step', color=colors[ind])
+
+            ax[ind].set_xlabel(key if math_labels is None else math_labels[ind])
+
+        return fig
+
     def plot_acceptance(self, fig=None, ax=None):
 
         if not self.has_stats:
@@ -697,7 +723,8 @@ class RunVisualizer(_Visualizer):
     # Summaries
     # ----------------------------------------------------------------------
 
-    # def plot_params(self, fig=None, ax=None):
+    # TODO this very much does not work currently
+    # def plot_boxplots(self, fig=None, ax=None):
 
     #     fig, axes = self._setup_artist(fig, ax)
 
@@ -713,7 +740,6 @@ class RunVisualizer(_Visualizer):
     #         axes[i].boxplot(chain[..., i])
     #         axes[i].tick_params(axis='y', direction='in', right=True)
     #         pad=-18, labelrotation=90??
-
 
     def print_summary(self, out=None, results_only=False, mathtext=False):
         '''write a summary of the run results, to a `out` file-like or stdout'''
