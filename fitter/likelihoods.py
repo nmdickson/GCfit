@@ -48,17 +48,74 @@ def masyr2kms(masyr, d):
     return kms
 
 # --------------------------------------------------------------------------
+# Helper Functions
+# --------------------------------------------------------------------------
+
+
+# Simple gaussian implementation
+def gaussian(x, sigma, mu):
+    norm = 1 / (sigma * np.sqrt(2 * np.pi))
+    exponent = np.exp(-0.5 * (((x - mu) / sigma) ** 2))
+    return norm * exponent
+
+
+def galactic_pot(gal_lat, gal_lon, D):
+    '''Compute galactic potential contribution (Pdot/P)_{gal}
+    D in kpc
+    '''
+    # TODO replace this with a galpy MW potential
+
+    R0 = 8.178  # kpc
+    δ = R0 / D
+
+    Vc = 220  # km/s assumption (see phinney 1993)
+    c_kms = 299_792.458  # km/s
+    A = Vc**2 / (c_kms * (R0 * 3.086e16))
+
+    coord_proj = np.cos(gal_lat) * np.cos(gal_lon)
+
+    return -A * (coord_proj + (δ - coord_proj) / (1 + δ - 2 * coord_proj))
+
+
+def pulsar_Pdot_KDE(*, pulsar_db='full_test.dat', corrected=True):
+    '''Return a gaussian kde
+    '''
+    # Get field pulsars data
+    P, Pdot, Pdot_pm, gal_lat, gal_lon, D = np.loadtxt(pulsar_db).T
+
+    # Compute and remove the galactic contribution from the PM corrected Pdot
+    # (logged for easier KDE grid)
+    if corrected:
+        Pdot_int = np.log10(Pdot_pm - galactic_pot(gal_lat, gal_lon, D) * P)
+    else:
+        Pdot_int = np.log10(Pdot)
+
+    P = np.log10(P)
+
+    # Create Gaussian P-Pdot_int KDE
+    return scipy.stats.gaussian_kde(np.vstack([P, Pdot_int]))
+
+
+# --------------------------------------------------------------------------
 # Component likelihood functions
 # --------------------------------------------------------------------------
 
 
-def likelihood_pulsar(model, pulsars, mass_bin=None):
+def likelihood_pulsar(model, pulsars, Pdot_kde, cluster_μ, coords, *,
+                      mass_bin=None):
 
-    # Simple gaussian implementation
-    def gaussian(x, sigma, mu):
-        norm = 1 / (sigma * np.sqrt(2 * np.pi))
-        exponent = np.exp(-0.5 * (((x - mu) / sigma) ** 2))
-        return norm * exponent
+    # ----------------------------------------------------------------------
+    # Get the pulsar P-Pdot_int kde
+    # ----------------------------------------------------------------------
+
+    if Pdot_kde is None:
+        Pdot_kde = pulsar_Pdot_KDE()
+
+    Pdot_min, Pdot_max = Pdot_kde.dataset[1].min(), Pdot_kde.dataset[1].max()
+
+    # ----------------------------------------------------------------------
+    # Get pulsar mass bins
+    # ----------------------------------------------------------------------
 
     if mass_bin is None:
         if 'm' in pulsars.mdata:
@@ -67,50 +124,73 @@ def likelihood_pulsar(model, pulsars, mass_bin=None):
             logging.debug("No mass bin provided for pulsars, using -1")
             mass_bin = -1
 
-    # Generate the probability distributions that we will convolve with the
-    #   pre-generated error distributions
-    # pre_prob_dist = gen_prob_dists(model, A_SPACE, pulsars['r'], mass_bin)
+    c = 299_792_458  # m/s
 
-    accel_domains, accel_prob_dists = zip(*[
-        vec_Paz(model=model, R=R, mass_bin=mass_bin) for R in pulsars['r']
-    ])
+    N = pulsars['id'].size
+    probs = np.zeros(N)
 
-    error_dists = [
-        gaussian(x=accel_domains[i], sigma=width, mu=0)
-        for i, width in enumerate(pulsars['Δa_los'])
-    ]
+    # iterate over all pulsars to examine
+    for i in range(N):
 
-    prob_dists = []
-    for i in range(len(accel_prob_dists)):
-        conved = scipy.signal.convolve(error_dists[i], accel_prob_dists[i],
-                                       mode="same")
+        # Create a basically 1D "grid" spanning the dP_int range at this
+        #  pulsars period
+        P_i = np.log10(pulsars['P'][i])
 
-        spl = interp.UnivariateSpline(accel_domains[i], conved, k=3, s=0, ext=1)
-        conved /= spl.integral(accel_domains[i].min(), accel_domains[i].max())
+        # TODO might want to max the grid at like -15, depending on conv tests
+        P_i_grid, Pdot_int_grid = np.mgrid[P_i:P_i:1j, Pdot_min:Pdot_max:100j]
 
-        prob_dists.append(conved)
+        # compute (and reshape) the dP_int probability distribution of this
+        # period from the KDE
+        Pdot_int_prob_i = np.reshape(
+            Pdot_kde(np.vstack([P_i_grid.ravel(), Pdot_int_grid.ravel()])),
+            P_i_grid.shape
+        )[0]
 
-    # For each distribution we want to interpolate the probability from the
-    #   corresponding a_los measurement
-    probs = np.zeros(len(pulsars['r']))
+        # get all the data for this pulsar (unlogged, where necessary)
+        dP_meas_i = pulsars['dP_meas'][i]
+        ΔdP_meas_i = pulsars['ΔdP_meas'][i]
 
-    # Select the corresponding distributions
-    for i in range(len(pulsars['r'])):
+        P_i = 10**P_i
+        ΔP_i = pulsars['ΔP'][i]
 
-        # Interpolate the probability value from the convolved distributions
-        interpolated = interp.interp1d(
-            accel_domains[i], prob_dists[i], assume_sorted=True,
+        R_i = pulsars['r'][i]
+
+        # Compute models cluster component
+        a_domain, dP_c_prob_i = vec_Paz(model=model, R=R_i, mass_bin=mass_bin)
+        dP_domain = a_domain / c
+
+        # Compute gaussian measurement error
+        width = np.sqrt(ΔdP_meas_i**2 * (1 / P_i)**2
+                        + ΔP_i**2 * (-dP_meas_i / P_i**2)**2)
+        err_i = gaussian(x=dP_domain, sigma=width, mu=0)
+
+        # Convolve the different distributions
+        conv1 = np.convolve(err_i, dP_c_prob_i, 'same')
+        conv2 = np.convolve(conv1, Pdot_int_prob_i, 'same')
+
+        # Compute the Shklovskii effect component
+        pm = cluster_μ * 4.84e-9 / 31557600  # mas/yr -> rad/s
+
+        D = model.d / 3.24078e-20  # kpc -> m
+
+        dPP_pm = pm**2 * D / c
+
+        # Compute the galactic potential component
+        dPP_gal = galactic_pot(*coords, model.d)
+
+        # Interpolate the probability value from the overall distribution
+        prob_dist = interp.interp1d(
+            dP_domain + dPP_pm + dPP_gal, conv2, assume_sorted=True,
             bounds_error=False, fill_value=0.0
         )
 
-        # evaluate at the measured a_los
-        probs[i] = interpolated(pulsars['a_los'][i])
+        probs[i] = prob_dist(dP_meas_i / P_i)
 
     # Multiply all the probabilities and return the total log probability.
     return np.log(np.prod(probs))
 
 
-def likelihood_number_density(model, ndensity, mass_bin=None):
+def likelihood_number_density(model, ndensity, *, mass_bin=None):
 
     if mass_bin is None:
         if 'm' in ndensity.mdata:
@@ -161,7 +241,7 @@ def likelihood_number_density(model, ndensity, mass_bin=None):
     )
 
 
-def likelihood_pm_tot(model, pm, mass_bin=None):
+def likelihood_pm_tot(model, pm, *, mass_bin=None):
 
     if mass_bin is None:
         if 'm' in pm.mdata:
@@ -187,7 +267,7 @@ def likelihood_pm_tot(model, pm, mass_bin=None):
     )
 
 
-def likelihood_pm_ratio(model, pm, mass_bin=None):
+def likelihood_pm_ratio(model, pm, *, mass_bin=None):
 
     if mass_bin is None:
         if 'm' in pm.mdata:
@@ -212,7 +292,7 @@ def likelihood_pm_ratio(model, pm, mass_bin=None):
     )
 
 
-def likelihood_pm_T(model, pm, mass_bin=None):
+def likelihood_pm_T(model, pm, *, mass_bin=None):
 
     if mass_bin is None:
         if 'm' in pm.mdata:
@@ -236,7 +316,7 @@ def likelihood_pm_T(model, pm, mass_bin=None):
     )
 
 
-def likelihood_pm_R(model, pm, mass_bin=None):
+def likelihood_pm_R(model, pm, *, mass_bin=None):
 
     if mass_bin is None:
         if 'm' in pm.mdata:
@@ -260,7 +340,7 @@ def likelihood_pm_R(model, pm, mass_bin=None):
     )
 
 
-def likelihood_LOS(model, vlos, mass_bin=None):
+def likelihood_LOS(model, vlos, *, mass_bin=None):
 
     if mass_bin is None:
         if 'm' in vlos.mdata:
@@ -455,43 +535,45 @@ def determine_components(obs):
     I really don't love this
     '''
 
-    L_components = []
+    comps = []
     for key in obs.datasets:
 
-        # fnmatch is to correctly find subgroup stuff like pm/high_mass, etc
+        # ------------------------------------------------------------------
+        # Parse each key to determine if it matches with one of our
+        # likelihood functions.
+        # fnmatch is used to properly handle relevant subgroups
+        # such as proper_motion/high_mass and etc, where they exist
+        # ------------------------------------------------------------------
+
         if fnmatch.fnmatch(key, '*pulsar*'):
 
-            # now that we need to do this every time, its actually quicker
-            # to just compute it manually
-            # Well actually this may change once we are also pulsar-vectorized
-            # a_width = np.abs(obs[key]['Δa_los'])
-            # pulsar_edist = scipy.stats.norm.pdf(A_SPACE, 0, np.c_[a_width])
+            mdata = obs.mdata['μ'], (obs.mdata['b'], obs.mdata['l'])
 
-            L_components.append((key, likelihood_pulsar))
+            comps.append((key, likelihood_pulsar, (pulsar_Pdot_KDE(), *mdata)))
 
         elif fnmatch.fnmatch(key, '*velocity_dispersion*'):
-            L_components.append((key, likelihood_LOS, ))
+            comps.append((key, likelihood_LOS, ))
 
         elif fnmatch.fnmatch(key, '*number_density*'):
-            L_components.append((key, likelihood_number_density, ))
+            comps.append((key, likelihood_number_density, ))
 
         elif fnmatch.fnmatch(key, '*proper_motion*'):
             if 'PM_tot' in obs[key]:
-                L_components.append((key, likelihood_pm_tot, ))
+                comps.append((key, likelihood_pm_tot, ))
 
             if 'PM_ratio' in obs[key]:
-                L_components.append((key, likelihood_pm_ratio, ))
+                comps.append((key, likelihood_pm_ratio, ))
 
             if 'PM_R' in obs[key]:
-                L_components.append((key, likelihood_pm_R, ))
+                comps.append((key, likelihood_pm_R, ))
 
             if 'PM_T' in obs[key]:
-                L_components.append((key, likelihood_pm_T, ))
+                comps.append((key, likelihood_pm_T, ))
 
         elif fnmatch.fnmatch(key, '*mass_function*'):
-            L_components.append((key, likelihood_mass_func, ))
+            comps.append((key, likelihood_mass_func, ))
 
-    return L_components
+    return comps
 
 
 # Main likelihood function, generates the model(theta) passes it to the
