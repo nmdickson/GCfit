@@ -9,7 +9,7 @@ import shutil
 import logging
 
 from .likelihoods import posterior, determine_components
-from .data import Observations
+from .data import Observations, Model
 
 
 def main(cluster, Niters, Nwalkers, Ncpu, *,

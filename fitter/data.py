@@ -1,6 +1,9 @@
-'''READONLY access to data in cluster resources files'''
-import numpy as np
+'''observational and modelled data'''
+
 import h5py
+import numpy as np
+import limepy as lp
+from ssptools import evolve_mf_3 as emf3
 
 import os
 import glob
@@ -25,6 +28,11 @@ DEFAULT_INITIALS = {
     'BHret': 0.5,
     'd': 6.405,
 }
+
+
+# --------------------------------------------------------------------------
+# Cluster Observational Data
+# --------------------------------------------------------------------------
 
 
 class Dataset:
@@ -116,7 +124,7 @@ class Dataset:
 
 
 class Observations:
-    '''Collection of Datasets, read from a corresponding hdf5 file'''
+    '''Collection of Datasets, read from a corresponding hdf5 file (READONLY)'''
 
     def __repr__(self):
         return f'Observations(cluster="{self.cluster}")'
@@ -200,21 +208,141 @@ class Observations:
                 self.mdata = dict(file.attrs)
 
 
-def get_dataset(cluster, key):
-    '''get a dataset corresponding to a key
-
-    indices is either a slice or a tuple for making a slice or a nparray mask
-        mathcing the size of the data. None will return everything (:)
-    '''
-
-    with resources.path('fitter', 'resources') as datadir:
-        with h5py.File(f'{datadir}/{cluster}.hdf5', 'r') as file:
-
-            return file[key][:]
-
-
 def cluster_list():
     with resources.path('fitter', 'resources') as datadir:
 
         return [os.path.splitext(os.path.basename(fn))[0]
                 for fn in glob.iglob(f'{datadir}/[!TEST]*.hdf5')]
+
+
+# --------------------------------------------------------------------------
+# Cluster Modelled data
+# --------------------------------------------------------------------------
+# TODO if werent for obs stuff I would make the case for moving this to ssptools
+
+
+class Model(lp.limepy):
+
+    def __getattr__(self, key):
+        '''If `key` is not defined in the limepy model, try to get it from θ'''
+        return self._theta[key]
+
+    def _init_mf(self, a12=None):
+
+        m123 = [0.1, 0.5, 1.0, 100]  # Slope breakpoints for imf
+        nbin12 = [5, 5, 20]
+
+        if a12 is None:
+            a12 = [-self.a1, -self.a2, -self.a3]  # Slopes for imf
+
+        # Output times for the evolution (age)
+        tout = np.array([11000])
+
+        # TODO figure out which of these are cluster dependant, store in hdfs
+        # TODO set up a logging duplicate filter so only log these warnings once
+
+        # Integration settings
+        N0 = 5e5  # Normalization of stars
+        tcc = 0  # Core collapse time
+        NS_ret = 0.1  # Initial neutron star retention
+        BH_ret_int = 1  # Initial Black Hole retention
+        BH_ret_dyn = self.BHret / 100  # Dynamical Black Hole retention
+
+        # Metallicity
+        try:
+            FeHe = self.observations.mdata['FeHe']
+        except (AttributeError, KeyError):
+            logging.warning("No cluster metallicity stored, reverting to -1.02")
+            FeHe = -1.02
+
+        # Regulates low mass objects depletion, default -20, 0 for 47 Tuc
+        try:
+            Ndot = self.observations.mdata['Ndot']
+        except (AttributeError, KeyError):
+            logging.warning("No cluster Ndot stored, reverting to 0")
+            Ndot = 0
+
+        # Generate the mass function
+        return emf3.evolve_mf(
+            m123=m123,
+            a12=a12,
+            nbin12=nbin12,
+            tout=tout,
+            N0=N0,
+            Ndot=Ndot,
+            tcc=tcc,
+            NS_ret=NS_ret,
+            BH_ret_int=BH_ret_int,
+            BH_ret_dyn=BH_ret_dyn,
+            FeHe=FeHe,
+        )
+
+    def __init__(self, theta, observations=None, *, verbose=False):
+
+        self.observations = observations
+
+        # ------------------------------------------------------------------
+        # Unpack theta
+        # ------------------------------------------------------------------
+
+        if not isinstance(theta, dict):
+            theta = dict(zip(DEFAULT_INITIALS, theta))
+
+        if missing_params := (DEFAULT_INITIALS.keys() - theta.keys()):
+            mssg = f"Missing required params: {missing_params}"
+            raise KeyError(mssg)
+
+        self._theta = theta
+
+        # ------------------------------------------------------------------
+        # Get mass function
+        # ------------------------------------------------------------------
+
+        self._mf = self._init_mf(self.a1, self.a2, self.a3, self.BHret)
+
+        # Set bins that should be empty to empty
+        cs = self._mf.Ns[-1] > 10 * self._mf.Nmin
+        cr = self._mf.Nr[-1] > 10 * self._mf.Nmin
+
+        # Collect mean mass and total mass bins
+        mj = np.r_[self._mf.ms[-1][cs], self._mf.mr[-1][cr]]
+        Mj = np.r_[self._mf.Ms[-1][cs], self._mf.Mr[-1][cr]]
+
+        # append tracer mass bins (must be appended to end to not affect nms)
+        if observations is not None:
+
+            tracer_mj = [
+                dataset.mdata['m'] for dataset in observations.datasets.values()
+                if 'm' in dataset.mdata
+            ]
+
+            mj = np.concatenate((mj, tracer_mj))
+            Mj = np.concatenate((Mj, 0.1 * np.ones_like(tracer_mj)))
+
+        else:
+            logging.warning("No `Observations` given, no tracer masses added")
+
+        # store some necessary mass function info in the model
+        self.nms = len(self._mf.ms[-1][cs])
+        self.mes_widths = self._mf.mes[-1][1:] - self._mf.mes[-1][:-1]
+
+        # ------------------------------------------------------------------
+        # Create the limepy model base
+        # ------------------------------------------------------------------
+
+        try:
+            super().__init__(
+                phi0=self.W0,
+                g=self.g,
+                M=self.M * 1e6,
+                rh=self.rh,
+                ra=10**self.ra,
+                delta=self.delta,
+                mj=mj,
+                Mj=Mj,
+                project=True,
+                verbose=verbose,
+            )
+        except ValueError as err:
+            logging.debug(f"Model did not converge with {theta=}")
+            raise ValueError(err)
