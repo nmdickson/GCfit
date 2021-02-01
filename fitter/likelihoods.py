@@ -53,13 +53,13 @@ def masyr2kms(masyr, d):
 
 
 # Simple gaussian implementation
-def gaussian(x, sigma, mu):
+def _gaussian(x, sigma, mu):
     norm = 1 / (sigma * np.sqrt(2 * np.pi))
     exponent = np.exp(-0.5 * (((x - mu) / sigma) ** 2))
     return norm * exponent
 
 
-def galactic_pot(gal_lat, gal_lon, D):
+def _galactic_pot(gal_lat, gal_lon, D):
     '''Compute galactic potential contribution (Pdot/P)_{gal}
     D in kpc
     '''
@@ -86,7 +86,7 @@ def pulsar_Pdot_KDE(*, pulsar_db='full_test.dat', corrected=True):
     # Compute and remove the galactic contribution from the PM corrected Pdot
     # (logged for easier KDE grid)
     if corrected:
-        Pdot_int = np.log10(Pdot_pm - galactic_pot(gal_lat, gal_lon, D) * P)
+        Pdot_int = np.log10(Pdot_pm - _galactic_pot(gal_lat, gal_lon, D) * P)
     else:
         Pdot_int = np.log10(Pdot)
 
@@ -103,6 +103,8 @@ def pulsar_Pdot_KDE(*, pulsar_db='full_test.dat', corrected=True):
 
 def likelihood_pulsar(model, pulsars, Pdot_kde, cluster_μ, coords, *,
                       mass_bin=None):
+
+    c = 299_792_458  # m/s
 
     # ----------------------------------------------------------------------
     # Get the pulsar P-Pdot_int kde
@@ -124,69 +126,98 @@ def likelihood_pulsar(model, pulsars, Pdot_kde, cluster_μ, coords, *,
             logging.debug("No mass bin provided for pulsars, using -1")
             mass_bin = -1
 
-    c = 299_792_458  # m/s
+    # ----------------------------------------------------------------------
+    # Iterate over all pulsars
+    # ----------------------------------------------------------------------
 
-    N = pulsars['id'].size
+    N = pulsars['r'].size
     probs = np.zeros(N)
 
-    # iterate over all pulsars to examine
     for i in range(N):
 
-        # Create a basically 1D "grid" spanning the dP_int range at this
-        #  pulsars period
-        P_i = np.log10(pulsars['P'][i])
+        # ------------------------------------------------------------------
+        # Get this pulsars necessary data
+        # ------------------------------------------------------------------
+
+        R_i = pulsars['r'][i]
+
+        P_i = pulsars['P'][i]
+        ΔP_i = pulsars['ΔP'][i]
+
+        Pdot_meas_i = pulsars['Pdot_meas'][i]
+        ΔPdot_meas_i = pulsars['ΔPdot_meas'][i]
+
+        # ------------------------------------------------------------------
+        # Create a slice of the P-Pdot space, along this pulsars P
+        # ------------------------------------------------------------------
+
+        lg_P = np.log10(P_i)
 
         # TODO might want to max the grid at like -15, depending on conv tests
-        P_i_grid, Pdot_int_grid = np.mgrid[P_i:P_i:1j, Pdot_min:Pdot_max:100j]
+        P_i_grid, Pdot_int_grid = np.mgrid[lg_P:lg_P:1j, Pdot_min:Pdot_max:100j]
 
-        # compute (and reshape) the dP_int probability distribution of this
-        # period from the KDE
+        # ------------------------------------------------------------------
+        # Compute the Pdot_int distribution from the KDE
+        # ------------------------------------------------------------------
+
         Pdot_int_prob_i = np.reshape(
             Pdot_kde(np.vstack([P_i_grid.ravel(), Pdot_int_grid.ravel()])),
             P_i_grid.shape
         )[0]
 
-        # get all the data for this pulsar (unlogged, where necessary)
-        dP_meas_i = pulsars['dP_meas'][i]
-        ΔdP_meas_i = pulsars['ΔdP_meas'][i]
+        # ------------------------------------------------------------------
+        # Compute the cluster component distribution of Pdot, from the model
+        # ------------------------------------------------------------------
 
-        P_i = 10**P_i
-        ΔP_i = pulsars['ΔP'][i]
+        a_domain, Pdot_c_prob_i = vec_Paz(model=model, R=R_i, mass_bin=mass_bin)
+        Pdot_domain = a_domain / c
 
-        R_i = pulsars['r'][i]
+        # ------------------------------------------------------------------
+        # Compute gaussian measurement error distribution
+        # ------------------------------------------------------------------
 
-        # Compute models cluster component
-        a_domain, dP_c_prob_i = vec_Paz(model=model, R=R_i, mass_bin=mass_bin)
-        dP_domain = a_domain / c
+        width = np.sqrt(ΔPdot_meas_i**2 * (1 / P_i)**2
+                        + ΔP_i**2 * (-Pdot_meas_i / P_i**2)**2)
+        err_i = _gaussian(x=Pdot_domain, sigma=width, mu=0)
 
-        # Compute gaussian measurement error
-        width = np.sqrt(ΔdP_meas_i**2 * (1 / P_i)**2
-                        + ΔP_i**2 * (-dP_meas_i / P_i**2)**2)
-        err_i = gaussian(x=dP_domain, sigma=width, mu=0)
-
+        # ------------------------------------------------------------------
         # Convolve the different distributions
-        conv1 = np.convolve(err_i, dP_c_prob_i, 'same')
+        # ------------------------------------------------------------------
+
+        conv1 = np.convolve(err_i, Pdot_c_prob_i, 'same')
         conv2 = np.convolve(conv1, Pdot_int_prob_i, 'same')
 
-        # Compute the Shklovskii effect component
+        # ------------------------------------------------------------------
+        # Compute the Shklovskii (proper motion) effect component
+        # ------------------------------------------------------------------
+
         pm = cluster_μ * 4.84e-9 / 31557600  # mas/yr -> rad/s
 
         D = model.d / 3.24078e-20  # kpc -> m
 
-        dPP_pm = pm**2 * D / c
+        PdotP_pm = pm**2 * D / c
 
+        # ------------------------------------------------------------------
         # Compute the galactic potential component
-        dPP_gal = galactic_pot(*coords, model.d)
+        # ------------------------------------------------------------------
 
-        # Interpolate the probability value from the overall distribution
+        PdotP_gal = _galactic_pot(*coords, model.d)
+
+        # ------------------------------------------------------------------
+        # Interpolate the likelihood value from the overall distribution
+        # ------------------------------------------------------------------
+
         prob_dist = interp.interp1d(
-            dP_domain + dPP_pm + dPP_gal, conv2, assume_sorted=True,
+            Pdot_domain + PdotP_pm + PdotP_gal, conv2, assume_sorted=True,
             bounds_error=False, fill_value=0.0
         )
 
-        probs[i] = prob_dist(dP_meas_i / P_i)
+        probs[i] = prob_dist(Pdot_meas_i / P_i)
 
+    # ----------------------------------------------------------------------
     # Multiply all the probabilities and return the total log probability.
+    # ----------------------------------------------------------------------
+
     return np.log(np.prod(probs))
 
 
