@@ -361,6 +361,7 @@ def create_model(theta, observations=None, *, verbose=False):
     tout = np.array([11000])
 
     # TODO figure out which of these are cluster dependant, store them in files
+    # TODO set up a logging duplicate filter so we only log these warnings once
     # Integration settings
     N0 = 5e5  # Normalization of stars
     tcc = 0  # Core collapse time
@@ -372,12 +373,14 @@ def create_model(theta, observations=None, *, verbose=False):
     try:
         FeHe = observations.mdata['FeHe']
     except (AttributeError, KeyError):
+        logging.warning("No cluster metallicity stored, reverting to -1.02")
         FeHe = -1.02
 
     # Regulates low mass objects depletion, default -20, 0 for 47 Tuc
     try:
         Ndot = observations.mdata['Ndot']
     except (AttributeError, KeyError):
+        logging.warning("No cluster Ndot stored, reverting to 0")
         Ndot = 0
 
     # Generate the mass function
@@ -435,6 +438,7 @@ def create_model(theta, observations=None, *, verbose=False):
 
     # TODO not my favourite way to store this info
     #   means models *have* to be created here for the most part
+    #   Almost feels like should be subclassing the limepy cls to include this
 
     # store some necessary mass function info in the model
     model.nms = len(mass_func.ms[-1][cs])
@@ -525,19 +529,16 @@ def posterior(theta, observations, fixed_initials, L_components):
 
     # TODO make this prettier
     # Prior probability function
-    if not (3 < theta['W0'] < 20
-            and 0.5 < theta['rh'] < 15
-            and 0.01 < theta['M'] < 10
-            and 0 < theta['ra'] < 5
-            and 0 < theta['g'] < 2.3
-            and 0.3 < theta['delta'] < 0.5
-            and 0 < theta['s2'] < 10
-            and 0.1 < theta['F'] < 0.5
-            and -2 < theta['a1'] < 6
-            and -2 < theta['a2'] < 6
-            and -2 < theta['a3'] < 6
-            and 0 < theta['BHret'] < 100
+    if not (3 < theta['W0'] < 20 and 0.5 < theta['rh'] < 15
+            and 0.01 < theta['M'] < 10 and 0 < theta['ra'] < 5
+            and 0 < theta['g'] < 2.3 and 0.3 < theta['delta'] < 0.5
+            and 0 < theta['s2'] < 10 and 0.1 < theta['F'] < 0.5
+            and -2 < theta['a1'] < 6 and -2 < theta['a2'] < 6
+            and -2 < theta['a3'] < 6 and 0 < theta['BHret'] < 100
             and 4 < theta['d'] < 8):
+
+        logging.debug("Theta outside priors domain")
+
         return -np.inf, *(-np.inf * np.ones(len(L_components)))
 
     probability, individuals = log_likelihood(theta, observations, L_components)

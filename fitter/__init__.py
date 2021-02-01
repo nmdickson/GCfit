@@ -14,18 +14,8 @@ from .data import Observations
 
 def main(cluster, Niters, Nwalkers, Ncpu, *,
          mpi, initials, fixed_params, excluded_likelihoods,
-         cont_run, savedir, outdir, verbose, debug):
+         cont_run, savedir, outdir, verbose):
 
-    # TODO if not debug, only info if verbose
-    logfile = f"{savedir}/fitter_{cluster}.log"
-    loglvl = logging.DEBUG if debug else logging.INFO
-    logfmt = ('%(process)s|%(asctime)s|'
-              '%(name)s:%(module)s:%(funcName)s:%(message)s')
-    datefmt = '%H:%M:%S'
-
-    logging.basicConfig(filename=logfile, level=loglvl,
-                        format=logfmt, datefmt=datefmt)
-    logging.getLogger('matplotlib').setLevel(logging.WARNING)
     logging.info("BEGIN")
 
     # TODO add argument defaults and error checks (including redo these ones)
@@ -65,6 +55,8 @@ def main(cluster, Niters, Nwalkers, Ncpu, *,
         # fill manually supplied dict with defaults (change to unions in 3.9)
         initials = {**observations.initials, **initials}
 
+    logging.debug(f"Inital initals: {initials}")
+
     if extraneous_params := (set(fixed_params) - initials.keys()):
         raise ValueError(f"Invalid fixed parameters: {extraneous_params}")
 
@@ -76,6 +68,9 @@ def main(cluster, Niters, Nwalkers, Ncpu, *,
     fixed_initials = {key: initials[key] for key in fixed_params}
     variable_initials = {key: initials[key] for key in
                          sorted(variable_params, key=list(initials).index)}
+
+    logging.debug(f"Fixed initals: {fixed_initials}")
+    logging.debug(f"Variable initals: {variable_initials}")
 
     init_pos = np.fromiter(variable_initials.values(), np.float64)
     init_pos = 1e-4 * np.random.randn(Nwalkers, init_pos.size) + init_pos

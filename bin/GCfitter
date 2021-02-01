@@ -3,6 +3,7 @@
 import fitter
 
 import json
+import logging
 import pathlib
 import argparse
 
@@ -47,6 +48,10 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    # ----------------------------------------------------------------------
+    # Do any args preprocessing necessary for calling fitter
+    # ----------------------------------------------------------------------
+
     if args.cont_run:
         raise NotImplementedError
 
@@ -62,6 +67,33 @@ if __name__ == '__main__':
 
     pathlib.Path(args.outdir).mkdir(exist_ok=True)
     pathlib.Path(args.savedir).mkdir(exist_ok=True)
+
+    if debug := args.debug:
+        args.verbose = True
+
+    del args.debug
+
+    # ----------------------------------------------------------------------
+    # Setup logging
+    # ----------------------------------------------------------------------
+
+    config = {
+        'level': logging.DEBUG if debug else logging.INFO,
+        'format': ('%(process)s|%(asctime)s|'
+                   '%(name)s:%(module)s:%(funcName)s:%(message)s'),
+        'datefmt': '%H:%M:%S'
+    }
+
+    if args.verbose:
+        config['filename'] = f"{args.savedir}/fitter_{args.cluster}.log"
+    else:
+        config['handlers'] = [logging.NullHandler]
+
+    logging.basicConfig(**config)
+
+    # ----------------------------------------------------------------------
+    # Call fitter
+    # ----------------------------------------------------------------------
 
     print('args:', vars(args))
 
