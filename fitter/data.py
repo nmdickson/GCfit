@@ -42,10 +42,9 @@ class Dataset:
 
     h5py attributes are called metadata here cause that is more descriptive
     '''
-    class _Variable(np.ndarray):
+    class Variable(np.ndarray):
         '''simple readonly subclass to allow metadata dict on the variable'''
         def __new__(cls, input_array, mdata=None):
-            # TODO mdata doesn't carry over into views, might need _finalize_
 
             obj = np.asarray(input_array).view(cls)
 
@@ -60,6 +59,10 @@ class Dataset:
 
             return obj
 
+        def __array_finalize__(self, obj):
+            if obj is not None:
+                self.mdata = getattr(obj, 'mdata', dict())
+
     def __contains__(self, key):
         return key in self._dict_variables
 
@@ -71,7 +74,7 @@ class Dataset:
 
         if isinstance(var, h5py.Dataset):
             mdata = dict(var.attrs)
-            self._dict_variables[name] = self._Variable(var[:], mdata=mdata)
+            self._dict_variables[name] = self.Variable(var[:], mdata=mdata)
 
     def __init__(self, group):
 
