@@ -150,7 +150,7 @@ def main(cluster, Niters, Nwalkers, Ncpu=2, *,
 
         logging.info(f"Iterating sampler ({Niters} iterations)")
 
-        t = time.time()
+        t0 = t = time.time()
 
         # TODO implement cont_run
         # Set initial state to None if resuming run (`cont_run`)
@@ -186,11 +186,16 @@ def main(cluster, Niters, Nwalkers, Ncpu=2, *,
     # ----------------------------------------------------------------------
 
     with h5py.File(backend_fn, 'r+') as backend_hdf:
-        # TODO store some more info like pool info, run time
 
         # Store run metadata
 
         meta_grp = backend_hdf.require_group(name='metadata')
+
+        meta_grp.attrs['mpi'] = mpi
+        meta_grp.attrs['Ncpu'] = Ncpu
+
+        meta_grp.attrs['runtime'] = time.time() - t0
+        meta_grp.attrs['autocorr'] = tau
 
         fix_dset = meta_grp.create_dataset("fixed_params", dtype="f")
         for k, v in fixed_initials.items():
