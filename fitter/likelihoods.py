@@ -60,21 +60,24 @@ def _gaussian(x, sigma, mu):
 
 
 def _galactic_pot(gal_lat, gal_lon, D):
-    '''Compute galactic potential contribution (Pdot/P)_{gal}
-    D in kpc
-    '''
-    # TODO replace this with a galpy MW potential
+    from galpy import potential, util
 
-    R0 = 8.178  # kpc
-    δ = R0 / D
-
-    Vc = 220  # km/s assumption (see phinney 1993)
     c_kms = 299_792.458  # km/s
-    A = Vc**2 / (c_kms * (R0 * 3.086e16))
 
-    coord_proj = np.cos(gal_lat) * np.cos(gal_lon)
+    R0 = 8.
+    V0 = 220.
 
-    return -A * (coord_proj + (δ - coord_proj) / (1 + δ - 2 * coord_proj))
+    X, Y, Z = util.bovy_coords.lbd_to_XYZ(gal_lon, gal_lat, D, degree=True)
+    R, phi, z = util.bovy_coords.XYZ_to_galcencyl(X, Y, Z)
+
+    MW = potential.MWPotential2014
+
+    forceR = potential.evaluateRforces(MW, R=R / R0, z=z / R0, phi=phi)
+    forcez = potential.evaluatezforces(MW, R=R / R0, z=z / R0, phi=phi)
+
+    force = (forceR + forcez) * util.bovy_conversion.force_in_10m13kms2(V0, R0)
+
+    return force * 1e-13 / c_kms  # s^-1
 
 
 def pulsar_Pdot_KDE(*, pulsar_db='full_test.dat', corrected=True):
