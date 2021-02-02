@@ -45,6 +45,7 @@ def masyr2kms(masyr, d):
     kms = kmyr / 3.154e7
     return kms
 
+
 # --------------------------------------------------------------------------
 # Component likelihood functions
 # --------------------------------------------------------------------------
@@ -389,7 +390,7 @@ def log_likelihood(theta, observations, L_components):
     try:
         model = Model(theta, observations)
     except ValueError:
-        # Model did not converge
+        logging.debug(f"Model did not converge with {theta=}")
         return -np.inf, -np.inf * np.ones(len(L_components))
 
     # Calculate each log likelihood

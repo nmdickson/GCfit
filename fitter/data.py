@@ -218,7 +218,6 @@ def cluster_list():
 # --------------------------------------------------------------------------
 # Cluster Modelled data
 # --------------------------------------------------------------------------
-# TODO if werent for obs stuff I would make the case for moving this to ssptools
 
 
 class Model(lp.limepy):
@@ -239,7 +238,6 @@ class Model(lp.limepy):
         tout = np.array([11000])
 
         # TODO figure out which of these are cluster dependant, store in hdfs
-        # TODO set up a logging duplicate filter so only log these warnings once
 
         # Integration settings
         N0 = 5e5  # Normalization of stars
@@ -330,19 +328,16 @@ class Model(lp.limepy):
         # Create the limepy model base
         # ------------------------------------------------------------------
 
-        try:
-            super().__init__(
-                phi0=self.W0,
-                g=self.g,
-                M=self.M * 1e6,
-                rh=self.rh,
-                ra=10**self.ra,
-                delta=self.delta,
-                mj=mj,
-                Mj=Mj,
-                project=True,
-                verbose=verbose,
-            )
-        except ValueError as err:
-            logging.debug(f"Model did not converge with {theta=}")
-            raise ValueError(err)
+        super().__init__(
+            phi0=self.W0,
+            g=self.g,
+            M=self.M * 1e6,
+            rh=self.rh,
+            ra=10**self.ra,
+            delta=self.delta,
+            mj=mj,
+            Mj=Mj,
+            project=True,
+            verbose=verbose,
+        )
+
