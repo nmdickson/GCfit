@@ -7,18 +7,24 @@ import sys
 import time
 import shutil
 import logging
+import pathlib
 
 from .likelihoods import posterior, determine_components
 from .data import Observations, Model
 
 
-def main(cluster, Niters, Nwalkers, Ncpu, *,
-         mpi, initials, fixed_params, excluded_likelihoods,
-         cont_run, savedir, outdir, verbose):
+_here = pathlib.Path()
+
+
+def main(cluster, Niters, Nwalkers, Ncpu=2, *,
+         mpi=False, initials=None, fixed_params=None, excluded_likelihoods=None,
+         cont_run=False, savedir=_here, outdir=_here, verbose=False):
 
     logging.info("BEGIN")
 
-    # TODO add argument defaults and error checks (including redo these ones)
+    # ----------------------------------------------------------------------
+    # Check arguments
+    # ----------------------------------------------------------------------
 
     if fixed_params is None:
         fixed_params = []
@@ -26,7 +32,21 @@ def main(cluster, Niters, Nwalkers, Ncpu, *,
     if excluded_likelihoods is None:
         excluded_likelihoods = []
 
-    # Load the observation data here once
+    if cont_run:
+        raise NotImplementedError
+
+    savedir = pathlib.Path(savedir)
+    if not savedir.is_dir():
+        raise ValueError(f"Cannot access '{savedir}': No such directory")
+
+    outdir = pathlib.Path(outdir)
+    if not outdir.is_dir():
+        raise ValueError(f"Cannot access '{outdir}': No such directory")
+
+    # ----------------------------------------------------------------------
+    # Load obeservational data, determine which likelihoods are viable
+    # ----------------------------------------------------------------------
+
     logging.info(f"Loading {cluster} data")
 
     observations = Observations(cluster)
@@ -45,10 +65,13 @@ def main(cluster, Niters, Nwalkers, Ncpu, *,
 
     logging.debug(f"Likelihood components: {L_components}")
 
+    # ----------------------------------------------------------------------
     # Initialize the walker positions
+    # ----------------------------------------------------------------------
+
     # *_params -> list of keys, *_initials -> dictionary
 
-    # get manually supplied initials, or read them from the data files
+    # get supplied initials, or read them from the data files if not given
     if initials is None:
         initials = observations.initials
     else:
@@ -75,11 +98,22 @@ def main(cluster, Niters, Nwalkers, Ncpu, *,
     init_pos = np.fromiter(variable_initials.values(), np.float64)
     init_pos = 1e-4 * np.random.randn(Nwalkers, init_pos.size) + init_pos
 
-    # HDF file saving
-    logging.debug(f"Using hdf backend at {savedir}/{cluster}_sampler.hdf")
+    # ----------------------------------------------------------------------
+    # Setup MCMC backend
+    # ----------------------------------------------------------------------
 
     backend_fn = f"{savedir}/{cluster}_sampler.hdf"
+
+    logging.debug(f"Using hdf backend at {backend_fn}")
+
     backend = emcee.backends.HDFBackend(backend_fn)
+
+    accept_rate = np.empty((Niters, Nwalkers))
+    iter_rate = np.empty(Niters)
+
+    # ----------------------------------------------------------------------
+    # Setup multi-processing pool
+    # ----------------------------------------------------------------------
 
     logging.info("Beginning pool")
 
@@ -94,7 +128,10 @@ def main(cluster, Niters, Nwalkers, Ncpu, *,
 
         logging.info("Initializing sampler")
 
-        # Initialize the sampler
+        # ------------------------------------------------------------------
+        # Initialize the MCMC sampler
+        # ------------------------------------------------------------------
+
         sampler = emcee.EnsembleSampler(
             Nwalkers,
             init_pos.shape[-1],
@@ -107,12 +144,9 @@ def main(cluster, Niters, Nwalkers, Ncpu, *,
 
         logging.debug(f"Sampler class: {sampler}")
 
-        # The acceptance rate is unfortunately not auto-stored in the backend
-        accept_rate = np.empty((Niters, Nwalkers))
-        iter_rate = np.empty(Niters)
-
-        # Start the sampler
-        # Need to change initial_state to None if resuming from previous run.
+        # ------------------------------------------------------------------
+        # Run the sampler
+        # ------------------------------------------------------------------
 
         logging.info(f"Iterating sampler ({Niters} iterations)")
 
@@ -121,6 +155,10 @@ def main(cluster, Niters, Nwalkers, Ncpu, *,
         # TODO implement cont_run
         # Set initial state to None if resuming run (`cont_run`)
         for _ in sampler.sample(init_pos, iterations=Niters, progress=verbose):
+
+            # --------------------------------------------------------------
+            # Store some iteration metadata
+            # --------------------------------------------------------------
 
             t_i = time.time()
             iter_rate[sampler.iteration - 1] = t_i - t
@@ -133,8 +171,8 @@ def main(cluster, Niters, Nwalkers, Ncpu, *,
                 shutil.copyfile(f"{savedir}/{cluster}_sampler.hdf",
                                 f"{savedir}/.backup_{cluster}_sampler.hdf")
 
-        # Attempt to get autocorrelation time, chain may not be long enough
         try:
+            # Attempt to get autocorrelation time
             tau = sampler.get_autocorr_time()
         except emcee.autocorr.AutocorrError:
             tau = np.nan
@@ -143,10 +181,15 @@ def main(cluster, Niters, Nwalkers, Ncpu, *,
 
     logging.info("Finished iteration")
 
+    # ----------------------------------------------------------------------
+    # Write extra metadata and statistics to output (backend) file
+    # ----------------------------------------------------------------------
+
     with h5py.File(backend_fn, 'r+') as backend_hdf:
         # TODO store some more info like pool info, run time
 
         # Store run metadata
+
         meta_grp = backend_hdf.require_group(name='metadata')
 
         fix_dset = meta_grp.create_dataset("fixed_params", dtype="f")
@@ -158,6 +201,7 @@ def main(cluster, Niters, Nwalkers, Ncpu, *,
             ex_dset.attrs[str(i)] = L
 
         # Store run statistics
+
         stat_grp = backend_hdf.require_group(name='statistics')
 
         stat_grp.create_dataset(name='iteration_rate', data=iter_rate)
@@ -165,7 +209,9 @@ def main(cluster, Niters, Nwalkers, Ncpu, *,
 
     logging.debug(f"Final state: {sampler}")
 
-    # Print results to stdout
+    # ----------------------------------------------------------------------
+    # Print some verbose results to stdout
+    # ----------------------------------------------------------------------
 
     if verbose:
         flat_samples = sampler.get_chain(discard=0, thin=1, flat=True)
