@@ -619,13 +619,17 @@ def determine_components(obs):
         # likelihood functions.
         # fnmatch is used to properly handle relevant subgroups
         # such as proper_motion/high_mass and etc, where they exist
+        #
+        # Each component is a tuple of where the first two elements are,
+        # respectively, the observation key and likelihood function, and all
+        # remaining elements are the extra arguments to pass to the function
         # ------------------------------------------------------------------
 
         if fnmatch.fnmatch(key, '*pulsar*'):
 
             mdata = obs.mdata['μ'], (obs.mdata['b'], obs.mdata['l'])
 
-            comps.append((key, likelihood_pulsar, (pulsar_Pdot_KDE(), *mdata)))
+            comps.append((key, likelihood_pulsar, pulsar_Pdot_KDE(), *mdata))
 
         elif fnmatch.fnmatch(key, '*velocity_dispersion*'):
             comps.append((key, likelihood_LOS, ))
