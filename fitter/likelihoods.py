@@ -168,12 +168,22 @@ def likelihood_pulsar(model, pulsars, Pdot_kde, cluster_μ, coords, *,
             P_i_grid.shape
         )[0]
 
+        # Normalize
+        Pdot_int_prob_i /= interp.UnivariateSpline(
+            Pdot_int_grid.ravel(), Pdot_int_prob_i, k=3, s=0, ext=1
+        ).integral(-np.inf, np.inf)
+
         # ------------------------------------------------------------------
         # Compute the cluster component distribution of Pdot, from the model
         # ------------------------------------------------------------------
 
         a_domain, Pdot_c_prob_i = vec_Paz(model=model, R=R_i, mass_bin=mass_bin)
         Pdot_domain = a_domain / c
+
+        # Normalize
+        Pdot_c_prob_i /= interp.UnivariateSpline(
+            Pdot_domain, Pdot_c_prob_i, k=3, s=0, ext=1
+        ).integral(-np.inf, np.inf)
 
         # ------------------------------------------------------------------
         # Compute gaussian measurement error distribution
@@ -188,7 +198,18 @@ def likelihood_pulsar(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         # ------------------------------------------------------------------
 
         conv1 = np.convolve(err_i, Pdot_c_prob_i, 'same')
+
+        # Normalize
+        conv1 /= interp.UnivariateSpline(
+            Pdot_domain, conv1, k=3, s=0, ext=1
+        ).integral(-np.inf, np.inf)
+
         conv2 = np.convolve(conv1, Pdot_int_prob_i, 'same')
+
+        # Normalize
+        conv2 /= interp.UnivariateSpline(
+            Pdot_domain, conv2, k=3, s=0, ext=1
+        ).integral(-np.inf, np.inf)
 
         # ------------------------------------------------------------------
         # Compute the Shklovskii (proper motion) effect component
