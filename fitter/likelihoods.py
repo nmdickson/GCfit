@@ -3,6 +3,7 @@ from .new_Paz import vec_Paz
 
 import numpy as np
 import limepy as lp
+import astropy.units as u
 import scipy.stats
 import scipy.signal
 import scipy.integrate as integ
@@ -59,25 +60,39 @@ def _gaussian(x, sigma, mu):
     return norm * exponent
 
 
-def _galactic_pot(gal_lat, gal_lon, D):
-    from galpy import potential, util
+def _galactic_pot(lat, lon, D):
+    '''b, l, d'''
+    import gala.potential as pot
 
-    c_kms = 299_792.458  # km/s
+    from astropy.constants import c
+    from astropy.coordinates import SkyCoord
 
-    R0 = 8.
-    V0 = 220.
+    # Mikly Way Potential
+    mw = pot.BovyMWPotential2014()
 
-    X, Y, Z = util.bovy_coords.lbd_to_XYZ(gal_lon, gal_lat, D, degree=True)
-    R, phi, z = util.bovy_coords.XYZ_to_galcencyl(X, Y, Z)
+    # TODO chck that these dont already have units (or maybe require them first)
+    # Pulsar position in galactocentric coordinates
+    b_pulsar, l_pulsar, D_pulsar = lat * u.deg, lon * u.deg, D * u.kpc
 
-    MW = potential.MWPotential2014
+    crd = SkyCoord(b=b_pulsar, l=l_pulsar, distance=D_pulsar, frame='galactic')
+    XYZ = crd.galactocentric.cartesian.xyz
 
-    forceR = potential.evaluateRforces(MW, R=R / R0, z=z / R0, phi=phi)
-    forcez = potential.evaluatezforces(MW, R=R / R0, z=z / R0, phi=phi)
+    # Sun position in galactocentric coordinates
+    b_sun = np.zeros_like(lat) * u.deg
+    l_sun = np.zeros_like(lon) * u.deg
+    D_sun = np.zeros_like(D) * u.kpc
 
-    force = (forceR + forcez) * util.bovy_conversion.force_in_10m13kms2(V0, R0)
+    sun = SkyCoord(b=b_sun, l=l_sun, distance=D_sun, frame='galactic')
+    XYZ_sun = sun.galactocentric.cartesian.xyz
 
-    return force * 1e-13 / c_kms  # s^-1
+    PdotP = mw.acceleration(XYZ).si / c
+
+    # scalar projection of PdotP along the position vector from pulsar to sun
+    LOS = XYZ_sun - XYZ
+    # PdotP_LOS = np.dot(PdotP, LOS) / np.linalg.norm(LOS)
+    PdotP_LOS = np.einsum('i...,i...->...', PdotP, LOS) / np.linalg.norm(LOS)
+
+    return PdotP_LOS
 
 
 def pulsar_Pdot_KDE(*, pulsar_db='full_test.dat', corrected=True):
@@ -87,13 +102,19 @@ def pulsar_Pdot_KDE(*, pulsar_db='full_test.dat', corrected=True):
     P, Pdot, Pdot_pm, gal_lat, gal_lon, D = np.loadtxt(pulsar_db).T
 
     # Compute and remove the galactic contribution from the PM corrected Pdot
-    # (logged for easier KDE grid)
+    # TODO logging might not be necessary, if use a logspace later or something
     if corrected:
-        Pdot_int = np.log10(Pdot_pm - _galactic_pot(gal_lat, gal_lon, D) * P)
+        # TODO dont use value, make everything else be units
+        Pdot_int = Pdot_pm - _galactic_pot(gal_lat, gal_lon, D).value
     else:
-        Pdot_int = np.log10(Pdot)
+        Pdot_int = Pdot
 
-    P = np.log10(P)
+    # TODO this shouldnt be necessary but sometimes gal > pm -> neg Pdot_int
+    #   Check the new gal_pot against old Phinney, this never used to happen
+    finite = np.where(Pdot_int > 0)
+
+    P = np.log10(P[finite])
+    Pdot_int = np.log10(Pdot_int[finite])
 
     # Create Gaussian P-Pdot_int KDE
     return scipy.stats.gaussian_kde(np.vstack([P, Pdot_int]))
