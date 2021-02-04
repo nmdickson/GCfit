@@ -246,7 +246,8 @@ def likelihood_pulsar(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         # Compute the galactic potential component
         # ------------------------------------------------------------------
 
-        PdotP_gal = _galactic_pot(*coords, model.d)
+        # TODO cahnge everything to use units
+        PdotP_gal = _galactic_pot(*coords, model.d).value
 
         # ------------------------------------------------------------------
         # Interpolate the likelihood value from the overall distribution
