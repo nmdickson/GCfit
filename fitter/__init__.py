@@ -83,6 +83,7 @@ def main(cluster, Niters, Nwalkers, Ncpu, *,
     # HDF file saving
     logging.debug(f"Using hdf backend at {savedir}/{cluster}_sampler.hdf")
 
+    # TODO if not cont_run, need to make sure this file doesnt already exist
     backend_fn = f"{savedir}/{cluster}_sampler.hdf"
     backend = emcee.backends.HDFBackend(backend_fn)
 

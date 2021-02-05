@@ -12,6 +12,8 @@ from ssptools import evolve_mf_3 as emf3
 
 import logging
 import fnmatch
+import pathlib
+from importlib import resources
 
 
 # --------------------------------------------------------------------------
@@ -95,29 +97,31 @@ def _galactic_pot(lat, lon, D):
     return PdotP_LOS
 
 
-def pulsar_Pdot_KDE(*, pulsar_db='full_test.dat', corrected=True):
+def pulsar_Pdot_KDE(*, pulsar_db='field_msp.dat', corrected=True):
     '''Return a gaussian kde
+    psrcat -db_file psrcat.db -c "p0 p1 p1_i GB GL Dist" -l "p0 < 0.1 &&
+        p1 > 0 && p1_i > 0 && ! assoc(GC)" -x > field_msp.dat
     '''
     # Get field pulsars data
-    P, Pdot, Pdot_pm, gal_lat, gal_lon, D = np.loadtxt(pulsar_db).T
+    with resources.path('fitter', 'resources') as datadir:
+        pulsar_db = pathlib.Path(f"{datadir}/{pulsar_db}")
+        cols = (0, 3, 6, 7, 8, 9)
+        P, Pdot, Pdot_pm, lat, lon, D = np.genfromtxt(pulsar_db, usecols=cols).T
 
     # Compute and remove the galactic contribution from the PM corrected Pdot
+    # TODO dont use value, make everything else be units
+    Pdot_int = Pdot_pm - _galactic_pot(lat, lon, D).value
+
     # TODO logging might not be necessary, if use a logspace later or something
-    if corrected:
-        # TODO dont use value, make everything else be units
-        Pdot_int = Pdot_pm - _galactic_pot(gal_lat, gal_lon, D).value
-    else:
-        Pdot_int = Pdot
+    P = np.log10(P)
+    Pdot_int = np.log10(Pdot_int)
 
     # TODO this shouldnt be necessary but sometimes gal > pm -> neg Pdot_int
     #   Check the new gal_pot against old Phinney, this never used to happen
-    finite = np.where(Pdot_int > 0)
-
-    P = np.log10(P[finite])
-    Pdot_int = np.log10(Pdot_int[finite])
+    finite = np.isfinite(Pdot_int)
 
     # Create Gaussian P-Pdot_int KDE
-    return scipy.stats.gaussian_kde(np.vstack([P, Pdot_int]))
+    return scipy.stats.gaussian_kde(np.vstack([P[finite], Pdot_int[finite]]))
 
 
 # --------------------------------------------------------------------------
