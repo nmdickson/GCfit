@@ -117,7 +117,6 @@ def pulsar_Pdot_KDE(*, pulsar_db='field_msp.dat', corrected=True):
     Pdot_int = np.log10(Pdot_int)
 
     # TODO this shouldnt be necessary but sometimes gal > pm -> neg Pdot_int
-    #   Check the new gal_pot against old Phinney, this never used to happen
     finite = np.isfinite(Pdot_int)
 
     # Create Gaussian P-Pdot_int KDE
