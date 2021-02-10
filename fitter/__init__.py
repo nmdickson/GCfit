@@ -102,6 +102,7 @@ def main(cluster, Niters, Nwalkers, Ncpu=2, *,
     # Setup MCMC backend
     # ----------------------------------------------------------------------
 
+    # TODO if not cont_run, need to make sure this file doesnt already exist
     backend_fn = f"{savedir}/{cluster}_sampler.hdf"
 
     logging.debug(f"Using hdf backend at {backend_fn}")
