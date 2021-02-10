@@ -5,11 +5,13 @@ import matplotlib.pyplot as plt
 
 # TODO vectorize this along pulsar R's as well
 
-def vec_Paz(model, R, mass_bin):
+def vec_Paz(model, R, mass_bin, *, logged=False):
     """ 
     Computes probability distribution for a range of line of sight
     accelerations at projected R : P(az|R)
     Returns the an array containing the probability distribution.
+
+    `logged` uses a logspace for the acceleration domain, rather than linear
     """
 
     # Assumes units of az [m/s^2] if model.G == 0.004302, else models units
@@ -104,11 +106,13 @@ def vec_Paz(model, R, mass_bin):
     azmax = az_spl(zmax)
 
     # define the acceleration space domain, based on amax
-    # TODO this attempts to match the original 47Tuc resolution, could be better
-    #   also have to test if changing this per pulsar has a large effect
+    # TODO this (especially with logged) requires care to ensure its normalized
 
     bound = azmax + 5e-9
-    az_domain = np.linspace(5e-11, bound, int(bound / 15e-9 * 150))
+    if logged:
+        az_domain = np.geomspace(5e-11, bound, int(bound / 15e-9 * 150))
+    else:
+        az_domain = np.linspace(5e-11, bound, int(bound / 15e-9 * 150))
 
     # All invalid acceleratoin space (outside azmax) will have probability = 0
 

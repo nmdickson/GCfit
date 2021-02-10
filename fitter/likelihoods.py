@@ -4,8 +4,8 @@ from .new_Paz import vec_Paz
 import numpy as np
 import limepy as lp
 import astropy.units as u
+from astropy.constants import c
 import scipy.stats
-import scipy.signal
 import scipy.integrate as integ
 import scipy.interpolate as interp
 from ssptools import evolve_mf_3 as emf3
@@ -62,11 +62,16 @@ def _gaussian(x, sigma, mu):
     return norm * exponent
 
 
+def RV_transform(domain, f_X, h, h_prime):
+    '''transformation of a random variable over a function g=h^-1'''
+    f_Y = f_X(h(domain)) * h_prime(domain)
+    return np.nan_to_num(f_Y)
+
+
 def _galactic_pot(lat, lon, D):
     '''b, l, d'''
     import gala.potential as pot
 
-    from astropy.constants import c
     from astropy.coordinates import SkyCoord
 
     # Mikly Way Potential
@@ -84,6 +89,7 @@ def _galactic_pot(lat, lon, D):
     l_sun = np.zeros_like(lon) * u.deg
     D_sun = np.zeros_like(D) * u.kpc
 
+    # TODO the transformations are kinda slow, and are prob uneccessary here
     sun = SkyCoord(b=b_sun, l=l_sun, distance=D_sun, frame='galactic')
     XYZ_sun = sun.galactocentric.cartesian.xyz
 
@@ -142,6 +148,9 @@ def likelihood_pulsar(model, pulsars, Pdot_kde, cluster_μ, coords, *,
 
     Pdot_min, Pdot_max = Pdot_kde.dataset[1].min(), Pdot_kde.dataset[1].max()
 
+    # Functions for transforming a distribution from a log to linear scale
+    RV_kw = {"h": np.log10, "h_prime": lambda y: (1 / (np.log(10) * y))}
+
     # ----------------------------------------------------------------------
     # Get pulsar mass bins
     # ----------------------------------------------------------------------
@@ -166,73 +175,82 @@ def likelihood_pulsar(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         # Get this pulsars necessary data
         # ------------------------------------------------------------------
 
-        R_i = pulsars['r'][i]
+        R = pulsars['r'][i]
 
-        P_i = pulsars['P'][i]
-        ΔP_i = pulsars['ΔP'][i]
+        P = pulsars['P'][i]
 
-        Pdot_meas_i = pulsars['Pdot_meas'][i]
-        ΔPdot_meas_i = pulsars['ΔPdot_meas'][i]
-
-        # ------------------------------------------------------------------
-        # Create a slice of the P-Pdot space, along this pulsars P
-        # ------------------------------------------------------------------
-
-        lg_P = np.log10(P_i)
-
-        # TODO might want to max the grid at like -15, depending on conv tests
-        P_i_grid, Pdot_int_grid = np.mgrid[lg_P:lg_P:1j, Pdot_min:Pdot_max:100j]
-
-        # ------------------------------------------------------------------
-        # Compute the Pdot_int distribution from the KDE
-        # ------------------------------------------------------------------
-
-        Pdot_int_prob_i = np.reshape(
-            Pdot_kde(np.vstack([P_i_grid.ravel(), Pdot_int_grid.ravel()])),
-            P_i_grid.shape
-        )[0]
-
-        # Normalize
-        Pdot_int_prob_i /= interp.UnivariateSpline(
-            Pdot_int_grid.ravel(), Pdot_int_prob_i, k=3, s=0, ext=1
-        ).integral(-np.inf, np.inf)
+        Pdot_meas = pulsars['Pdot_meas'][i]
+        ΔPdot_meas = pulsars['ΔPdot_meas'][i]
 
         # ------------------------------------------------------------------
         # Compute the cluster component distribution of Pdot, from the model
         # ------------------------------------------------------------------
 
-        a_domain, Pdot_c_prob_i = vec_Paz(model=model, R=R_i, mass_bin=mass_bin)
-        Pdot_domain = a_domain / c
+        a_domain, Pdot_c_prob = vec_Paz(model, R, mass_bin, logged=True)
+        Pdot_domain = P * a_domain / c
 
-        # Normalize
-        Pdot_c_prob_i /= interp.UnivariateSpline(
-            Pdot_domain, Pdot_c_prob_i, k=3, s=0, ext=1
-        ).integral(-np.inf, np.inf)
+        # linear to avoid effects around asymptote
+        Pdot_c_spl = interp.UnivariateSpline(
+            Pdot_domain, Pdot_c_prob, k=1, s=0, ext=1
+        )
 
         # ------------------------------------------------------------------
         # Compute gaussian measurement error distribution
         # ------------------------------------------------------------------
 
-        width = np.sqrt(ΔPdot_meas_i**2 * (1 / P_i)**2
-                        + ΔP_i**2 * (-Pdot_meas_i / P_i**2)**2)
-        err_i = _gaussian(x=Pdot_domain, sigma=width, mu=0)
+        err = _gaussian(x=Pdot_domain, sigma=ΔPdot_meas, mu=0)
+
+        err_spl = interp.UnivariateSpline(Pdot_domain, err, k=3, s=0, ext=1)
+
+        # ------------------------------------------------------------------
+        # Create a slice of the P-Pdot space, along this pulsars P
+        # ------------------------------------------------------------------
+
+        lg_P = np.log10(P)
+
+        P_grid, Pdot_int_domain = np.mgrid[lg_P:lg_P:1j, Pdot_min:Pdot_max:200j]
+
+        P_grid, Pdot_int_domain = P_grid.ravel(), Pdot_int_domain.ravel()
+
+        # ------------------------------------------------------------------
+        # Compute the Pdot_int distribution from the KDE
+        # ------------------------------------------------------------------
+
+        Pdot_int_prob = Pdot_kde(np.vstack([P_grid, Pdot_int_domain]))
+
+        Pdot_int_spl = interp.UnivariateSpline(
+            Pdot_int_domain, Pdot_int_prob, k=3, s=0, ext=1
+        )
+
+        Pdot_int_prob = RV_transform(10**Pdot_int_domain, Pdot_int_spl, **RV_kw)
+
+        Pdot_int_spl = interp.UnivariateSpline(
+            10**Pdot_int_domain, Pdot_int_prob, k=3, s=0, ext=1
+        )
+
+        # ------------------------------------------------------------------
+        # Set up the equally-spaced linear convolution domain
+        # ------------------------------------------------------------------
+
+        # TODO both 5000 and 1e-18 need to be computed dynamically
+        #   5000 to be enough steps to sample the gaussian and int peaks
+        #   1e-18 to be far enough for the int distribution to go to zero
+        #   Both balanced so as to use way too much memory uneccessarily
+        #   Must be symmetric, to avoid bound effects
+
+        lin_domain = np.linspace(-1e-18, 1e-18, 5_000)
 
         # ------------------------------------------------------------------
         # Convolve the different distributions
         # ------------------------------------------------------------------
 
-        conv1 = np.convolve(err_i, Pdot_c_prob_i, 'same')
+        conv1 = np.convolve(err_spl(lin_domain), Pdot_c_spl(lin_domain), 'same')
 
-        # Normalize
-        conv1 /= interp.UnivariateSpline(
-            Pdot_domain, conv1, k=3, s=0, ext=1
-        ).integral(-np.inf, np.inf)
-
-        conv2 = np.convolve(conv1, Pdot_int_prob_i, 'same')
+        conv2 = np.convolve(conv1, Pdot_int_spl(lin_domain), 'same')
 
         # Normalize
         conv2 /= interp.UnivariateSpline(
-            Pdot_domain, conv2, k=3, s=0, ext=1
+            lin_domain, conv2, k=3, s=0, ext=1
         ).integral(-np.inf, np.inf)
 
         # ------------------------------------------------------------------
@@ -257,17 +275,17 @@ def likelihood_pulsar(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         # ------------------------------------------------------------------
 
         prob_dist = interp.interp1d(
-            Pdot_domain + PdotP_pm + PdotP_gal, conv2, assume_sorted=True,
-            bounds_error=False, fill_value=0.0
+            (lin_domain / P) + PdotP_pm + PdotP_gal, conv2,
+            assume_sorted=True, bounds_error=False, fill_value=0.0
         )
 
-        probs[i] = prob_dist(Pdot_meas_i / P_i)
+        probs[i] = prob_dist(Pdot_meas / P)
 
     # ----------------------------------------------------------------------
     # Multiply all the probabilities and return the total log probability.
     # ----------------------------------------------------------------------
 
-    return np.log(np.prod(probs))
+    return np.sum(np.log(probs))
 
 
 def likelihood_number_density(model, ndensity, *, mass_bin=None):
