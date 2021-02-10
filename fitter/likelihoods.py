@@ -1,5 +1,5 @@
-from .data import DEFAULT_INITIALS
 from .new_Paz import vec_Paz
+from .data import DEFAULT_INITIALS, Model
 
 import numpy as np
 import limepy as lp
@@ -8,7 +8,6 @@ from astropy.constants import c
 import scipy.stats
 import scipy.integrate as integ
 import scipy.interpolate as interp
-from ssptools import evolve_mf_3 as emf3
 
 import logging
 import fnmatch
@@ -49,6 +48,7 @@ def masyr2kms(masyr, d):
     kmyr = pcyr / 3.24078e-14
     kms = kmyr / 3.154e7
     return kms
+
 
 # --------------------------------------------------------------------------
 # Helper Functions
@@ -517,116 +517,6 @@ def likelihood_mass_func(model, mf):
 # --------------------------------------------------------------------------
 
 
-def create_model(theta, observations=None, *, verbose=False):
-    '''if observations are provided, will use it for a few parameters and
-    check if need to add any mass bins. Otherwise will just use defaults.
-    '''
-
-    # Construct the model with current theta (parameters)
-    if isinstance(theta, dict):
-        W0, M, rh, ra, g, delta, s2, F, a1, a2, a3, BHret, d = (
-            theta['W0'], theta['M'], theta['rh'], theta['ra'], theta['g'],
-            theta['delta'], theta['s2'], theta['F'],
-            theta['a1'], theta['a2'], theta['a3'], theta['BHret'], theta['d']
-        )
-    else:
-        W0, M, rh, ra, g, delta, s2, F, a1, a2, a3, BHret, d = theta
-
-    m123 = [0.1, 0.5, 1.0, 100]  # Slope breakpoints for initial mass function
-    a12 = [-a1, -a2, -a3]  # Slopes for initial mass function
-    nbin12 = [5, 5, 20]
-
-    # Output times for the evolution (age)
-    tout = np.array([11000])
-
-    # TODO figure out which of these are cluster dependant, store them in files
-    # Integration settings
-    N0 = 5e5  # Normalization of stars
-    tcc = 0  # Core collapse time
-    NS_ret = 0.1  # Initial neutron star retention
-    BH_ret_int = 1  # Initial Black Hole retention
-    BH_ret_dyn = BHret / 100  # Dynamical Black Hole retention
-
-    # Metallicity
-    try:
-        FeHe = observations.mdata['FeHe']
-    except (AttributeError, KeyError):
-        FeHe = -1.02
-
-    # Regulates low mass objects depletion, default -20, 0 for 47 Tuc
-    try:
-        Ndot = observations.mdata['Ndot']
-    except (AttributeError, KeyError):
-        Ndot = 0
-
-    # Generate the mass function
-    mass_func = emf3.evolve_mf(
-        m123=m123,
-        a12=a12,
-        nbin12=nbin12,
-        tout=tout,
-        N0=N0,
-        Ndot=Ndot,
-        tcc=tcc,
-        NS_ret=NS_ret,
-        BH_ret_int=BH_ret_int,
-        BH_ret_dyn=BH_ret_dyn,
-        FeHe=FeHe,
-    )
-
-    # Set bins that should be empty to empty
-    cs = mass_func.Ns[-1] > 10 * mass_func.Nmin
-    cr = mass_func.Nr[-1] > 10 * mass_func.Nmin
-
-    # Collect mean mass and total mass bins
-    mj = np.r_[mass_func.ms[-1][cs], mass_func.mr[-1][cr]]
-    Mj = np.r_[mass_func.Ms[-1][cs], mass_func.Mr[-1][cr]]
-
-    # append tracer mass bins (must be appended to end to not affect nms)
-
-    if observations is not None:
-
-        tracer_mj = [
-            dataset.mdata['m'] for dataset in observations.datasets.values()
-            if 'm' in dataset.mdata
-        ]
-
-        mj = np.concatenate((mj, tracer_mj))
-        Mj = np.concatenate((Mj, 0.1 * np.ones_like(tracer_mj)))
-
-    # In the event that a limepy model does not converge, return -inf.
-    try:
-        model = lp.limepy(
-            phi0=W0,
-            g=g,
-            M=M * 1e6,
-            rh=rh,
-            ra=10**ra,
-            delta=delta,
-            mj=mj,
-            Mj=Mj,
-            project=True,
-            verbose=verbose,
-        )
-    except ValueError as err:
-        logging.debug(f"Model did not converge with {theta=}")
-        raise ValueError(err)
-
-    # TODO not my favourite way to store this info
-    #   means models *have* to be created here for the most part
-
-    # store some necessary mass function info in the model
-    model.nms = len(mass_func.ms[-1][cs])
-    model.mes_widths = mass_func.mes[-1][1:] - mass_func.mes[-1][:-1]
-
-    # store some necessary theta parameters in the model
-    model.d = d
-    model.F = F
-    model.s2 = s2
-
-    return model
-
-
 def determine_components(obs):
     '''from observations, determine which likelihood functions will be computed
     and return a dict of the relevant obs dataset keys, and tuples of the
@@ -684,9 +574,9 @@ def determine_components(obs):
 def log_likelihood(theta, observations, L_components):
 
     try:
-        model = create_model(theta, observations)
+        model = Model(theta, observations)
     except ValueError:
-        # Model did not converge
+        logging.debug(f"Model did not converge with {theta=}")
         return -np.inf, -np.inf * np.ones(len(L_components))
 
     # Calculate each log likelihood
@@ -710,19 +600,16 @@ def posterior(theta, observations, fixed_initials, L_components):
 
     # TODO make this prettier
     # Prior probability function
-    if not (3 < theta['W0'] < 20
-            and 0.5 < theta['rh'] < 15
-            and 0.01 < theta['M'] < 10
-            and 0 < theta['ra'] < 5
-            and 0 < theta['g'] < 2.3
-            and 0.3 < theta['delta'] < 0.5
-            and 0 < theta['s2'] < 10
-            and 0.1 < theta['F'] < 0.5
-            and -2 < theta['a1'] < 6
-            and -2 < theta['a2'] < 6
-            and -2 < theta['a3'] < 6
-            and 0 < theta['BHret'] < 100
+    if not (3 < theta['W0'] < 20 and 0.5 < theta['rh'] < 15
+            and 0.01 < theta['M'] < 10 and 0 < theta['ra'] < 5
+            and 0 < theta['g'] < 2.3 and 0.3 < theta['delta'] < 0.5
+            and 0 < theta['s2'] < 10 and 0.1 < theta['F'] < 0.5
+            and -2 < theta['a1'] < 6 and -2 < theta['a2'] < 6
+            and -2 < theta['a3'] < 6 and 0 < theta['BHret'] < 100
             and 4 < theta['d'] < 8):
+
+        logging.debug("Theta outside priors domain")
+
         return -np.inf, *(-np.inf * np.ones(len(L_components)))
 
     probability, individuals = log_likelihood(theta, observations, L_components)

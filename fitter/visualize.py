@@ -4,7 +4,8 @@ import h5py
 import numpy as np
 import matplotlib.pyplot as plt
 
-from .likelihoods import pc2arcsec, kms2masyr, as2pc, create_model
+from .likelihoods import pc2arcsec, kms2masyr, as2pc
+from .data import Model
 
 # TODO add confidence intervals to plots
 # TODO fix spacings
@@ -424,8 +425,6 @@ class ModelVisualizer(_Visualizer):
         '''
         create a Visualizer instance based on a chain, y taking the median
         of the chain parameters
-
-        # TODO this supports 1-d chain arrays (theta) but not the same dicts
         '''
 
         reduc = cls._REDUC_METHODS[method]
@@ -437,11 +436,19 @@ class ModelVisualizer(_Visualizer):
 
         theta = reduc(chain, axis=0)
 
-        return cls(create_model(theta, observations), observations)
+        return cls(Model(theta, observations), observations)
 
-    def __init__(self, model, observations):
-        self.obs = observations
+    @classmethod
+    def from_theta(cls, theta, observations):
+        '''
+        create a Visualizer instance based on a theta, see `Model` for allowed
+        theta types
+        '''
+        return cls(Model(theta, observations), observations)
+
+    def __init__(self, model, observations=None):
         self.model = model
+        self.obs = observations if observations else model.observations
 
 
 class RunVisualizer(_Visualizer):
