@@ -118,11 +118,10 @@ def pulsar_Pdot_KDE(*, pulsar_db='field_msp.dat', corrected=True):
     # TODO dont use value, make everything else be units
     Pdot_int = Pdot_pm - _galactic_pot(lat, lon, D).value
 
-    # TODO logging might not be necessary, if use a logspace later or something
     P = np.log10(P)
     Pdot_int = np.log10(Pdot_int)
 
-    # TODO this shouldnt be necessary but sometimes gal > pm -> neg Pdot_int
+    # TODO some Pdot_pm < Pdot_gal; this may or may not be physical, need check
     finite = np.isfinite(Pdot_int)
 
     # Create Gaussian P-Pdot_int KDE
@@ -197,6 +196,8 @@ def likelihood_pulsar(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         # ------------------------------------------------------------------
         # Compute gaussian measurement error distribution
         # ------------------------------------------------------------------
+
+        # TODO if width << Pint width, maybe don't bother with first conv.
 
         err = _gaussian(x=Pdot_domain, sigma=ΔPdot_meas, mu=0)
 
