@@ -3,12 +3,16 @@ from .new_Paz import vec_Paz
 from .data import DEFAULT_INITIALS, Model
 
 import numpy as np
+import astropy.units as u
 from astropy.constants import c
 import scipy.integrate as integ
 import scipy.interpolate as interp
 
 import logging
 import fnmatch
+
+
+# TODO standardize which interpolation funciton we're using, 3 are in play rn
 
 
 # --------------------------------------------------------------------------
@@ -185,9 +189,9 @@ def likelihood_number_density(model, ndensity, *, mass_bin=None):
     obs_err = ndensity['ΔΣ'][valid]
 
     # Interpolated the model data at the measurement locations
-    # TODO the numdens data should be converted to arcsec in storage or data
+    # TODO look into just using `u.set_enabled_equivalencies`
     interpolated = np.interp(
-        ndensity['r'][valid], util.pc2arcsec(model.r, model.d) / 60,
+        ndensity['r'][valid], model.r.to(u.arcmin, util.angular_width(model.d)),
         model.Sigmaj[mass_bin] / model.mj[mass_bin],
     )
 
@@ -232,8 +236,8 @@ def likelihood_pm_tot(model, pm, *, mass_bin=None):
     model_tot = np.sqrt(0.5 * (model.v2Tj[mass_bin] + model.v2Rj[mass_bin]))
 
     # Convert model units
-    model_r = util.pc2arcsec(model.r, model.d)
-    model_tot = util.kms2masyr(model_tot, model.d)
+    model_r = model.r.to(u.arcsec, util.angular_width(model.d))
+    model_tot = model_tot.to(u.mas / u.yr, util.angular_speed(model.d))
 
     # Build asymmetric error, if exists
     obs_err = pm.build_err('PM_tot', model_r, model_tot)
@@ -256,7 +260,7 @@ def likelihood_pm_ratio(model, pm, *, mass_bin=None):
             mass_bin = model.nms - 1
 
     # Convert model units
-    model_r = util.pc2arcsec(model.r, model.d)
+    model_r = model.r.to(u.arcsec, util.angular_width(model.d))
     model_ratio = np.sqrt(model.v2Tj[mass_bin] / model.v2Rj[mass_bin])
 
     # Build asymmetric error, if exists
@@ -280,9 +284,11 @@ def likelihood_pm_T(model, pm, *, mass_bin=None):
         else:
             mass_bin = model.nms - 1
 
+    model_T = np.sqrt(model.v2Tj[mass_bin])
+
     # Convert model units
-    model_r = util.pc2arcsec(model.r, model.d)
-    model_T = util.kms2masyr(np.sqrt(model.v2Tj[mass_bin]), model.d)
+    model_r = model.r.to(u.arcsec, util.angular_width(model.d))
+    model_T = model_T.to(u.mas / u.yr, util.angular_speed(model.d))
 
     # Build asymmetric error, if exists
     obs_err = pm.build_err('PM_T', model_r, model_T)
@@ -304,9 +310,11 @@ def likelihood_pm_R(model, pm, *, mass_bin=None):
         else:
             mass_bin = model.nms - 1
 
+    model_R = np.sqrt(model.v2Rj[mass_bin])
+
     # Convert model units
-    model_r = util.pc2arcsec(model.r, model.d)
-    model_R = util.kms2masyr(np.sqrt(model.v2Rj[mass_bin]), model.d)
+    model_r = model.r.to(u.arcsec, util.angular_width(model.d))
+    model_R = model_R.to(u.mas / u.yr, util.angular_speed(model.d))
 
     # Build asymmetric error, if exists
     obs_err = pm.build_err('PM_R', model_r, model_R)
@@ -329,7 +337,7 @@ def likelihood_LOS(model, vlos, *, mass_bin=None):
             mass_bin = model.nms - 1
 
     # Convert model units
-    model_r = util.pc2arcsec(model.r, model.d)
+    model_r = model.r.to(u.arcsec, util.angular_width(model.d))
     model_LOS = np.sqrt(model.v2pj[mass_bin])
 
     # Build asymmetric error, if exists
@@ -353,8 +361,8 @@ def likelihood_mass_func(model, mf):
         # we only want to use the obs data for this r bin
         r_mask = (mf['bin'] == annulus_ind)
 
-        r1 = util.as2pc(60 * 0.4 * annulus_ind, model.d)
-        r2 = util.as2pc(60 * 0.4 * (annulus_ind + 1), model.d)
+        r1 = 0.4 * annulus_ind.to(u.arcsec, util.angular_width(model.d))
+        r2 = 0.4 * (annulus_ind + 1).to(u.arcsec, util.angular_width(model.d))
 
         # Get a binned version of N_model (an Nstars for each mbin)
         binned_N_model = np.empty(model.nms)

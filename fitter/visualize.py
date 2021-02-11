@@ -2,6 +2,7 @@ import sys
 
 import h5py
 import numpy as np
+import astropy.units as u
 import matplotlib.pyplot as plt
 
 from . import util
@@ -84,8 +85,6 @@ class ModelVisualizer(_Visualizer):
         ax.set_xlabel('R')
         ax.set_ylabel(r'$a_{los}$')
 
-        d = self.model.d
-
         maz = []
         for r in self.model.r:
             self.model.get_Paz(0, r, -1)
@@ -104,8 +103,10 @@ class ModelVisualizer(_Visualizer):
                 if show_obs != 'attempt':
                     raise err
 
-        upper_az, = ax.plot(util.pc2arcsec(self.model.r, d) / 60., maz)
-        ax.plot(util.pc2arcsec(self.model.r, d) / 60., -maz, c=upper_az.get_color())
+        model_r = self.model.r.to(u.arcmin, util.angular_width(self.model.d))
+
+        upper_az, = ax.plot(model_r, maz)
+        ax.plot(model_r, -maz, c=upper_az.get_color())
 
         # N_pulsars = obs_r.size
         # prob_dist = np.array([
@@ -155,8 +156,9 @@ class ModelVisualizer(_Visualizer):
                 if show_obs != 'attempt':
                     raise err
 
-        ax.plot(util.pc2arcsec(self.model.r, self.model.d),
-                np.sqrt(self.model.v2pj[mass_bin]))
+        model_r = self.model.r.to(u.arcsec, util.angular_width(self.model.d))
+
+        ax.plot(model_r, np.sqrt(self.model.v2pj[mass_bin]))
 
         return fig
 
@@ -184,10 +186,14 @@ class ModelVisualizer(_Visualizer):
                 if show_obs != 'attempt':
                     raise err
 
-        model_t2 = 0.5 * (self.model.v2Tj[mass_bin] + self.model.v2Rj[mass_bin])
+        model_t = np.sqrt(
+            0.5 * (self.model.v2Tj[mass_bin] + self.model.v2Rj[mass_bin])
+        )
 
-        ax.plot(util.pc2arcsec(self.model.r, self.model.d),
-                util.kms2masyr(np.sqrt(model_t2), self.model.d))
+        model_r = self.model.r.to(u.arcsec, util.angular_width(self.model.d))
+        model_t = model_t.to(u.mas / u.yr, util.angular_speed(self.model.d))
+
+        ax.plot(model_r, model_t)
 
         return fig
 
@@ -218,7 +224,9 @@ class ModelVisualizer(_Visualizer):
 
         model_ratio2 = self.model.v2Tj[mass_bin] / self.model.v2Rj[mass_bin]
 
-        ax.plot(util.pc2arcsec(self.model.r, self.model.d), np.sqrt(model_ratio2))
+        model_r = self.model.r.to(u.arcsec, util.angular_width(self.model.d))
+
+        ax.plot(model_r, np.sqrt(model_ratio2))
 
         return fig
 
@@ -248,8 +256,12 @@ class ModelVisualizer(_Visualizer):
                 if show_obs != 'attempt':
                     raise err
 
-        ax.plot(util.pc2arcsec(self.model.r, self.model.d),
-                util.kms2masyr(np.sqrt(self.model.v2Tj[mass_bin]), self.model.d))
+        model_T = np.sqrt(self.model.v2Tj[mass_bin])
+
+        model_r = self.model.r.to(u.arcsec, util.angular_width(self.model.d))
+        model_T = model_T.to(u.mas / u.yr, util.angular_speed(self.model.d))
+
+        ax.plot(model_r, model_T)
 
         return fig
 
@@ -278,10 +290,12 @@ class ModelVisualizer(_Visualizer):
                 if show_obs != 'attempt':
                     raise err
 
-        model_pm = self.model.v2Rj
+        model_R = np.sqrt(self.model.v2Rj[mass_bin])
 
-        ax.plot(util.pc2arcsec(self.model.r, self.model.d),
-                util.kms2masyr(np.sqrt(model_pm[mass_bin]), self.model.d))
+        model_r = self.model.r.to(u.arcsec, util.angular_width(self.model.d))
+        model_R = model_R.to(u.mas / u.yr, util.angular_speed(self.model.d))
+
+        ax.plot(model_r, model_R)
 
         return fig
 
@@ -306,7 +320,8 @@ class ModelVisualizer(_Visualizer):
 
             # interpolate number density to the observed data points r
             interp_model = np.interp(
-                numdens['r'], util.pc2arcsec(self.model.r, self.model.d) / 60.,
+                numdens['r'],
+                self.model.r.to(u.arcmin, util.angular_width(self.model.d)),
                 self.model.Sigmaj[mass_bin] / self.model.mj[mass_bin]
             )
 
@@ -321,14 +336,14 @@ class ModelVisualizer(_Visualizer):
 
                 numdens = self.obs['number_density']
 
-                ax.errorbar(numdens['r'] * 60, numdens["Σ"], fmt='k.',
+                ax.errorbar(numdens['r'].to(u.arcsec), numdens["Σ"], fmt='k.',
                             yerr=np.sqrt(numdens["ΔΣ"]**2 + self.model.s2))
 
             except KeyError as err:
                 if show_obs != 'attempt':
                     raise err
 
-        ax.plot(util.pc2arcsec(self.model.r, self.model.d),
+        ax.plot(self.model.r.to(u.arcsec, util.angular_width(self.model.d)),
                 K * self.model.Sigmaj[mass_bin] / self.model.mj[mass_bin])
 
         return fig
@@ -345,14 +360,16 @@ class ModelVisualizer(_Visualizer):
         mf = self.obs['mass_function']
 
         scale = [1000., 10., 0.1, 0.001]
+        angular_width = util.angular_width(self.model.d)
 
+        # MBIN MUST HAVE UNITS OF u.arcmin
         for annulus_ind in np.unique(mf['bin']):
 
             # we only want to use the obs data for this r bin
             r_mask = (mf['bin'] == annulus_ind)
 
-            r1 = util.as2pc(0.4 * 60 * annulus_ind, self.model.d)
-            r2 = util.as2pc(0.4 * 60 * (annulus_ind + 1), self.model.d)
+            r1 = 0.4 * annulus_ind.to(u.arcsec, angular_width)
+            r2 = 0.4 * (annulus_ind + 1).to(u.arcsec, angular_width)
 
             # Get a binned version of N_model (an Nstars for each mbin)
             binned_N_model = np.empty(self.model.nms)
@@ -366,9 +383,10 @@ class ModelVisualizer(_Visualizer):
                 )
 
                 # Convert density spline into Nstars
+                mper = self.model.mj[mbin_ind] * self.model.mes_widths[mbin_ind]
+
                 binned_N_model[mbin_ind] = (
-                    integ.quad(density, r1, r2)[0]
-                    / (self.model.mj[mbin_ind] * self.model.mes_widths[mbin_ind])
+                    integ.quad(density, r1, r2)[0] / mper
                 )
 
             # Grab the N_data (adjusted by width to get an average
