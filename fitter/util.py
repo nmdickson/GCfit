@@ -11,34 +11,36 @@ from astropy.constants import c
 # --------------------------------------------------------------------------
 
 
-def pc2arcsec(r, d):
-    '''Convert r from [pc] to [arcsec]. `d` must be given in [kpc]'''
-    d *= 1000
-    return 206265 * 2 * np.arctan(r / (2 * d))
+def angular_width(D):
+    '''AstroPy units conversion equivalency for angular to linear widths.
+    See: https://docs.astropy.org/en/stable/units/equivalencies.html
+    '''
+
+    D = D.to(u.pc)
+
+    def pc2rad(r):
+        return 2 * np.arctan(r / (2 * D.value))
+
+    def rad2pc(θ):
+        return np.tan(θ / 2) * (2 * D.value)
+
+    return [(u.pc, u.rad, pc2rad, rad2pc)]
 
 
-def as2pc(theta, d):
-    '''Convert theta from [as] to [pc]. `d` must be given in [kpc]'''
-    d *= 1000
-    return np.tan(theta * 1 / 3600 * np.pi / 180 / 2) * 2 * d
+def angular_speed(D):
+    '''AstroPy units conversion equivalency for angular to tangential speeds.
+    See: https://docs.astropy.org/en/stable/units/equivalencies.html
+    '''
 
+    D = D.to(u.pc)
 
-def kms2masyr(kms, d):
-    '''Convert kms from [kms] to [masyr `d` must be given in [kpc]'''
-    kmyr = kms * 3.154e7
-    pcyr = kmyr * 3.24078e-14
-    asyr = pc2arcsec(pcyr, d)
-    masyr = 1000 * asyr
-    return masyr
+    def kms2asyr(vt):
+        return vt / (4.74 * D.value)
 
+    def asyr2kms(μ):
+        return 4.74 * D.value * μ
 
-def masyr2kms(masyr, d):
-    '''Convert masyr from [masyr] to [kms]. `d` must be given in [kpc]'''
-    asyr = masyr / 1000.
-    pcyr = as2pc(asyr, d)
-    kmyr = pcyr / 3.24078e-14
-    kms = kmyr / 3.154e7
-    return kms
+    return [((u.km / u.s), (u.arcsec / u.yr), kms2asyr, asyr2kms)]
 
 
 # --------------------------------------------------------------------------
