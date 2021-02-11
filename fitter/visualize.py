@@ -4,7 +4,7 @@ import h5py
 import numpy as np
 import matplotlib.pyplot as plt
 
-from .likelihoods import pc2arcsec, kms2masyr, as2pc
+from . import util
 from .data import Model
 
 # TODO add confidence intervals to plots
@@ -104,8 +104,8 @@ class ModelVisualizer(_Visualizer):
                 if show_obs != 'attempt':
                     raise err
 
-        upper_az, = ax.plot(pc2arcsec(self.model.r, d) / 60., maz)
-        ax.plot(pc2arcsec(self.model.r, d) / 60., -maz, c=upper_az.get_color())
+        upper_az, = ax.plot(util.pc2arcsec(self.model.r, d) / 60., maz)
+        ax.plot(util.pc2arcsec(self.model.r, d) / 60., -maz, c=upper_az.get_color())
 
         # N_pulsars = obs_r.size
         # prob_dist = np.array([
@@ -155,7 +155,7 @@ class ModelVisualizer(_Visualizer):
                 if show_obs != 'attempt':
                     raise err
 
-        ax.plot(pc2arcsec(self.model.r, self.model.d),
+        ax.plot(util.pc2arcsec(self.model.r, self.model.d),
                 np.sqrt(self.model.v2pj[mass_bin]))
 
         return fig
@@ -186,8 +186,8 @@ class ModelVisualizer(_Visualizer):
 
         model_t2 = 0.5 * (self.model.v2Tj[mass_bin] + self.model.v2Rj[mass_bin])
 
-        ax.plot(pc2arcsec(self.model.r, self.model.d),
-                kms2masyr(np.sqrt(model_t2), self.model.d))
+        ax.plot(util.pc2arcsec(self.model.r, self.model.d),
+                util.kms2masyr(np.sqrt(model_t2), self.model.d))
 
         return fig
 
@@ -218,7 +218,7 @@ class ModelVisualizer(_Visualizer):
 
         model_ratio2 = self.model.v2Tj[mass_bin] / self.model.v2Rj[mass_bin]
 
-        ax.plot(pc2arcsec(self.model.r, self.model.d), np.sqrt(model_ratio2))
+        ax.plot(util.pc2arcsec(self.model.r, self.model.d), np.sqrt(model_ratio2))
 
         return fig
 
@@ -248,8 +248,8 @@ class ModelVisualizer(_Visualizer):
                 if show_obs != 'attempt':
                     raise err
 
-        ax.plot(pc2arcsec(self.model.r, self.model.d),
-                kms2masyr(np.sqrt(self.model.v2Tj[mass_bin]), self.model.d))
+        ax.plot(util.pc2arcsec(self.model.r, self.model.d),
+                util.kms2masyr(np.sqrt(self.model.v2Tj[mass_bin]), self.model.d))
 
         return fig
 
@@ -280,8 +280,8 @@ class ModelVisualizer(_Visualizer):
 
         model_pm = self.model.v2Rj
 
-        ax.plot(pc2arcsec(self.model.r, self.model.d),
-                kms2masyr(np.sqrt(model_pm[mass_bin]), self.model.d))
+        ax.plot(util.pc2arcsec(self.model.r, self.model.d),
+                util.kms2masyr(np.sqrt(model_pm[mass_bin]), self.model.d))
 
         return fig
 
@@ -306,7 +306,7 @@ class ModelVisualizer(_Visualizer):
 
             # interpolate number density to the observed data points r
             interp_model = np.interp(
-                numdens['r'], pc2arcsec(self.model.r, self.model.d) / 60.,
+                numdens['r'], util.pc2arcsec(self.model.r, self.model.d) / 60.,
                 self.model.Sigmaj[mass_bin] / self.model.mj[mass_bin]
             )
 
@@ -328,7 +328,7 @@ class ModelVisualizer(_Visualizer):
                 if show_obs != 'attempt':
                     raise err
 
-        ax.plot(pc2arcsec(self.model.r, self.model.d),
+        ax.plot(util.pc2arcsec(self.model.r, self.model.d),
                 K * self.model.Sigmaj[mass_bin] / self.model.mj[mass_bin])
 
         return fig
@@ -351,8 +351,8 @@ class ModelVisualizer(_Visualizer):
             # we only want to use the obs data for this r bin
             r_mask = (mf['bin'] == annulus_ind)
 
-            r1 = as2pc(0.4 * 60 * annulus_ind, self.model.d)
-            r2 = as2pc(0.4 * 60 * (annulus_ind + 1), self.model.d)
+            r1 = util.as2pc(0.4 * 60 * annulus_ind, self.model.d)
+            r2 = util.as2pc(0.4 * 60 * (annulus_ind + 1), self.model.d)
 
             # Get a binned version of N_model (an Nstars for each mbin)
             binned_N_model = np.empty(self.model.nms)

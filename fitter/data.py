@@ -5,8 +5,6 @@ import numpy as np
 import limepy as lp
 from ssptools import evolve_mf_3 as emf3
 
-import os
-import glob
 import logging
 from importlib import resources
 
@@ -211,13 +209,6 @@ class Observations:
                 self.mdata = dict(file.attrs)
 
 
-def cluster_list():
-    with resources.path('fitter', 'resources') as datadir:
-
-        return [os.path.splitext(os.path.basename(fn))[0]
-                for fn in glob.iglob(f'{datadir}/[!TEST]*.hdf5')]
-
-
 # --------------------------------------------------------------------------
 # Cluster Modelled data
 # --------------------------------------------------------------------------
@@ -343,4 +334,3 @@ class Model(lp.limepy):
             project=True,
             verbose=verbose,
         )
-

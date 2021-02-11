@@ -1,7 +1,6 @@
 import numpy as np
-
 from scipy.interpolate import interp1d, UnivariateSpline
-import matplotlib.pyplot as plt
+
 
 # TODO vectorize this along pulsar R's as well
 

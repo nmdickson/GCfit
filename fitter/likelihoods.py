@@ -1,131 +1,14 @@
+from . import util
 from .new_Paz import vec_Paz
 from .data import DEFAULT_INITIALS, Model
 
 import numpy as np
-import limepy as lp
-import astropy.units as u
 from astropy.constants import c
-import scipy.stats
 import scipy.integrate as integ
 import scipy.interpolate as interp
 
 import logging
 import fnmatch
-import pathlib
-from importlib import resources
-
-
-# --------------------------------------------------------------------------
-# Unit conversions
-# --------------------------------------------------------------------------
-
-
-def pc2arcsec(r, d):
-    '''Convert r from [pc] to [arcsec]. `d` must be given in [kpc]'''
-    d *= 1000
-    return 206265 * 2 * np.arctan(r / (2 * d))
-
-
-def as2pc(theta, d):
-    '''Convert theta from [as] to [pc]. `d` must be given in [kpc]'''
-    d *= 1000
-    return np.tan(theta * 1 / 3600 * np.pi / 180 / 2) * 2 * d
-
-
-def kms2masyr(kms, d):
-    '''Convert kms from [kms] to [masyr `d` must be given in [kpc]'''
-    kmyr = kms * 3.154e7
-    pcyr = kmyr * 3.24078e-14
-    asyr = pc2arcsec(pcyr, d)
-    masyr = 1000 * asyr
-    return masyr
-
-
-def masyr2kms(masyr, d):
-    '''Convert masyr from [masyr] to [kms]. `d` must be given in [kpc]'''
-    asyr = masyr / 1000.
-    pcyr = as2pc(asyr, d)
-    kmyr = pcyr / 3.24078e-14
-    kms = kmyr / 3.154e7
-    return kms
-
-
-# --------------------------------------------------------------------------
-# Helper Functions
-# --------------------------------------------------------------------------
-
-
-# Simple gaussian implementation
-def _gaussian(x, sigma, mu):
-    norm = 1 / (sigma * np.sqrt(2 * np.pi))
-    exponent = np.exp(-0.5 * (((x - mu) / sigma) ** 2))
-    return norm * exponent
-
-
-def RV_transform(domain, f_X, h, h_prime):
-    '''transformation of a random variable over a function g=h^-1'''
-    f_Y = f_X(h(domain)) * h_prime(domain)
-    return np.nan_to_num(f_Y)
-
-
-def _galactic_pot(lat, lon, D):
-    '''b, l, d'''
-    import gala.potential as pot
-
-    from astropy.coordinates import SkyCoord
-
-    # Mikly Way Potential
-    mw = pot.BovyMWPotential2014()
-
-    # TODO chck that these dont already have units (or maybe require them first)
-    # Pulsar position in galactocentric coordinates
-    b_pulsar, l_pulsar, D_pulsar = lat * u.deg, lon * u.deg, D * u.kpc
-
-    crd = SkyCoord(b=b_pulsar, l=l_pulsar, distance=D_pulsar, frame='galactic')
-    XYZ = crd.galactocentric.cartesian.xyz
-
-    # Sun position in galactocentric coordinates
-    b_sun = np.zeros_like(lat) * u.deg
-    l_sun = np.zeros_like(lon) * u.deg
-    D_sun = np.zeros_like(D) * u.kpc
-
-    # TODO the transformations are kinda slow, and are prob uneccessary here
-    sun = SkyCoord(b=b_sun, l=l_sun, distance=D_sun, frame='galactic')
-    XYZ_sun = sun.galactocentric.cartesian.xyz
-
-    PdotP = mw.acceleration(XYZ).si / c
-
-    # scalar projection of PdotP along the position vector from pulsar to sun
-    LOS = XYZ_sun - XYZ
-    # PdotP_LOS = np.dot(PdotP, LOS) / np.linalg.norm(LOS)
-    PdotP_LOS = np.einsum('i...,i...->...', PdotP, LOS) / np.linalg.norm(LOS)
-
-    return PdotP_LOS
-
-
-def pulsar_Pdot_KDE(*, pulsar_db='field_msp.dat', corrected=True):
-    '''Return a gaussian kde
-    psrcat -db_file psrcat.db -c "p0 p1 p1_i GB GL Dist" -l "p0 < 0.1 &&
-        p1 > 0 && p1_i > 0 && ! assoc(GC)" -x > field_msp.dat
-    '''
-    # Get field pulsars data
-    with resources.path('fitter', 'resources') as datadir:
-        pulsar_db = pathlib.Path(f"{datadir}/{pulsar_db}")
-        cols = (0, 3, 6, 7, 8, 9)
-        P, Pdot, Pdot_pm, lat, lon, D = np.genfromtxt(pulsar_db, usecols=cols).T
-
-    # Compute and remove the galactic contribution from the PM corrected Pdot
-    # TODO dont use value, make everything else be units
-    Pdot_int = Pdot_pm - _galactic_pot(lat, lon, D).value
-
-    P = np.log10(P)
-    Pdot_int = np.log10(Pdot_int)
-
-    # TODO some Pdot_pm < Pdot_gal; this may or may not be physical, need check
-    finite = np.isfinite(Pdot_int)
-
-    # Create Gaussian P-Pdot_int KDE
-    return scipy.stats.gaussian_kde(np.vstack([P[finite], Pdot_int[finite]]))
 
 
 # --------------------------------------------------------------------------
@@ -136,19 +19,14 @@ def pulsar_Pdot_KDE(*, pulsar_db='field_msp.dat', corrected=True):
 def likelihood_pulsar(model, pulsars, Pdot_kde, cluster_μ, coords, *,
                       mass_bin=None):
 
-    c = 299_792_458  # m/s
-
     # ----------------------------------------------------------------------
     # Get the pulsar P-Pdot_int kde
     # ----------------------------------------------------------------------
 
     if Pdot_kde is None:
-        Pdot_kde = pulsar_Pdot_KDE()
+        Pdot_kde = util.pulsar_Pdot_KDE()
 
     Pdot_min, Pdot_max = Pdot_kde.dataset[1].min(), Pdot_kde.dataset[1].max()
-
-    # Functions for transforming a distribution from a log to linear scale
-    RV_kw = {"h": np.log10, "h_prime": lambda y: (1 / (np.log(10) * y))}
 
     # ----------------------------------------------------------------------
     # Get pulsar mass bins
@@ -186,7 +64,7 @@ def likelihood_pulsar(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         # ------------------------------------------------------------------
 
         a_domain, Pdot_c_prob = vec_Paz(model, R, mass_bin, logged=True)
-        Pdot_domain = P * a_domain / c
+        Pdot_domain = P * a_domain / c.value
 
         # linear to avoid effects around asymptote
         Pdot_c_spl = interp.UnivariateSpline(
@@ -199,7 +77,7 @@ def likelihood_pulsar(model, pulsars, Pdot_kde, cluster_μ, coords, *,
 
         # TODO if width << Pint width, maybe don't bother with first conv.
 
-        err = _gaussian(x=Pdot_domain, sigma=ΔPdot_meas, mu=0)
+        err = util.gaussian(x=Pdot_domain, sigma=ΔPdot_meas, mu=0)
 
         err_spl = interp.UnivariateSpline(Pdot_domain, err, k=3, s=0, ext=1)
 
@@ -223,7 +101,10 @@ def likelihood_pulsar(model, pulsars, Pdot_kde, cluster_μ, coords, *,
             Pdot_int_domain, Pdot_int_prob, k=3, s=0, ext=1
         )
 
-        Pdot_int_prob = RV_transform(10**Pdot_int_domain, Pdot_int_spl, **RV_kw)
+        Pdot_int_prob = util.RV_transform(
+            domain=10**Pdot_int_domain, f_X=Pdot_int_spl,
+            h=np.log10, h_prime=lambda y: (1 / (np.log(10) * y))
+        )
 
         Pdot_int_spl = interp.UnivariateSpline(
             10**Pdot_int_domain, Pdot_int_prob, k=3, s=0, ext=1
@@ -262,14 +143,14 @@ def likelihood_pulsar(model, pulsars, Pdot_kde, cluster_μ, coords, *,
 
         D = model.d / 3.24078e-20  # kpc -> m
 
-        PdotP_pm = pm**2 * D / c
+        PdotP_pm = pm**2 * D / c.value
 
         # ------------------------------------------------------------------
         # Compute the galactic potential component
         # ------------------------------------------------------------------
 
         # TODO cahnge everything to use units
-        PdotP_gal = _galactic_pot(*coords, model.d).value
+        PdotP_gal = util.galactic_pot(*coords, model.d).value
 
         # ------------------------------------------------------------------
         # Interpolate the likelihood value from the overall distribution
@@ -306,7 +187,7 @@ def likelihood_number_density(model, ndensity, *, mass_bin=None):
     # Interpolated the model data at the measurement locations
     # TODO the numdens data should be converted to arcsec in storage or data
     interpolated = np.interp(
-        ndensity['r'][valid], pc2arcsec(model.r, model.d) / 60,
+        ndensity['r'][valid], util.pc2arcsec(model.r, model.d) / 60,
         model.Sigmaj[mass_bin] / model.mj[mass_bin],
     )
 
@@ -351,8 +232,8 @@ def likelihood_pm_tot(model, pm, *, mass_bin=None):
     model_tot = np.sqrt(0.5 * (model.v2Tj[mass_bin] + model.v2Rj[mass_bin]))
 
     # Convert model units
-    model_r = pc2arcsec(model.r, model.d)
-    model_tot = kms2masyr(model_tot, model.d)
+    model_r = util.pc2arcsec(model.r, model.d)
+    model_tot = util.kms2masyr(model_tot, model.d)
 
     # Build asymmetric error, if exists
     obs_err = pm.build_err('PM_tot', model_r, model_tot)
@@ -375,7 +256,7 @@ def likelihood_pm_ratio(model, pm, *, mass_bin=None):
             mass_bin = model.nms - 1
 
     # Convert model units
-    model_r = pc2arcsec(model.r, model.d)
+    model_r = util.pc2arcsec(model.r, model.d)
     model_ratio = np.sqrt(model.v2Tj[mass_bin] / model.v2Rj[mass_bin])
 
     # Build asymmetric error, if exists
@@ -400,8 +281,8 @@ def likelihood_pm_T(model, pm, *, mass_bin=None):
             mass_bin = model.nms - 1
 
     # Convert model units
-    model_r = pc2arcsec(model.r, model.d)
-    model_T = kms2masyr(np.sqrt(model.v2Tj[mass_bin]), model.d)
+    model_r = util.pc2arcsec(model.r, model.d)
+    model_T = util.kms2masyr(np.sqrt(model.v2Tj[mass_bin]), model.d)
 
     # Build asymmetric error, if exists
     obs_err = pm.build_err('PM_T', model_r, model_T)
@@ -424,8 +305,8 @@ def likelihood_pm_R(model, pm, *, mass_bin=None):
             mass_bin = model.nms - 1
 
     # Convert model units
-    model_r = pc2arcsec(model.r, model.d)
-    model_R = kms2masyr(np.sqrt(model.v2Rj[mass_bin]), model.d)
+    model_r = util.pc2arcsec(model.r, model.d)
+    model_R = util.kms2masyr(np.sqrt(model.v2Rj[mass_bin]), model.d)
 
     # Build asymmetric error, if exists
     obs_err = pm.build_err('PM_R', model_r, model_R)
@@ -448,7 +329,7 @@ def likelihood_LOS(model, vlos, *, mass_bin=None):
             mass_bin = model.nms - 1
 
     # Convert model units
-    model_r = pc2arcsec(model.r, model.d)
+    model_r = util.pc2arcsec(model.r, model.d)
     model_LOS = np.sqrt(model.v2pj[mass_bin])
 
     # Build asymmetric error, if exists
@@ -472,8 +353,8 @@ def likelihood_mass_func(model, mf):
         # we only want to use the obs data for this r bin
         r_mask = (mf['bin'] == annulus_ind)
 
-        r1 = as2pc(60 * 0.4 * annulus_ind, model.d)
-        r2 = as2pc(60 * 0.4 * (annulus_ind + 1), model.d)
+        r1 = util.as2pc(60 * 0.4 * annulus_ind, model.d)
+        r2 = util.as2pc(60 * 0.4 * (annulus_ind + 1), model.d)
 
         # Get a binned version of N_model (an Nstars for each mbin)
         binned_N_model = np.empty(model.nms)
@@ -542,7 +423,7 @@ def determine_components(obs):
 
             mdata = obs.mdata['μ'], (obs.mdata['b'], obs.mdata['l'])
 
-            comps.append((key, likelihood_pulsar, pulsar_Pdot_KDE(), *mdata))
+            comps.append((key, likelihood_pulsar, util.pulsar_Pdot_KDE(), *mdata))
 
         elif fnmatch.fnmatch(key, '*velocity_dispersion*'):
             comps.append((key, likelihood_LOS, ))
