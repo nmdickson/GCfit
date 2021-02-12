@@ -37,8 +37,11 @@ DEFAULT_INITIALS = {
 class Variable(u.Quantity):
     '''simple readonly Quantity subclass to allow metadata on the variable
     '''
+    # TODO better way to handle string arrays, and with nicer method failures
     # TODO the "readonly" part of Variable is currently not functional
     def __new__(cls, value, unit=None, mdata=None, *args, **kwargs):
+
+        is_str = value.dtype.kind in 'US'
 
         # If unit is None, look for unit in mdata then assume dimensionless
         if unit is None and mdata is not None:
@@ -48,16 +51,26 @@ class Variable(u.Quantity):
                 pass
 
         if unit is not None:
+
+            if is_str:
+                raise ValueError("value is array of strings, cannot have unit")
+
             unit = u.Unit(unit)
 
+        # If value is already a quantity, ensure its compatible with given unit
         if isinstance(value, u.Quantity):
             if unit is not None and unit is not value.unit:
                 value = value.to(unit)
 
             unit = value.unit
 
-        quant = super().__new__(cls, value, unit, *args, **kwargs)
+        # Create the parent object (usually quantity, except if is string)
+        if not is_str:
+            quant = super().__new__(cls, value, unit, *args, **kwargs)
+        else:
+            quant = np.asarray(value, *args, **kwargs).view(cls)
 
+        # Store the metadata
         if isinstance(mdata, dict):
             quant.mdata = mdata
         elif mdata is None:
@@ -113,7 +126,7 @@ class Dataset:
 
         if isinstance(var, h5py.Dataset):
             mdata = dict(var.attrs)
-            self._dict_variables[name] = self.Variable(var[:], mdata=mdata)
+            self._dict_variables[name] = Variable(var[:], mdata=mdata)
 
     def __init__(self, group):
 
