@@ -3,6 +3,7 @@
 import h5py
 import numpy as np
 import limepy as lp
+from astropy import units as u
 from ssptools import evolve_mf_3 as emf3
 
 import logging
@@ -33,6 +34,66 @@ DEFAULT_INITIALS = {
 # --------------------------------------------------------------------------
 
 
+class Variable(u.Quantity):
+    '''simple readonly Quantity subclass to allow metadata on the variable
+    '''
+    # TODO the "readonly" part of Variable is currently not functional
+    def __new__(cls, value, unit=None, mdata=None, *args, **kwargs):
+
+        # If unit is None, look for unit in mdata then assume dimensionless
+        if unit is None and mdata is not None:
+            try:
+                unit = mdata['unit']
+            except KeyError:
+                pass
+
+        if unit is not None:
+            unit = u.Unit(unit)
+
+        if isinstance(value, u.Quantity):
+            if unit is not None and unit is not value.unit:
+                value = value.to(unit)
+
+            unit = value.unit
+
+        quant = super().__new__(cls, value, unit, *args, **kwargs)
+
+        if isinstance(mdata, dict):
+            quant.mdata = mdata
+        elif mdata is None:
+            quant.mdata = dict()
+        else:
+            raise TypeError('`mdata` must be a dict or None')
+
+        # quant.flags.writeable = False
+
+        return quant
+
+    def __array_finalize__(self, obj):
+
+        if obj is None:
+            return
+
+        self.mdata = getattr(obj, 'mdata', dict(defaulted=True))
+
+        try:
+
+            if self._unit is None:
+                unit = getattr(obj, '_unit', None)
+                if unit is not None:
+                    self._set_unit(unit)
+
+            if 'info' in obj.__dict__:
+                self.info = obj.info
+
+        except AttributeError:
+            pass
+
+        # nump.arra.view is only one now missing its writeable=False
+        # if obj.flags.writeable is not False:
+        #    self.flags.writeable = False
+
+
 class Dataset:
     '''each group of observations, like mass_function, proper_motions, etc
     init from a h5py group
@@ -40,26 +101,6 @@ class Dataset:
 
     h5py attributes are called metadata here cause that is more descriptive
     '''
-    class Variable(np.ndarray):
-        '''simple readonly subclass to allow metadata dict on the variable'''
-        def __new__(cls, input_array, mdata=None):
-
-            obj = np.asarray(input_array).view(cls)
-
-            if isinstance(mdata, dict):
-                obj.mdata = mdata
-            elif mdata is None:
-                obj.mdata = dict()
-            else:
-                raise TypeError('`mdata` must be a dict or None')
-
-            obj.flags.writeable = False
-
-            return obj
-
-        def __array_finalize__(self, obj):
-            if obj is not None:
-                self.mdata = getattr(obj, 'mdata', dict())
 
     def __contains__(self, key):
         return key in self._dict_variables
@@ -220,7 +261,7 @@ class Model(lp.limepy):
         '''If `key` is not defined in the limepy model, try to get it from θ'''
         return self._theta[key]
 
-    def _init_mf(self, a12=None):
+    def _init_mf(self, a12=None, BHret=None):
 
         m123 = [0.1, 0.5, 1.0, 100]  # Slope breakpoints for imf
         nbin12 = [5, 5, 20]
@@ -290,7 +331,7 @@ class Model(lp.limepy):
         # Get mass function
         # ------------------------------------------------------------------
 
-        self._mf = self._init_mf(self.a1, self.a2, self.a3, self.BHret)
+        self._mf = self._init_mf((self.a1, self.a2, self.a3), self.BHret)
 
         # Set bins that should be empty to empty
         cs = self._mf.Ns[-1] > 10 * self._mf.Nmin
@@ -334,3 +375,9 @@ class Model(lp.limepy):
             project=True,
             verbose=verbose,
         )
+
+
+# EVERYTHING HERE NEEDS TO HAVE ASTROPY UNITS NOW
+# MODEL STUFF PROBABLY EXPLICITLY< SOMEHOW
+# OBS STUFF HOPEFULLY ALL FROM THE mdata
+# MKAE IT A SUBCLASS OF QUNATITY RATHER THAN ARRAY
