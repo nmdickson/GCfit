@@ -272,6 +272,7 @@ class Observations:
 # Cluster Modelled data
 # --------------------------------------------------------------------------
 
+# TODO The units are *very* incomplete in Model (10)
 
 class Model(lp.limepy):
 
@@ -303,14 +304,14 @@ class Model(lp.limepy):
         try:
             FeHe = self.observations.mdata['FeHe']
         except (AttributeError, KeyError):
-            logging.warning("No cluster metallicity stored, reverting to -1.02")
+            logging.warning("No cluster FeHe stored, defaulting to -1.02")
             FeHe = -1.02
 
         # Regulates low mass objects depletion, default -20, 0 for 47 Tuc
         try:
             Ndot = self.observations.mdata['Ndot']
         except (AttributeError, KeyError):
-            logging.warning("No cluster Ndot stored, reverting to 0")
+            logging.warning("No cluster Ndot stored, defaulting to 0")
             Ndot = 0
 
         # Generate the mass function
@@ -327,6 +328,43 @@ class Model(lp.limepy):
             BH_ret_dyn=BH_ret_dyn,
             FeHe=FeHe,
         )
+
+    # def _get_scale(self):
+    #     G_scale, M_scale, R_scale = self._GS, self._MS, self._RS
+
+    def _assign_units(self):
+        # TODO this needs to be much more general
+        #   Right now it is only applied to those params we use in likelihoods?
+        #   Also the actualy units used are being set manually
+
+        # TODO I have no idea how the scaling is supposed to work in limepy
+
+        if not self.scale:
+            return
+
+        G_units = u.Unit('(pc km2) / (s2 Msun)')
+        R_units = u.pc
+        M_units = u.Msun
+        V2_units = G_units * M_units / R_units
+
+        self.G *= G_units
+
+        self.M *= M_units
+        self.mj *= M_units
+        self.mc *= M_units
+
+        self.r *= R_units
+        self.rh *= R_units
+        self.rt *= R_units
+        self.ra *= R_units
+
+        self.v2Tj *= V2_units
+        self.v2Rj *= V2_units
+        self.v2pj *= V2_units
+
+        # self.Sigmaj *= (M_units / R_units**2)
+
+        self.d *= u.kpc
 
     def __init__(self, theta, observations=None, *, verbose=False):
 
@@ -394,8 +432,8 @@ class Model(lp.limepy):
             verbose=verbose,
         )
 
+        # ------------------------------------------------------------------
+        # Assign units
+        # ------------------------------------------------------------------
 
-# EVERYTHING HERE NEEDS TO HAVE ASTROPY UNITS NOW
-# MODEL STUFF PROBABLY EXPLICITLY< SOMEHOW
-# OBS STUFF HOPEFULLY ALL FROM THE mdata
-# MKAE IT A SUBCLASS OF QUNATITY RATHER THAN ARRAY
+        self._assign_units()
