@@ -68,7 +68,7 @@ def likelihood_pulsar(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         # Compute the cluster component distribution of Pdot, from the model
         # ------------------------------------------------------------------
 
-        a_domain, Pdot_c_prob = vec_Paz(model, R, mass_bin, logged=True)
+        a_domain, Pdot_c_prob = vec_Paz(model, R, mass_bin, logspaced=True)
         Pdot_domain = P * a_domain / c.value
 
         # linear to avoid effects around asymptote
@@ -190,7 +190,7 @@ def likelihood_number_density(model, ndensity, *, mass_bin=None):
     obs_Σ = ndensity['Σ'][valid]
     obs_err = ndensity['ΔΣ'][valid]
 
-    # TODO the model Sigma is in /pc^2, and is not being converted to match obs
+    # TODO the model Sigma is in /pc^2, and is not being converted to match obs?
     model_r = model.r.to(u.arcmin, util.angular_width(model.d))
     model_Σ = (model.Sigmaj[mass_bin] / model.mj[mass_bin])
 

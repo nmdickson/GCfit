@@ -1,29 +1,25 @@
 import numpy as np
-from scipy.interpolate import interp1d, UnivariateSpline
+import astropy.units as u
+from scipy.interpolate import UnivariateSpline
 
 
 # TODO vectorize this along pulsar R's as well
 
-def vec_Paz(model, R, mass_bin, *, logged=False):
+def vec_Paz(model, R, mass_bin, *, logspaced=False):
     """ 
     Computes probability distribution for a range of line of sight
     accelerations at projected R : P(az|R)
     Returns the an array containing the probability distribution.
 
-    `logged` uses a logspace for the acceleration domain, rather than linear
+    `logspaced` uses a logspace for the acceleration domain, rather than linear
+
+    Unfortuneately it's not completely general wrt Quantities vs arrays, as the
+    UnivariateSpline class does not yet support units, so they must be added
+    manually in some spots. Also expects model to come from `data`, with units
     """
-
-    # Assumes units of az [m/s^2] if model.G == 0.004302, else models units
-    # Conversion factor from [pc (km/s)^2/Msun] -> [m/s^2]
-    az_fac = 1.0 / 3.0857e10 if (model.G == 0.004302) else 1
-
-    # This flag will be set to false in the case of an interpolation error,
-    # we will then ignore that point and not append to the list.
-    append = True
 
     if R > model.rt:
         raise ValueError(f"Pulsar position outside cluster bound ({model.rt})")
-        # return
 
     nz = model.nstep
 
@@ -38,13 +34,13 @@ def vec_Paz(model, R, mass_bin, *, logged=False):
     r = np.sqrt(R ** 2 + z ** 2)
 
     # Spline for enclosed mass
-    spl_Mr = UnivariateSpline(model.r, model.mc, s=0, ext=1)
+    Mr = UnivariateSpline(model.r, model.mc, s=0, ext=1)(r) * model.mc.unit
 
     # LOS acceleration calculation
-    az = model.G * spl_Mr(r) * z / r ** 3
+    az = model.G * Mr * z / r ** 3
 
     # convert to [m/s^2]
-    az *= az_fac
+    az = az.to(u.Unit('m/s^2'))
 
     # Spline for LOS acceleration
     # 4th order, as k=2 derivatives cannot find roots
@@ -52,7 +48,7 @@ def vec_Paz(model, R, mass_bin, *, logged=False):
     az_der = az_spl.derivative()
 
     # Location of the maximum acceleration along this los
-    zmax = az_der.roots()
+    zmax = az_der.roots() * z.unit
 
     # Acceleration at zt
     azt = az[-1]
@@ -102,38 +98,39 @@ def vec_Paz(model, R, mass_bin, *, logged=False):
         z1_spl = UnivariateSpline(az_spl(z1), z1, k=k, s=0, ext=1)
 
     # Value of the maximum acceleration, at the chosen root
-    azmax = az_spl(zmax)
+    azmax = az_spl(zmax) * az.unit
 
     # define the acceleration space domain, based on amax
-    # TODO this (especially with logged) requires care to ensure its normalized
+    # TODO this (especially w/ logspaced) requires care to ensure its normalized
 
-    bound = azmax + 5e-9
-    if logged:
-        az_domain = np.geomspace(5e-11, bound, int(bound / 15e-9 * 150))
+    bound = azmax + (5e-9 * az.unit)
+    num = int(bound.value / 15e-9 * 150)
+    if logspaced:
+        az_domain = np.geomspace(5e-11 * az.unit, bound, num)
     else:
-        az_domain = np.linspace(5e-11, bound, int(bound / 15e-9 * 150))
+        az_domain = np.linspace(5e-11 * az.unit, bound, num)
 
     # All invalid acceleratoin space (outside azmax) will have probability = 0
 
-    Paz_dist = np.zeros_like(az_domain)
+    Paz_dist = np.zeros(az_domain.shape) * u.dimensionless_unscaled
 
     within_max = np.where(az_domain < azmax)
 
     # TODO look at the old new_Paz to get the comments for this stuff
 
-    z1 = np.maximum(z1_spl(az_domain[within_max]), z[0])
+    z1 = np.maximum(z1_spl(az_domain[within_max]) * z1.unit, z[0])
 
     Paz = rhoz_spl(z1) / abs(az_der(z1))
 
     outside_azt = np.where(az_domain[within_max] > azt)
 
-    z2 = z2_spl(az_domain[within_max][outside_azt])
+    z2 = z2_spl(az_domain[within_max][outside_azt]) * z2.unit
 
     within_bounds = np.where(z2 < zt)
 
     Paz[outside_azt][within_bounds] += rhoz_spl(z2[within_bounds]) / abs(az_der(z2[within_bounds]))
 
-    Paz[outside_azt][within_bounds] /= rhoz_spl.integral(0., zt)
+    Paz[outside_azt][within_bounds] /= rhoz_spl.integral(0., zt.value)
 
     Paz_dist[within_max] = Paz
 
