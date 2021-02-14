@@ -41,6 +41,8 @@ class Variable(u.Quantity):
     # TODO the "readonly" part of Variable is currently not functional
     def __new__(cls, value, unit=None, mdata=None, *args, **kwargs):
 
+        value = np.asanyarray(value)
+
         is_str = value.dtype.kind in 'US'
 
         # If unit is None, look for unit in mdata then assume dimensionless
@@ -105,6 +107,9 @@ class Variable(u.Quantity):
         # nump.arra.view is only one now missing its writeable=False
         # if obj.flags.writeable is not False:
         #    self.flags.writeable = False
+
+    def __quantity_subclass__(self, unit):
+        return type(self), True
 
 
 class Dataset:
