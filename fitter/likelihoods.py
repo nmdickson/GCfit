@@ -13,6 +13,7 @@ import fnmatch
 
 
 # TODO standardize which interpolation funciton we're using, 3 are in play rn
+# TODO look into just using `u.set_enabled_equivalencies`
 
 
 # --------------------------------------------------------------------------
@@ -185,15 +186,16 @@ def likelihood_number_density(model, ndensity, *, mass_bin=None):
     # Set cutoff to avoid fitting flat end of data
     valid = (ndensity['Σ'] > 0.1)
 
+    obs_r = ndensity['r'][valid]
     obs_Σ = ndensity['Σ'][valid]
     obs_err = ndensity['ΔΣ'][valid]
 
+    # TODO the model Sigma is in /pc^2, and is not being converted to match obs
+    model_r = model.r.to(u.arcmin, util.angular_width(model.d))
+    model_Σ = (model.Sigmaj[mass_bin] / model.mj[mass_bin])
+
     # Interpolated the model data at the measurement locations
-    # TODO look into just using `u.set_enabled_equivalencies`
-    interpolated = np.interp(
-        ndensity['r'][valid], model.r.to(u.arcmin, util.angular_width(model.d)),
-        model.Sigmaj[mass_bin] / model.mj[mass_bin],
-    )
+    interpolated = np.interp(obs_r, model_r, model_Σ,)
 
     # K Scaling Factor
 
