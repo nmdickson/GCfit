@@ -265,6 +265,7 @@ class Observations:
                     logging.info("No initial state stored, using defaults")
                     pass
 
+                # TODO need a way to read units for some mdata from file
                 self.mdata = dict(file.attrs)
 
 

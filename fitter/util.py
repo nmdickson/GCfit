@@ -61,7 +61,6 @@ def RV_transform(domain, f_X, h, h_prime):
     return np.nan_to_num(f_Y)
 
 
-# TODO add astropy "require units" decorator to this (and any other relevant)
 def galactic_pot(lat, lon, D):
     '''b, l, d'''
     import gala.potential as pot
@@ -91,7 +90,7 @@ def galactic_pot(lat, lon, D):
     # PdotP_LOS = np.dot(PdotP, LOS) / np.linalg.norm(LOS)
     PdotP_LOS = np.einsum('i...,i...->...', PdotP, LOS) / np.linalg.norm(LOS)
 
-    return PdotP_LOS
+    return PdotP_LOS.decompose()
 
 
 def pulsar_Pdot_KDE(*, pulsar_db='field_msp.dat', corrected=True):

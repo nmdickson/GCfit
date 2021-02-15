@@ -21,8 +21,8 @@ import fnmatch
 # --------------------------------------------------------------------------
 
 
-def likelihood_pulsar(model, pulsars, Pdot_kde, cluster_μ, coords, *,
-                      mass_bin=None):
+def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
+                           mass_bin=None):
 
     # ----------------------------------------------------------------------
     # Get the pulsar P-Pdot_int kde
@@ -69,7 +69,7 @@ def likelihood_pulsar(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         # ------------------------------------------------------------------
 
         a_domain, Pdot_c_prob = vec_Paz(model, R, mass_bin, logspaced=True)
-        Pdot_domain = P * a_domain / c
+        Pdot_domain = (P * a_domain / c).decompose()
 
         # linear to avoid effects around asymptote
         Pdot_c_spl = interp.UnivariateSpline(
@@ -148,13 +148,12 @@ def likelihood_pulsar(model, pulsars, Pdot_kde, cluster_μ, coords, *,
 
         D = model.d.to('m')
 
-        PdotP_pm = pm**2 * D / c
+        PdotP_pm = (pm**2 * D / c).decompose()
 
         # ------------------------------------------------------------------
         # Compute the galactic potential component
         # ------------------------------------------------------------------
 
-        # TODO cahnge everything to use units
         PdotP_gal = util.galactic_pot(*(coords * u.deg), D=model.d)
 
         # ------------------------------------------------------------------
@@ -166,7 +165,103 @@ def likelihood_pulsar(model, pulsars, Pdot_kde, cluster_μ, coords, *,
             assume_sorted=True, bounds_error=False, fill_value=0.0
         )
 
-        probs[i] = prob_dist(Pdot_meas / P)
+        probs[i] = prob_dist((Pdot_meas / P).decompose())
+
+    # ----------------------------------------------------------------------
+    # Multiply all the probabilities and return the total log probability.
+    # ----------------------------------------------------------------------
+
+    return np.sum(np.log(probs))
+
+
+def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
+                              mass_bin=None):
+    '''
+    Like isolated pulsar, but using binary orbit timings rather than
+    pulsar timings
+    '''
+
+    # ----------------------------------------------------------------------
+    # Get pulsar mass bins
+    # ----------------------------------------------------------------------
+
+    if mass_bin is None:
+        if 'm' in pulsars.mdata:
+            mass_bin = np.where(model.mj == pulsars.mdata['m'] * u.Msun)[0][0]
+        else:
+            logging.debug("No mass bin provided for pulsars, using -1")
+            mass_bin = -1
+
+    # ----------------------------------------------------------------------
+    # Iterate over all pulsars
+    # ----------------------------------------------------------------------
+
+    N = pulsars['r'].size
+    probs = np.zeros(N)
+
+    for i in range(N):
+
+        # ------------------------------------------------------------------
+        # Get this pulsars necessary data
+        # ------------------------------------------------------------------
+
+        R = pulsars['r'][i]
+
+        Pb = pulsars['Pb'][i]
+
+        Pbdot_meas = pulsars['Pbdot_meas'][i]
+        ΔPbdot_meas = pulsars['ΔPbdot_meas'][i]
+
+        # ------------------------------------------------------------------
+        # Compute the cluster component distribution of Pdot, from the model
+        # ------------------------------------------------------------------
+
+        a_domain, Pdot_c_prob = vec_Paz(model, R, mass_bin, logspaced=True)
+        Pdot_domain = (Pb * a_domain / c).decompose()
+
+        # ------------------------------------------------------------------
+        # Compute gaussian measurement error distribution
+        # ------------------------------------------------------------------
+
+        err = util.gaussian(x=Pdot_domain, sigma=ΔPbdot_meas, mu=0)
+
+        # ------------------------------------------------------------------
+        # Convolve the different distributions
+        # ------------------------------------------------------------------
+
+        conv = np.convolve(err, Pdot_c_prob, 'same')
+
+        # Normalize
+        conv /= interp.UnivariateSpline(
+            Pdot_domain, conv, k=3, s=0, ext=1
+        ).integral(-np.inf, np.inf)
+
+        # ------------------------------------------------------------------
+        # Compute the Shklovskii (proper motion) effect component
+        # ------------------------------------------------------------------
+
+        pm = (cluster_μ * u.Unit("mas/yr")).to("1/s", u.dimensionless_angles())
+
+        D = model.d.to('m')
+
+        PdotP_pm = (pm**2 * D / c).decompose()
+
+        # ------------------------------------------------------------------
+        # Compute the galactic potential component
+        # ------------------------------------------------------------------
+
+        PdotP_gal = util.galactic_pot(*(coords * u.deg), D=model.d)
+
+        # ------------------------------------------------------------------
+        # Interpolate the likelihood value from the overall distribution
+        # ------------------------------------------------------------------
+
+        prob_dist = interp.interp1d(
+            (Pdot_domain / Pb) + PdotP_pm + PdotP_gal, conv,
+            assume_sorted=True, bounds_error=False, fill_value=0.0
+        )
+
+        probs[i] = prob_dist(Pbdot_meas / Pb)
 
     # ----------------------------------------------------------------------
     # Multiply all the probabilities and return the total log probability.
@@ -436,20 +531,46 @@ def determine_components(obs):
         # remaining elements are the extra arguments to pass to the function
         # ------------------------------------------------------------------
 
+        # ------------------------------------------------------------------
+        # Pulsar likelihoods
+        # ------------------------------------------------------------------
+
         if fnmatch.fnmatch(key, '*pulsar*'):
 
-            # TODO need a way to read units for mdata from file
             mdata = obs.mdata['μ'], (obs.mdata['b'], obs.mdata['l'])
 
-            comps.append((key, likelihood_pulsar, util.pulsar_Pdot_KDE(), *mdata))
+            if 'Pdot_meas' in obs[key]:
+
+                kde = util.pulsar_Pdot_KDE()
+
+                comps.append((key, likelihood_pulsar_spin, kde, *mdata))
+
+            if 'Pb' in obs[key]:
+
+                comps.append((key, likelihood_pulsar_orbital, *mdata))
+
+        # ------------------------------------------------------------------
+        # Line-of-sight velocity dispersion likelihoods
+        # ------------------------------------------------------------------
 
         elif fnmatch.fnmatch(key, '*velocity_dispersion*'):
+
             comps.append((key, likelihood_LOS, ))
 
+        # ------------------------------------------------------------------
+        # Number density likelihoods
+        # ------------------------------------------------------------------
+
         elif fnmatch.fnmatch(key, '*number_density*'):
+
             comps.append((key, likelihood_number_density, ))
 
+        # ------------------------------------------------------------------
+        # Proper motion dispersion likelihoods
+        # ------------------------------------------------------------------
+
         elif fnmatch.fnmatch(key, '*proper_motion*'):
+
             if 'PM_tot' in obs[key]:
                 comps.append((key, likelihood_pm_tot, ))
 
@@ -462,7 +583,12 @@ def determine_components(obs):
             if 'PM_T' in obs[key]:
                 comps.append((key, likelihood_pm_T, ))
 
+        # ------------------------------------------------------------------
+        # Stellar mass function likelihoods
+        # ------------------------------------------------------------------
+
         elif fnmatch.fnmatch(key, '*mass_function*'):
+
             comps.append((key, likelihood_mass_func, ))
 
     return comps
