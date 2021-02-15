@@ -276,13 +276,12 @@ class Model(lp.limepy):
         '''If `key` is not defined in the limepy model, try to get it from θ'''
         return self._theta[key]
 
-    def _init_mf(self, a12=None, BHret=None):
+    def _init_mf(self):
 
         m123 = [0.1, 0.5, 1.0, 100]  # Slope breakpoints for imf
         nbin12 = [5, 5, 20]
 
-        if a12 is None:
-            a12 = [-self.a1, -self.a2, -self.a3]  # Slopes for imf
+        a12 = [-self.a1, -self.a2, -self.a3]  # Slopes for imf
 
         # Output times for the evolution (age)
         tout = np.array([11000])
@@ -383,7 +382,7 @@ class Model(lp.limepy):
         # Get mass function
         # ------------------------------------------------------------------
 
-        self._mf = self._init_mf((self.a1, self.a2, self.a3), self.BHret)
+        self._mf = self._init_mf()
 
         # Set bins that should be empty to empty
         cs = self._mf.Ns[-1] > 10 * self._mf.Nmin
