@@ -331,11 +331,12 @@ def likelihood_pm_tot(model, pm, *, mass_bin=None):
         else:
             mass_bin = model.nms - 1
 
+    # Get model values
     model_tot = np.sqrt(0.5 * (model.v2Tj[mass_bin] + model.v2Rj[mass_bin]))
 
     # Convert model units
-    model_r = model.r.to(u.arcsec, util.angular_width(model.d))
-    model_tot = model_tot.to(u.mas / u.yr, util.angular_speed(model.d))
+    model_r = model.r.to(pm['r'].unit, util.angular_width(model.d))
+    model_tot = model_tot.to(pm['PM_tot'].unit, util.angular_speed(model.d))
 
     # Build asymmetric error, if exists
     obs_err = pm.build_err('PM_tot', model_r, model_tot)
@@ -358,15 +359,17 @@ def likelihood_pm_ratio(model, pm, *, mass_bin=None):
         else:
             mass_bin = model.nms - 1
 
-    # Convert model units
-    model_r = model.r.to(u.arcsec, util.angular_width(model.d))
+    # Get model values
     model_ratio = np.sqrt(model.v2Tj[mass_bin] / model.v2Rj[mass_bin])
+
+    # Convert model units
+    model_r = model.r.to(pm['r'].unit, util.angular_width(model.d))
 
     # Build asymmetric error, if exists
     obs_err = pm.build_err('PM_ratio', model_r, model_ratio)
 
     # Interpolated model at data locations
-    interpolated = np.interp(pm['r'], model_r, model_ratio)
+    interpolated = np.interp(pm['r'], model_r, model_ratio.decompose())
 
     # Gaussian likelihood
     return -0.5 * np.sum(
@@ -383,11 +386,12 @@ def likelihood_pm_T(model, pm, *, mass_bin=None):
         else:
             mass_bin = model.nms - 1
 
+    # Get model values
     model_T = np.sqrt(model.v2Tj[mass_bin])
 
     # Convert model units
-    model_r = model.r.to(u.arcsec, util.angular_width(model.d))
-    model_T = model_T.to(u.mas / u.yr, util.angular_speed(model.d))
+    model_r = model.r.to(pm['r'].unit, util.angular_width(model.d))
+    model_T = model_T.to(pm['PM_T'].unit, util.angular_speed(model.d))
 
     # Build asymmetric error, if exists
     obs_err = pm.build_err('PM_T', model_r, model_T)
@@ -410,11 +414,12 @@ def likelihood_pm_R(model, pm, *, mass_bin=None):
         else:
             mass_bin = model.nms - 1
 
+    # Get model values
     model_R = np.sqrt(model.v2Rj[mass_bin])
 
     # Convert model units
-    model_r = model.r.to(u.arcsec, util.angular_width(model.d))
-    model_R = model_R.to(u.mas / u.yr, util.angular_speed(model.d))
+    model_r = model.r.to(pm['r'].unit, util.angular_width(model.d))
+    model_R = model_R.to(pm['PM_R'].unit, util.angular_speed(model.d))
 
     # Build asymmetric error, if exists
     obs_err = pm.build_err('PM_R', model_r, model_R)
@@ -437,9 +442,12 @@ def likelihood_LOS(model, vlos, *, mass_bin=None):
         else:
             mass_bin = model.nms - 1
 
-    # Convert model units
-    model_r = model.r.to(u.arcsec, util.angular_width(model.d))
+    # Get model values
     model_LOS = np.sqrt(model.v2pj[mass_bin])
+
+    # Convert model units
+    model_r = model.r.to(vlos['r'].unit, util.angular_width(model.d))
+    model_LOS = model_LOS.to(vlos['σ'].unit, util.angular_speed(model.d))
 
     # Build asymmetric error, if exists
     obs_err = vlos.build_err('σ', model_r, model_LOS)
@@ -463,8 +471,11 @@ def likelihood_mass_func(model, mf):
         # we only want to use the obs data for this r bin
         r_mask = (mf['bin'] == annulus_ind)
 
-        r1 = 0.4 * annulus_ind.to(u.arcsec, util.angular_width(model.d))
-        r2 = 0.4 * (annulus_ind + 1).to(u.arcsec, util.angular_width(model.d))
+        r1 = ((0.4 * annulus_ind) * u.arcmin)
+        r1 = r1.to(model.r.unit, util.angular_width(model.d))
+
+        r2 = (0.4 * (annulus_ind + 1)) * u.arcmin
+        r2 = r2.to(model.r.unit, util.angular_width(model.d))
 
         # Get a binned version of N_model (an Nstars for each mbin)
         binned_N_model = np.empty(model.nms)
