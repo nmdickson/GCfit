@@ -61,6 +61,7 @@ def RV_transform(domain, f_X, h, h_prime):
     return np.nan_to_num(f_Y)
 
 
+# TODO add astropy "require units" decorator to this (and any other relevant)
 def galactic_pot(lat, lon, D):
     '''b, l, d'''
     import gala.potential as pot
@@ -70,17 +71,14 @@ def galactic_pot(lat, lon, D):
     # Mikly Way Potential
     mw = pot.BovyMWPotential2014()
 
-    # TODO chck that these dont already have units (or maybe require them first)
     # Pulsar position in galactocentric coordinates
-    b_pulsar, l_pulsar, D_pulsar = lat * u.deg, lon * u.deg, D * u.kpc
-
-    crd = SkyCoord(b=b_pulsar, l=l_pulsar, distance=D_pulsar, frame='galactic')
+    crd = SkyCoord(b=lat, l=lon, distance=D, frame='galactic')
     XYZ = crd.galactocentric.cartesian.xyz
 
     # Sun position in galactocentric coordinates
-    b_sun = np.zeros_like(lat) * u.deg
-    l_sun = np.zeros_like(lon) * u.deg
-    D_sun = np.zeros_like(D) * u.kpc
+    b_sun = np.zeros_like(lat)
+    l_sun = np.zeros_like(lon)
+    D_sun = np.zeros_like(D)
 
     # TODO the transformations are kinda slow, and are prob uneccessary here
     sun = SkyCoord(b=b_sun, l=l_sun, distance=D_sun, frame='galactic')
@@ -109,7 +107,7 @@ def pulsar_Pdot_KDE(*, pulsar_db='field_msp.dat', corrected=True):
 
     # Compute and remove the galactic contribution from the PM corrected Pdot
     # TODO dont use value, make everything else be units
-    Pdot_int = Pdot_pm - galactic_pot(lat, lon, D).value
+    Pdot_int = Pdot_pm - galactic_pot(*(lat, lon) * u.deg, D * u.kpc).value
 
     P = np.log10(P)
     Pdot_int = np.log10(Pdot_int)

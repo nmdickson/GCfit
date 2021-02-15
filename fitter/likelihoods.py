@@ -39,7 +39,7 @@ def likelihood_pulsar(model, pulsars, Pdot_kde, cluster_μ, coords, *,
 
     if mass_bin is None:
         if 'm' in pulsars.mdata:
-            mass_bin = np.where(model.mj == pulsars.mdata['m'])[0][0]
+            mass_bin = np.where(model.mj == pulsars.mdata['m'] * u.Msun)[0][0]
         else:
             logging.debug("No mass bin provided for pulsars, using -1")
             mass_bin = -1
@@ -69,7 +69,7 @@ def likelihood_pulsar(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         # ------------------------------------------------------------------
 
         a_domain, Pdot_c_prob = vec_Paz(model, R, mass_bin, logspaced=True)
-        Pdot_domain = P * a_domain / c.value
+        Pdot_domain = P * a_domain / c
 
         # linear to avoid effects around asymptote
         Pdot_c_spl = interp.UnivariateSpline(
@@ -90,7 +90,7 @@ def likelihood_pulsar(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         # Create a slice of the P-Pdot space, along this pulsars P
         # ------------------------------------------------------------------
 
-        lg_P = np.log10(P)
+        lg_P = np.log10(P / P.unit)
 
         P_grid, Pdot_int_domain = np.mgrid[lg_P:lg_P:1j, Pdot_min:Pdot_max:200j]
 
@@ -144,18 +144,18 @@ def likelihood_pulsar(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         # Compute the Shklovskii (proper motion) effect component
         # ------------------------------------------------------------------
 
-        pm = cluster_μ * 4.84e-9 / 31557600  # mas/yr -> rad/s
+        pm = (cluster_μ * u.Unit("mas/yr")).to("1/s", u.dimensionless_angles())
 
-        D = model.d / 3.24078e-20  # kpc -> m
+        D = model.d.to('m')
 
-        PdotP_pm = pm**2 * D / c.value
+        PdotP_pm = pm**2 * D / c
 
         # ------------------------------------------------------------------
         # Compute the galactic potential component
         # ------------------------------------------------------------------
 
         # TODO cahnge everything to use units
-        PdotP_gal = util.galactic_pot(*coords, model.d).value
+        PdotP_gal = util.galactic_pot(*(coords * u.deg), D=model.d)
 
         # ------------------------------------------------------------------
         # Interpolate the likelihood value from the overall distribution
@@ -176,26 +176,27 @@ def likelihood_pulsar(model, pulsars, Pdot_kde, cluster_μ, coords, *,
 
 
 def likelihood_number_density(model, ndensity, *, mass_bin=None):
+    # TODO the units are all messed up on this one, simply being ignored
 
     if mass_bin is None:
         if 'm' in ndensity.mdata:
-            mass_bin = np.where(model.mj == ndensity.mdata['m'])[0][0]
+            mass_bin = np.where(model.mj == ndensity.mdata['m'] * u.Msun)[0][0]
         else:
             mass_bin = model.nms - 1
 
     # Set cutoff to avoid fitting flat end of data
-    valid = (ndensity['Σ'] > 0.1)
+    valid = (ndensity['Σ'].value > 0.1)
 
     obs_r = ndensity['r'][valid]
-    obs_Σ = ndensity['Σ'][valid]
-    obs_err = ndensity['ΔΣ'][valid]
+    obs_Σ = ndensity['Σ'][valid].value
+    obs_err = ndensity['ΔΣ'][valid].value
 
     # TODO the model Sigma is in /pc^2, and is not being converted to match obs?
     model_r = model.r.to(u.arcmin, util.angular_width(model.d))
-    model_Σ = (model.Sigmaj[mass_bin] / model.mj[mass_bin])
+    model_Σ = (model.Sigmaj[mass_bin] / model.mj[mass_bin]).value
 
     # Interpolated the model data at the measurement locations
-    interpolated = np.interp(obs_r, model_r, model_Σ,)
+    interpolated = np.interp(obs_r, model_r, model_Σ)
 
     # K Scaling Factor
 
@@ -209,8 +210,8 @@ def likelihood_number_density(model, ndensity, *, mass_bin=None):
     # Divided by sum of model**2 / observed**2
 
     # Calculate scaling factor
-    K = (np.sum(obs_Σ * interpolated / obs_Σ ** 2)
-         / np.sum(interpolated ** 2 / obs_Σ ** 2))
+    K = (np.sum(obs_Σ * interpolated / obs_Σ**2)
+         / np.sum(interpolated**2 / obs_Σ**2))
 
     interpolated *= K
 
@@ -219,11 +220,11 @@ def likelihood_number_density(model, ndensity, *, mass_bin=None):
     # allows us to fit on the data while not worrying too much about the
     # outermost points where background effects are most prominent.
 
-    yerr = np.sqrt(obs_err ** 2 + model.s2)
+    yerr = np.sqrt(obs_err**2 + model.s2)
 
     # Now regular gaussian likelihood
     return -0.5 * np.sum(
-        (obs_Σ - interpolated) ** 2 / yerr ** 2 + np.log(yerr ** 2)
+        (obs_Σ - interpolated)**2 / yerr**2 + np.log(yerr**2)
     )
 
 
@@ -231,7 +232,7 @@ def likelihood_pm_tot(model, pm, *, mass_bin=None):
 
     if mass_bin is None:
         if 'm' in pm.mdata:
-            mass_bin = np.where(model.mj == pm.mdata['m'])[0][0]
+            mass_bin = np.where(model.mj == pm.mdata['m'] * u.Msun)[0][0]
         else:
             mass_bin = model.nms - 1
 
@@ -249,7 +250,8 @@ def likelihood_pm_tot(model, pm, *, mass_bin=None):
 
     # Gaussian likelihood
     return -0.5 * np.sum(
-        (pm['PM_tot'] - interpolated) ** 2 / obs_err ** 2 + np.log(obs_err ** 2)
+        (pm['PM_tot'] - interpolated)**2 / obs_err**2
+        + np.log((obs_err / obs_err.unit)**2)
     )
 
 
@@ -257,7 +259,7 @@ def likelihood_pm_ratio(model, pm, *, mass_bin=None):
 
     if mass_bin is None:
         if 'm' in pm.mdata:
-            mass_bin = np.where(model.mj == pm.mdata['m'])[0][0]
+            mass_bin = np.where(model.mj == pm.mdata['m'] * u.Msun)[0][0]
         else:
             mass_bin = model.nms - 1
 
@@ -273,8 +275,8 @@ def likelihood_pm_ratio(model, pm, *, mass_bin=None):
 
     # Gaussian likelihood
     return -0.5 * np.sum(
-        (pm['PM_ratio'] - interpolated) ** 2 / obs_err ** 2
-        + np.log(obs_err ** 2)
+        (pm['PM_ratio'] - interpolated)**2 / obs_err**2
+        + np.log((obs_err / obs_err.unit)**2)
     )
 
 
@@ -282,7 +284,7 @@ def likelihood_pm_T(model, pm, *, mass_bin=None):
 
     if mass_bin is None:
         if 'm' in pm.mdata:
-            mass_bin = np.where(model.mj == pm.mdata['m'])[0][0]
+            mass_bin = np.where(model.mj == pm.mdata['m'] * u.Msun)[0][0]
         else:
             mass_bin = model.nms - 1
 
@@ -300,7 +302,8 @@ def likelihood_pm_T(model, pm, *, mass_bin=None):
 
     # Gaussian likelihood
     return -0.5 * np.sum(
-        (pm['PM_T'] - interpolated) ** 2 / obs_err ** 2 + np.log(obs_err ** 2)
+        (pm['PM_T'] - interpolated)**2 / obs_err**2
+        + np.log((obs_err / obs_err.unit)**2)
     )
 
 
@@ -308,7 +311,7 @@ def likelihood_pm_R(model, pm, *, mass_bin=None):
 
     if mass_bin is None:
         if 'm' in pm.mdata:
-            mass_bin = np.where(model.mj == pm.mdata['m'])[0][0]
+            mass_bin = np.where(model.mj == pm.mdata['m'] * u.Msun)[0][0]
         else:
             mass_bin = model.nms - 1
 
@@ -326,7 +329,8 @@ def likelihood_pm_R(model, pm, *, mass_bin=None):
 
     # Gaussian likelihood
     return -0.5 * np.sum(
-        (pm['PM_R'] - interpolated) ** 2 / obs_err ** 2 + np.log(obs_err ** 2)
+        (pm['PM_R'] - interpolated)**2 / obs_err**2
+        + np.log((obs_err / obs_err.unit)**2)
     )
 
 
@@ -334,7 +338,7 @@ def likelihood_LOS(model, vlos, *, mass_bin=None):
 
     if mass_bin is None:
         if 'm' in vlos.mdata:
-            mass_bin = np.where(model.mj == vlos.mdata['m'])[0][0]
+            mass_bin = np.where(model.mj == vlos.mdata['m'] * u.Msun)[0][0]
         else:
             mass_bin = model.nms - 1
 
@@ -350,7 +354,8 @@ def likelihood_LOS(model, vlos, *, mass_bin=None):
 
     # Gaussian likelihood
     return -0.5 * np.sum(
-        (vlos['σ'] - interpolated) ** 2 / obs_err ** 2 + np.log(obs_err ** 2)
+        (vlos['σ'] - interpolated)**2 / obs_err**2
+        + np.log((obs_err / obs_err.unit)**2)
     )
 
 
@@ -397,8 +402,9 @@ def likelihood_mass_func(model, mf):
         err = np.sqrt(mf['Δmbin'][r_mask]**2 + (model.F * N_data)**2)
 
         # compute final gaussian log likelihood
-        tot_likelihood += (-0.5 * np.sum((N_data - N_model)**2
-                                         / err**2 + np.log(err**2)))
+        tot_likelihood += -0.5 * np.sum(
+            (N_data - N_model)**2 / err**2 + np.log((err / err.unit)**2)
+        )
 
     return tot_likelihood
 
@@ -413,6 +419,7 @@ def determine_components(obs):
     and return a dict of the relevant obs dataset keys, and tuples of the
     functions and any other required args
     I really don't love this
+    This should really go in data.Observations, at least
     '''
 
     comps = []
@@ -431,6 +438,7 @@ def determine_components(obs):
 
         if fnmatch.fnmatch(key, '*pulsar*'):
 
+            # TODO need a way to read units for mdata from file
             mdata = obs.mdata['μ'], (obs.mdata['b'], obs.mdata['l'])
 
             comps.append((key, likelihood_pulsar, util.pulsar_Pdot_KDE(), *mdata))
@@ -481,6 +489,12 @@ def log_likelihood(theta, observations, L_components):
 
 # Combines the likelihood with the prior
 def posterior(theta, observations, fixed_initials, L_components):
+    '''
+    theta : array of theta values
+    observations : data.Observations
+    fixed_initials : dict of any theta values to fix
+    L_components : output from determine_components
+    '''
 
     # get a list of variable params, sorted for the unpacking of theta
     variable_params = DEFAULT_INITIALS.keys() - fixed_initials.keys()

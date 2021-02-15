@@ -8,4 +8,4 @@ numpy
 scipy
 h5py
 tqdm
-galpy
+gala
