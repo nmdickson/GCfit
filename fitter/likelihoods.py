@@ -57,7 +57,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         # Get this pulsars necessary data
         # ------------------------------------------------------------------
 
-        R = pulsars['r'][i]
+        R = pulsars['r'][i].to(u.pc, util.angular_width(model.d))
 
         P = pulsars['P'][i]
 
@@ -205,7 +205,7 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
         # Get this pulsars necessary data
         # ------------------------------------------------------------------
 
-        R = pulsars['r'][i]
+        R = pulsars['r'][i].to(u.pc, util.angular_width(model.d))
 
         Pb = pulsars['Pb'][i]
 
