@@ -177,11 +177,6 @@ class Dataset:
 
             return err
 
-    def convert_units(self):
-        # TODO auto unit conversions based on attributes
-        # This makes me dream about something like astropy units
-        pass
-
 
 class Observations:
     '''Collection of Datasets, read from a corresponding hdf5 file (READONLY)'''
