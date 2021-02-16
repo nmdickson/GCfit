@@ -62,7 +62,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         P = pulsars['P'][i]
 
         Pdot_meas = pulsars['Pdot_meas'][i]
-        ΔPdot_meas = pulsars['ΔPdot_meas'][i]
+        ΔPdot_meas = np.abs(pulsars['ΔPdot_meas'][i])
 
         # ------------------------------------------------------------------
         # Compute the cluster component distribution of Pdot, from the model
@@ -125,7 +125,9 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         #   Both balanced so as to use way too much memory uneccessarily
         #   Must be symmetric, to avoid bound effects
 
-        lin_domain = np.linspace(-1e-18, 1e-18, 5_000)
+        # mirrored/starting at zero so very small gaussians become the δ-func
+        lin_domain = np.linspace(0, 1e-18, 5_000 // 2)
+        lin_domain = np.concatenate((np.flip(-lin_domain[1:]), lin_domain))
 
         # ------------------------------------------------------------------
         # Convolve the different distributions
@@ -171,7 +173,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
     # Multiply all the probabilities and return the total log probability.
     # ----------------------------------------------------------------------
 
-    return np.sum(np.log(probs))
+    return np.sum(np.nan_to_num(np.log(probs)))
 
 
 def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
@@ -520,7 +522,7 @@ def likelihood_mass_func(model, mf):
 # Composite likelihood functions
 # --------------------------------------------------------------------------
 
-
+# TODO MOVE THIS TO OBESRVATIONS
 def determine_components(obs):
     '''from observations, determine which likelihood functions will be computed
     and return a dict of the relevant obs dataset keys, and tuples of the
