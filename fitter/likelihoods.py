@@ -463,6 +463,7 @@ def likelihood_LOS(model, vlos, *, mass_bin=None):
 
 
 def likelihood_mass_func(model, mf):
+    # TODO the units in mf are messy, due to all the interpolations
 
     tot_likelihood = 0
 
@@ -489,8 +490,8 @@ def likelihood_mass_func(model, mf):
 
             # Convert density spline into Nstars
             binned_N_model[mbin_ind] = (
-                integ.quad(density, r1, r2)[0]
-                / (model.mj[mbin_ind] * model.mes_widths[mbin_ind])
+                integ.quad(density, r1.value, r2.value)[0]
+                / (model.mj[mbin_ind] * model.mes_widths[mbin_ind]).value
             )
 
         # interpolate a func N_model = f(mean mass) from the binned N_model
@@ -502,7 +503,7 @@ def likelihood_mass_func(model, mf):
 
         # Grab the N_data (adjusted by width to get an average
         #                   dr of a bin (like average-interpolating almost))
-        N_data = (mf['N'][r_mask] / mf['mbin_width'][r_mask])
+        N_data = (mf['N'][r_mask] / mf['mbin_width'][r_mask]).value
 
         # Compute δN_model from poisson error, and nuisance factor
         err = np.sqrt(mf['Δmbin'][r_mask]**2 + (model.F * N_data)**2)
