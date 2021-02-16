@@ -19,18 +19,18 @@ CONTACT_EMAIL = 'ndickson@ap.smu.ca'
 # Installation information
 # TODO This is not the right way to get ssptools, currently need to dload first
 REQUIRED = [
-    "corner"
-    "astro-limepy"
-    "astropy"
-    "emcee"
-    "ssptools"
-    "schwimmbad"
-    "matplotlib"
-    "numpy"
-    "scipy"
-    "h5py"
-    "tqdm"
-    "gala"
+    "corner",
+    "astro-limepy",
+    "astropy",
+    "emcee",
+    "ssptools",
+    "schwimmbad",
+    "matplotlib",
+    "numpy",
+    "scipy",
+    "h5py",
+    "tqdm",
+    "gala",
 ]
 
 REQUIRES_PYTHON = '>=3.7'
