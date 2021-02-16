@@ -18,9 +18,21 @@ CONTACT_EMAIL = 'ndickson@ap.smu.ca'
 
 # Installation information
 # TODO This is not the right way to get ssptools, currently need to dload first
-# TODO should read this from requirements.txt preferably
-REQUIRED = ['corner', 'astro-limepy', 'emcee', 'ssptools', 'schwimmbad',
-            'matplotlib', 'numpy', 'scipy', 'h5py', 'tqdm']
+REQUIRED = [
+    "corner"
+    "astro-limepy"
+    "astropy"
+    "emcee"
+    "ssptools"
+    "schwimmbad"
+    "matplotlib"
+    "numpy"
+    "scipy"
+    "h5py"
+    "tqdm"
+    "gala"
+]
+
 REQUIRES_PYTHON = '>=3.7'
 
 # setup parameters
