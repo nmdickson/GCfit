@@ -1,5 +1,6 @@
 corner
 astro-limepy
+astropy
 emcee
 ssptools
 schwimmbad
