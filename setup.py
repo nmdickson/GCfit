@@ -42,6 +42,6 @@ setuptools.setup(
 
     include_package_data=True,
     package_data={
-        "fitter": ["resources/*.hdf5"]
+        "fitter": ["resources/*.hdf5", "resources/*msp.dat"]
     },
 )
