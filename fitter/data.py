@@ -149,12 +149,30 @@ class Dataset:
         varname is the variable we want to get the error for
         quantity is the actual model data we will be comparing this with
 
-        model_r, _val must be in the right units already (this may be a
-        temporary requirement) so do the pc2arcsec conversion beforehand pls
+        model_r, _val must be in equivalent units to the var already.
+        conversion will be attempted, but with no equivalencies
         '''
+
+        quantity = self[varname]
+
+        # ------------------------------------------------------------------
+        # Attempt to convert model values
+        # ------------------------------------------------------------------
+
+        model_r = model_r.to(self['r'].unit)
+        model_val = model_r.to(quantity.unit)
+
+        # ------------------------------------------------------------------
+        # If a single homogenous uncertainty exists, return it
+        # ------------------------------------------------------------------
 
         try:
             return self[f'Δ{varname}']
+
+        # ------------------------------------------------------------------
+        # If the uncertainties aren't symmetric, determine which bound to use
+        # based on the models value above or below the quantity
+        # ------------------------------------------------------------------
 
         except KeyError:
 
@@ -166,7 +184,6 @@ class Dataset:
                 mssg = f"There are no error(Δ) values associated with {varname}"
                 raise ValueError(mssg)
 
-            quantity = self[varname]
             err = np.zeros_like(quantity)
 
             model_val = np.interp(self['r'], model_r, model_val)
