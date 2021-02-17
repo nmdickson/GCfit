@@ -1,0 +1,23 @@
+#!/usr/bin/env python3
+
+import fitter.util
+
+import argparse
+
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser(description='Dump GC data file contents')
+
+    parser.add_argument('cluster', help='Common name of the cluster to view')
+
+    parser.add_argument('-a', '--attrs', action='store_true',
+                        help='Dump the attrs of each group/dataset as well')
+
+    parser.add_argument('-s', '--spacing', default='normal',
+                        choices=['normal', 'tight', 'loose'],
+                        help='The spacing of the output ')
+
+    args = parser.parse_args()
+
+    fitter.util.hdf_view(args.cluster, args.attrs, args.spacing)

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+# TODO way outdated, probably just remove it tbh
+
 from fitter import data
 import fitter.visualize as viz
 from fitter.likelihoods import create_model
