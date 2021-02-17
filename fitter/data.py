@@ -295,7 +295,7 @@ class Observations:
         I really don't love this
         This should really go in data.Observations, at least
         '''
-        from . import likelihoods
+        from . import probabilities
 
         comps = []
         for key in self.datasets:
@@ -306,7 +306,7 @@ class Observations:
             # fnmatch is used to properly handle relevant subgroups
             # such as proper_motion/high_mass and etc, where they exist
             #
-            # Some datasets could have multiple likelihoods, depending on what
+            # Some datasets could have multiple probabilities, depending on what
             # variables they contain
             #
             # Each component is a tuple of where the first two elements are,
@@ -315,7 +315,7 @@ class Observations:
             # --------------------------------------------------------------
 
             # --------------------------------------------------------------
-            # Pulsar likelihoods
+            # Pulsar probabilities
             # --------------------------------------------------------------
 
             if fnmatch.fnmatch(key, '*pulsar*'):
@@ -324,7 +324,7 @@ class Observations:
 
                 if 'Pdot_meas' in self[key]:
 
-                    func = likelihoods.likelihood_pulsar_spin
+                    func = probabilities.likelihood_pulsar_spin
 
                     kde = util.pulsar_Pdot_KDE()
 
@@ -332,67 +332,67 @@ class Observations:
 
                 if 'Pb' in self[key]:
 
-                    func = likelihoods.likelihood_pulsar_orbital
+                    func = probabilities.likelihood_pulsar_orbital
 
                     comps.append((key, func, *metadata))
 
             # --------------------------------------------------------------
-            # Line-of-sight velocity dispersion likelihoods
+            # Line-of-sight velocity dispersion probabilities
             # --------------------------------------------------------------
 
             elif fnmatch.fnmatch(key, '*velocity_dispersion*'):
 
-                func = likelihoods.likelihood_LOS
+                func = probabilities.likelihood_LOS
 
                 comps.append((key, func, ))
 
             # --------------------------------------------------------------
-            # Number density likelihoods
+            # Number density probabilities
             # --------------------------------------------------------------
 
             elif fnmatch.fnmatch(key, '*number_density*'):
 
-                func = likelihoods.likelihood_number_density
+                func = probabilities.likelihood_number_density
 
                 comps.append((key, func, ))
 
             # --------------------------------------------------------------
-            # Proper motion dispersion likelihoods
+            # Proper motion dispersion probabilities
             # --------------------------------------------------------------
 
             elif fnmatch.fnmatch(key, '*proper_motion*'):
 
                 if 'PM_tot' in self[key]:
 
-                    func = likelihoods.likelihood_pm_tot
+                    func = probabilities.likelihood_pm_tot
 
                     comps.append((key, func, ))
 
                 if 'PM_ratio' in self[key]:
 
-                    func = likelihoods.likelihood_pm_ratio
+                    func = probabilities.likelihood_pm_ratio
 
                     comps.append((key, func, ))
 
                 if 'PM_R' in self[key]:
 
-                    func = likelihoods.likelihood_pm_R
+                    func = probabilities.likelihood_pm_R
 
                     comps.append((key, func, ))
 
                 if 'PM_T' in self[key]:
 
-                    func = likelihoods.likelihood_pm_T
+                    func = probabilities.likelihood_pm_T
 
                     comps.append((key, func, ))
 
             # --------------------------------------------------------------
-            # Stellar mass function likelihoods
+            # Stellar mass function probabilities
             # --------------------------------------------------------------
 
             elif fnmatch.fnmatch(key, '*mass_function*'):
 
-                func = likelihoods.likelihood_mass_func
+                func = probabilities.likelihood_mass_func
 
                 comps.append((key, func, ))
 

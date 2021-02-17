@@ -9,7 +9,7 @@ import shutil
 import logging
 import pathlib
 
-from .likelihoods import posterior, determine_components
+from .probabilities import posterior
 from .data import Observations, Model
 
 
@@ -54,16 +54,16 @@ def main(cluster, Niters, Nwalkers, Ncpu=2, *,
     logging.debug(f"Observation datasets: {observations}")
 
     # determine which likelihoods to compute (given data and exclusions)
-    L_components = [
+    likelihoods = [
         component for component in observations.valid_likelihoods
         if not (component[0] in excluded_likelihoods
                 or component[1].__name__ in excluded_likelihoods)
     ]
 
     blobs_dtype = [(f'{key}/{func.__qualname__}', float)
-                   for (key, func, *_) in L_components]
+                   for (key, func, *_) in likelihoods]
 
-    logging.debug(f"Likelihood components: {L_components}")
+    logging.debug(f"Likelihood components: {likelihoods}")
 
     # ----------------------------------------------------------------------
     # Initialize the walker positions
@@ -137,7 +137,7 @@ def main(cluster, Niters, Nwalkers, Ncpu=2, *,
             Nwalkers,
             init_pos.shape[-1],
             posterior,
-            args=(observations, fixed_initials, L_components,),
+            args=(observations, fixed_initials, likelihoods,),
             pool=pool,
             backend=backend,
             blobs_dtype=blobs_dtype
