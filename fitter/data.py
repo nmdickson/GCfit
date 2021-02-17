@@ -180,6 +180,7 @@ class Dataset:
 
 class Observations:
     '''Collection of Datasets, read from a corresponding hdf5 file (READONLY)'''
+    # TODO interesting errors occur when trying to iterate over Observ
 
     def __repr__(self):
         return f'Observations(cluster="{self.cluster}")'
