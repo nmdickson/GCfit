@@ -173,7 +173,12 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
     # Multiply all the probabilities and return the total log probability.
     # ----------------------------------------------------------------------
 
-    return np.sum(np.nan_to_num(np.log(probs)))
+    # TODO should a probs of zero or less return a final 0 or -inf?
+
+    logprobs = np.log(probs)
+    logprobs[np.isnan(logprobs)] = np.NINF
+
+    return np.sum(logprobs)
 
 
 def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
@@ -643,7 +648,8 @@ def posterior(theta, observations, fixed_initials, L_components):
     # Update to unions when 3.9 becomes enforced
     theta = dict(zip(params, theta), **fixed_initials)
 
-    # TODO make this prettier
+    # TODO make this prettier,  and maybe output which one failed
+    # Also these ranges will probably have to change a bunch when we expand
     # Prior probability function
     if not (3 < theta['W0'] < 20 and 0.5 < theta['rh'] < 15
             and 0.01 < theta['M'] < 10 and 0 < theta['ra'] < 5
@@ -651,7 +657,7 @@ def posterior(theta, observations, fixed_initials, L_components):
             and 0 < theta['s2'] < 10 and 0.1 < theta['F'] < 0.5
             and -2 < theta['a1'] < 6 and -2 < theta['a2'] < 6
             and -2 < theta['a3'] < 6 and 0 < theta['BHret'] < 100
-            and 4 < theta['d'] < 8):
+            and 2 < theta['d'] < 8):
 
         logging.debug("Theta outside priors domain")
 
