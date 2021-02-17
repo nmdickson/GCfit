@@ -158,7 +158,7 @@ def hdf_view(cluster, attrs=False, spacing='normal', *, outfile="stdout"):
                 for k, v in obj.attrs.items():
                     outstr += f"{tabs}    |- {k}: {v}\n"
 
-                if isinstance(obj, h5py.Dataset):
+                if isinstance(obj, h5py.Dataset) and key != 'initials':
                     outstr += f"{tabs}    |- shape: {obj.shape}\n"
                     outstr += f"{tabs}    |- dtype: {obj.dtype}\n"
 
