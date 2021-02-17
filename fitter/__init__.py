@@ -44,7 +44,7 @@ def main(cluster, Niters, Nwalkers, Ncpu=2, *,
         raise ValueError(f"Cannot access '{outdir}': No such directory")
 
     # ----------------------------------------------------------------------
-    # Load obeservational data, determine which likelihoods are viable
+    # Load obeservational data, determine which likelihoods are valid/desired
     # ----------------------------------------------------------------------
 
     logging.info(f"Loading {cluster} data")
@@ -55,9 +55,9 @@ def main(cluster, Niters, Nwalkers, Ncpu=2, *,
 
     # determine which likelihoods to compute (given data and exclusions)
     L_components = [
-        comp for comp in determine_components(observations)
-        if not (comp[0] in excluded_likelihoods
-                or comp[1].__name__ in excluded_likelihoods)
+        component for component in observations.valid_likelihoods
+        if not (component[0] in excluded_likelihoods
+                or component[1].__name__ in excluded_likelihoods)
     ]
 
     blobs_dtype = [(f'{key}/{func.__qualname__}', float)

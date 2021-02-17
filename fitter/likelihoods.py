@@ -9,11 +9,10 @@ import scipy.integrate as integ
 import scipy.interpolate as interp
 
 import logging
-import fnmatch
 
 
 # TODO standardize which interpolation funciton we're using, 3 are in play rn
-# TODO look into just using `u.set_enabled_equivalencies`
+# TODO look into just using `u.set_enabled_equivalencies` (or put in Model)
 
 
 # --------------------------------------------------------------------------
@@ -527,92 +526,6 @@ def likelihood_mass_func(model, mf):
 # Composite likelihood functions
 # --------------------------------------------------------------------------
 
-# TODO MOVE THIS TO OBESRVATIONS
-def determine_components(obs):
-    '''from observations, determine which likelihood functions will be computed
-    and return a dict of the relevant obs dataset keys, and tuples of the
-    functions and any other required args
-    I really don't love this
-    This should really go in data.Observations, at least
-    '''
-
-    comps = []
-    for key in obs.datasets:
-
-        # ------------------------------------------------------------------
-        # Parse each key to determine if it matches with one of our
-        # likelihood functions.
-        # fnmatch is used to properly handle relevant subgroups
-        # such as proper_motion/high_mass and etc, where they exist
-        #
-        # Each component is a tuple of where the first two elements are,
-        # respectively, the observation key and likelihood function, and all
-        # remaining elements are the extra arguments to pass to the function
-        # ------------------------------------------------------------------
-
-        # ------------------------------------------------------------------
-        # Pulsar likelihoods
-        # ------------------------------------------------------------------
-
-        if fnmatch.fnmatch(key, '*pulsar*'):
-
-            mdata = obs.mdata['μ'], (obs.mdata['b'], obs.mdata['l'])
-
-            if 'Pdot_meas' in obs[key]:
-
-                kde = util.pulsar_Pdot_KDE()
-
-                comps.append((key, likelihood_pulsar_spin, kde, *mdata))
-
-            if 'Pb' in obs[key]:
-
-                comps.append((key, likelihood_pulsar_orbital, *mdata))
-
-        # ------------------------------------------------------------------
-        # Line-of-sight velocity dispersion likelihoods
-        # ------------------------------------------------------------------
-
-        elif fnmatch.fnmatch(key, '*velocity_dispersion*'):
-
-            comps.append((key, likelihood_LOS, ))
-
-        # ------------------------------------------------------------------
-        # Number density likelihoods
-        # ------------------------------------------------------------------
-
-        elif fnmatch.fnmatch(key, '*number_density*'):
-
-            comps.append((key, likelihood_number_density, ))
-
-        # ------------------------------------------------------------------
-        # Proper motion dispersion likelihoods
-        # ------------------------------------------------------------------
-
-        elif fnmatch.fnmatch(key, '*proper_motion*'):
-
-            if 'PM_tot' in obs[key]:
-                comps.append((key, likelihood_pm_tot, ))
-
-            if 'PM_ratio' in obs[key]:
-                comps.append((key, likelihood_pm_ratio, ))
-
-            if 'PM_R' in obs[key]:
-                comps.append((key, likelihood_pm_R, ))
-
-            if 'PM_T' in obs[key]:
-                comps.append((key, likelihood_pm_T, ))
-
-        # ------------------------------------------------------------------
-        # Stellar mass function likelihoods
-        # ------------------------------------------------------------------
-
-        elif fnmatch.fnmatch(key, '*mass_function*'):
-
-            comps.append((key, likelihood_mass_func, ))
-
-    return comps
-
-
 # Main likelihood function, generates the model(theta) passes it to the
 # individual likelihood functions and collects their results.
 def log_likelihood(theta, observations, L_components):
@@ -633,13 +546,19 @@ def log_likelihood(theta, observations, L_components):
 
 
 # Combines the likelihood with the prior
-def posterior(theta, observations, fixed_initials, L_components):
+def posterior(theta, observations, fixed_initials=None, L_components=None):
     '''
     theta : array of theta values
     observations : data.Observations
     fixed_initials : dict of any theta values to fix
     L_components : output from determine_components
     '''
+
+    if fixed_initials is None:
+        fixed_initials = {}
+
+    if L_components is None:
+        L_components = observations.valid_likelihoods
 
     # get a list of variable params, sorted for the unpacking of theta
     variable_params = DEFAULT_INITIALS.keys() - fixed_initials.keys()

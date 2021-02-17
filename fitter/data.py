@@ -1,11 +1,14 @@
 '''observational and modelled data'''
 
+from . import util
+
 import h5py
 import numpy as np
 import limepy as lp
 from astropy import units as u
 from ssptools import evolve_mf_3 as emf3
 
+import fnmatch
 import logging
 from importlib import resources
 
@@ -209,6 +212,10 @@ class Observations:
     def datasets(self):
         return self._dict_datasets
 
+    @property
+    def valid_likelihoods(self):
+        return self._determine_likelihoods()
+
     def __getitem__(self, key):
 
         try:
@@ -281,6 +288,115 @@ class Observations:
                 # TODO need a way to read units for some mdata from file
                 self.mdata = dict(file.attrs)
 
+    def _determine_likelihoods(self):
+        '''from observations, determine which likelihood functions will be
+        computed and return a dict of the relevant obs dataset keys, and tuples
+        of the functions and any other required args
+        I really don't love this
+        This should really go in data.Observations, at least
+        '''
+        from . import likelihoods
+
+        comps = []
+        for key in self.datasets:
+
+            # --------------------------------------------------------------
+            # Parse each key to determine if it matches with one of our
+            # likelihood functions.
+            # fnmatch is used to properly handle relevant subgroups
+            # such as proper_motion/high_mass and etc, where they exist
+            #
+            # Some datasets could have multiple likelihoods, depending on what
+            # variables they contain
+            #
+            # Each component is a tuple of where the first two elements are,
+            # respectively, the observation key and likelihood function, and all
+            # remaining elements are the extra arguments to pass to the function
+            # --------------------------------------------------------------
+
+            # --------------------------------------------------------------
+            # Pulsar likelihoods
+            # --------------------------------------------------------------
+
+            if fnmatch.fnmatch(key, '*pulsar*'):
+
+                metadata = self.mdata['μ'], (self.mdata['b'], self.mdata['l'])
+
+                if 'Pdot_meas' in self[key]:
+
+                    func = likelihoods.likelihood_pulsar_spin
+
+                    kde = util.pulsar_Pdot_KDE()
+
+                    comps.append((key, func, kde, *metadata))
+
+                if 'Pb' in self[key]:
+
+                    func = likelihoods.likelihood_pulsar_orbital
+
+                    comps.append((key, func, *metadata))
+
+            # --------------------------------------------------------------
+            # Line-of-sight velocity dispersion likelihoods
+            # --------------------------------------------------------------
+
+            elif fnmatch.fnmatch(key, '*velocity_dispersion*'):
+
+                func = likelihoods.likelihood_LOS
+
+                comps.append((key, func, ))
+
+            # --------------------------------------------------------------
+            # Number density likelihoods
+            # --------------------------------------------------------------
+
+            elif fnmatch.fnmatch(key, '*number_density*'):
+
+                func = likelihoods.likelihood_number_density
+
+                comps.append((key, func, ))
+
+            # --------------------------------------------------------------
+            # Proper motion dispersion likelihoods
+            # --------------------------------------------------------------
+
+            elif fnmatch.fnmatch(key, '*proper_motion*'):
+
+                if 'PM_tot' in self[key]:
+
+                    func = likelihoods.likelihood_pm_tot
+
+                    comps.append((key, func, ))
+
+                if 'PM_ratio' in self[key]:
+
+                    func = likelihoods.likelihood_pm_ratio
+
+                    comps.append((key, func, ))
+
+                if 'PM_R' in self[key]:
+
+                    func = likelihoods.likelihood_pm_R
+
+                    comps.append((key, func, ))
+
+                if 'PM_T' in self[key]:
+
+                    func = likelihoods.likelihood_pm_T
+
+                    comps.append((key, func, ))
+
+            # --------------------------------------------------------------
+            # Stellar mass function likelihoods
+            # --------------------------------------------------------------
+
+            elif fnmatch.fnmatch(key, '*mass_function*'):
+
+                func = likelihoods.likelihood_mass_func
+
+                comps.append((key, func, ))
+
+        return comps
 
 # --------------------------------------------------------------------------
 # Cluster Modelled data
