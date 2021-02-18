@@ -105,7 +105,6 @@ def pulsar_Pdot_KDE(*, pulsar_db='field_msp.dat', corrected=True):
         P, Pdot, Pdot_pm, lat, lon, D = np.genfromtxt(pulsar_db, usecols=cols).T
 
     # Compute and remove the galactic contribution from the PM corrected Pdot
-    # TODO dont use value, make everything else be units
     Pdot_int = Pdot_pm - galactic_pot(*(lat, lon) * u.deg, D * u.kpc).value
 
     P = np.log10(P)

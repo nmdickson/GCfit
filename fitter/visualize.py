@@ -11,6 +11,8 @@ from .data import Model
 # TODO add confidence intervals to plots
 # TODO fix spacings
 
+# TODO I thinkk this is all pretty out of date (20)
+
 
 class _Visualizer:
 
@@ -66,6 +68,7 @@ class ModelVisualizer(_Visualizer):
     '''
     class for making, showing, saving all the plots related to a model
     '''
+    # TODO definitely can use set_enabled_equivalencies in here
 
     # -----------------------------------------------------------------------
     # Plotting functions
@@ -85,12 +88,10 @@ class ModelVisualizer(_Visualizer):
         ax.set_xlabel('R')
         ax.set_ylabel(r'$a_{los}$')
 
-        maz = []
-        for r in self.model.r:
-            self.model.get_Paz(0, r, -1)
-            maz.append(self.model.azmax)
-
-        maz = np.array(maz)
+        maz = u.Quantity(np.empty_like(self.model.r), 'm/s^2')
+        for i in self.model.nstep:
+            self.model.get_Paz(0, self.model.r[i], -1)
+            maz[i] = self.model.azmax << maz.unit
 
         if show_obs:
             try:
@@ -108,25 +109,30 @@ class ModelVisualizer(_Visualizer):
         upper_az, = ax.plot(model_r, maz)
         ax.plot(model_r, -maz, c=upper_az.get_color())
 
-        # N_pulsars = obs_r.size
-        # prob_dist = np.array([
-        #     vec_Paz(self.model, A_SPACE, obs_r[i], i)
-        #     for i in range(N_pulsars)
-        # ])
-        # max_probs = prob_dist.max(axis=1)
-
-        # err = scipy.stats.norm.pdf(A_SPACE, 0, np.c_[obs_pulsar['Δa_los']])
-
-        # prob_dist = likelihood_pulsars(self.model, obs_pulsar, err, True)
-        # for ind in range(len(obs_pulsar['r'])):
-        #     clr = f'C{ind + 1}'
-        #     print(prob_dist[ind])
-        #     # TO-DO lots of nans?
-        #     plt.plot(A_SPACE, prob_dist[ind], c=clr)
-        #     plt.axvline(obs_pulsar['r'][ind], c=clr)
-        #     plt.axhline(obs_pulsar['a_los'][ind], c=clr)
-
         return fig
+
+    # def plot_pulsar_distributions(self, fig=None, ax=None, show_obs=True):
+    #     '''plot the prob dists and the convolutions for all pulsars'''
+
+    #     N_pulsars = obs_r.size
+    #     prob_dist = np.array([
+    #         vec_Paz(self.model, A_SPACE, obs_r[i], i)
+    #         for i in range(N_pulsars)
+    #     ])
+    #     max_probs = prob_dist.max(axis=1)
+
+    #     err = scipy.stats.norm.pdf(A_SPACE, 0, np.c_[obs_pulsar['Δa_los']])
+
+    #     prob_dist = likelihood_pulsars(self.model, obs_pulsar, err, True)
+    #     for ind in range(len(obs_pulsar['r'])):
+    #         clr = f'C{ind + 1}'
+    #         print(prob_dist[ind])
+    #         # TO-DO lots of nans?
+    #         plt.plot(A_SPACE, prob_dist[ind], c=clr)
+    #         plt.axvline(obs_pulsar['r'][ind], c=clr)
+    #         plt.axhline(obs_pulsar['a_los'][ind], c=clr)
+
+    #     return fig
 
     # line of sight dispersion
     def plot_LOS(self, fig=None, ax=None, show_obs=True):

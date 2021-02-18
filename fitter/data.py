@@ -292,8 +292,6 @@ class Observations:
         '''from observations, determine which likelihood functions will be
         computed and return a dict of the relevant obs dataset keys, and tuples
         of the functions and any other required args
-        I really don't love this
-        This should really go in data.Observations, at least
         '''
         from . import probabilities
 
