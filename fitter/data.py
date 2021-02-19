@@ -163,7 +163,7 @@ class Dataset:
         # ------------------------------------------------------------------
 
         model_r = model_r.to(self['r'].unit)
-        model_val = model_r.to(quantity.unit)
+        model_val = model_val.to(quantity.unit)
 
         # ------------------------------------------------------------------
         # If a single homogenous uncertainty exists, return it
