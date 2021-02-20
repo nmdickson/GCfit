@@ -438,8 +438,8 @@ class Model(lp.limepy):
         try:
             Ndot = self.observations.mdata['Ndot']
         except (AttributeError, KeyError):
-            logging.warning("No cluster Ndot stored, defaulting to 0")
-            Ndot = 0
+            logging.warning("No cluster Ndot stored, defaulting to -20")
+            Ndot = -20
 
         # Generate the mass function
         return emf3.evolve_mf(
@@ -496,6 +496,10 @@ class Model(lp.limepy):
     def __init__(self, theta, observations=None, *, verbose=False):
 
         self.observations = observations
+
+        if self.observations is None:
+            logging.warning("No `Observations` given, if `theta` was computed "
+                            "using observations, this model will not match")
 
         # ------------------------------------------------------------------
         # Unpack theta
