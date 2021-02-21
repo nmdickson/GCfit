@@ -58,7 +58,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
 
         R = pulsars['r'][i].to(u.pc, util.angular_width(model.d))
 
-        P = pulsars['P'][i]
+        P = pulsars['P'][i].to('s')
 
         Pdot_meas = pulsars['Pdot_meas'][i]
         ΔPdot_meas = np.abs(pulsars['ΔPdot_meas'][i])
@@ -213,7 +213,7 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
 
         R = pulsars['r'][i].to(u.pc, util.angular_width(model.d))
 
-        Pb = pulsars['Pb'][i]
+        Pb = pulsars['Pb'][i].to('s')
 
         Pbdot_meas = pulsars['Pbdot_meas'][i]
         ΔPbdot_meas = pulsars['ΔPbdot_meas'][i]
@@ -567,6 +567,7 @@ def posterior(theta, observations, fixed_initials=None, L_components=None):
     # Update to unions when 3.9 becomes enforced
     theta = dict(zip(params, theta), **fixed_initials)
 
+    # TODO add type check on theta, cause the exceptions aren't very pretty
     # TODO make this prettier,  and maybe output which one failed
     # Also these ranges will probably have to change a bunch when we expand
     # Prior probability function
