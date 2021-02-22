@@ -214,6 +214,7 @@ class Observations:
 
     @property
     def valid_likelihoods(self):
+        # TODO Set this up so they're only generated once since shouldnt change
         return self._determine_likelihoods()
 
     def __getitem__(self, key):
@@ -489,7 +490,7 @@ class Model(lp.limepy):
         self.v2Rj *= V2_units
         self.v2pj *= V2_units
 
-        # self.Sigmaj *= (M_units / R_units**2)
+        self.Sigmaj *= (M_units / R_units**2)
 
         self.d *= u.kpc
 

@@ -106,9 +106,9 @@ def vec_Paz(model, R, mass_bin, *, logspaced=False):
     bound = azmax + (5e-9 * az.unit)
     num = int(bound.value / 15e-9 * 150)
     if logspaced:
-        az_domain = np.geomspace(5e-11 * az.unit, bound, num)
+        az_domain = np.r_[0., np.geomspace(5e-11 * az.unit, bound, num - 1)]
     else:
-        az_domain = np.linspace(5e-11 * az.unit, bound, num)
+        az_domain = np.linspace(0. * az.unit, bound, num)
 
     # All invalid acceleratoin space (outside azmax) will have probability = 0
 
@@ -135,7 +135,7 @@ def vec_Paz(model, R, mass_bin, *, logspaced=False):
     Paz_dist[within_max] = Paz
 
     # Mirror the distributions
-    Paz_dist = np.concatenate((np.flip(Paz_dist), Paz_dist))
-    az_domain = np.concatenate((np.flip(-az_domain), az_domain))
+    Paz_dist = np.concatenate((np.flip(Paz_dist[1:]), Paz_dist))
+    az_domain = np.concatenate((np.flip(-az_domain[1:]), az_domain))
 
     return az_domain, Paz_dist

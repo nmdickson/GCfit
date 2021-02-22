@@ -168,6 +168,7 @@ def main(cluster, Niters, Nwalkers, Ncpu=2, *,
             accept_rate[sampler.iteration - 1, :] = sampler.acceptance_fraction
 
             if sampler.iteration % 100 == 0:
+                # TODO the backup probably isn't necessary anymore
                 logging.debug(f"{sampler.iteration=}: Creating backup")
                 shutil.copyfile(f"{savedir}/{cluster}_sampler.hdf",
                                 f"{savedir}/.backup_{cluster}_sampler.hdf")
