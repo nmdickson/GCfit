@@ -18,7 +18,7 @@ def vec_Paz(model, R, mass_bin, *, logspaced=False):
     manually in some spots. Also expects model to come from `data`, with units
     """
 
-    if R > model.rt:
+    if R >= model.rt:
         raise ValueError(f"Pulsar position outside cluster bound ({model.rt})")
 
     nz = model.nstep
@@ -124,13 +124,16 @@ def vec_Paz(model, R, mass_bin, *, logspaced=False):
 
     outside_azt = np.where(az_domain[within_max] > azt)
 
-    z2 = z2_spl(az_domain[within_max][outside_azt]) * z2.unit
+    # Only use z2 if any outside_azt values exist (ensures z2_spl exists)
+    if outside_azt[0].size > 0:
 
-    within_bounds = np.where(z2 < zt)
+        z2 = z2_spl(az_domain[within_max][outside_azt]) * z2.unit
 
-    Paz[outside_azt][within_bounds] += rhoz_spl(z2[within_bounds]) / abs(az_der(z2[within_bounds]))
+        within_bounds = np.where(z2 < zt)
 
-    Paz[outside_azt][within_bounds] /= rhoz_spl.integral(0., zt.value)
+        Paz[outside_azt][within_bounds] += rhoz_spl(z2[within_bounds]) / abs(az_der(z2[within_bounds]))
+
+        Paz[outside_azt][within_bounds] /= rhoz_spl.integral(0., zt.value)
 
     Paz_dist[within_max] = Paz
 

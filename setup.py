@@ -6,7 +6,7 @@ here = os.path.abspath(os.path.dirname(__file__))
 
 # Package information
 NAME = 'GCfit'
-VERSION = "0.4.0"
+VERSION = "0.4.1"
 
 DESCRIPTION = 'Multimass MCMC fitting of Limepy globular cluster analytic model'
 with io.open(os.path.join(here, 'README.md'), encoding='utf-8') as f:

@@ -286,6 +286,7 @@ def likelihood_number_density(model, ndensity, *, mass_bin=None):
             mass_bin = model.nms - 1
 
     # Set cutoff to avoid fitting flat end of data
+    # TODO should do this cutoff based on a flatness, rather than a set value
     valid = (ndensity['Σ'].value > 0.1)
 
     obs_r = ndensity['r'][valid]
@@ -293,7 +294,7 @@ def likelihood_number_density(model, ndensity, *, mass_bin=None):
     obs_err = ndensity['ΔΣ'][valid].value
 
     # TODO the model Sigma is in /pc^2, and is not being converted to match obs?
-    model_r = model.r.to(u.arcmin, util.angular_width(model.d))
+    model_r = model.r.to(obs_r.unit, util.angular_width(model.d))
     model_Σ = (model.Sigmaj[mass_bin] / model.mj[mass_bin]).value
 
     # Interpolated the model data at the measurement locations
