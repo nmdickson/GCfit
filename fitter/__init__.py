@@ -221,17 +221,7 @@ def main(cluster, Niters, Nwalkers, Ncpu=2, *,
     # ----------------------------------------------------------------------
 
     if verbose:
-        flat_samples = sampler.get_chain(discard=0, thin=1, flat=True)
-
-        # TODO breaks with fixed initials, switch to using print_summary (15)
-
-        mssg = ''
-        for ind, key in enumerate(observations.initials):
-            perc = np.percentile(flat_samples[:, ind], [16, 50, 84])
-            qnt = np.diff(perc)
-
-            mssg += f'{key:>5} = {perc[1]:.3f} (+{qnt[0]:.3f}/-{qnt[1]:.3f})\n'
-
-        sys.stdout.write(mssg)
+        from . import visualize as viz
+        viz.RunVisualizer(backend_fn, observations).print_summary()
 
     logging.info("FINISHED")
