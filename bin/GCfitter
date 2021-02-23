@@ -87,6 +87,7 @@ if __name__ == '__main__':
     if args.verbose:
         config['filename'] = f"{args.savedir}/fitter_{args.cluster}.log"
     else:
+        # TODO this is broken actually
         config['handlers'] = [logging.NullHandler]
 
     logging.basicConfig(**config)

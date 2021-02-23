@@ -223,6 +223,8 @@ def main(cluster, Niters, Nwalkers, Ncpu=2, *,
     if verbose:
         flat_samples = sampler.get_chain(discard=0, thin=1, flat=True)
 
+        # TODO breaks with fixed initials, just switch to using print_summary
+
         mssg = ''
         for ind, key in enumerate(observations.initials):
             perc = np.percentile(flat_samples[:, ind], [16, 50, 84])

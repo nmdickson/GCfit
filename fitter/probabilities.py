@@ -568,19 +568,26 @@ def posterior(theta, observations, fixed_initials=None, L_components=None):
     # Update to unions when 3.9 becomes enforced
     theta = dict(zip(params, theta), **fixed_initials)
 
-    # TODO add type check on theta, cause the exceptions aren't very pretty
-    # TODO make this prettier,  and maybe output which one failed
+    # TODO add type check on theta, cause those exceptions aren't very pretty
+    # TODO if this fails on a fixed param, the run should be aborted
     # Also these ranges will probably have to change a bunch when we expand
     # Prior probability function
-    if not (3 < theta['W0'] < 20 and 0.5 < theta['rh'] < 15
-            and 0.01 < theta['M'] < 10 and 0 < theta['ra'] < 5
-            and 0 < theta['g'] < 2.3 and 0.3 < theta['delta'] < 0.5
-            and 0 < theta['s2'] < 10 and 0.1 < theta['F'] < 0.5
-            and -2 < theta['a1'] < 6 and -2 < theta['a2'] < 6
-            and -2 < theta['a3'] < 6 and 0 < theta['BHret'] < 100
-            and 2 < theta['d'] < 8):
+    if not all(priors := (3 < theta['W0'] < 20,
+                          0.01 < theta['M'] < 10,
+                          0.5 < theta['rh'] < 15,
+                          0 < theta['ra'] < 5,
+                          0 < theta['g'] < 2.3,
+                          0.3 < theta['delta'] < 0.8,
+                          0 < theta['s2'] < 10,
+                          0.1 < theta['F'] < 0.5,
+                          -2 < theta['a1'] < 6,
+                          -2 < theta['a2'] < 6,
+                          -2 < theta['a3'] < 6,
+                          0 < theta['BHret'] < 100,
+                          2 < theta['d'] < 8)):
 
-        logging.debug("Theta outside priors domain")
+        inv = {f"{k}={theta[k]}" for i, k in enumerate(theta) if not priors[i]}
+        logging.debug(f"Theta outside priors domain: {'; '.join(inv)}")
 
         return -np.inf, *(-np.inf * np.ones(len(L_components)))
 
