@@ -393,7 +393,7 @@ class ModelVisualizer(_Visualizer):
         return fig
 
     @_support_units
-    def plot_mf_tot(self, fig=None, ax=None, show_obs=True):
+    def plot_mass_func(self, fig=None, ax=None, show_obs=True):
 
         import scipy.integrate as integ
         import scipy.interpolate as interp
