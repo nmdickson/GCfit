@@ -1,12 +1,15 @@
+from . import util
+from .data import Model
+from .new_Paz import vec_Paz
+
 import sys
 
 import h5py
 import numpy as np
 import astropy.units as u
 import matplotlib.pyplot as plt
+import astropy.visualization as astroviz
 
-from . import util
-from .data import Model
 
 # TODO add confidence intervals to plots
 # TODO fix spacings
@@ -70,6 +73,27 @@ class ModelVisualizer(_Visualizer):
     '''
     # TODO definitely can use set_enabled_equivalencies in here
 
+    def _support_units(method):
+
+        def _unit_decorator(self, *args, **kwargs):
+
+            eqvs = (util.angular_width(self.model.d),
+                    util.angular_speed(self.model.d))
+
+            with astroviz.quantity_support(), u.set_enabled_equivalencies(eqvs):
+                return method(method, *args, **kwargs)
+
+        return _unit_decorator
+
+    def get_err(self, dataset, key):
+        try:
+            return dataset[f'Δ{key}']
+        except KeyError:
+            try:
+                return (dataset[f'Δ{key},down'], dataset[f'Δ{key},up'])
+            except KeyError:
+                return None
+
     # -----------------------------------------------------------------------
     # Plotting functions
     # -----------------------------------------------------------------------
@@ -78,9 +102,13 @@ class ModelVisualizer(_Visualizer):
     # TODO change all these to check data for mass bin like in likelihoods
     # TODO the generation of obs_err should be generalized in all functions
 
-    # Pulsar max az vs measured az
+    @_support_units
     def plot_pulsar(self, fig=None, ax=None, show_obs=True):
         # TODO this is out of date with the new pulsar probability code
+        # TODO I dont even think this is what we should use anymore, but the 
+        #   new convolved distributions peak
+
+        from astropy.constants import c
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -88,17 +116,21 @@ class ModelVisualizer(_Visualizer):
         ax.set_xlabel('R')
         ax.set_ylabel(r'$a_{los}$')
 
-        maz = u.Quantity(np.empty_like(self.model.r), 'm/s^2')
-        for i in self.model.nstep:
-            self.model.get_Paz(0, self.model.r[i], -1)
-            maz[i] = self.model.azmax << maz.unit
+        maz = u.Quantity(np.empty(self.model.nstep - 1), 'm/s^2')
+        for i in range(self.model.nstep - 1):
+            a_domain, Paz = vec_Paz(self.model, self.model.r[i], -1)
+            maz[i] = a_domain[Paz.argmax()] << maz.unit
+
+        maz = (self.obs['pulsar/P'] * maz / c).decompose()
 
         if show_obs:
             try:
                 obs_pulsar = self.obs['pulsar']
 
-                ax.errorbar(obs_pulsar['r'], self.obs['pulsar/a_los'],
-                            yerr=self.obs['pulsar/Δa_los'], fmt='k.')
+                ax.errorbar(obs_pulsar['r'],
+                            self.obs['pulsar/Pdot_meas'],
+                            yerr=self.obs['pulsar/ΔPdot_meas'],
+                            fmt='k.')
 
             except KeyError as err:
                 if show_obs != 'attempt':
@@ -106,8 +138,8 @@ class ModelVisualizer(_Visualizer):
 
         model_r = self.model.r.to(u.arcmin, util.angular_width(self.model.d))
 
-        upper_az, = ax.plot(model_r, maz)
-        ax.plot(model_r, -maz, c=upper_az.get_color())
+        upper_az, = ax.plot(model_r[:-1], maz)
+        ax.plot(model_r[:-1], -maz, c=upper_az.get_color())
 
         return fig
 
@@ -134,16 +166,14 @@ class ModelVisualizer(_Visualizer):
 
     #     return fig
 
-    # line of sight dispersion
+    @_support_units
     def plot_LOS(self, fig=None, ax=None, show_obs=True):
 
         mass_bin = self.model.nms - 1
 
         fig, ax = self._setup_artist(fig, ax)
 
-        ax.set_title('Line of Sight Velocity')
-        ax.set_xlabel("R [arcsec]")
-        ax.set_ylabel(r"$\sigma_{los} \ [km \ s^{-1}]$")
+        ax.set_title('Line of Sight Velocity Dispersion')
 
         ax.set_xscale("log")
 
@@ -151,24 +181,23 @@ class ModelVisualizer(_Visualizer):
             try:
                 veldisp = self.obs['velocity_dispersion']
 
-                try:
-                    obs_err = (veldisp['Δσ,down'], veldisp['Δσ,up'])
-                except KeyError:
-                    obs_err = veldisp['Δσ']
+                xerr = self.get_err(veldisp, 'r')
+                yerr = self.get_err(veldisp, 'σ')
 
-                ax.errorbar(veldisp['r'], veldisp['σ'], yerr=obs_err, fmt='k.')
+                ax.errorbar(veldisp['r'], veldisp['σ'], fmt='k.',
+                            xerr=xerr, yerr=yerr)
 
             except KeyError as err:
                 if show_obs != 'attempt':
                     raise err
 
-        model_r = self.model.r.to(u.arcsec, util.angular_width(self.model.d))
+        model_r = self.model.r.to(u.arcsec)
 
         ax.plot(model_r, np.sqrt(self.model.v2pj[mass_bin]))
 
         return fig
 
-    # total proper motion
+    @_support_units
     def plot_pm_tot(self, fig=None, ax=None, show_obs=True):
 
         mass_bin = self.model.nms - 1
@@ -176,8 +205,6 @@ class ModelVisualizer(_Visualizer):
         fig, ax = self._setup_artist(fig, ax)
 
         ax.set_title("Total Proper Motion")
-        ax.set_xlabel("R [arcsec]")
-        ax.set_ylabel(r"$\sigma_{pm, total} \ [mas \ yr^{-1}]$")
 
         ax.set_xscale("log")
 
@@ -185,8 +212,11 @@ class ModelVisualizer(_Visualizer):
             try:
                 pm = self.obs['proper_motion']
 
-                ax.errorbar(pm['r'], pm['PM_tot'],
-                            xerr=pm['Δr'], yerr=pm['ΔPM_tot'], fmt='k.')
+                xerr = self.get_err(pm, 'r')
+                yerr = self.get_err(pm, 'PM_tot')
+
+                ax.errorbar(pm['r'], pm['PM_tot'], fmt='k.',
+                            xerr=xerr, yerr=yerr)
 
             except KeyError as err:
                 if show_obs != 'attempt':
@@ -196,14 +226,14 @@ class ModelVisualizer(_Visualizer):
             0.5 * (self.model.v2Tj[mass_bin] + self.model.v2Rj[mass_bin])
         )
 
-        model_r = self.model.r.to(u.arcsec, util.angular_width(self.model.d))
-        model_t = model_t.to(u.mas / u.yr, util.angular_speed(self.model.d))
+        model_r = self.model.r.to(u.arcsec)
+        model_t = model_t.to(u.mas / u.yr)
 
         ax.plot(model_r, model_t)
 
         return fig
 
-    # proper motion anisotropy (ratio)
+    @_support_units
     def plot_pm_ratio(self, fig=None, ax=None, show_obs=True):
 
         mass_bin = self.model.nms - 1
@@ -211,8 +241,6 @@ class ModelVisualizer(_Visualizer):
         fig, ax = self._setup_artist(fig, ax)
 
         ax.set_title("Proper Motion Ratio")
-        ax.set_xlabel("R [arcsec]")
-        ax.set_ylabel(r"$\sigma_{pm,T} / \sigma_{pm,R} \ [mas \ yr^{-1}]$")
 
         ax.set_xscale("log")
 
@@ -221,8 +249,11 @@ class ModelVisualizer(_Visualizer):
 
                 pm = self.obs['proper_motion']
 
-                ax.errorbar(pm['r'], pm['PM_ratio'],
-                            xerr=pm['Δr'], yerr=pm['ΔPM_ratio'], fmt='k.')
+                xerr = self.get_err(pm, 'r')
+                yerr = self.get_err(pm, 'PM_ratio')
+
+                ax.errorbar(pm['r'], pm['PM_ratio'], fmt='k.',
+                            xerr=xerr, yerr=yerr)
 
             except KeyError as err:
                 if show_obs != 'attempt':
@@ -230,13 +261,13 @@ class ModelVisualizer(_Visualizer):
 
         model_ratio2 = self.model.v2Tj[mass_bin] / self.model.v2Rj[mass_bin]
 
-        model_r = self.model.r.to(u.arcsec, util.angular_width(self.model.d))
+        model_r = self.model.r.to(u.arcsec)
 
         ax.plot(model_r, np.sqrt(model_ratio2))
 
         return fig
 
-    # tangential proper motion
+    @_support_units
     def plot_pm_T(self, fig=None, ax=None, show_obs=True):
         # TODO capture all mass bins which have data (high_mass, low_mass, etc)
 
@@ -245,8 +276,6 @@ class ModelVisualizer(_Visualizer):
         fig, ax = self._setup_artist(fig, ax)
 
         ax.set_title("Tangential Proper Motion [High Mass]")
-        ax.set_xlabel("R [arcsec]")
-        ax.set_ylabel(r"$\sigma_{pm, T} \ [mas \ yr^{-1}]$")
 
         ax.set_xscale("log")
 
@@ -255,8 +284,11 @@ class ModelVisualizer(_Visualizer):
 
                 pm = self.obs['proper_motion/high_mass']
 
-                ax.errorbar(pm['r'], pm["PM_T"],
-                            xerr=pm["Δr"], yerr=pm["ΔPM_T"], fmt='k.')
+                xerr = self.get_err(pm, 'r')
+                yerr = self.get_err(pm, 'PM_T')
+
+                ax.errorbar(pm['r'], pm["PM_T"], fmt='k.',
+                            xerr=xerr, yerr=yerr)
 
             except KeyError as err:
                 if show_obs != 'attempt':
@@ -264,14 +296,14 @@ class ModelVisualizer(_Visualizer):
 
         model_T = np.sqrt(self.model.v2Tj[mass_bin])
 
-        model_r = self.model.r.to(u.arcsec, util.angular_width(self.model.d))
-        model_T = model_T.to(u.mas / u.yr, util.angular_speed(self.model.d))
+        model_r = self.model.r.to(u.arcsec)
+        model_T = model_T.to(u.mas / u.yr)
 
         ax.plot(model_r, model_T)
 
         return fig
 
-    # radial proper motion
+    @_support_units
     def plot_pm_R(self, fig=None, ax=None, show_obs=True):
 
         mass_bin = self.model.nms - 1
@@ -279,8 +311,6 @@ class ModelVisualizer(_Visualizer):
         fig, ax = self._setup_artist(fig, ax)
 
         ax.set_title("Radial Proper Motion [High Mass]")
-        ax.set_xlabel("R [arcsec]")
-        ax.set_ylabel(r"$\sigma_{pm, R} \ [mas \ yr^{-1}]$")
 
         ax.set_xscale("log")
 
@@ -289,8 +319,11 @@ class ModelVisualizer(_Visualizer):
 
                 pm = self.obs['proper_motion/high_mass']
 
-                ax.errorbar(pm['r'], pm["PM_R"],
-                            xerr=pm["Δr"], yerr=pm["ΔPM_R"], fmt='k.')
+                xerr = self.get_err(pm, 'r')
+                yerr = self.get_err(pm, 'PM_R')
+
+                ax.errorbar(pm['r'], pm["PM_R"], fmt='k.',
+                            xerr=xerr, yerr=yerr)
 
             except KeyError as err:
                 if show_obs != 'attempt':
@@ -298,36 +331,32 @@ class ModelVisualizer(_Visualizer):
 
         model_R = np.sqrt(self.model.v2Rj[mass_bin])
 
-        model_r = self.model.r.to(u.arcsec, util.angular_width(self.model.d))
-        model_R = model_R.to(u.mas / u.yr, util.angular_speed(self.model.d))
+        model_r = self.model.r.to(u.arcsec)
+        model_R = model_R.to(u.mas / u.yr)
 
         ax.plot(model_r, model_R)
 
         return fig
 
-    # number density
+    @_support_units
     def plot_number_density(self, fig=None, ax=None, show_obs=True):
+        # numdens is a bit different cause we want to compute K based on obs
+        # whenever possible, even if we're not showing obs
 
         mass_bin = self.model.nms - 1
 
         fig, ax = self._setup_artist(fig, ax)
 
         ax.set_title('Number Density')
-        ax.set_xlabel("R [arcsec]")
-        ax.set_ylabel(r"$\Sigma \  {[arcmin}^{-2}]$")
 
         ax.loglog()
-
-        # numdens is a bit different cause we want to compute K whenever
-        #   possible, even if we're not showing obs
 
         try:
             numdens = self.obs['number_density']
 
             # interpolate number density to the observed data points r
             interp_model = np.interp(
-                numdens['r'],
-                self.model.r.to(u.arcmin, util.angular_width(self.model.d)),
+                numdens['r'].to(u.arcmin), self.model.r.to(u.arcmin),
                 self.model.Sigmaj[mass_bin] / self.model.mj[mass_bin]
             )
 
@@ -342,20 +371,27 @@ class ModelVisualizer(_Visualizer):
 
                 numdens = self.obs['number_density']
 
-                ax.errorbar(numdens['r'].to(u.arcsec), numdens["Σ"], fmt='k.',
-                            yerr=np.sqrt(numdens["ΔΣ"]**2 + self.model.s2))
+                xerr = self.get_err(numdens, 'r')
+
+                ΔΣ = self.get_err(numdens, "ΔΣ").value
+                yerr = np.sqrt(ΔΣ**2 + self.model.s2)
+
+                ax.errorbar(numdens['r'], numdens["Σ"], fmt='k.',
+                            xerr=xerr, yerr=yerr)
 
             except KeyError as err:
                 if show_obs != 'attempt':
                     raise err
 
-        ax.plot(self.model.r.to(u.arcsec, util.angular_width(self.model.d)),
-                K * self.model.Sigmaj[mass_bin] / self.model.mj[mass_bin])
+        model_r = self.model.r.to(u.arcmin)
+        model_Σ = K * self.model.Sigmaj[mass_bin] / self.model.mj[mass_bin]
+
+        ax.plot(model_r, model_Σ)
 
         return fig
 
-    # mass function
     # TODO add a "mass fucntion" plot, maybe like peters, or like limepy example
+    @_support_units
     def plot_mf_tot(self, fig=None, ax=None, show_obs=True):
 
         import scipy.integrate as integ
@@ -417,6 +453,7 @@ class ModelVisualizer(_Visualizer):
     # def plot_imf
     # def plot_bhcontent
 
+    @_support_units
     def plot_all(self, fig=None, axes=None, show_obs='attempt'):
 
         # TODO have a require_obs option, where if required we change to try
@@ -441,6 +478,7 @@ class ModelVisualizer(_Visualizer):
         self.plot_LOS(fig=fig, ax=axes[7], show_obs=show_obs)
 
         # TODO maybe have some written info in one of the empty panels (ax6)
+        fig.tight_layout()
 
         return fig
 
@@ -702,6 +740,8 @@ class RunVisualizer(_Visualizer):
             # TODO this is to make a clearer hist border, but should switch to
             #   explicitly creating a color with alpha for facecolor only
             ax[ind].hist(vals, histtype='step', color=colors[ind])
+
+            # TODO optionally plot a line for the median
 
             ax[ind].set_xlabel(key if math_labels is None else math_labels[ind])
 
