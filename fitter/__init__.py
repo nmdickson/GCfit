@@ -223,7 +223,7 @@ def main(cluster, Niters, Nwalkers, Ncpu=2, *,
     if verbose:
         flat_samples = sampler.get_chain(discard=0, thin=1, flat=True)
 
-        # TODO breaks with fixed initials, just switch to using print_summary
+        # TODO breaks with fixed initials, switch to using print_summary (15)
 
         mssg = ''
         for ind, key in enumerate(observations.initials):

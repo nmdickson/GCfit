@@ -474,15 +474,17 @@ def likelihood_mass_func(model, mf):
 
     tot_likelihood = 0
 
+    rbin_size = 0.4 * u.arcmin
+
     for annulus_ind in np.unique(mf['bin']):
 
         # we only want to use the obs data for this r bin
         r_mask = (mf['bin'] == annulus_ind)
 
-        r1 = ((0.4 * annulus_ind) * u.arcmin)
+        r1 = rbin_size * annulus_ind
         r1 = r1.to(model.r.unit, util.angular_width(model.d))
 
-        r2 = (0.4 * (annulus_ind + 1)) * u.arcmin
+        r2 = rbin_size * (annulus_ind + 1)
         r2 = r2.to(model.r.unit, util.angular_width(model.d))
 
         # Get a binned version of N_model (an Nstars for each mbin)
@@ -511,9 +513,10 @@ def likelihood_mass_func(model, mf):
         # Grab the N_data (adjusted by width to get an average
         #                   dr of a bin (like average-interpolating almost))
         N_data = (mf['N'][r_mask] / mf['mbin_width'][r_mask]).value
+        err_data = (mf['Δmbin'][r_mask] / mf['mbin_width'][r_mask]).value
 
         # Compute δN_model from poisson error, and nuisance factor
-        err = np.sqrt(mf['Δmbin'][r_mask]**2 + (model.F * N_data)**2)
+        err = np.sqrt(err_data**2 + (model.F * N_data)**2)
 
         # compute final gaussian log likelihood
         tot_likelihood += -0.5 * np.sum(

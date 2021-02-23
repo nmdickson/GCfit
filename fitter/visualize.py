@@ -74,14 +74,16 @@ class ModelVisualizer(_Visualizer):
     # TODO definitely can use set_enabled_equivalencies in here
 
     def _support_units(method):
+        import functools
 
+        @functools.wraps(method)
         def _unit_decorator(self, *args, **kwargs):
 
-            eqvs = (util.angular_width(self.model.d),
-                    util.angular_speed(self.model.d))
+            eqvs = [util.angular_width(self.model.d)[0],
+                    util.angular_speed(self.model.d)[0]]
 
             with astroviz.quantity_support(), u.set_enabled_equivalencies(eqvs):
-                return method(method, *args, **kwargs)
+                return method(self, *args, **kwargs)
 
         return _unit_decorator
 
@@ -144,27 +146,27 @@ class ModelVisualizer(_Visualizer):
         return fig
 
     # def plot_pulsar_distributions(self, fig=None, ax=None, show_obs=True):
-    #     '''plot the prob dists and the convolutions for all pulsars'''
+        # '''plot the prob dists and the convolutions for all pulsars'''
 
-    #     N_pulsars = obs_r.size
-    #     prob_dist = np.array([
-    #         vec_Paz(self.model, A_SPACE, obs_r[i], i)
-    #         for i in range(N_pulsars)
-    #     ])
-    #     max_probs = prob_dist.max(axis=1)
+        # N_pulsars = obs_r.size
+        # prob_dist = np.array([
+        #     vec_Paz(self.model, A_SPACE, obs_r[i], i)
+        #     for i in range(N_pulsars)
+        # ])
+        # max_probs = prob_dist.max(axis=1)
 
-    #     err = scipy.stats.norm.pdf(A_SPACE, 0, np.c_[obs_pulsar['Δa_los']])
+        # err = scipy.stats.norm.pdf(A_SPACE, 0, np.c_[obs_pulsar['Δa_los']])
 
-    #     prob_dist = likelihood_pulsars(self.model, obs_pulsar, err, True)
-    #     for ind in range(len(obs_pulsar['r'])):
-    #         clr = f'C{ind + 1}'
-    #         print(prob_dist[ind])
-    #         # TO-DO lots of nans?
-    #         plt.plot(A_SPACE, prob_dist[ind], c=clr)
-    #         plt.axvline(obs_pulsar['r'][ind], c=clr)
-    #         plt.axhline(obs_pulsar['a_los'][ind], c=clr)
+        # prob_dist = likelihood_pulsars(self.model, obs_pulsar, err, True)
+        # for ind in range(len(obs_pulsar['r'])):
+        #     clr = f'C{ind + 1}'
+        #     print(prob_dist[ind])
+        #     # TO-DO lots of nans?
+        #     plt.plot(A_SPACE, prob_dist[ind], c=clr)
+        #     plt.axvline(obs_pulsar['r'][ind], c=clr)
+        #     plt.axhline(obs_pulsar['a_los'][ind], c=clr)
 
-    #     return fig
+        # return fig
 
     @_support_units
     def plot_LOS(self, fig=None, ax=None, show_obs=True):
@@ -390,7 +392,6 @@ class ModelVisualizer(_Visualizer):
 
         return fig
 
-    # TODO add a "mass fucntion" plot, maybe like peters, or like limepy example
     @_support_units
     def plot_mf_tot(self, fig=None, ax=None, show_obs=True):
 
@@ -401,17 +402,18 @@ class ModelVisualizer(_Visualizer):
 
         mf = self.obs['mass_function']
 
-        scale = [1000., 10., 0.1, 0.001]
-        angular_width = util.angular_width(self.model.d)
+        rbin_size = 0.4 * u.arcmin
 
-        # MBIN MUST HAVE UNITS OF u.arcmin
         for annulus_ind in np.unique(mf['bin']):
+
+            scale = 10**annulus_ind
 
             # we only want to use the obs data for this r bin
             r_mask = (mf['bin'] == annulus_ind)
 
-            r1 = 0.4 * annulus_ind.to(u.arcsec, angular_width)
-            r2 = 0.4 * (annulus_ind + 1).to(u.arcsec, angular_width)
+            # Convert the radial bin baounds from arcmin to model units
+            r1 = (rbin_size * annulus_ind).to(u.parsec)
+            r2 = (rbin_size * (annulus_ind + 1)).to(u.parsec)
 
             # Get a binned version of N_model (an Nstars for each mbin)
             binned_N_model = np.empty(self.model.nms)
@@ -428,25 +430,27 @@ class ModelVisualizer(_Visualizer):
                 mper = self.model.mj[mbin_ind] * self.model.mes_widths[mbin_ind]
 
                 binned_N_model[mbin_ind] = (
-                    integ.quad(density, r1, r2)[0] / mper
+                    integ.quad(density, r1.value, r2.value)[0] / mper.value
                 )
 
             # Grab the N_data (adjusted by width to get an average
             #                   dr of a bin (like average-interpolating almost))
-            N_data = (mf['N'][r_mask] / mf['mbin_width'][r_mask])
+            N_data = (mf['N'][r_mask] / mf['mbin_width'][r_mask]).value
+            err_data = (mf['Δmbin'][r_mask] / mf['mbin_width'][r_mask]).value
 
-            # TODO in Peters notebooks this is actually computed differently
             # Compute δN_model from poisson error, and nuisance factor
-            err = np.sqrt(mf['Δmbin'][r_mask]**2 + (self.model.F * N_data)**2)
+            err = np.sqrt(err_data**2 + (self.model.F * N_data)**2)
 
-            ax.errorbar(mf['mbin_mean'][r_mask],
-                        N_data * scale[annulus_ind], yerr=err, fmt='o')
+            pnts = ax.errorbar(mf['mbin_mean'][r_mask], N_data * scale,
+                               fmt='o', yerr=err * scale)
 
-            ax.plot(self.model.mj[:self.model.nms],
-                    binned_N_model * scale[annulus_ind], 'x--')
+            ax.plot(self.model.mj[:self.model.nms], binned_N_model * scale,
+                    'x--', c=pnts[0].get_color(), label=f"R={r1:.1f}-{r2:.1f}")
 
         ax.set_yscale("log")
         ax.set_xscale("log")
+
+        ax.legend()
 
         return fig
 
@@ -511,6 +515,9 @@ class ModelVisualizer(_Visualizer):
     def __init__(self, model, observations=None):
         self.model = model
         self.obs = observations if observations else model.observations
+
+        # TODO somehow based on valid_likelihoods figure out dataset names
+        # self.data_fields =
 
 
 class RunVisualizer(_Visualizer):
