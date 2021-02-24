@@ -532,11 +532,12 @@ class Model(lp.limepy):
         # append tracer mass bins (must be appended to end to not affect nms)
         if observations is not None:
 
-            tracer_mj = [
+            tracer_mj = np.unique([
                 dataset.mdata['m'] for dataset in observations.datasets.values()
                 if 'm' in dataset.mdata
-            ]
+            ])
 
+            # TODO shouldn't append multiple of same tracer mass
             mj = np.concatenate((mj, tracer_mj))
             Mj = np.concatenate((Mj, 0.1 * np.ones_like(tracer_mj)))
 
