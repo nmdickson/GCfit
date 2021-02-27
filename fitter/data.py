@@ -329,7 +329,7 @@ class Observations:
 
                     comps.append((key, func, kde, *metadata))
 
-                if 'Pb' in self[key]:
+                if 'Pbdot_meas' in self[key]:
 
                     func = probabilities.likelihood_pulsar_orbital
 
