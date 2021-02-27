@@ -375,8 +375,8 @@ class ModelVisualizer(_Visualizer):
 
                 xerr = self.get_err(numdens, 'r')
 
-                ΔΣ = self.get_err(numdens, "ΔΣ").value
-                yerr = np.sqrt(ΔΣ**2 + self.model.s2)
+                ΔΣ = self.get_err(numdens, "Σ")
+                yerr = np.sqrt(ΔΣ**2 + (self.model.s2 << ΔΣ.unit**2))
 
                 ax.errorbar(numdens['r'], numdens["Σ"], fmt='k.',
                             xerr=xerr, yerr=yerr)
@@ -393,7 +393,7 @@ class ModelVisualizer(_Visualizer):
         return fig
 
     @_support_units
-    def plot_mass_func(self, fig=None, ax=None, show_obs=True):
+    def plot_mass_func(self, fig=None, ax=None, show_obs=True, rbin_size=0.4):
 
         import scipy.integrate as integ
         import scipy.interpolate as interp
@@ -402,7 +402,9 @@ class ModelVisualizer(_Visualizer):
 
         mf = self.obs['mass_function']
 
-        rbin_size = 0.4 * u.arcmin
+        # TODO rbin size should actually come from the data,
+        #   sollima is always 0.4' I think but still it should be an attr/smthn
+        rbin_size <<= u.arcmin
 
         for annulus_ind in np.unique(mf['bin']):
 
@@ -455,7 +457,63 @@ class ModelVisualizer(_Visualizer):
         return fig
 
     # def plot_imf
-    # def plot_bhcontent
+
+    # def plot_BH_mass(self, fig=None, axes=None):
+    # TODO this is actually a histogram based off the entire chain, not a model
+    #     fig, ax = self._setup_artist(fig, ax)
+    #     ax.hist(self.model)
+
+    @_support_units
+    def plot_density(self, fig=None, ax=None):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        ax.set_title('Mass Density')
+
+        # Main sequence density
+        rho_MS = np.sum(self.model.rhoj[:self.model.nms], axis=0)
+        ax.plot(self.model.r, rho_MS, label='Main Sequence')
+
+        # Total density
+        rho_MS = np.sum(self.model.rhoj, axis=0)
+        ax.plot(self.model.r, rho_MS, label='Total')
+
+        # Black hole density
+        rho_MS = np.sum(self.model.BH_rhoj, axis=0)
+        ax.plot(self.model.r, rho_MS, label='Black Hole')
+
+        ax.set_yscale("log")
+        ax.set_xscale("log")
+
+        ax.legend()
+
+        return fig
+
+    @_support_units
+    def plot_surface_density(self, fig=None, ax=None):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        ax.set_title('Surface Mass Density')
+
+        # Main sequence density
+        rho_MS = np.sum(self.model.Sigmaj[:self.model.nms], axis=0)
+        ax.plot(self.model.r, rho_MS, label='Main Sequence')
+
+        # Total density
+        rho_MS = np.sum(self.model.Sigmaj, axis=0)
+        ax.plot(self.model.r, rho_MS, label='Total')
+
+        # Black hole density
+        rho_MS = np.sum(self.model.BH_Sigmaj, axis=0)
+        ax.plot(self.model.r, rho_MS, label='Black Hole')
+
+        ax.set_yscale("log")
+        ax.set_xscale("log")
+
+        ax.legend()
+
+        return fig
 
     @_support_units
     def plot_all(self, fig=None, axes=None, show_obs='attempt'):
@@ -482,7 +540,7 @@ class ModelVisualizer(_Visualizer):
         self.plot_LOS(fig=fig, ax=axes[7], show_obs=show_obs)
 
         # TODO maybe have some written info in one of the empty panels (ax6)
-        fig.tight_layout()
+        # fig.tight_layout()
 
         return fig
 
@@ -672,8 +730,9 @@ class RunVisualizer(_Visualizer):
                 mssg = 'reduced parameters, but no explanatory metadata stored'
                 raise err(mssg)
 
-            ax.set_xlabel('Iterations')
             ax.set_ylabel(labels[ind])
+
+        axes[-1].set_xlabel('Iterations')
 
         return fig
 
@@ -888,39 +947,11 @@ class RunVisualizer(_Visualizer):
 
         out.write(mssg)
 
+    # TODO We're gonna want to start viewing the distributions of some derived
+    #   model parameters soon (for dist and contours and etc), which means
+    #   getting the model for the entire chain, which is a monstrous task.
+    #   Need to figure out the best way to do so.
 
-def compare_runs(output_files, observations):
 
-    RV_list = [RunVisualizer(file, observations) for file in output_files]
-    MV_list = [RV.get_model() for RV in RV_list]
-
-    # compare run stats, chains, etc
-
-    # plot median chains for all runs in same figure
-
-    # fig1 = plt.figure()
-    fig1 = None
-
-    # plot indivs with full walkers for all runs in separate columns of same fig
-    # TODO having trouble because you cant really comine figs in plt
-    fig2 = plt.figure()
-    # nrows=max number of likelihoods in the RVs, ncols=len(RV_list)
-
-    for ind, RV in enumerate(RV_list):
-        RV.walkers = 'median'
-        fig1 = RV.plot_chains(fig1)
-
-        # RV.walkers = slice(None)
-        # indiv_axes = RV.plot_indiv().axes
-
-        # fig2.add_subplot()
-
-   # compare model outputs
-
-    # do a plot all, with obs only being plots once, but all runs in same fig 
-
-    # fig3 = plt.figure()
-    fig3 = None
-
-    for ind, MV in enumerate(MV_list):
-        fig3 = MV.plot_all(fig3, show_obs=(not ind))
+# TODO a sort of "run details" method I can run on a glob pattern to print
+#   a summary, so I can see which run is which, maybe should go in ./bin

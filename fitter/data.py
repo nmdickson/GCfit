@@ -476,24 +476,26 @@ class Model(lp.limepy):
         M_units = u.Msun
         V2_units = G_units * M_units / R_units
 
-        self.G *= G_units
+        self.G <<= G_units
 
-        self.M *= M_units
-        self.mj *= M_units
-        self.mc *= M_units
+        self.M <<= M_units
+        self.mj <<= M_units
+        self.Mj <<= M_units
+        self.mc <<= M_units
 
-        self.r *= R_units
-        self.rh *= R_units
-        self.rt *= R_units
-        self.ra *= R_units
+        self.r <<= R_units
+        self.rh <<= R_units
+        self.rt <<= R_units
+        self.ra <<= R_units
 
-        self.v2Tj *= V2_units
-        self.v2Rj *= V2_units
-        self.v2pj *= V2_units
+        self.v2Tj <<= V2_units
+        self.v2Rj <<= V2_units
+        self.v2pj <<= V2_units
 
-        self.Sigmaj *= (M_units / R_units**2)
+        self.rhoj <<= (M_units / R_units**3)
+        self.Sigmaj <<= (M_units / R_units**2)
 
-        self.d *= u.kpc
+        self.d <<= u.kpc
 
     def __init__(self, theta, observations=None, *, verbose=False):
 
@@ -567,7 +569,21 @@ class Model(lp.limepy):
         )
 
         # ------------------------------------------------------------------
-        # Assign units
+        # Assign units to model values
         # ------------------------------------------------------------------
 
         self._assign_units()
+
+        # ------------------------------------------------------------------
+        # Get Black Holes
+        # ------------------------------------------------------------------
+
+        self._BH_bins = self.mj > (self._mf.IFMR.mBH_min << u.Msun)
+
+        self.BH_mj = self.mj[self._BH_bins]
+        self.BH_Mj = self.Mj[self._BH_bins]
+
+        self.BH_rhoj = self.rhoj[self._BH_bins]
+        self.BH_Sigmaj = self.Sigmaj[self._BH_bins]
+
+        # self.BH_Nj =
