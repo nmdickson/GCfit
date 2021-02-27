@@ -187,6 +187,9 @@ class TestResources(unittest.TestCase):
         else:
             self.assertIn(f'Δ{key}', dataset)
 
+    def _check_for_units(self, key, dataset):
+        self.assertIsNot(dataset[key].unit, u.dimensionless_unscaled)
+
     def test_data_compliance(self):
 
         for cluster in util.cluster_list():
@@ -209,16 +212,19 @@ class TestResources(unittest.TestCase):
 
                     if fnmatch.fnmatch(key, '*pulsar*'):
                         self.assertIn('r', dataset)
+                        self._check_for_units('r', dataset)
 
                         if 'P' in dataset:
 
                             self.assertIn('Pdot_meas', dataset)
                             self._check_for_error('Pdot_meas', dataset)
+                            self._check_for_units('Pdot_meas', dataset)
 
                         elif 'Pb' in dataset:
 
                             self.assertIn('Pbdot_meas', dataset)
                             self._check_for_error('Pbdot_meas', dataset)
+                            self._check_for_units('Pbdot_meas', dataset)
 
                         else:
                             assert False, f"None of ('P', 'Pb') in {dataset}"
@@ -227,20 +233,27 @@ class TestResources(unittest.TestCase):
 
                     elif fnmatch.fnmatch(key, '*velocity_dispersion*'):
                         self.assertIn('r', dataset)
+                        self._check_for_units('r', dataset)
+
                         self.assertIn('σ', dataset)
                         self._check_for_error('σ', dataset)
+                        self._check_for_units('σ', dataset)
 
                     # Number Density
 
                     elif fnmatch.fnmatch(key, '*number_density*'):
                         self.assertIn('r', dataset)
+                        self._check_for_units('r', dataset)
+
                         self.assertIn('Σ', dataset)
                         self._check_for_error('Σ', dataset)
+                        self._check_for_units('Σ', dataset)
 
                     # Proper Motion Dispersion
 
                     elif fnmatch.fnmatch(key, '*proper_motion*'):
                         self.assertIn('r', dataset)
+                        self._check_for_units('r', dataset)
 
                         # make sure that atleast one PM is there
                         pm_fields = ('PM_tot', 'PM_ratio', 'PM_R', 'PM_T')
@@ -252,15 +265,18 @@ class TestResources(unittest.TestCase):
                         # Check for corresponding errors
                         if 'PM_tot' in dataset:
                             self._check_for_error('PM_tot', dataset)
+                            self._check_for_units('PM_tot', dataset)
 
                         if 'PM_ratio' in dataset:
                             self._check_for_error('PM_ratio', dataset)
 
                         if 'PM_R' in dataset:
                             self._check_for_error('PM_R', dataset)
+                            self._check_for_units('PM_R', dataset)
 
                         if 'PM_T' in dataset:
                             self._check_for_error('PM_T', dataset)
+                            self._check_for_units('PM_T', dataset)
 
                     # Mass Function
 
@@ -268,8 +284,12 @@ class TestResources(unittest.TestCase):
                         self.assertIn('N', dataset)
                         self.assertIn('bin', dataset)
                         self.assertIn('Δmbin', dataset)
+
                         self.assertIn('mbin_mean', dataset)
+                        self._check_for_units('mbin_mean', dataset)
+
                         self.assertIn('mbin_width', dataset)
+                        self._check_for_units('mbin_width', dataset)
 
 
 if __name__ == '__main__':
