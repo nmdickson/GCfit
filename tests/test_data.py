@@ -92,7 +92,7 @@ class TestResources(unittest.TestCase):
 
     def test_data_compliance(self):
 
-        for cluster in data.cluster_list():
+        for cluster in util.cluster_list():
 
             with self.subTest(cluster=cluster):
 
@@ -108,28 +108,50 @@ class TestResources(unittest.TestCase):
 
                 for key, dataset in obs.datasets.items():
 
+                    # Pulsars
+
                     if fnmatch.fnmatch(key, '*pulsar*'):
                         self.assertIn('r', dataset)
-                        self.assertIn('a_los', dataset)
-                        self._check_for_error('a_los', dataset)
+
+                        if 'P' in dataset:
+                            self._check_for_error('P', dataset)
+
+                            self.assertIn('Pdot_meas', dataset)
+                            self._check_for_error('Pdot_meas', dataset)
+
+                        elif 'Pb' in dataset:
+                            self._check_for_error('Pb', dataset)
+
+                            self.assertIn('Pbdot_meas', dataset)
+                            self._check_for_error('Pbdot_meas', dataset)
+
+                        else:
+                            assert False, f"None of ('P', 'Pb') in {dataset}"
+
+                    # LOS Velocity Dispersion
 
                     elif fnmatch.fnmatch(key, '*velocity_dispersion*'):
                         self.assertIn('r', dataset)
                         self.assertIn('σ', dataset)
                         self._check_for_error('σ', dataset)
 
+                    # Number Density
+
                     elif fnmatch.fnmatch(key, '*number_density*'):
                         self.assertIn('r', dataset)
                         self.assertIn('Σ', dataset)
                         self._check_for_error('Σ', dataset)
 
+                    # Proper Motion Dispersion
+
                     elif fnmatch.fnmatch(key, '*proper_motion*'):
                         self.assertIn('r', dataset)
 
                         # make sure that atleast one PM is there
+                        pm_fields = ('PM_tot', 'PM_ratio', 'PM_R', 'PM_T')
                         self.assertTrue(
-                            any([field in dataset for field in
-                                 ('PM_tot', 'PM_ratio', 'PM_R', 'PM_T')])
+                            any([field in dataset for field in pm_fields]),
+                            f"None of {pm_fields} in {dataset}"
                         )
 
                         # Check for corresponding errors
@@ -144,6 +166,8 @@ class TestResources(unittest.TestCase):
 
                         if 'PM_T' in dataset:
                             self._check_for_error('PM_T', dataset)
+
+                    # Mass Function
 
                     elif fnmatch.fnmatch(key, '*mass_function*'):
                         self.assertIn('N', dataset)
