@@ -5,27 +5,30 @@
 \subsubsection{Datasets}
 
 \begin{center}
-\begin{table}
+\begin{table}[H]
 \begin{tabular}{ | c | c | c | c | }
     \hline
     Variable & Dataset Name & Supplementary Datasets &  attributes \\
     \hline\hline
     Radial distance & \texttt{r\(^*\)} & \texttt{\(\Delta\)r} & \texttt{units} \\
     \hline
-    Total proper motion & \texttt{PM\_tot} & \texttt{\(\Delta\)PM\_tot} &
-    \texttt{units}\\
+    Total proper motion & \texttt{PM\_tot\(^*\)} &
+    \texttt{\(\Delta\)PM\_tot\(^*\)} & \texttt{units}\\
     \hline
-    Proper motion ratio & \texttt{PM\_ratio} & \texttt{\(\Delta\)PM\_ratio} &
-    \texttt{method} \\
+    Proper motion ratio & \texttt{PM\_ratio\(^*\)} &
+    \texttt{\(\Delta\)PM\_ratio\(^*\)} & \texttt{method} \\
     \hline
-    Radial proper motion & \texttt{PM\_R} & \texttt{\(\Delta\)PM\_R} &
-    \texttt{units}\\
+    Radial proper motion & \texttt{PM\_R\(^*\)} &
+    \texttt{\(\Delta\)PM\_R\(^*\)} & \texttt{units}\\
     \hline
-    Tangential proper motion & \texttt{PM\_T} & \texttt{\(\Delta\)PM\_T} &
-    \texttt{units}\\
+    Tangential proper motion & \texttt{PM\_T\(^*\)} &
+    \texttt{\(\Delta\)PM\_T\(^*\)} & \texttt{units}\\
     \hline
 \end{tabular}
-\caption*{Atleast one of these is req'd, and must have corresponding errors}
+\caption*{
+    The proper motions can be fit on any of these components.
+    The corresponding errors are required for any.
+}
 \end{table}
 \end{center}
 
@@ -33,6 +36,7 @@
 
 
 \begin{center}
+\begin{table}[H]
 \begin{tabular}{ | c | c | }
     \hline
     Attribute & Description \\
@@ -42,4 +46,5 @@
     \texttt{m} & Mean stellar mass of tracer stars [\(M_\odot\)] \\
     \hline
 \end{tabular}
+\end{table}
 \end{center}

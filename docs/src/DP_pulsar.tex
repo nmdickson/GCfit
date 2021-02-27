@@ -5,37 +5,47 @@
 \subsubsection{Datasets}
 
 \begin{center}
+\begin{table}[H]
 \begin{tabular}{ | c | c | c | c | }
     \hline
     Variable & Dataset Name & Supplementary Datasets &  attributes \\
     \hline\hline
     Radial distance & \texttt{r\(^*\)} & & \texttt{units} \\
     \hline
-    LOS acceleration & \texttt{a\_los\(^*\)} & \texttt{\(\Delta\)a\_los} &
-    \texttt{units}\\ &&&\texttt{method}\\ &&&\texttt{a\_g}\\ &&&\texttt{a\_s}\\
+    Spin period & \texttt{P\(^*\)} & \texttt{\(\Delta\)P} & \texttt{units}\\
     \hline
-    Intrinsic acceleration & \texttt{a\_int} & & 
-    \texttt{units} \\ & & & \texttt{method} \\ & & & \texttt{B} \\
+    Spin period derivative & \texttt{Pdot\_meas\(^*\)} &
+    \texttt{\(\Delta\)Pdot\_meas\(^*\)} & \texttt{units} \\
     \hline
-    Spin period & \texttt{P} & \texttt{\(\Delta\)P} & \texttt{units} \\
+    Orbital period & \texttt{Pb\(^*\)} & \texttt{\(\Delta\)Pb} & \texttt{units}\\
     \hline
-    Spin period derivative & \texttt{dP\_meas} & \texttt{\(\Delta\)dP\_meas} &
-    \texttt{units} \\
+    Orbital period derivative & \texttt{Pbdot\_meas\(^*\)} &
+    \texttt{\(\Delta\)Pbdot\_meas\(^*\)} & \texttt{units} \\
     \hline
     Pulsar identifier & \texttt{id} & & \\
     \hline
 \end{tabular}
+\caption*{
+    Pulsars can be fit on the timing solutions of both the isolated
+    pulsar spin (P, Pdot\_meas) and the binary systems orbit (Pb, Pbdot).
+    The period, derivative and corresponding errors are required for either.
+}
+\end{table}
 \end{center}
 
 \subsubsection{Attributes}
 
 
 \begin{center}
+\begin{table}[H]
 \begin{tabular}{ | c | c | }
     \hline
     Attribute & Description \\
     \hline\hline
     \texttt{source} & Literature source(s) of data \\
     \hline
+    \texttt{m} & Mean stellar mass of tracer stars [\(M_\odot\)] \\
+    \hline
 \end{tabular}
+\end{table}
 \end{center}
