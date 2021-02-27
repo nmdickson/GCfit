@@ -432,14 +432,14 @@ class Model(lp.limepy):
         try:
             FeHe = self.observations.mdata['FeHe']
         except (AttributeError, KeyError):
-            logging.warning("No cluster FeHe stored, defaulting to -1.02")
+            logging.debug("No cluster FeHe stored, defaulting to -1.02")
             FeHe = -1.02
 
         # Regulates low mass objects depletion, default -20, 0 for 47 Tuc
         try:
             Ndot = self.observations.mdata['Ndot']
         except (AttributeError, KeyError):
-            logging.warning("No cluster Ndot stored, defaulting to -20")
+            logging.debug("No cluster Ndot stored, defaulting to -20")
             Ndot = -20
 
         # Generate the mass function
@@ -455,6 +455,7 @@ class Model(lp.limepy):
             BH_ret_int=BH_ret_int,
             BH_ret_dyn=BH_ret_dyn,
             FeHe=FeHe,
+            natal_kicks=False
         )
 
     # def _get_scale(self):
