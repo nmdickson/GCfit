@@ -520,7 +520,7 @@ def likelihood_mass_func(model, mf):
 
         # compute final gaussian log likelihood
         tot_likelihood += -0.5 * np.sum(
-            (N_data - N_model)**2 / err**2 + np.log((err / err.unit)**2)
+            (N_data - N_model)**2 / err**2 + np.log(err**2)
         )
 
     return tot_likelihood
