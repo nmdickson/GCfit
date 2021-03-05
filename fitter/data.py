@@ -595,3 +595,19 @@ class Model(lp.limepy):
         self.BH_Sigmaj = self.Sigmaj[self._BH_bins]
 
         # self.BH_Nj =
+
+        # ------------------------------------------------------------------
+        # Get White Dwarfs
+        # ------------------------------------------------------------------
+
+        # TODO figure out how to get WDs, not the same as Hs
+
+        # self._WD_bins = self.mj > (self._mf.IFMR.mWD_min << u.Msun)
+
+        # self.WD_mj = self.mj[self._WD_bins]
+        # self.WD_Mj = self.Mj[self._WD_bins]
+
+        # self.WD_rhoj = self.rhoj[self._WD_bins]
+        # self.WD_Sigmaj = self.Sigmaj[self._WD_bins]
+
+        # self.WD_Nj =
