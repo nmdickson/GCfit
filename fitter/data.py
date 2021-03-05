@@ -455,7 +455,7 @@ class Model(lp.limepy):
             BH_ret_int=BH_ret_int,
             BH_ret_dyn=BH_ret_dyn,
             FeHe=FeHe,
-            natal_kicks=False
+            natal_kicks=True
         )
 
     # def _get_scale(self):
