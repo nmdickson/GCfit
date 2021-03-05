@@ -123,6 +123,12 @@ class Dataset:
     h5py attributes are called metadata here cause that is more descriptive
     '''
 
+    def __repr__(self):
+        return f'Dataset({self._name})'
+
+    def __str__(self):
+        return f'{self._name} Dataset'
+
     def __contains__(self, key):
         return key in self._dict_variables
 
@@ -142,6 +148,8 @@ class Dataset:
         group.visititems(self._init_variables)
 
         self.mdata = dict(group.attrs)
+
+        self._name = group.name
 
     @property
     def variables(self):
