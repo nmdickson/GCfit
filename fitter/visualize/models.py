@@ -1,6 +1,6 @@
 from .. import util
 from ..data import Observations, Model
-from ..probabilities.new_Paz import vec_Paz
+from ..probabilities.pulsars import cluster_component
 
 import h5py
 import numpy as np
@@ -120,7 +120,7 @@ class ModelVisualizer(_Visualizer):
 
         maz = u.Quantity(np.empty(self.model.nstep - 1), 'm/s^2')
         for i in range(self.model.nstep - 1):
-            a_domain, Paz = vec_Paz(self.model, self.model.r[i], -1)
+            a_domain, Paz = cluster_component(self.model, self.model.r[i], -1)
             maz[i] = a_domain[Paz.argmax()] << maz.unit
 
         maz = (self.obs['pulsar/P'] * maz / c).decompose()
@@ -150,7 +150,7 @@ class ModelVisualizer(_Visualizer):
 
         # N_pulsars = obs_r.size
         # prob_dist = np.array([
-        #     vec_Paz(self.model, A_SPACE, obs_r[i], i)
+        #     cluster_component(self.model, A_SPACE, obs_r[i], i)
         #     for i in range(N_pulsars)
         # ])
         # max_probs = prob_dist.max(axis=1)

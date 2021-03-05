@@ -1,21 +1,35 @@
+import scipy.stats
 import numpy as np
 import astropy.units as u
+from astropy.constants import c
 from scipy.interpolate import UnivariateSpline
 
+import pathlib
+from importlib import resources
 
-# TODO vectorize this along pulsar R's as well
 
-def vec_Paz(model, R, mass_bin, *, logspaced=False):
-    """ 
+__all__ = [
+    'cluster_component',
+    'galactic_component',
+    'shklovskii_component',
+    'field_Pdot_KDE',
+]
+
+
+# --------------------------------------------------------------------------
+# Pulsar acceleration (Pdot / P) components
+# --------------------------------------------------------------------------
+
+
+def cluster_component(model, R, mass_bin, *, logspaced=False):
+    """
     Computes probability distribution for a range of line of sight
     accelerations at projected R : P(az|R)
-    Returns the an array containing the probability distribution.
+    Returns the an array containing the probability distribution and the Pdot/P
+    domain of said distribution
 
     `logspaced` uses a logspace for the acceleration domain, rather than linear
 
-    Unfortuneately it's not completely general wrt Quantities vs arrays, as the
-    UnivariateSpline class does not yet support units, so they must be added
-    manually in some spots. Also expects model to come from `data`, with units
     """
 
     if R >= model.rt:
@@ -72,7 +86,8 @@ def vec_Paz(model, R, mass_bin, *, logspaced=False):
 
     # Option (1): zmax < max(z)
     if len(zmax) > 0:
-        zmax = zmax[0]  # Take first entry for the rare cases with multiple peaks
+        # Take first entry for the rare cases with multiple peaks
+        zmax = zmax[0]
         # Set up 2 splines for the inverse z(a_z) for z < zmax and z > zmax
         z1 = np.linspace(z[0], zmax, nr)
 
@@ -101,8 +116,8 @@ def vec_Paz(model, R, mass_bin, *, logspaced=False):
     azmax = az_spl(zmax) * az.unit
 
     # define the acceleration space domain, based on amax
-    # TODO this (especially w/ logspaced) requires care to ensure its normalized
 
+    # TODO this (especially w/ logspaced) requires care to ensure its normalized
     bound = azmax + (5e-9 * az.unit)
     num = int(bound.value / 15e-9 * 150)
     if logspaced:
@@ -131,7 +146,8 @@ def vec_Paz(model, R, mass_bin, *, logspaced=False):
 
         within_bounds = np.where(z2 < zt)
 
-        Paz[outside_azt][within_bounds] += rhoz_spl(z2[within_bounds]) / abs(az_der(z2[within_bounds]))
+        Paz[outside_azt][within_bounds] += (rhoz_spl(z2[within_bounds])
+                                            / abs(az_der(z2[within_bounds])))
 
         Paz[outside_azt][within_bounds] /= rhoz_spl.integral(0., zt.value)
 
@@ -141,4 +157,85 @@ def vec_Paz(model, R, mass_bin, *, logspaced=False):
     Paz_dist = np.concatenate((np.flip(Paz_dist[1:]), Paz_dist))
     az_domain = np.concatenate((np.flip(-az_domain[1:]), az_domain))
 
-    return az_domain, Paz_dist
+    # Change the acceleration domain to a Pdot / P domain
+    PdotP_domain = az_domain / c
+
+    return PdotP_domain, Paz_dist
+
+
+def galactic_component(lat, lon, D):
+    '''b, l, d'''
+    import gala.potential as pot
+
+    from astropy.coordinates import SkyCoord
+
+    # Mikly Way Potential
+    mw = pot.BovyMWPotential2014()
+
+    # Pulsar position in galactocentric coordinates
+    crd = SkyCoord(b=lat, l=lon, distance=D, frame='galactic')
+    XYZ = crd.galactocentric.cartesian.xyz
+
+    # Sun position in galactocentric coordinates
+    b_sun = np.zeros_like(lat)
+    l_sun = np.zeros_like(lon)
+    D_sun = np.zeros_like(D)
+
+    # TODO the transformations are kinda slow, and are prob uneccessary here
+    sun = SkyCoord(b=b_sun, l=l_sun, distance=D_sun, frame='galactic')
+    XYZ_sun = sun.galactocentric.cartesian.xyz
+
+    PdotP = mw.acceleration(XYZ).si / c
+
+    # scalar projection of PdotP along the position vector from pulsar to sun
+    LOS = XYZ_sun - XYZ
+    # PdotP_LOS = np.dot(PdotP, LOS) / np.linalg.norm(LOS)
+    PdotP_LOS = np.einsum('i...,i...->...', PdotP, LOS) / np.linalg.norm(LOS)
+
+    return PdotP_LOS.decompose()
+
+
+def shklovskii_component(pm, D):
+    '''
+    pm in angular speed (mas/yr)
+    '''
+    pm = pm.to("1/s", u.dimensionless_angles())
+
+    D = D.to('m')
+
+    PdotP_pm = pm**2 * D / c
+
+    return (PdotP_pm).decompose()
+
+
+# --------------------------------------------------------------------------
+# Distribution of field pulsar parameters
+# --------------------------------------------------------------------------
+
+
+def field_Pdot_KDE(*, pulsar_db='field_msp.dat', corrected=True):
+    '''Return a gaussian kde
+    psrcat -db_file psrcat.db -c "p0 p1 p1_i GB GL Dist" -l "p0 < 0.1 &&
+        p1 > 0 && p1_i > 0 && ! assoc(GC)" -x > field_msp.dat
+    '''
+    # Get field pulsars data
+    with resources.path('fitter', 'resources') as datadir:
+        pulsar_db = pathlib.Path(f"{datadir}/{pulsar_db}")
+        cols = (0, 3, 6, 7, 8, 9)
+        P, Pdot, Pdot_pm, lat, lon, D = np.genfromtxt(pulsar_db, usecols=cols).T
+
+    lat <<= u.deg
+    lon <<= u.deg
+    D <<= u.kpc
+
+    # Compute and remove the galactic contribution from the PM corrected Pdot
+    Pdot_int = Pdot_pm - galactic_component(*(lat, lon), D).value
+
+    P = np.log10(P)
+    Pdot_int = np.log10(Pdot_int)
+
+    # TODO some Pdot_pm < Pdot_gal; this may or may not be physical, need check
+    finite = np.isfinite(Pdot_int)
+
+    # Create Gaussian P-Pdot_int KDE
+    return scipy.stats.gaussian_kde(np.vstack([P[finite], Pdot_int[finite]]))

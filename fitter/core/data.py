@@ -1,5 +1,3 @@
-from .. import util
-
 import h5py
 import numpy as np
 import limepy as lp
@@ -304,7 +302,7 @@ class Observations:
         computed and return a dict of the relevant obs dataset keys, and tuples
         of the functions and any other required args
         '''
-        from . import probabilities
+        from .. import probabilities
 
         comps = []
         for key in self.datasets:
@@ -335,7 +333,7 @@ class Observations:
 
                     func = probabilities.likelihood_pulsar_spin
 
-                    kde = util.pulsar_Pdot_KDE()
+                    kde = probabilities.pulsars.field_Pdot_KDE()
 
                     comps.append((key, func, kde, *metadata))
 
