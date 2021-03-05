@@ -1,6 +1,6 @@
 from .pulsars import *
 from .. import util
-from ..data import DEFAULT_INITIALS, Model
+from ..core.data import DEFAULT_INITIALS, Model
 
 import numpy as np
 import astropy.units as u

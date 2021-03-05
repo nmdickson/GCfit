@@ -1,5 +1,5 @@
 from .. import util
-from ..data import Observations, Model
+from ..core.data import Observations, Model
 from ..probabilities.pulsars import cluster_component
 
 import h5py
