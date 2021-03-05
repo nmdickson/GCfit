@@ -10,6 +10,8 @@ from astropy.constants import c
 # Unit conversions
 # --------------------------------------------------------------------------
 
+# TODO should probably be using `Equivalency` class?
+
 
 def angular_width(D):
     '''AstroPy units conversion equivalency for angular to linear widths.
@@ -116,6 +118,18 @@ def pulsar_Pdot_KDE(*, pulsar_db='field_msp.dat', corrected=True):
     # Create Gaussian P-Pdot_int KDE
     return scipy.stats.gaussian_kde(np.vstack([P[finite], Pdot_int[finite]]))
 
+
+# TODO maybe univariatespline instead, that gets used often, or maybe both?
+class interpQuantity(scipy.interpolate.interp1d):
+
+    def __init__(self, x, y, bounds_error=False, *args, **kwargs):
+        self._xunit = x.unit
+        self._yunit = y.unit
+
+        super().__init__(x, y, bounds_error=bounds_error, *args, **kwargs)
+
+    def __call__(self, x):
+        return super().__call__(x.to_value(self._xunit)) << self._yunit
 
 # --------------------------------------------------------------------------
 # Data file helpers
