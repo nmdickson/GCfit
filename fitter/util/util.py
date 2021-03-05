@@ -6,59 +6,12 @@ import numpy as np
 import astropy.units as u
 from astropy.constants import c
 
-__all__ = [
-    'angular_width',
-    'angular_speed',
-    'gaussian',
-    'RV_transform',
-    'galactic_pot',
-    'pulsar_Pdot_KDE',
-    'interpQuantity',
-    'cluster_list',
-    'hdf_view',
-]
 
-# --------------------------------------------------------------------------
-# Unit conversions
-# --------------------------------------------------------------------------
-
-# TODO should probably be using `Equivalency` class?
-
-
-def angular_width(D):
-    '''AstroPy units conversion equivalency for angular to linear widths.
-    See: https://docs.astropy.org/en/stable/units/equivalencies.html
-    '''
-
-    D = D.to(u.pc)
-
-    def pc2rad(r):
-        return 2 * np.arctan(r / (2 * D.value))
-
-    def rad2pc(θ):
-        return np.tan(θ / 2) * (2 * D.value)
-
-    return [(u.pc, u.rad, pc2rad, rad2pc)]
-
-
-def angular_speed(D):
-    '''AstroPy units conversion equivalency for angular to tangential speeds.
-    See: https://docs.astropy.org/en/stable/units/equivalencies.html
-    '''
-
-    D = D.to(u.pc)
-
-    def kms2asyr(vt):
-        return vt / (4.74 * D.value)
-
-    def asyr2kms(μ):
-        return 4.74 * D.value * μ
-
-    return [((u.km / u.s), (u.arcsec / u.yr), kms2asyr, asyr2kms)]
+__all__ = ['gaussian', 'RV_transform', 'galactic_pot', 'pulsar_Pdot_KDE']
 
 
 # --------------------------------------------------------------------------
-# Helper Functions
+# Probability Distribution Helper Functions
 # --------------------------------------------------------------------------
 
 
@@ -73,6 +26,12 @@ def RV_transform(domain, f_X, h, h_prime):
     '''transformation of a random variable over a function g=h^-1'''
     f_Y = f_X(h(domain)) * h_prime(domain)
     return np.nan_to_num(f_Y)
+
+
+# --------------------------------------------------------------------------
+# Pulsar Period Component Functions
+# --------------------------------------------------------------------------
+# TODO should maybe be in probabilities with other pulsar code
 
 
 def galactic_pot(lat, lon, D):
@@ -129,92 +88,3 @@ def pulsar_Pdot_KDE(*, pulsar_db='field_msp.dat', corrected=True):
 
     # Create Gaussian P-Pdot_int KDE
     return scipy.stats.gaussian_kde(np.vstack([P[finite], Pdot_int[finite]]))
-
-
-# TODO maybe univariatespline instead, that gets used often, or maybe both?
-class interpQuantity(scipy.interpolate.interp1d):
-
-    def __init__(self, x, y, bounds_error=False, *args, **kwargs):
-        self._xunit = x.unit
-        self._yunit = y.unit
-
-        super().__init__(x, y, bounds_error=bounds_error, *args, **kwargs)
-
-    def __call__(self, x):
-        return super().__call__(x.to_value(self._xunit)) << self._yunit
-
-# --------------------------------------------------------------------------
-# Data file helpers
-# --------------------------------------------------------------------------
-
-
-def cluster_list():
-    with resources.path('fitter', 'resources') as datadir:
-        return [f.stem for f in pathlib.Path(datadir).glob('[!TEST]*.hdf5')]
-
-
-def hdf_view(cluster, attrs=False, spacing='normal', *, outfile="stdout"):
-    '''print out the contents of a given cluster hdf5 file in a pretty way'''
-    import sys
-    import h5py
-
-    # ----------------------------------------------------------------------
-    # Crawler to generate each line of output
-    # ----------------------------------------------------------------------
-
-    def _crawler(root_group):
-
-        def _writer(key, obj):
-
-            tabs = '    ' * key.count('/')
-
-            key = key.split('/')[-1]
-
-            if isinstance(obj, h5py.Group):
-                newline = '' if spacing == 'tight' else '\n'
-            else:
-                newline = '\n' if spacing == 'loose' else ''
-
-            front = f'{newline}{tabs}'
-
-            outstr = f"{front}{type(obj).__name__}: {key}\n"
-
-            if attrs:
-                for k, v in obj.attrs.items():
-                    outstr += f"{tabs}    |- {k}: {v}\n"
-
-                if isinstance(obj, h5py.Dataset) and key != 'initials':
-                    outstr += f"{tabs}    |- shape: {obj.shape}\n"
-                    outstr += f"{tabs}    |- dtype: {obj.dtype}\n"
-
-            res.append(outstr)
-
-        res = []
-        root_group.visititems(_writer)
-
-        return ''.join(res)
-
-    # ----------------------------------------------------------------------
-    # Open the file and run the crawler over all its items
-    # ----------------------------------------------------------------------
-
-    with resources.path('fitter', 'resources') as datadir:
-        with h5py.File(f'{datadir}/{cluster}.hdf5', 'r') as file:
-
-            out = f"{f' {cluster} ':=^40}\n\n"
-
-            out += _crawler(file)
-
-    # ----------------------------------------------------------------------
-    # Write the ouput
-    # ----------------------------------------------------------------------
-
-    if outfile == 'return':
-        return out
-
-    elif outfile == 'stdout':
-        sys.stdout.write(out)
-
-    else:
-        with open(outfile, 'a') as output:
-            output.write(out)

@@ -4,5 +4,6 @@ util
 various utility and helper functions
 '''
 
-# TODO split utils into their own categorical modules
 from .util import *
+from .data import *
+from .units import *
