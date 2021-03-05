@@ -1,6 +1,4 @@
-'''observational and modelled data'''
-
-from . import util
+from .. import util
 
 import h5py
 import numpy as np
@@ -11,6 +9,10 @@ from ssptools import evolve_mf_3 as emf3
 import fnmatch
 import logging
 from importlib import resources
+
+
+__all__ = ['DEFAULT_INITIALS', 'Model', 'Observations']
+
 
 # TODO better exception handling
 

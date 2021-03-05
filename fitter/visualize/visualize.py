@@ -1,6 +1,6 @@
-from . import util
-from .data import Observations, Model
-from .new_Paz import vec_Paz
+from .. import util
+from ..data import Observations, Model
+from ..probabilities.new_Paz import vec_Paz
 
 import sys
 
@@ -13,10 +13,12 @@ import scipy.integrate as integ
 import astropy.visualization as astroviz
 
 
-# TODO add confidence intervals to plots
+__all__ = ['RunVisualizer', 'ModelVisualizer', 'CIModelVisualizer']
+
+
 # TODO fix spacings
 
-# TODO I thinkk this is all pretty out of date (20)
+# TODO I thinkk this is somewhat out of date (20)
 
 
 class _Visualizer:
