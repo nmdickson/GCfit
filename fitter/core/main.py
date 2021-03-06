@@ -224,7 +224,7 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     # ----------------------------------------------------------------------
 
     if verbose:
-        from . import visualize as viz
+        from .. import visualize as viz
         viz.RunVisualizer(backend_fn, observations).print_summary()
 
     logging.info("FINISHED")
