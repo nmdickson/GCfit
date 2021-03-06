@@ -98,4 +98,4 @@ if __name__ == '__main__':
 
     print('args:', vars(args))
 
-    fitter.main(**vars(args))
+    fitter.fit(**vars(args))
