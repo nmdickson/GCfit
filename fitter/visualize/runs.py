@@ -143,11 +143,11 @@ class RunVisualizer(_Visualizer):
 
         return ModelVisualizer.from_chain(chain, self.obs, method)
 
-    def get_CImodel(self, iterations=None, walkers=None, method='median'):
+    def get_CImodel(self, N=100, iterations=None, walkers=None):
 
         labels, chain = self._get_chains(iterations, walkers)
 
-        return CIModelVisualizer.from_chain(chain, self.obs)
+        return CIModelVisualizer.from_chain(chain, self.obs, N)
 
     # ----------------------------------------------------------------------
     # Plots

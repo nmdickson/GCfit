@@ -625,6 +625,15 @@ class CIModelVisualizer(_Visualizer):
 
         return ax
 
+    def get_err(self, dataset, key):
+        try:
+            return dataset[f'Δ{key}']
+        except KeyError:
+            try:
+                return (dataset[f'Δ{key},down'], dataset[f'Δ{key},up'])
+            except KeyError:
+                return None
+
     # -----------------------------------------------------------------------
     # Plotting functions
     # -----------------------------------------------------------------------
@@ -890,6 +899,8 @@ class CIModelVisualizer(_Visualizer):
     @_support_units
     def plot_density(self, fig=None, ax=None, *, kind='all'):
 
+        # TODO some z-order stuff is off, and alpha needs to be better
+
         if kind == 'all':
             kind = {'MS', 'tot', 'BH'}
 
@@ -969,7 +980,7 @@ class CIModelVisualizer(_Visualizer):
         return fig
 
     @classmethod
-    def from_chain(cls, chain, observations, M=100, *, verbose=True):
+    def from_chain(cls, chain, observations, N=100, *, verbose=True):
 
         viz = cls()
 
@@ -977,17 +988,21 @@ class CIModelVisualizer(_Visualizer):
 
         chain = chain.reshape((-1, chain.shape[-1]))
 
-        viz.M = M
+        viz.N = N
 
         viz.obs = observations
 
-        viz.d = np.median(chain[-M:][:, -1], axis=0) << u.kpc
+        median_chain = np.median(chain[-N:], axis=0)
+
+        viz.F = median_chain[:, 7]
+        viz.s2 = median_chain[:, 6]
+        viz.d = median_chain[:, 12] << u.kpc
 
         if verbose:
             import tqdm
-            chain_loader = tqdm.tqdm(chain[-M:])
+            chain_loader = tqdm.tqdm(chain[-N:])
         else:
-            chain_loader = chain[-M:]
+            chain_loader = chain[-N:]
 
         model_sample = [Model(θ, viz.obs) for θ in chain_loader]
 
@@ -997,33 +1012,35 @@ class CIModelVisualizer(_Visualizer):
         viz.r = np.r_[0, np.geomspace(1e-5, max_r.value, num=99)] << u.pc
 
         # Setup the final full parameters arrays
+        # TODO composite stuff like ratio prob need to be computed here,
+        #   not in the plotting. seems to be creating errors
 
         vel_unit = model_sample[0].v2Tj.unit
 
-        v2Tj_full = np.empty((M, viz.r.size)) << vel_unit
-        v2Rj_full = np.empty((M, viz.r.size)) << vel_unit
-        v2pj_full = np.empty((M, viz.r.size)) << vel_unit
+        v2Tj_full = np.empty((N, viz.r.size)) << vel_unit
+        v2Rj_full = np.empty((N, viz.r.size)) << vel_unit
+        v2pj_full = np.empty((N, viz.r.size)) << vel_unit
 
         rho_unit = model_sample[0].rhoj.unit
 
-        rho_MS_full = np.empty((M, viz.r.size)) << rho_unit
-        rho_tot_full = np.empty((M, viz.r.size)) << rho_unit
-        rho_BH_full = np.empty((M, viz.r.size)) << rho_unit
-        # rho_WD_full = np.empty((M, viz.r.size)) << rho_unit
+        rho_MS_full = np.empty((N, viz.r.size)) << rho_unit
+        rho_tot_full = np.empty((N, viz.r.size)) << rho_unit
+        rho_BH_full = np.empty((N, viz.r.size)) << rho_unit
+        # rho_WD_full = np.empty((N, viz.r.size)) << rho_unit
 
         Sigma_unit = model_sample[0].Sigmaj.unit
 
-        Sigma_MS_full = np.empty((M, viz.r.size)) << Sigma_unit
-        Sigma_tot_full = np.empty((M, viz.r.size)) << Sigma_unit
-        Sigma_BH_full = np.empty((M, viz.r.size)) << Sigma_unit
+        Sigma_MS_full = np.empty((N, viz.r.size)) << Sigma_unit
+        Sigma_tot_full = np.empty((N, viz.r.size)) << Sigma_unit
+        Sigma_BH_full = np.empty((N, viz.r.size)) << Sigma_unit
 
-        nd_full = np.empty((M, viz.r.size)) << u.arcmin**-2
+        nd_full = np.empty((N, viz.r.size)) << u.arcmin**-2
 
         N_rbins = np.unique(viz.obs['mass_function/bin']).size
         N_mbins = max(model_sample, key=lambda m: m.nms).nms
-        mf_full = np.empty((M, N_rbins, N_mbins))
+        mf_full = np.empty((N, N_rbins, N_mbins))
 
-        BH_mass = np.empty(M) << u.Msun
+        BH_mass = np.empty(N) << u.Msun
 
         # Get the interpolater and interpolate every parameter
 
@@ -1155,8 +1172,10 @@ class CIModelVisualizer(_Visualizer):
             meta_grp = file.create_group('metadata')
 
             meta_grp.create_dataset('r', data=self.r)
+            meta_grp.attrs['s2'] = self.s2
+            meta_grp.attrs['F'] = self.F
             meta_grp.attrs['d'] = self.d
-            meta_grp.attrs['M'] = self.M
+            meta_grp.attrs['N'] = self.N
             meta_grp.attrs['cluster'] = self.obs.cluster
 
             perc_grp = file.create_group('percentiles')
@@ -1207,8 +1226,11 @@ class CIModelVisualizer(_Visualizer):
         with h5py.File(filename, 'r') as file:
 
             viz.obs = Observations(file['metadata'].attrs['cluster'])
+            viz.N = file['metadata'].attrs['N']
+
+            viz.s2 = file['metadata'].attrs['s2']
+            viz.F = file['metadata'].attrs['F']
             viz.d = file['metadata'].attrs['d'] << u.kpc
-            viz.M = file['metadata'].attrs['M']
 
             viz.r = file['metadata']['r'][:] << u.pc
 
