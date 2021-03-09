@@ -333,6 +333,7 @@ def likelihood_number_density(model, ndensity, *, mass_bin=None):
     # allows us to fit on the data while not worrying too much about the
     # outermost points where background effects are most prominent.
 
+    # TODO it doesn't seem like s2 is being constrained like at all?
     yerr = np.sqrt(obs_err**2 + model.s2)
 
     # Now regular gaussian likelihood
@@ -592,8 +593,8 @@ def posterior(theta, observations, fixed_initials=None, L_components=None):
                           0 < theta['ra'] < 5,
                           0 < theta['g'] < 2.3,
                           0.3 < theta['delta'] < 0.8,
-                          0 < theta['s2'] < 10,
-                          0.1 < theta['F'] < 0.5,
+                          0 < theta['s2'] < 15,
+                          0 < theta['F'] < 0.7,
                           -2 < theta['a1'] < 6,
                           -2 < theta['a2'] < 6,
                           -2 < theta['a3'] < 6,
