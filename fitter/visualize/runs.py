@@ -297,23 +297,32 @@ class RunVisualizer(_Visualizer):
     # Summaries
     # ----------------------------------------------------------------------
 
-    # TODO this very much does not work currently
-    # def plot_boxplots(self, fig=None, ax=None):
+    # TODO this is missing alot of formatting needs
+    def plot_summary(self, fig=None, *, box=True, violin=True):
 
-    #     fig, axes = self._setup_artist(fig, ax)
+        if not (box or violin):
+            raise ValueError("Must plot atleast one of `box` or `violin`")
 
-    #     labels, chain = self._get_chains()
+        labels, chain = self._get_chains()
 
-    #     chain = chain.reshape((-1, chain.shape[-1]))
+        chain = chain.reshape((-1, chain.shape[-1]))
 
-    #     gridspec to hspace, wspace = 0
-    #     subplot spacing to use more of grid
-    #     replace bottom ticks with labels
+        fig, axes = self._setup_multi_artist(fig, shape=(1, chain.shape[-1]))
 
-    #     for i in range(chain.shape[-1]):
-    #         axes[i].boxplot(chain[..., i])
-    #         axes[i].tick_params(axis='y', direction='in', right=True)
-    #         pad=-18, labelrotation=90??
+        # gridspec to hspace, wspace = 0
+        # subplot spacing to use more of grid
+        # replace bottom ticks with labels
+
+        for i in range(chain.shape[-1]):
+
+            if box:
+                axes[i].boxplot(chain[..., i])
+
+            if violin:
+                axes[i].violinplot(chain[..., i])
+
+            axes[i].tick_params(axis='y', direction='in', right=True)
+            # pad=-18, labelrotation=90??
 
     def print_summary(self, out=None, results_only=False, mathtext=False):
         '''write a summary of the run results, to a `out` file-like or stdout'''
