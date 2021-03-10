@@ -409,7 +409,7 @@ class Observations:
 # Cluster Modelled data
 # --------------------------------------------------------------------------
 
-# TODO The units are *very* incomplete in Model (10)
+# TODO The units are *quite* incomplete in Model (10)
 
 class Model(lp.limepy):
 
@@ -426,6 +426,10 @@ class Model(lp.limepy):
 
         # Output times for the evolution (age)
         tout = np.array([11000])
+        # tout = np.array([
+        #     1, 2, 3, 4, 5, 6, 7, 8, 10, 25, 50, 100, 250, 500, 1000, 2000,
+        #     3000, 4000, 5000, 6000, 7000, 8000, 9000, 12000
+        # ])
 
         # TODO figure out which of these are cluster dependant, store in hdfs
 
@@ -435,6 +439,8 @@ class Model(lp.limepy):
         NS_ret = 0.1  # Initial neutron star retention
         BH_ret_int = 1  # Initial Black Hole retention
         BH_ret_dyn = self.BHret / 100  # Dynamical Black Hole retention
+
+        natal_kicks = True
 
         # Metallicity
         try:
@@ -463,7 +469,7 @@ class Model(lp.limepy):
             BH_ret_int=BH_ret_int,
             BH_ret_dyn=BH_ret_dyn,
             FeHe=FeHe,
-            natal_kicks=True
+            natal_kicks=natal_kicks
         )
 
     # def _get_scale(self):
@@ -530,15 +536,31 @@ class Model(lp.limepy):
         # Get mass function
         # ------------------------------------------------------------------
 
+        # TODO I think how we are handling everything with mj and bins could
+        #   be done much more nicely (maybe with some sweet masked arrays)
+
         self._mf = self._init_mf()
 
         # Set bins that should be empty to empty
         cs = self._mf.Ns[-1] > 10 * self._mf.Nmin
+        ms, Ms = self._mf.ms[-1][cs], self._mf.Ms[-1][cs]
+
         cr = self._mf.Nr[-1] > 10 * self._mf.Nmin
+        mr, Mr = self._mf.mr[-1][cr], self._mf.Mr[-1][cr]
 
         # Collect mean mass and total mass bins
-        mj = np.r_[self._mf.ms[-1][cs], self._mf.mr[-1][cr]]
-        Mj = np.r_[self._mf.Ms[-1][cs], self._mf.Mr[-1][cr]]
+        mj = np.r_[ms, mr]
+        Mj = np.r_[Ms, Mr]
+
+        # store some necessary mass function info in the model
+        self.nms = ms.size
+        self.nmr = mr.size
+
+        # TODO these kind of slices would prob be more useful than nms elsewhere
+        self._star_bins = slice(0, self.nms)
+        self._remnant_bins = slice(self.nms, self.nms + self.nmr)
+
+        self.mes_widths = self._mf.mes[-1][1:] - self._mf.mes[-1][:-1]
 
         # append tracer mass bins (must be appended to end to not affect nms)
         if observations is not None:
@@ -554,10 +576,6 @@ class Model(lp.limepy):
 
         else:
             logging.warning("No `Observations` given, no tracer masses added")
-
-        # store some necessary mass function info in the model
-        self.nms = len(self._mf.ms[-1][cs])
-        self.mes_widths = self._mf.mes[-1][1:] - self._mf.mes[-1][:-1]
 
         # ------------------------------------------------------------------
         # Create the limepy model base
@@ -583,31 +601,49 @@ class Model(lp.limepy):
         self._assign_units()
 
         # ------------------------------------------------------------------
+        # Split apart the stellar classes of the mass bins
+        # ------------------------------------------------------------------
+
+        # TODO slight difference in mf.IFMR.mBH_min and mf.mBH_min?
+        self._mBH_min = self._mf.IFMR.mBH_min << u.Msun
+        self._BH_bins = self.mj[self._remnant_bins] > self._mBH_min
+
+        self._mWD_max = self._mf.IFMR.predict(self._mf.IFMR.wd_m_max) << u.Msun
+        self._WD_bins = self.mj[self._remnant_bins] < self._mWD_max
+
+        self._NS_bins = ((self._mWD_max < self.mj[self._remnant_bins])
+                         & (self.mj[self._remnant_bins] < self._mBH_min))
+
+        # ------------------------------------------------------------------
         # Get Black Holes
         # ------------------------------------------------------------------
 
-        self._BH_bins = self.mj > (self._mf.IFMR.mBH_min << u.Msun)
+        self.BH_mj = self.mj[self._remnant_bins][self._BH_bins]
+        self.BH_Mj = self.Mj[self._remnant_bins][self._BH_bins]
+        # TODO should this use Nr or Mr/mr? they are somehow different
+        self.BH_Nj = self.BH_Mj / self.BH_mj
 
-        self.BH_mj = self.mj[self._BH_bins]
-        self.BH_Mj = self.Mj[self._BH_bins]
-
-        self.BH_rhoj = self.rhoj[self._BH_bins]
-        self.BH_Sigmaj = self.Sigmaj[self._BH_bins]
-
-        # self.BH_Nj =
+        self.BH_rhoj = self.rhoj[self._remnant_bins][self._BH_bins]
+        self.BH_Sigmaj = self.Sigmaj[self._remnant_bins][self._BH_bins]
 
         # ------------------------------------------------------------------
         # Get White Dwarfs
         # ------------------------------------------------------------------
 
-        # TODO figure out how to get WDs, not the same as Hs
+        self.WD_mj = self.mj[self._remnant_bins][self._WD_bins]
+        self.WD_Mj = self.Mj[self._remnant_bins][self._WD_bins]
+        self.WD_Nj = self.WD_Mj / self.WD_mj
 
-        # self._WD_bins = self.mj > (self._mf.IFMR.mWD_min << u.Msun)
+        self.WD_rhoj = self.rhoj[self._remnant_bins][self._WD_bins]
+        self.WD_Sigmaj = self.Sigmaj[self._remnant_bins][self._WD_bins]
 
-        # self.WD_mj = self.mj[self._WD_bins]
-        # self.WD_Mj = self.Mj[self._WD_bins]
+        # ------------------------------------------------------------------
+        # Get Neutron Stars
+        # ------------------------------------------------------------------
 
-        # self.WD_rhoj = self.rhoj[self._WD_bins]
-        # self.WD_Sigmaj = self.Sigmaj[self._WD_bins]
+        self.NS_mj = self.mj[self._remnant_bins][self._NS_bins]
+        self.NS_Mj = self.Mj[self._remnant_bins][self._NS_bins]
+        self.NS_Nj = self.NS_Mj / self.NS_mj
 
-        # self.WD_Nj =
+        self.NS_rhoj = self.rhoj[self._remnant_bins][self._NS_bins]
+        self.NS_Sigmaj = self.Sigmaj[self._remnant_bins][self._NS_bins]
