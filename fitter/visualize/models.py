@@ -6,8 +6,9 @@ import h5py
 import numpy as np
 import astropy.units as u
 import matplotlib.pyplot as plt
-import matplotlib.colors as mpl_clr
 import scipy.integrate as integ
+import scipy.interpolate as interp
+import matplotlib.colors as mpl_clr
 import astropy.visualization as astroviz
 
 
@@ -979,6 +980,41 @@ class CIModelVisualizer(_Visualizer):
         return fig
 
     @_support_units
+    def plot_cumulative_mass(self, fig=None, ax=None, *, kind='all'):
+
+        if kind == 'all':
+            kind = {'MS', 'tot', 'BH', 'WD', 'NS'}
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        ax.set_title('Cumulative Mass')
+
+        # Main sequence density
+        if 'MS' in kind:
+            self._plot_model_CI(ax, self.cum_M_MS, label='Main Sequence')
+
+        # Total density
+        if 'tot' in kind:
+            self._plot_model_CI(ax, self.cum_M_tot, label='Total')
+
+        # Black hole density
+        if 'BH' in kind:
+            self._plot_model_CI(ax, self.cum_M_BH, label='Black Hole')
+
+        if 'WD' in kind:
+            self._plot_model_CI(ax, self.cum_M_WD, label='White Dwarf')
+
+        if 'NS' in kind:
+            self._plot_model_CI(ax, self.cum_M_NS, label='Neutron Star')
+
+        ax.set_yscale("log")
+        ax.set_xscale("log")
+
+        ax.legend()
+
+        return fig
+
+    @_support_units
     def plot_all(self, fig=None, axes=None, show_obs=False):
 
         # TODO a better method for being able to overplot multiple show_alls
@@ -1059,6 +1095,14 @@ class CIModelVisualizer(_Visualizer):
         Sigma_WD_full = np.empty((N, viz.r.size)) << Sigma_unit
         Sigma_NS_full = np.empty((N, viz.r.size)) << Sigma_unit
 
+        mass_unit = model_sample[0].M.unit
+
+        cum_M_MS_full = np.empty((N, viz.r.size)) << mass_unit
+        cum_M_tot_full = np.empty((N, viz.r.size)) << mass_unit
+        cum_M_BH_full = np.empty((N, viz.r.size)) << mass_unit
+        cum_M_WD_full = np.empty((N, viz.r.size)) << mass_unit
+        cum_M_NS_full = np.empty((N, viz.r.size)) << mass_unit
+
         nd_full = np.empty((N, viz.r.size)) << u.arcmin**-2
 
         N_rbins = np.unique(viz.obs['mass_function/bin']).size
@@ -1130,6 +1174,32 @@ class CIModelVisualizer(_Visualizer):
             Sigma_NS_interp = util.interpQuantity(model.r, Sigma_NS)
             Sigma_NS_full[ind, :] = Sigma_NS_interp(viz.r)
 
+            # Cumulative Mass distribution
+            # TODO it seems like the final cum mass is a bit less than total Mj?
+
+            r = viz.r.value
+            r0 = r[0]
+
+            cum_M_MS = 2 * np.pi * model.r * Sigma_MS
+            cum_M_MS_interp = interp.UnivariateSpline(model.r, cum_M_MS, k=3, s=0, ext=1)
+            cum_M_MS_full[ind, :] = [cum_M_MS_interp.integral(r0, ri) for ri in r] << mass_unit
+
+            cum_M_tot = 2 * np.pi * model.r * Sigma_tot
+            cum_M_tot_interp = interp.UnivariateSpline(model.r, cum_M_tot, k=3, s=0, ext=1)
+            cum_M_tot_full[ind, :] = [cum_M_tot_interp.integral(r0, ri) for ri in r] << mass_unit
+
+            cum_M_BH = 2 * np.pi * model.r * Sigma_BH
+            cum_M_BH_interp = interp.UnivariateSpline(model.r, cum_M_BH, k=3, s=0, ext=1)
+            cum_M_BH_full[ind, :] = [cum_M_BH_interp.integral(r0, ri) for ri in r] << mass_unit
+
+            cum_M_WD = 2 * np.pi * model.r * Sigma_WD
+            cum_M_WD_interp = interp.UnivariateSpline(model.r, cum_M_WD, k=3, s=0, ext=1)
+            cum_M_WD_full[ind, :] = [cum_M_WD_interp.integral(r0, ri) for ri in r] << mass_unit
+
+            cum_M_NS = 2 * np.pi * model.r * Sigma_NS
+            cum_M_NS_interp = interp.UnivariateSpline(model.r, cum_M_NS, k=3, s=0, ext=1)
+            cum_M_NS_full[ind, :] = [cum_M_NS_interp.integral(r0, ri) for ri in r] << mass_unit
+
             # Number Densities
 
             obs_nd = viz.obs['number_density']
@@ -1196,6 +1266,12 @@ class CIModelVisualizer(_Visualizer):
         viz.Sigma_BH = np.percentile(Sigma_BH_full, q, axis=0)
         viz.Sigma_WD = np.percentile(Sigma_WD_full, q, axis=0)
         viz.Sigma_NS = np.percentile(Sigma_NS_full, q, axis=0)
+
+        viz.cum_M_MS = np.percentile(cum_M_MS_full, q, axis=0)
+        viz.cum_M_tot = np.percentile(cum_M_tot_full, q, axis=0)
+        viz.cum_M_BH = np.percentile(cum_M_BH_full, q, axis=0)
+        viz.cum_M_WD = np.percentile(cum_M_WD_full, q, axis=0)
+        viz.cum_M_NS = np.percentile(cum_M_NS_full, q, axis=0)
 
         viz.numdens = np.percentile(nd_full, q, axis=0)
         viz.mass_func = np.percentile(mf_full, q, axis=0)

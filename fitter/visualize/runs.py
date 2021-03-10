@@ -312,6 +312,7 @@ class RunVisualizer(_Visualizer):
         # gridspec to hspace, wspace = 0
         # subplot spacing to use more of grid
         # replace bottom ticks with labels
+        # Maybe set ylims ased on prior bounds? if they're not too large
 
         for i in range(chain.shape[-1]):
 
