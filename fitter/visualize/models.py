@@ -476,6 +476,14 @@ class ModelVisualizer(_Visualizer):
         rho_BH = np.sum(self.model.BH_rhoj, axis=0)
         ax.plot(self.model.r, rho_BH, label='Black Hole')
 
+        # White Dwarf density
+        rho_WD = np.sum(self.model.WD_rhoj, axis=0)
+        ax.plot(self.model.r, rho_WD, label='White Dwarf')
+
+        # Neutron Stars density
+        rho_NS = np.sum(self.model.NS_rhoj, axis=0)
+        ax.plot(self.model.r, rho_NS, label='Neutron Stars')
+
         ax.set_yscale("log")
         ax.set_xscale("log")
 
@@ -491,16 +499,24 @@ class ModelVisualizer(_Visualizer):
         ax.set_title('Surface Mass Density')
 
         # Main sequence density
-        rho_MS = np.sum(self.model.Sigmaj[:self.model.nms], axis=0)
-        ax.plot(self.model.r, rho_MS, label='Main Sequence')
+        sig_MS = np.sum(self.model.Sigmaj[:self.model.nms], axis=0)
+        ax.plot(self.model.r, sig_MS, label='Main Sequence')
 
         # Total density
-        rho_MS = np.sum(self.model.Sigmaj, axis=0)
-        ax.plot(self.model.r, rho_MS, label='Total')
+        sig_MS = np.sum(self.model.Sigmaj, axis=0)
+        ax.plot(self.model.r, sig_MS, label='Total')
 
         # Black hole density
-        rho_MS = np.sum(self.model.BH_Sigmaj, axis=0)
-        ax.plot(self.model.r, rho_MS, label='Black Hole')
+        sig_MS = np.sum(self.model.BH_Sigmaj, axis=0)
+        ax.plot(self.model.r, sig_MS, label='Black Hole')
+
+        # White Dwarf density
+        sig_WD = np.sum(self.model.WD_Sigmaj, axis=0)
+        ax.plot(self.model.r, sig_WD, label='White Dwarf')
+
+        # Neutron Stars density
+        sig_NS = np.sum(self.model.NS_Sigmaj, axis=0)
+        ax.plot(self.model.r, sig_NS, label='Neutron Stars')
 
         ax.set_yscale("log")
         ax.set_xscale("log")
@@ -902,7 +918,7 @@ class CIModelVisualizer(_Visualizer):
         # TODO some z-order stuff is off, and alpha needs to be better
 
         if kind == 'all':
-            kind = {'MS', 'tot', 'BH'}
+            kind = {'MS', 'tot', 'BH', 'WD', 'NS'}
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -919,6 +935,12 @@ class CIModelVisualizer(_Visualizer):
         # Black hole density
         if 'BH' in kind:
             self._plot_model_CI(ax, self.rho_BH, label='Black Hole')
+
+        if 'WD' in kind:
+            self._plot_model_CI(ax, self.rho_WD, label='White Dwarf')
+
+        if 'NS' in kind:
+            self._plot_model_CI(ax, self.rho_NS, label='Neutron Star')
 
         ax.set_yscale("log")
         ax.set_xscale("log")
@@ -994,9 +1016,9 @@ class CIModelVisualizer(_Visualizer):
 
         median_chain = np.median(chain[-N:], axis=0)
 
-        viz.F = median_chain[:, 7]
-        viz.s2 = median_chain[:, 6]
-        viz.d = median_chain[:, 12] << u.kpc
+        viz.F = median_chain[7]
+        viz.s2 = median_chain[6]
+        viz.d = median_chain[12] << u.kpc
 
         if verbose:
             import tqdm
@@ -1026,13 +1048,16 @@ class CIModelVisualizer(_Visualizer):
         rho_MS_full = np.empty((N, viz.r.size)) << rho_unit
         rho_tot_full = np.empty((N, viz.r.size)) << rho_unit
         rho_BH_full = np.empty((N, viz.r.size)) << rho_unit
-        # rho_WD_full = np.empty((N, viz.r.size)) << rho_unit
+        rho_WD_full = np.empty((N, viz.r.size)) << rho_unit
+        rho_NS_full = np.empty((N, viz.r.size)) << rho_unit
 
         Sigma_unit = model_sample[0].Sigmaj.unit
 
         Sigma_MS_full = np.empty((N, viz.r.size)) << Sigma_unit
         Sigma_tot_full = np.empty((N, viz.r.size)) << Sigma_unit
         Sigma_BH_full = np.empty((N, viz.r.size)) << Sigma_unit
+        Sigma_WD_full = np.empty((N, viz.r.size)) << Sigma_unit
+        Sigma_NS_full = np.empty((N, viz.r.size)) << Sigma_unit
 
         nd_full = np.empty((N, viz.r.size)) << u.arcmin**-2
 
@@ -1075,9 +1100,13 @@ class CIModelVisualizer(_Visualizer):
             rho_BH_interp = util.interpQuantity(model.r, rho_BH)
             rho_BH_full[ind, :] = rho_BH_interp(viz.r)
 
-            # rho_WD = np.sum(model.WD_rhoj, axis=0)
-            # rho_WD_interp = util.interpQuantity(model.r, rho_WD)
-            # rho_WD_full[ind, :] = rho_WD_interp(viz.r)
+            rho_WD = np.sum(model.WD_rhoj, axis=0)
+            rho_WD_interp = util.interpQuantity(model.r, rho_WD)
+            rho_WD_full[ind, :] = rho_WD_interp(viz.r)
+
+            rho_NS = np.sum(model.NS_rhoj, axis=0)
+            rho_NS_interp = util.interpQuantity(model.r, rho_NS)
+            rho_NS_full[ind, :] = rho_NS_interp(viz.r)
 
             # Surface Densities
 
@@ -1092,6 +1121,14 @@ class CIModelVisualizer(_Visualizer):
             Sigma_BH = np.sum(model.BH_Sigmaj, axis=0)
             Sigma_BH_interp = util.interpQuantity(model.r, Sigma_BH)
             Sigma_BH_full[ind, :] = Sigma_BH_interp(viz.r)
+
+            Sigma_WD = np.sum(model.WD_Sigmaj, axis=0)
+            Sigma_WD_interp = util.interpQuantity(model.r, Sigma_WD)
+            Sigma_WD_full[ind, :] = Sigma_WD_interp(viz.r)
+
+            Sigma_NS = np.sum(model.NS_Sigmaj, axis=0)
+            Sigma_NS_interp = util.interpQuantity(model.r, Sigma_NS)
+            Sigma_NS_full[ind, :] = Sigma_NS_interp(viz.r)
 
             # Number Densities
 
@@ -1147,6 +1184,8 @@ class CIModelVisualizer(_Visualizer):
         viz.rho_MS = np.percentile(rho_MS_full, q, axis=0)
         viz.rho_tot = np.percentile(rho_tot_full, q, axis=0)
         viz.rho_BH = np.percentile(rho_BH_full, q, axis=0)
+        viz.rho_WD = np.percentile(rho_WD_full, q, axis=0)
+        viz.rho_NS = np.percentile(rho_NS_full, q, axis=0)
 
         viz.v2Tj = np.percentile(v2Tj_full, q, axis=0)
         viz.v2Rj = np.percentile(v2Rj_full, q, axis=0)
@@ -1155,6 +1194,8 @@ class CIModelVisualizer(_Visualizer):
         viz.Sigma_MS = np.percentile(Sigma_MS_full, q, axis=0)
         viz.Sigma_tot = np.percentile(Sigma_tot_full, q, axis=0)
         viz.Sigma_BH = np.percentile(Sigma_BH_full, q, axis=0)
+        viz.Sigma_WD = np.percentile(Sigma_WD_full, q, axis=0)
+        viz.Sigma_NS = np.percentile(Sigma_NS_full, q, axis=0)
 
         viz.numdens = np.percentile(nd_full, q, axis=0)
         viz.mass_func = np.percentile(mf_full, q, axis=0)
@@ -1189,6 +1230,12 @@ class CIModelVisualizer(_Visualizer):
             ds = perc_grp.create_dataset('rho_BH', data=self.rho_BH)
             ds.attrs['unit'] = self.rho_BH.unit.to_string()
 
+            ds = perc_grp.create_dataset('rho_WD', data=self.rho_WD)
+            ds.attrs['unit'] = self.rho_WD.unit.to_string()
+
+            ds = perc_grp.create_dataset('rho_NS', data=self.rho_NS)
+            ds.attrs['unit'] = self.rho_NS.unit.to_string()
+
             ds = perc_grp.create_dataset('v2Tj', data=self.v2Tj)
             ds.attrs['unit'] = self.v2Tj.unit.to_string()
 
@@ -1206,6 +1253,12 @@ class CIModelVisualizer(_Visualizer):
 
             ds = perc_grp.create_dataset('Sigma_BH', data=self.Sigma_BH)
             ds.attrs['unit'] = self.Sigma_BH.unit.to_string()
+
+            ds = perc_grp.create_dataset('Sigma_WD', data=self.Sigma_WD)
+            ds.attrs['unit'] = self.Sigma_WD.unit.to_string()
+
+            ds = perc_grp.create_dataset('Sigma_NS', data=self.Sigma_NS)
+            ds.attrs['unit'] = self.Sigma_NS.unit.to_string()
 
             ds = perc_grp.create_dataset('numdens', data=self.numdens)
             ds.attrs['unit'] = self.numdens.unit.to_string()
@@ -1245,4 +1298,3 @@ class CIModelVisualizer(_Visualizer):
                 setattr(viz, key, value)
 
         return viz
-
