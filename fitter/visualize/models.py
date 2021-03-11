@@ -1115,90 +1115,90 @@ class CIModelVisualizer(_Visualizer):
 
         for ind, model in enumerate(model_sample):
 
-            # Do this for BH and stuff too??
-            # Not really sure how to handle mass bin
             mass_bin = model.nms - 1
 
             # Velocities
 
-            v2Tj_interp = util.interpQuantity(model.r, model.v2Tj[mass_bin])
+            v2Tj_interp = util.QuantitySpline(model.r, model.v2Tj[mass_bin])
             v2Tj_full[ind, :] = v2Tj_interp(viz.r)
 
-            v2Rj_interp = util.interpQuantity(model.r, model.v2Rj[mass_bin])
+            v2Rj_interp = util.QuantitySpline(model.r, model.v2Rj[mass_bin])
             v2Rj_full[ind, :] = v2Rj_interp(viz.r)
 
-            v2pj_interp = util.interpQuantity(model.r, model.v2pj[mass_bin])
+            v2pj_interp = util.QuantitySpline(model.r, model.v2pj[mass_bin])
             v2pj_full[ind, :] = v2pj_interp(viz.r)
 
             # Mass Densities
 
             rho_MS = np.sum(model.rhoj[:model.nms], axis=0)
-            rho_MS_interp = util.interpQuantity(model.r, rho_MS)
+            rho_MS_interp = util.QuantitySpline(model.r, rho_MS)
             rho_MS_full[ind, :] = rho_MS_interp(viz.r)
 
             rho_tot = np.sum(model.rhoj, axis=0)
-            rho_tot_interp = util.interpQuantity(model.r, rho_tot)
+            rho_tot_interp = util.QuantitySpline(model.r, rho_tot)
             rho_tot_full[ind, :] = rho_tot_interp(viz.r)
 
             rho_BH = np.sum(model.BH_rhoj, axis=0)
-            rho_BH_interp = util.interpQuantity(model.r, rho_BH)
+            rho_BH_interp = util.QuantitySpline(model.r, rho_BH)
             rho_BH_full[ind, :] = rho_BH_interp(viz.r)
 
             rho_WD = np.sum(model.WD_rhoj, axis=0)
-            rho_WD_interp = util.interpQuantity(model.r, rho_WD)
+            rho_WD_interp = util.QuantitySpline(model.r, rho_WD)
             rho_WD_full[ind, :] = rho_WD_interp(viz.r)
 
             rho_NS = np.sum(model.NS_rhoj, axis=0)
-            rho_NS_interp = util.interpQuantity(model.r, rho_NS)
+            rho_NS_interp = util.QuantitySpline(model.r, rho_NS)
             rho_NS_full[ind, :] = rho_NS_interp(viz.r)
 
             # Surface Densities
 
             Sigma_MS = np.sum(model.Sigmaj[:model.nms], axis=0)
-            Sigma_MS_interp = util.interpQuantity(model.r, Sigma_MS)
+            Sigma_MS_interp = util.QuantitySpline(model.r, Sigma_MS)
             Sigma_MS_full[ind, :] = Sigma_MS_interp(viz.r)
 
             Sigma_tot = np.sum(model.Sigmaj, axis=0)
-            Sigma_tot_interp = util.interpQuantity(model.r, Sigma_tot)
+            Sigma_tot_interp = util.QuantitySpline(model.r, Sigma_tot)
             Sigma_tot_full[ind, :] = Sigma_tot_interp(viz.r)
 
             Sigma_BH = np.sum(model.BH_Sigmaj, axis=0)
-            Sigma_BH_interp = util.interpQuantity(model.r, Sigma_BH)
+            Sigma_BH_interp = util.QuantitySpline(model.r, Sigma_BH)
             Sigma_BH_full[ind, :] = Sigma_BH_interp(viz.r)
 
             Sigma_WD = np.sum(model.WD_Sigmaj, axis=0)
-            Sigma_WD_interp = util.interpQuantity(model.r, Sigma_WD)
+            Sigma_WD_interp = util.QuantitySpline(model.r, Sigma_WD)
             Sigma_WD_full[ind, :] = Sigma_WD_interp(viz.r)
 
             Sigma_NS = np.sum(model.NS_Sigmaj, axis=0)
-            Sigma_NS_interp = util.interpQuantity(model.r, Sigma_NS)
+            Sigma_NS_interp = util.QuantitySpline(model.r, Sigma_NS)
             Sigma_NS_full[ind, :] = Sigma_NS_interp(viz.r)
 
             # Cumulative Mass distribution
-            # TODO it seems like the final cum mass is a bit less than total Mj?
-
-            r = viz.r.value
-            r0 = r[0]
+            # TODO it seems like the integrated mass is a bit less than total Mj
 
             cum_M_MS = 2 * np.pi * model.r * Sigma_MS
-            cum_M_MS_interp = interp.UnivariateSpline(model.r, cum_M_MS, k=3, s=0, ext=1)
-            cum_M_MS_full[ind, :] = [cum_M_MS_interp.integral(r0, ri) for ri in r] << mass_unit
+            cum_M_MS_interp = util.QuantitySpline(model.r, cum_M_MS)
+            cum_M_MS_full[ind, :] = [cum_M_MS_interp.integral(viz.r[0], ri)
+                                     for ri in viz.r]
 
             cum_M_tot = 2 * np.pi * model.r * Sigma_tot
-            cum_M_tot_interp = interp.UnivariateSpline(model.r, cum_M_tot, k=3, s=0, ext=1)
-            cum_M_tot_full[ind, :] = [cum_M_tot_interp.integral(r0, ri) for ri in r] << mass_unit
+            cum_M_tot_interp = util.QuantitySpline(model.r, cum_M_tot)
+            cum_M_tot_full[ind, :] = [cum_M_tot_interp.integral(viz.r[0], ri)
+                                      for ri in viz.r]
 
             cum_M_BH = 2 * np.pi * model.r * Sigma_BH
-            cum_M_BH_interp = interp.UnivariateSpline(model.r, cum_M_BH, k=3, s=0, ext=1)
-            cum_M_BH_full[ind, :] = [cum_M_BH_interp.integral(r0, ri) for ri in r] << mass_unit
+            cum_M_BH_interp = util.QuantitySpline(model.r, cum_M_BH)
+            cum_M_BH_full[ind, :] = [cum_M_BH_interp.integral(viz.r[0], ri)
+                                     for ri in viz.r]
 
             cum_M_WD = 2 * np.pi * model.r * Sigma_WD
-            cum_M_WD_interp = interp.UnivariateSpline(model.r, cum_M_WD, k=3, s=0, ext=1)
-            cum_M_WD_full[ind, :] = [cum_M_WD_interp.integral(r0, ri) for ri in r] << mass_unit
+            cum_M_WD_interp = util.QuantitySpline(model.r, cum_M_WD)
+            cum_M_WD_full[ind, :] = [cum_M_WD_interp.integral(viz.r[0], ri)
+                                     for ri in viz.r]
 
             cum_M_NS = 2 * np.pi * model.r * Sigma_NS
-            cum_M_NS_interp = interp.UnivariateSpline(model.r, cum_M_NS, k=3, s=0, ext=1)
-            cum_M_NS_full[ind, :] = [cum_M_NS_interp.integral(r0, ri) for ri in r] << mass_unit
+            cum_M_NS_interp = util.QuantitySpline(model.r, cum_M_NS)
+            cum_M_NS_full[ind, :] = [cum_M_NS_interp.integral(viz.r[0], ri)
+                                     for ri in viz.r]
 
             # Number Densities
 
@@ -1207,7 +1207,7 @@ class CIModelVisualizer(_Visualizer):
             # TODO maybe this should actually be a part of `Model`
             model_nd = model.Sigmaj[mass_bin] / model.mj[mass_bin]
 
-            nd_interp = util.interpQuantity(model.r, model_nd)
+            nd_interp = util.QuantitySpline(model.r, model_nd)
 
             K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_nd['Σ']**2)
                  / np.nansum(nd_interp(obs_r)**2 / obs_nd['Σ']**2))
@@ -1229,7 +1229,7 @@ class CIModelVisualizer(_Visualizer):
                 for mbin_ind in range(model.nms):
 
                     # Interpolate the viz.model density at the data locations
-                    # TODO cant use interpQuantity here until the integ works
+                    # TODO cant use QuantitySpline here until the integ works
                     import scipy.interpolate
                     density = scipy.interpolate.interp1d(
                         model.r,

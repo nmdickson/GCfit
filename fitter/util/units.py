@@ -42,6 +42,9 @@ def angular_speed(D):
 
 
 class QuantitySpline(scipy.interpolate.UnivariateSpline):
+    '''
+    Univariate Spline which supports units
+    '''
 
     def __init__(self, x, y, w=None, bbox=[None] * 2, k=3, s=0,
                  ext=1, check_finite=False):
