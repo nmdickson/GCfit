@@ -358,10 +358,10 @@ class ModelVisualizer(_Visualizer):
             numdens = self.obs['number_density']
 
             # interpolate number density to the observed data points r
-            interp_model = np.interp(
-                numdens['r'].to(u.arcmin), self.model.r.to(u.arcmin),
+            interp_model = util.QuantitySpline(
+                self.model.r,
                 self.model.Sigmaj[mass_bin] / self.model.mj[mass_bin]
-            )
+            )(numdens['r'])
 
             K = (np.sum(numdens['Σ'] * interp_model / numdens["Σ"] ** 2)
                  / np.sum(interp_model ** 2 / numdens["Σ"] ** 2))
@@ -518,6 +518,68 @@ class ModelVisualizer(_Visualizer):
         # Neutron Stars density
         sig_NS = np.sum(self.model.NS_Sigmaj, axis=0)
         ax.plot(self.model.r, sig_NS, label='Neutron Stars')
+
+        ax.set_yscale("log")
+        ax.set_xscale("log")
+
+        ax.legend()
+
+        return fig
+
+    @_support_units
+    def plot_cumulative_mass(self, fig=None, ax=None):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        ax.set_title('Cumulative Mass')
+
+        r0 = self.model.r[0]
+
+        # Main sequence mass
+
+        Sigma_MS = self.model.Sigmaj[:self.model.nms]
+        sig_MS = 2 * np.pi * self.model.r * np.sum(Sigma_MS, axis=0)
+        dM_MS = util.QuantitySpline(self.model.r, sig_MS)
+
+        cum_M_MS = [dM_MS.integral(r0, ri) for ri in self.model.r]
+
+        ax.plot(self.model.r, cum_M_MS, label='Main Sequence')
+
+        # Total mass
+
+        sig_tot = 2 * np.pi * self.model.r * np.sum(self.model.Sigmaj, axis=0)
+        dM_tot = util.QuantitySpline(self.model.r, sig_tot)
+
+        cum_M_tot = [dM_tot.integral(r0, ri) for ri in self.model.r]
+
+        ax.plot(self.model.r, cum_M_tot, label='Total')
+
+        # Black hole mass
+
+        sig_BH = 2 * np.pi * self.model.r * np.sum(self.model.BH_Sigmaj, axis=0)
+        dM_BH = util.QuantitySpline(self.model.r, sig_BH)
+
+        cum_M_BH = [dM_BH.integral(r0, ri) for ri in self.model.r]
+
+        ax.plot(self.model.r, cum_M_BH, label='Black Hole')
+
+        # White Dwarf mass
+
+        sig_WD = 2 * np.pi * self.model.r * np.sum(self.model.WD_Sigmaj, axis=0)
+        dM_WD = util.QuantitySpline(self.model.r, sig_WD)
+
+        cum_M_WD = [dM_WD.integral(r0, ri) for ri in self.model.r]
+
+        ax.plot(self.model.r, cum_M_WD, label='White Dwarf')
+
+        # Neutron Star mass
+
+        sig_NS = 2 * np.pi * self.model.r * np.sum(self.model.NS_Sigmaj, axis=0)
+        dM_NS = util.QuantitySpline(self.model.r, sig_NS)
+
+        cum_M_NS = [dM_NS.integral(r0, ri) for ri in self.model.r]
+
+        ax.plot(self.model.r, cum_M_NS, label='Neutron Star')
 
         ax.set_yscale("log")
         ax.set_xscale("log")
@@ -1229,19 +1291,17 @@ class CIModelVisualizer(_Visualizer):
                 for mbin_ind in range(model.nms):
 
                     # Interpolate the viz.model density at the data locations
-                    # TODO cant use QuantitySpline here until the integ works
-                    import scipy.interpolate
-                    density = scipy.interpolate.interp1d(
+
+                    density = util.QuantitySpline(
                         model.r,
-                        2 * np.pi * model.r * model.Sigmaj[mbin_ind],
-                        kind="cubic"
+                        2 * np.pi * model.r * model.Sigmaj[mbin_ind]
                     )
 
                     # Convert density spline into Nstars
                     mper = model.mj[mbin_ind] * model.mes_widths[mbin_ind]
 
                     mf_full[ind, int(rbin_ind), mbin_ind] = (
-                        integ.quad(density, r1.value, r2.value)[0] / mper.value
+                        density.integral(r1, r2) / mper
                     )
 
             # Black hole mass
