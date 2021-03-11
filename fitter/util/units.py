@@ -3,7 +3,7 @@ import numpy as np
 import astropy.units as u
 
 
-__all__ = ['angular_width', 'angular_speed', 'interpQuantity']
+__all__ = ['angular_width', 'angular_speed', 'QuantitySpline']
 
 
 # TODO should probably be using `Equivalency` class?
@@ -41,14 +41,58 @@ def angular_speed(D):
     return [((u.km / u.s), (u.arcsec / u.yr), kms2asyr, asyr2kms)]
 
 
-# TODO maybe univariatespline instead, that gets used often, or maybe both?
-class interpQuantity(scipy.interpolate.interp1d):
+class QuantitySpline(scipy.interpolate.UnivariateSpline):
 
-    def __init__(self, x, y, bounds_error=False, *args, **kwargs):
+    def __init__(self, x, y, w=None, bbox=[None] * 2, k=3, s=0,
+                 ext=1, check_finite=False):
+
         self._xunit = x.unit
         self._yunit = y.unit
 
-        super().__init__(x, y, bounds_error=bounds_error, *args, **kwargs)
+        # Convert boundary box, if needed
+        if bbox[0] is not None:
+            bbox[0] = bbox[0].to_value(self._xunit)
 
-    def __call__(self, x):
-        return super().__call__(x.to_value(self._xunit)) << self._yunit
+        if bbox[1] is not None:
+            bbox[1] = bbox[1].to_value(self._xunit)
+
+        super().__init__(x, y, w=w, bbox=bbox, k=k, s=s,
+                         ext=ext, check_finite=check_finite)
+
+    @classmethod
+    def _from_tck(cls, tck, x_unit, y_unit, ext=0):
+
+        obj = super()._from_tck(tck, ext=ext)
+
+        obj._xunit = x_unit
+        obj._yunit = y_unit
+
+        return obj
+
+    def __call__(self, x, nu=0, ext=None):
+        x = x.to_value(self._xunit)
+        return super().__call__(x, nu=nu, ext=ext) << self._yunit
+
+    def integral(self, a, b):
+        a = a.to_value(self._xunit)
+        b = b.to_value(self._xunit)
+
+        integ_unit = self._xunit * self._yunit
+
+        return super().integral(a, b) << integ_unit
+
+    def roots(self):
+        return super().roots() << self._xunit
+
+    def derivative(self, n=1):
+        from scipy.interpolate import fitpack
+
+        tck = fitpack.splder(self._eval_args, n)
+        # if self.ext is 'const', derivative.ext will be 'zeros'
+        ext = 1 if self.ext == 3 else self.ext
+
+        der_unit = self._yunit * self._xunit**-n
+
+        return QuantitySpline._from_tck(
+            tck, x_unit=self._x_unit, y_unit=der_unit, ext=ext,
+        )
