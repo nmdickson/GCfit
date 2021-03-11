@@ -1336,6 +1336,21 @@ class CIModelVisualizer(_Visualizer):
             ds = perc_grp.create_dataset('Sigma_NS', data=self.Sigma_NS)
             ds.attrs['unit'] = self.Sigma_NS.unit.to_string()
 
+            ds = perc_grp.create_dataset('cum_M_MS', data=self.cum_M_MS)
+            ds.attrs['unit'] = self.cum_M_MS.unit.to_string()
+
+            ds = perc_grp.create_dataset('cum_M_tot', data=self.cum_M_tot)
+            ds.attrs['unit'] = self.cum_M_tot.unit.to_string()
+
+            ds = perc_grp.create_dataset('cum_M_BH', data=self.cum_M_BH)
+            ds.attrs['unit'] = self.cum_M_BH.unit.to_string()
+
+            ds = perc_grp.create_dataset('cum_M_WD', data=self.cum_M_WD)
+            ds.attrs['unit'] = self.cum_M_WD.unit.to_string()
+
+            ds = perc_grp.create_dataset('cum_M_NS', data=self.cum_M_NS)
+            ds.attrs['unit'] = self.cum_M_NS.unit.to_string()
+
             ds = perc_grp.create_dataset('numdens', data=self.numdens)
             ds.attrs['unit'] = self.numdens.unit.to_string()
 
