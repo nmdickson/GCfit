@@ -7,7 +7,6 @@ import numpy as np
 import astropy.units as u
 import matplotlib.pyplot as plt
 import scipy.integrate as integ
-import scipy.interpolate as interp
 import matplotlib.colors as mpl_clr
 import astropy.visualization as astroviz
 
@@ -935,10 +934,8 @@ class CIModelVisualizer(_Visualizer):
 
             midpoint = self.mass_func.shape[0] // 2
 
-            # TODO THIS WONT WORK< HAVENT STORED A mj
-
-            m_domain = self.mj[:self.mass_func.shape[-1]]
-            median_ = self.mass_func[midpoint] * scale
+            m_domain = self.median_mj[:self.mass_func.shape[-1]]
+            median_ = self.mass_func[midpoint, int(annulus_ind)] * scale
 
             med_plot, = ax.plot(m_domain, median_, 'x--', c=pnts[0].get_color(),
                                 label=f"R={r1:.1f}-{r2:.1f}")
@@ -948,8 +945,8 @@ class CIModelVisualizer(_Visualizer):
 
                 ax.fill_between(
                     m_domain,
-                    self.mass_func[midpoint + sigma] * scale,
-                    self.mass_func[midpoint - sigma] * scale,
+                    self.mass_func[midpoint + sigma, int(annulus_ind)] * scale,
+                    self.mass_func[midpoint - sigma, int(annulus_ind)] * scale,
                     alpha=1 - alpha, color=med_plot.get_color()
                 )
 
@@ -1113,10 +1110,12 @@ class CIModelVisualizer(_Visualizer):
         viz.obs = observations
 
         median_chain = np.median(chain[-N:], axis=0)
+        median_model = Model(median_chain, viz.obs)
 
         viz.F = median_chain[7]
         viz.s2 = median_chain[6]
         viz.d = median_chain[12] << u.kpc
+        viz.median_mj = median_model.mj
 
         if verbose:
             import tqdm
@@ -1349,6 +1348,7 @@ class CIModelVisualizer(_Visualizer):
             meta_grp = file.create_group('metadata')
 
             meta_grp.create_dataset('r', data=self.r)
+            meta_grp.create_dataset('median_mj', data=self.median_mj)
             meta_grp.attrs['s2'] = self.s2
             meta_grp.attrs['F'] = self.F
             meta_grp.attrs['d'] = self.d
@@ -1431,12 +1431,12 @@ class CIModelVisualizer(_Visualizer):
 
             viz.obs = Observations(file['metadata'].attrs['cluster'])
             viz.N = file['metadata'].attrs['N']
-
             viz.s2 = file['metadata'].attrs['s2']
             viz.F = file['metadata'].attrs['F']
             viz.d = file['metadata'].attrs['d'] << u.kpc
 
             viz.r = file['metadata']['r'][:] << u.pc
+            viz.r = file['metadata']['median_mj'][:] << u.Msun
 
             for key in file['percentiles']:
                 value = file['percentiles'][key][:]

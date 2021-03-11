@@ -124,7 +124,7 @@ class Dataset:
     '''
 
     def __repr__(self):
-        return f'Dataset({self._name})'
+        return f'Dataset("{self._name}")'
 
     def __str__(self):
         return f'{self._name} Dataset'
@@ -594,6 +594,8 @@ class Model(lp.limepy):
             verbose=verbose,
         )
 
+        self.Nj = self.Mj / self.mj
+
         # ------------------------------------------------------------------
         # Assign units to model values
         # ------------------------------------------------------------------
@@ -620,8 +622,7 @@ class Model(lp.limepy):
 
         self.BH_mj = self.mj[self._remnant_bins][self._BH_bins]
         self.BH_Mj = self.Mj[self._remnant_bins][self._BH_bins]
-        # TODO should this use Nr or Mr/mr? they are somehow different
-        self.BH_Nj = self.BH_Mj / self.BH_mj
+        self.BH_Nj = self.Nj[self._remnant_bins][self._BH_bins]
 
         self.BH_rhoj = self.rhoj[self._remnant_bins][self._BH_bins]
         self.BH_Sigmaj = self.Sigmaj[self._remnant_bins][self._BH_bins]
@@ -632,7 +633,7 @@ class Model(lp.limepy):
 
         self.WD_mj = self.mj[self._remnant_bins][self._WD_bins]
         self.WD_Mj = self.Mj[self._remnant_bins][self._WD_bins]
-        self.WD_Nj = self.WD_Mj / self.WD_mj
+        self.WD_Nj = self.Nj[self._remnant_bins][self._WD_bins]
 
         self.WD_rhoj = self.rhoj[self._remnant_bins][self._WD_bins]
         self.WD_Sigmaj = self.Sigmaj[self._remnant_bins][self._WD_bins]
@@ -643,7 +644,7 @@ class Model(lp.limepy):
 
         self.NS_mj = self.mj[self._remnant_bins][self._NS_bins]
         self.NS_Mj = self.Mj[self._remnant_bins][self._NS_bins]
-        self.NS_Nj = self.NS_Mj / self.NS_mj
+        self.NS_Nj = self.Nj[self._remnant_bins][self._NS_bins]
 
         self.NS_rhoj = self.rhoj[self._remnant_bins][self._NS_bins]
         self.NS_Sigmaj = self.Sigmaj[self._remnant_bins][self._NS_bins]
