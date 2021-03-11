@@ -973,6 +973,19 @@ class CIModelVisualizer(_Visualizer):
         return fig
 
     @_support_units
+    def plot_BH_num(self, fig=None, ax=None, bins='auto', color='b'):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        color = mpl_clr.to_rgb(color)
+        facecolor = color + (0.33, )
+
+        ax.hist(self.BH_num, histtype='stepfilled',
+                bins=bins, ec=color, fc=facecolor, lw=2)
+
+        return fig
+
+    @_support_units
     def plot_density(self, fig=None, ax=None, *, kind='all'):
 
         # TODO some z-order stuff is off, and alpha needs to be better
@@ -1171,6 +1184,7 @@ class CIModelVisualizer(_Visualizer):
         mf_full = np.empty((N, N_rbins, N_mbins))
 
         BH_mass = np.empty(N) << u.Msun
+        BH_num = np.empty(N) << u.dimensionless_unscaled
 
         # Get the interpolater and interpolate every parameter
 
@@ -1303,8 +1317,10 @@ class CIModelVisualizer(_Visualizer):
                         density.integral(r1, r2) / mper
                     )
 
-            # Black hole mass
+            # Black holes
             BH_mass[ind] = np.sum(model.BH_Mj)
+            BH_num[ind] = np.sum(model.BH_Nj)
+            # TODO Some way to quantify mass of indiv BHs? like a 2dhist of N&m?
 
         # compute and store the percentiles and median
         # TODO get sigmas dynamically ased on an arg
@@ -1335,6 +1351,7 @@ class CIModelVisualizer(_Visualizer):
         viz.numdens = np.percentile(nd_full, q, axis=0)
         viz.mass_func = np.percentile(mf_full, q, axis=0)
         viz.BH_mass = BH_mass
+        viz.BH_num = BH_num
 
         return viz
 
@@ -1418,6 +1435,9 @@ class CIModelVisualizer(_Visualizer):
 
             ds = perc_grp.create_dataset('BH_mass', data=self.BH_mass)
             ds.attrs['unit'] = self.BH_mass.unit.to_string()
+
+            ds = perc_grp.create_dataset('BH_num', data=self.BH_num)
+            ds.attrs['unit'] = self.BH_num.unit.to_string()
 
     @classmethod
     def load(cls, filename, validate=False):
