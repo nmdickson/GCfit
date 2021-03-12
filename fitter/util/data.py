@@ -60,6 +60,10 @@ def hdf_view(cluster, attrs=False, spacing='normal', *, outfile="stdout"):
 
             out = f"{f' {cluster} ':=^40}\n\n"
 
+            if attrs:
+                out += '\n'.join(f"|- {k}: {v}" for k, v in file.attrs.items())
+                out += '\n\n'
+
             out += _crawler(file)
 
     # ----------------------------------------------------------------------

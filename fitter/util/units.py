@@ -6,9 +6,6 @@ import astropy.units as u
 __all__ = ['angular_width', 'angular_speed', 'QuantitySpline']
 
 
-# TODO should probably be using `Equivalency` class?
-
-
 def angular_width(D):
     '''AstroPy units conversion equivalency for angular to linear widths.
     See: https://docs.astropy.org/en/stable/units/equivalencies.html
