@@ -25,7 +25,27 @@ __all__ = [
 
 
 # TODO standardize which interpolation funciton we're using, 3 are in play rn
-# TODO look into just using `u.set_enabled_equivalencies` (or put in Model)
+
+
+def _angular_units(func):
+    '''decorator for supporting all angular unit equivalencies,
+    for likelihoods
+    assumes 'model' will be first arg, or in kwargs
+    '''
+    import functools
+
+    @functools.wraps(func)
+    def angular_units_decorator(*args, **kwargs):
+
+        model = kwargs.get('model') or args[0]
+
+        eqvs = [angular_width(model.d)[0],
+                angular_speed(model.d)[0]]
+
+        with u.set_enabled_equivalencies(eqvs):
+            return func(*args, **kwargs)
+
+    return angular_units_decorator
 
 
 # --------------------------------------------------------------------------
@@ -33,6 +53,7 @@ __all__ = [
 # --------------------------------------------------------------------------
 
 
+@_angular_units
 def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
                            mass_bin=None):
 
@@ -69,7 +90,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         # Get this pulsars necessary data
         # ------------------------------------------------------------------
 
-        R = pulsars['r'][i].to(u.pc, util.angular_width(model.d))
+        R = pulsars['r'][i].to(u.pc)
 
         P = pulsars['P'][i].to('s')
 
@@ -192,6 +213,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
     return np.sum(logprobs)
 
 
+@_angular_units
 def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
                               mass_bin=None):
     '''
@@ -223,7 +245,7 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
         # Get this pulsars necessary data
         # ------------------------------------------------------------------
 
-        R = pulsars['r'][i].to(u.pc, util.angular_width(model.d))
+        R = pulsars['r'][i].to(u.pc)
 
         Pb = pulsars['Pb'][i].to('s')
 
@@ -287,6 +309,7 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
     return np.sum(np.log(probs))
 
 
+@_angular_units
 def likelihood_number_density(model, ndensity, *, mass_bin=None):
     # TODO the units are all messed up on this one, simply being ignored
 
@@ -305,7 +328,7 @@ def likelihood_number_density(model, ndensity, *, mass_bin=None):
     obs_err = ndensity['ΔΣ'][valid].value
 
     # TODO the model Sigma is in /pc^2, and is not being converted to match obs?
-    model_r = model.r.to(obs_r.unit, util.angular_width(model.d))
+    model_r = model.r.to(obs_r.unit)
     model_Σ = (model.Sigmaj[mass_bin] / model.mj[mass_bin]).value
 
     # Interpolated the model data at the measurement locations
@@ -342,6 +365,7 @@ def likelihood_number_density(model, ndensity, *, mass_bin=None):
     )
 
 
+@_angular_units
 def likelihood_pm_tot(model, pm, *, mass_bin=None):
 
     if mass_bin is None:
@@ -354,8 +378,8 @@ def likelihood_pm_tot(model, pm, *, mass_bin=None):
     model_tot = np.sqrt(0.5 * (model.v2Tj[mass_bin] + model.v2Rj[mass_bin]))
 
     # Convert model units
-    model_r = model.r.to(pm['r'].unit, util.angular_width(model.d))
-    model_tot = model_tot.to(pm['PM_tot'].unit, util.angular_speed(model.d))
+    model_r = model.r.to(pm['r'].unit)
+    model_tot = model_tot.to(pm['PM_tot'].unit)
 
     # Build asymmetric error, if exists
     obs_err = pm.build_err('PM_tot', model_r, model_tot)
@@ -370,6 +394,7 @@ def likelihood_pm_tot(model, pm, *, mass_bin=None):
     )
 
 
+@_angular_units
 def likelihood_pm_ratio(model, pm, *, mass_bin=None):
 
     if mass_bin is None:
@@ -382,7 +407,7 @@ def likelihood_pm_ratio(model, pm, *, mass_bin=None):
     model_ratio = np.sqrt(model.v2Tj[mass_bin] / model.v2Rj[mass_bin])
 
     # Convert model units
-    model_r = model.r.to(pm['r'].unit, util.angular_width(model.d))
+    model_r = model.r.to(pm['r'].unit)
 
     # Build asymmetric error, if exists
     obs_err = pm.build_err('PM_ratio', model_r, model_ratio)
@@ -397,6 +422,7 @@ def likelihood_pm_ratio(model, pm, *, mass_bin=None):
     )
 
 
+@_angular_units
 def likelihood_pm_T(model, pm, *, mass_bin=None):
 
     if mass_bin is None:
@@ -409,8 +435,8 @@ def likelihood_pm_T(model, pm, *, mass_bin=None):
     model_T = np.sqrt(model.v2Tj[mass_bin])
 
     # Convert model units
-    model_r = model.r.to(pm['r'].unit, util.angular_width(model.d))
-    model_T = model_T.to(pm['PM_T'].unit, util.angular_speed(model.d))
+    model_r = model.r.to(pm['r'].unit)
+    model_T = model_T.to(pm['PM_T'].unit)
 
     # Build asymmetric error, if exists
     obs_err = pm.build_err('PM_T', model_r, model_T)
@@ -425,6 +451,7 @@ def likelihood_pm_T(model, pm, *, mass_bin=None):
     )
 
 
+@_angular_units
 def likelihood_pm_R(model, pm, *, mass_bin=None):
 
     if mass_bin is None:
@@ -437,8 +464,8 @@ def likelihood_pm_R(model, pm, *, mass_bin=None):
     model_R = np.sqrt(model.v2Rj[mass_bin])
 
     # Convert model units
-    model_r = model.r.to(pm['r'].unit, util.angular_width(model.d))
-    model_R = model_R.to(pm['PM_R'].unit, util.angular_speed(model.d))
+    model_r = model.r.to(pm['r'].unit)
+    model_R = model_R.to(pm['PM_R'].unit)
 
     # Build asymmetric error, if exists
     obs_err = pm.build_err('PM_R', model_r, model_R)
@@ -453,6 +480,7 @@ def likelihood_pm_R(model, pm, *, mass_bin=None):
     )
 
 
+@_angular_units
 def likelihood_LOS(model, vlos, *, mass_bin=None):
 
     if mass_bin is None:
@@ -465,8 +493,8 @@ def likelihood_LOS(model, vlos, *, mass_bin=None):
     model_LOS = np.sqrt(model.v2pj[mass_bin])
 
     # Convert model units
-    model_r = model.r.to(vlos['r'].unit, util.angular_width(model.d))
-    model_LOS = model_LOS.to(vlos['σ'].unit, util.angular_speed(model.d))
+    model_r = model.r.to(vlos['r'].unit)
+    model_LOS = model_LOS.to(vlos['σ'].unit)
 
     # Build asymmetric error, if exists
     obs_err = vlos.build_err('σ', model_r, model_LOS)
@@ -481,6 +509,7 @@ def likelihood_LOS(model, vlos, *, mass_bin=None):
     )
 
 
+@_angular_units
 def likelihood_mass_func(model, mf):
     # TODO the units in mf are messy, due to all the interpolations
 
@@ -493,11 +522,8 @@ def likelihood_mass_func(model, mf):
         # we only want to use the obs data for this r bin
         r_mask = (mf['bin'] == annulus_ind)
 
-        r1 = rbin_size * annulus_ind
-        r1 = r1.to(model.r.unit, util.angular_width(model.d))
-
-        r2 = rbin_size * (annulus_ind + 1)
-        r2 = r2.to(model.r.unit, util.angular_width(model.d))
+        r1 = (rbin_size * annulus_ind).to(model.r.unit)
+        r2 = (rbin_size * (annulus_ind + 1)).to(model.r.unit)
 
         # Get a binned version of N_model (an Nstars for each mbin)
         binned_N_model = np.empty(model.nms)
