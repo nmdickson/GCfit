@@ -27,6 +27,7 @@ __all__ = [
 # TODO standardize which interpolation funciton we're using, 3 are in play rn
 
 
+# TODO this messes up the error messages sometimes (when .get(model) fails)
 def _angular_units(func):
     '''decorator for supporting all angular unit equivalencies,
     for likelihoods
@@ -39,8 +40,8 @@ def _angular_units(func):
 
         model = kwargs.get('model') or args[0]
 
-        eqvs = [angular_width(model.d)[0],
-                angular_speed(model.d)[0]]
+        eqvs = [util.angular_width(model.d)[0],
+                util.angular_speed(model.d)[0]]
 
         with u.set_enabled_equivalencies(eqvs):
             return func(*args, **kwargs)
