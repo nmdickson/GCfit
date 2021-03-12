@@ -437,10 +437,10 @@ class Model(lp.limepy):
 
         # Age
         try:
-            Age = self.observations.mdata['Age']
+            age = self.observations.mdata['age']
         except (AttributeError, KeyError):
             logging.debug("No cluster age stored, defaulting to 11000 Myr")
-            Age = 11000
+            age = 11000
 
         # Metallicity
         try:
@@ -461,7 +461,7 @@ class Model(lp.limepy):
             m123=m123,
             a12=a12,
             nbin12=nbin12,
-            tout=np.array([Age]),
+            tout=np.array([age]),
             N0=N0,
             Ndot=Ndot,
             tcc=tcc,
