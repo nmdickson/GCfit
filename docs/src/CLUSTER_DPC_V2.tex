@@ -56,6 +56,35 @@ subgroups will not be read in data, so there can be no shared space for groups
 and datasets. All datasets must go under the lowest level of subgroup.
 
 \section{Attributes}
+
+Overall cluster attributes. 
+
+\begin{center}
+\begin{table}[H]
+\begin{tabular}{ | c | c | c | c | c | }
+    \hline
+    Variable & Attribute Name & Notes & Default Value & Units \\
+    \hline\hline
+    Galactic Longitude & \texttt{l} &
+    Required for pulsar fitting & N/A & degrees \\
+    \hline
+    Galactic Latitude & \texttt{b}  &
+    Required for pulsar fitting & N/A & degrees \\
+    \hline
+    Metallicity & \texttt{FeHe} &
+    Defines mass function evolution & -1.00 & dex \\
+    \hline
+    Age & \texttt{age} & Defines mass function evolution & 12 & Gyr \\
+    \hline
+    Total Proper Motion & \texttt{\(\mu\)} &
+    Required for pulsar fitting & N/A & mas/yr \\
+    \hline
+    Total escape rate \(\dot{N}\) & \texttt{Ndot} &
+    Defines mass function evolution & -20 & \\
+    \hline
+\end{tabular}
+\end{table}
+\end{center}
 % TODO i dont know if initials should really go here, I need to but cluster
 %   stuff like Z and coords and overall pm in here (theyre actually attrs)
 % TODO document the sources of ^ somehow (and units as well)
