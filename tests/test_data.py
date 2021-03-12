@@ -29,6 +29,7 @@ import astropy.units as u
 #     def test_units(self):
 #         '''test that all the units are assigned correctly'''
 
+#       TEST THAT THE THETA VALUES ARE RIGHT< LIKE I MESSED UP THE s2 THING
 
 class TestObservations(unittest.TestCase):
 

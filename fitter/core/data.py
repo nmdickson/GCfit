@@ -446,8 +446,8 @@ class Model(lp.limepy):
         try:
             FeHe = self.observations.mdata['FeHe']
         except (AttributeError, KeyError):
-            logging.debug("No cluster FeHe stored, defaulting to -1.02")
-            FeHe = -1.02
+            logging.debug("No cluster FeHe stored, defaulting to -1.0")
+            FeHe = -1.0
 
         # Regulates low mass objects depletion, default -20, 0 for 47 Tuc
         try:
@@ -595,6 +595,8 @@ class Model(lp.limepy):
             verbose=verbose,
         )
 
+        # fix a couple of conflicted attributes
+        self.s2 = self._theta['s2']
         self.Nj = self.Mj / self.mj
 
         # ------------------------------------------------------------------
