@@ -424,13 +424,6 @@ class Model(lp.limepy):
 
         a12 = [-self.a1, -self.a2, -self.a3]  # Slopes for imf
 
-        # Output times for the evolution (age)
-        tout = np.array([11000])
-        # tout = np.array([
-        #     1, 2, 3, 4, 5, 6, 7, 8, 10, 25, 50, 100, 250, 500, 1000, 2000,
-        #     3000, 4000, 5000, 6000, 7000, 8000, 9000, 12000
-        # ])
-
         # TODO figure out which of these are cluster dependant, store in hdfs
 
         # Integration settings
@@ -441,6 +434,13 @@ class Model(lp.limepy):
         BH_ret_dyn = self.BHret / 100  # Dynamical Black Hole retention
 
         natal_kicks = True
+
+        # Age
+        try:
+            Age = self.observations.mdata['Age']
+        except (AttributeError, KeyError):
+            logging.debug("No cluster age stored, defaulting to 11000 Myr")
+            Age = 11000
 
         # Metallicity
         try:
@@ -461,7 +461,7 @@ class Model(lp.limepy):
             m123=m123,
             a12=a12,
             nbin12=nbin12,
-            tout=tout,
+            tout=np.array([Age]),
             N0=N0,
             Ndot=Ndot,
             tcc=tcc,
@@ -527,6 +527,7 @@ class Model(lp.limepy):
             theta = dict(zip(DEFAULT_INITIALS, theta))
 
         if missing_params := (DEFAULT_INITIALS.keys() - theta.keys()):
+            # TODO this error message is wrong if theta is given as an array
             mssg = f"Missing required params: {missing_params}"
             raise KeyError(mssg)
 
