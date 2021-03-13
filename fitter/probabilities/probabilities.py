@@ -57,6 +57,48 @@ def _angular_units(func):
 @_angular_units
 def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
                            mass_bin=None):
+    '''Compute the log likelihood of pulsar spin period derivatives
+
+    Computes the log likelihood component of a cluster's pulsar's spin
+    period derivatives, evaluating the observed pulsar timing solutions
+    against the combined probability distributions of the clusters acceleration
+    field, the pulsars intrinsic spin-down, the proper-motion contribution and
+    the galactic potential.
+
+    parameters
+    ----------
+    model : fitter.Model
+        Cluster model use to compute probability distribution
+
+    pulsars : fitter.core.data.Dataset
+        Pulsars dataset used to compute probability distribution and evaluate
+        log likelihood
+
+    Pdot_kde : scipy.stats.gaussian_kde
+        Gaussian KDE of the galactic field pulsars Pdot-P distribution, from
+        `field_Pdot_KDE`. Should be generated beforehand for speed, but if
+        None, will generate at runtime.
+
+    cluster_μ : float
+        Total cluster proper motion, in mas/yr
+
+    coords : 2-tuple of float
+        Cluster Galactic (Latitude, Longitude), in degrees
+
+    mass_bin : int, optional
+        Index of `model.mj` mass bin to use in all calculations.
+        If None (default), attempts to read 'm' from `pulsars.mdata`, else -1
+
+    Returns
+    -------
+    float
+        Log likelihood value
+
+    See Also
+    --------
+    likelihood_pulsar_orbital : Binary pulsar orbital period likelihood
+
+    '''
 
     # ----------------------------------------------------------------------
     # Get the pulsar P-Pdot_int kde
