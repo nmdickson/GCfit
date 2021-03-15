@@ -97,6 +97,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
     See Also
     --------
     likelihood_pulsar_orbital : Binary pulsar orbital period likelihood
+    fitter.probabilities.pulsars : Module containing all pulsar prob. components
 
     '''
 
@@ -259,9 +260,42 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
 @_angular_units
 def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
                               mass_bin=None):
-    '''
-    Like isolated pulsar, but using binary orbit timings rather than
-    pulsar timings
+    '''Compute the log likelihood of binary pulsar orbital period derivatives
+
+    Computes the log likelihood component of a cluster's binary pulsar's orbital
+    period derivatives, evaluating the observed orbital timing solutions
+    against the combined probability distributions of the clusters acceleration
+    field, the proper-motion contribution and the galactic potential.
+
+    parameters
+    ----------
+    model : fitter.Model
+        Cluster model use to compute probability distribution
+
+    pulsars : fitter.core.data.Dataset
+        Pulsars dataset used to compute probability distribution and evaluate
+        log likelihood
+
+    cluster_μ : float
+        Total cluster proper motion, in mas/yr
+
+    coords : 2-tuple of float
+        Cluster Galactic (Latitude, Longitude), in degrees
+
+    mass_bin : int, optional
+        Index of `model.mj` mass bin to use in all calculations.
+        If None (default), attempts to read 'm' from `pulsars.mdata`, else -1
+
+    Returns
+    -------
+    float
+        Log likelihood value
+
+    See Also
+    --------
+    likelihood_pulsar_spin : Pulsar spin period likelihood
+    fitter.probabilities.pulsars : Module containing all pulsar prob. components
+
     '''
 
     # ----------------------------------------------------------------------
@@ -354,6 +388,45 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
 
 @_angular_units
 def likelihood_number_density(model, ndensity, *, mass_bin=None):
+    r'''Compute the log likelihood of the cluster number density profile
+
+    Computes the log likelihood component of a cluster's number density profile,
+    assuming a Gaussian likelihood. The model profile is scaled to fit the shape
+    of the observation data, and a nuisance parameter is introduced to
+    add a constant error component and minimize the background effects present
+    near the outskirts of the cluster.
+
+    parameters
+    ----------
+    model : fitter.Model
+        Cluster model use to compute probability distribution
+
+    ndensity : fitter.core.data.Dataset
+        Number density profile dataset used to compute probability distribution
+        and evaluate log likelihood
+
+    mass_bin : int, optional
+        Index of `model.mj` mass bin to use in all calculations.
+        If None (default), attempts to read 'm' from `pulsars.mdata`, else
+        assumes
+
+    Returns
+    -------
+    float
+        Log likelihood value
+
+    Notes
+    -----
+    As the translation between discrete number density and surface-brightness
+    observations is difficult to quantify, the model is actually only fit on
+    the shape of the number density profile data.
+    To accomplish this the modelled number density is scaled to have the
+    same mean value as the surface brightness data (K scaling factor).
+    The chosen K factor minimizes chi-squared:
+
+    .. math:: K = \frac{\sum \Sigma_{obs} \Sigma_{model} / \delta\Sigma_{obs}^2}
+                       {\sum \Sigma_{model}^2 / \delta\Sigma_{obs}^2}
+    '''
     # TODO the units are all messed up on this one, simply being ignored
 
     if mass_bin is None:
@@ -377,29 +450,13 @@ def likelihood_number_density(model, ndensity, *, mass_bin=None):
     # Interpolated the model data at the measurement locations
     interpolated = np.interp(obs_r, model_r, model_Σ)
 
-    # K Scaling Factor
-
-    # Because the translation between number density and surface-brightness
-    # data is hard we actually only fit on the shape of the number density
-    # profile. To do this we scale the number density
-    # data to have the same mean value as the surface brightness data:
-
-    # This minimizes chi^2
-    # Sum of observed * model / observed**2
-    # Divided by sum of model**2 / observed**2
-
-    # Calculate scaling factor
+    # Calculate K scaling factor
     K = (np.sum(obs_Σ * interpolated / obs_Σ**2)
          / np.sum(interpolated**2 / obs_Σ**2))
 
     interpolated *= K
 
     # Now nuisance parameter
-    # This allows us to add a constant error component to the data which
-    # allows us to fit on the data while not worrying too much about the
-    # outermost points where background effects are most prominent.
-
-    # TODO it doesn't seem like s2 is being constrained like at all?
     yerr = np.sqrt(obs_err**2 + model.s2)
 
     # Now regular gaussian likelihood
@@ -410,6 +467,38 @@ def likelihood_number_density(model, ndensity, *, mass_bin=None):
 
 @_angular_units
 def likelihood_pm_tot(model, pm, *, mass_bin=None):
+    r'''Compute the log likelihood of the cluster total proper motion dispersion
+
+    Computes the log likelihood component of a cluster's proper motion
+    dispersion profile for the total proper motion, that is, the combined radial
+    and tangential components, assuming a gaussian likelihood.
+
+    parameters
+    ----------
+    model : fitter.Model
+        Cluster model use to compute probability distribution
+
+    pm : fitter.core.data.Dataset
+        Proper motion dispersions profile dataset used to compute probability
+        distribution and evaluate log likelihood
+
+    mass_bin : int, optional
+        Index of `model.mj` mass bin to use in all calculations.
+        If None (default), attempts to read 'm' from `pulsars.mdata`, else
+        uses largest of the main sequence bins, given by `model.nms`
+
+    Returns
+    -------
+    float
+        Log likelihood value
+
+    Notes
+    -----
+    The "total" combined proper motion is given by the averaged vector:
+
+    .. math:: PM_{tot} = \sqrt{\frac{(PM_{T}^2 + PM_{R}^2)}{2}}
+
+    '''
 
     if mass_bin is None:
         if 'm' in pm.mdata:
@@ -439,6 +528,38 @@ def likelihood_pm_tot(model, pm, *, mass_bin=None):
 
 @_angular_units
 def likelihood_pm_ratio(model, pm, *, mass_bin=None):
+    r'''Compute the log likelihood of the cluster proper motion dispersion ratio
+
+    Computes the log likelihood component of a cluster's proper motion
+    dispersion anisotropy profile as the ratio of the tangential to radial
+    dispersions, assuming a gaussian likelihood.
+
+    parameters
+    ----------
+    model : fitter.Model
+        Cluster model use to compute probability distribution
+
+    pm : fitter.core.data.Dataset
+        Proper motion dispersions profile dataset used to compute probability
+        distribution and evaluate log likelihood
+
+    mass_bin : int, optional
+        Index of `model.mj` mass bin to use in all calculations.
+        If None (default), attempts to read 'm' from `pulsars.mdata`, else
+        uses largest of the main sequence bins, given by `model.nms`
+
+    Returns
+    -------
+    float
+        Log likelihood value
+
+    Notes
+    -----
+    The proper motion ratio, or anisotropy measure, is given by the fraction:
+
+    .. math:: PM_{ratio} = \sqrt{\frac{PM_{T}^2}{PM_{R}^2}}
+
+    '''
 
     if mass_bin is None:
         if 'm' in pm.mdata:
@@ -467,6 +588,32 @@ def likelihood_pm_ratio(model, pm, *, mass_bin=None):
 
 @_angular_units
 def likelihood_pm_T(model, pm, *, mass_bin=None):
+    '''Compute the log likelihood of the cluster tangential proper motion
+
+    Computes the log likelihood component of a cluster's proper motion
+    dispersion profile for the tangential proper motion, in relation to the
+    cluster centre, assuming a gaussian likelihood.
+
+    parameters
+    ----------
+    model : fitter.Model
+        Cluster model use to compute probability distribution
+
+    pm : fitter.core.data.Dataset
+        Proper motion dispersions profile dataset used to compute probability
+        distribution and evaluate log likelihood
+
+    mass_bin : int, optional
+        Index of `model.mj` mass bin to use in all calculations.
+        If None (default), attempts to read 'm' from `pulsars.mdata`, else
+        uses largest of the main sequence bins, given by `model.nms`
+
+    Returns
+    -------
+    float
+        Log likelihood value
+
+    '''
 
     if mass_bin is None:
         if 'm' in pm.mdata:
@@ -496,6 +643,32 @@ def likelihood_pm_T(model, pm, *, mass_bin=None):
 
 @_angular_units
 def likelihood_pm_R(model, pm, *, mass_bin=None):
+    '''Compute the log likelihood of the cluster radial proper motion
+
+    Computes the log likelihood component of a cluster's proper motion
+    dispersion profile for the radial proper motion, in relation to the
+    cluster centre, assuming a gaussian likelihood.
+
+    parameters
+    ----------
+    model : fitter.Model
+        Cluster model use to compute probability distribution
+
+    pm : fitter.core.data.Dataset
+        Proper motion dispersions profile dataset used to compute probability
+        distribution and evaluate log likelihood
+
+    mass_bin : int, optional
+        Index of `model.mj` mass bin to use in all calculations.
+        If None (default), attempts to read 'm' from `pulsars.mdata`, else
+        uses largest of the main sequence bins, given by `model.nms`
+
+    Returns
+    -------
+    float
+        Log likelihood value
+
+    '''
 
     if mass_bin is None:
         if 'm' in pm.mdata:
@@ -525,6 +698,32 @@ def likelihood_pm_R(model, pm, *, mass_bin=None):
 
 @_angular_units
 def likelihood_LOS(model, vlos, *, mass_bin=None):
+    '''Compute the log likelihood of the cluster LOS velocity dispersion
+
+    Computes the log likelihood component of a cluster's velocity
+    dispersion profile for the line-of-sight velocities, assuming a gaussian
+    likelihood.
+
+    parameters
+    ----------
+    model : fitter.Model
+        Cluster model use to compute probability distribution
+
+    vlos : fitter.core.data.Dataset
+        Velocity dispersions profile dataset used to compute probability
+        distribution and evaluate log likelihood
+
+    mass_bin : int, optional
+        Index of `model.mj` mass bin to use in all calculations.
+        If None (default), attempts to read 'm' from `pulsars.mdata`, else
+        uses largest of the main sequence bins, given by `model.nms`
+
+    Returns
+    -------
+    float
+        Log likelihood value
+
+    '''
 
     if mass_bin is None:
         if 'm' in vlos.mdata:
@@ -554,6 +753,38 @@ def likelihood_LOS(model, vlos, *, mass_bin=None):
 
 @_angular_units
 def likelihood_mass_func(model, mf):
+    r'''Compute the log likelihood of the cluster mass function
+
+    Computes the log likelihood component of a cluster's present day mass
+    function distribution of visible stars. Profiles of the relative number
+    of stars in each mass bin are compared against the computed mass function
+    N of the model, given by it's density profile.
+
+    A Gaussian likelihood is assumed, with a δN Poisson error accompanying the
+    mass function nuisance parameter `F`.
+
+    parameters
+    ----------
+    model : fitter.Model
+        Cluster model use to compute probability distribution
+
+    mf : fitter.core.data.Dataset
+        Mass function profile dataset used to compute probability distribution
+        and evaluate log likelihood
+
+    Returns
+    -------
+    float
+        Log likelihood value
+
+    Notes
+    -----
+    The model mass function N is given for each stellar mass bin by the
+    integral of the surface density profile within each radial bin:
+
+    .. math:: N = \int_{r_0}^{r_1} 2 \pi r \Sigma(r) dr
+
+    '''
     # TODO the units in mf are messy, due to all the interpolations
 
     tot_likelihood = 0
