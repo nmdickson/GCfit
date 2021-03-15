@@ -426,6 +426,14 @@ def likelihood_number_density(model, ndensity, *, mass_bin=None):
 
     .. math:: K = \frac{\sum \Sigma_{obs} \Sigma_{model} / \delta\Sigma_{obs}^2}
                        {\sum \Sigma_{model}^2 / \delta\Sigma_{obs}^2}
+
+    References
+    ----------
+    [1]Hénault-Brunet, V., Gieles, M., Strader, J., Peuten, M., Balbinot, E.,
+        and Douglas, K. E. K., “On the black hole content and initial mass
+        function of 47 Tuc”, Monthly Notices of the Royal Astronomical Society,
+        vol. 491, no. 1, pp. 113–128, 2020.
+
     '''
     # TODO the units are all messed up on this one, simply being ignored
 
