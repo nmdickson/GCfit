@@ -451,8 +451,8 @@ def likelihood_number_density(model, ndensity, *, mass_bin=None):
     interpolated = np.interp(obs_r, model_r, model_Σ)
 
     # Calculate K scaling factor
-    K = (np.sum(obs_Σ * interpolated / obs_Σ**2)
-         / np.sum(interpolated**2 / obs_Σ**2))
+    K = (np.sum(obs_Σ * interpolated / obs_err**2)
+         / np.sum(interpolated**2 / obs_err**2))
 
     interpolated *= K
 
