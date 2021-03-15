@@ -451,7 +451,10 @@ def likelihood_number_density(model, ndensity, *, mass_bin=None):
     obs_Σ = ndensity['Σ'][valid].value
     obs_err = ndensity['ΔΣ'][valid].value
 
-    # TODO the model Sigma is in /pc^2, and is not being converted to match obs?
+    # Now nuisance parameter
+    yerr = np.sqrt(obs_err**2 + model.s2)
+
+    # TODO the model Sigma is in pc^-2, and is not being converted to match obs?
     model_r = model.r.to(obs_r.unit)
     model_Σ = (model.Sigmaj[mass_bin] / model.mj[mass_bin]).value
 
@@ -459,13 +462,10 @@ def likelihood_number_density(model, ndensity, *, mass_bin=None):
     interpolated = np.interp(obs_r, model_r, model_Σ)
 
     # Calculate K scaling factor
-    K = (np.sum(obs_Σ * interpolated / obs_err**2)
-         / np.sum(interpolated**2 / obs_err**2))
+    K = (np.sum(obs_Σ * interpolated / yerr**2)
+         / np.sum(interpolated**2 / yerr**2))
 
     interpolated *= K
-
-    # Now nuisance parameter
-    yerr = np.sqrt(obs_err**2 + model.s2)
 
     # Now regular gaussian likelihood
     return -0.5 * np.sum(
