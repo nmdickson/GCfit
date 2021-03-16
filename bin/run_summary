@@ -1,0 +1,36 @@
+#!/usr/bin/env python3
+
+import fitter
+import fitter.visualize as viz
+
+import pathlib
+import argparse
+
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser(description='Print the summary of a run')
+
+    parser.add_argument('file', help='Run output hdf file')
+
+    parser.add_argument('--plot', action='store_true',
+                        help='Show the summary plot as well')
+
+    args = parser.parse_args()
+
+    file = pathlib.Path(args.file)
+
+    if not file.is_file():
+        parser.error('Invalid run input filename')
+
+    # For now lets just hope this is always true (it should be)
+    cluster = file.name.split('_')[0]
+
+    obs = fitter.Observations(cluster)
+
+    rv = viz.RunVisualizer(file, obs)
+
+    rv.print_summary()
+
+    if args.plot:
+        rv.plot_summary().show()

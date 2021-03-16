@@ -15,6 +15,7 @@ class RunVisualizer(_Visualizer):
 
     based on an output file I guess?
     '''
+    # TODO a way to find the converged iteration automatcially
 
     def __str__(self):
         return f'{self.file.filename} - Run Results'
@@ -22,10 +23,10 @@ class RunVisualizer(_Visualizer):
     def __init__(self, file, observations, group='mcmc'):
 
         # TODO this needs to be closed properly, probably
-        if isinstance(file, str):
-            self.file = h5py.File(file, 'r')
-        else:
+        if isinstance(file, h5py.File):
             self.file = file
+        else:
+            self.file = h5py.File(file, 'r')
 
         self._gname = group
 
