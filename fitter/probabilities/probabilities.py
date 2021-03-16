@@ -893,6 +893,7 @@ def posterior(theta, observations, fixed_initials=None, L_components=None):
 
     # TODO add type check on theta, cause those exceptions aren't very pretty
     # TODO if this fails on a fixed param, the run should be aborted
+    # TODO maybe allow bounds to be set explicilty by the user?
     # Also these ranges will probably have to change a bunch when we expand
     # Prior probability function
     if not all(priors := (3 < theta['W0'] < 20,
@@ -900,12 +901,12 @@ def posterior(theta, observations, fixed_initials=None, L_components=None):
                           0.5 < theta['rh'] < 15,
                           0 < theta['ra'] < 5,
                           0 < theta['g'] < 2.3,
-                          0.3 < theta['delta'] < 0.8,
+                          0.3 < theta['delta'] < 0.5,
                           0 < theta['s2'] < 15,
-                          0 < theta['F'] < 0.7,
+                          0 < theta['F'] < 0.5,
                           -2 < theta['a1'] < 6,
                           -2 < theta['a2'] < 6,
-                          -2 < theta['a3'] < 6,
+                          1.6 < theta['a3'] < 6,
                           0 < theta['BHret'] < 100,
                           2 < theta['d'] < 8)):
 
