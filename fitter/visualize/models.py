@@ -110,20 +110,18 @@ class ModelVisualizer(_Visualizer):
         # TODO I dont even think this is what we should use anymore, but the
         #   new convolved distributions peak
 
-        from astropy.constants import c
-
         fig, ax = self._setup_artist(fig, ax)
 
         ax.set_title('Pulsar LOS Acceleration')
         ax.set_xlabel('R')
         ax.set_ylabel(r'$a_{los}$')
 
-        maz = u.Quantity(np.empty(self.model.nstep - 1), 'm/s^2')
+        maz = u.Quantity(np.empty(self.model.nstep - 1), '1/s')
         for i in range(self.model.nstep - 1):
             a_domain, Paz = cluster_component(self.model, self.model.r[i], -1)
             maz[i] = a_domain[Paz.argmax()] << maz.unit
 
-        maz = (self.obs['pulsar/P'] * maz / c).decompose()
+        maz = (self.obs['pulsar/P'] * maz).decompose()
 
         if show_obs:
             try:
@@ -526,13 +524,16 @@ class ModelVisualizer(_Visualizer):
         return fig
 
     @_support_units
-    def plot_cumulative_mass(self, fig=None, ax=None):
+    def plot_cumulative_mass(self, fig=None, ax=None, x_unit='pc'):
 
         fig, ax = self._setup_artist(fig, ax)
 
         ax.set_title('Cumulative Mass')
 
         r0 = self.model.r[0]
+
+        # for plotting in other units
+        r_domain = self.model.r.to(x_unit)
 
         # Main sequence mass
 
@@ -542,7 +543,7 @@ class ModelVisualizer(_Visualizer):
 
         cum_M_MS = [dM_MS.integral(r0, ri) for ri in self.model.r]
 
-        ax.plot(self.model.r, cum_M_MS, label='Main Sequence')
+        ax.plot(r_domain, cum_M_MS, label='Main Sequence')
 
         # Total mass
 
@@ -551,7 +552,7 @@ class ModelVisualizer(_Visualizer):
 
         cum_M_tot = [dM_tot.integral(r0, ri) for ri in self.model.r]
 
-        ax.plot(self.model.r, cum_M_tot, label='Total')
+        ax.plot(r_domain, cum_M_tot, label='Total')
 
         # Black hole mass
 
@@ -560,7 +561,7 @@ class ModelVisualizer(_Visualizer):
 
         cum_M_BH = [dM_BH.integral(r0, ri) for ri in self.model.r]
 
-        ax.plot(self.model.r, cum_M_BH, label='Black Hole')
+        ax.plot(r_domain, cum_M_BH, label='Black Hole')
 
         # White Dwarf mass
 
@@ -569,7 +570,7 @@ class ModelVisualizer(_Visualizer):
 
         cum_M_WD = [dM_WD.integral(r0, ri) for ri in self.model.r]
 
-        ax.plot(self.model.r, cum_M_WD, label='White Dwarf')
+        ax.plot(r_domain, cum_M_WD, label='White Dwarf')
 
         # Neutron Star mass
 
@@ -578,10 +579,12 @@ class ModelVisualizer(_Visualizer):
 
         cum_M_NS = [dM_NS.integral(r0, ri) for ri in self.model.r]
 
-        ax.plot(self.model.r, cum_M_NS, label='Neutron Star')
+        ax.plot(r_domain, cum_M_NS, label='Neutron Star')
 
         ax.set_yscale("log")
         ax.set_xscale("log")
+
+        ax.set_ylabel(rf'$M_{{enc}} ({cum_M_tot.unit})$')
 
         ax.legend()
 
@@ -671,7 +674,8 @@ class CIModelVisualizer(_Visualizer):
 
         return _unit_decorator
 
-    def _plot_model_CI(self, ax, percs, intervals=2, CI_kwargs=None, **kwargs):
+    def _plot_model_CI(self, ax, percs, intervals=2, r_unit='pc', *,
+                       CI_kwargs=None, **kwargs):
 
         CI_kwargs = dict() if CI_kwargs is None else CI_kwargs
 
@@ -685,9 +689,11 @@ class CIModelVisualizer(_Visualizer):
             mssg = f'{intervals}σ is outside stored range of {midpoint}σ'
             raise ValueError(mssg)
 
+        r_domain = self.r.to(r_unit)
+
         median_ = percs[midpoint]
 
-        med_plot, = ax.plot(self.r, median_, **kwargs)
+        med_plot, = ax.plot(r_domain, median_, **kwargs)
 
         CI_kwargs.setdefault('color', med_plot.get_color())
 
@@ -695,7 +701,7 @@ class CIModelVisualizer(_Visualizer):
         for sigma in range(1, intervals + 1):
 
             ax.fill_between(
-                self.r, percs[midpoint + sigma], percs[midpoint - sigma],
+                r_domain, percs[midpoint + sigma], percs[midpoint - sigma],
                 alpha=(1 - alpha), **CI_kwargs
             )
 
@@ -1052,7 +1058,8 @@ class CIModelVisualizer(_Visualizer):
         return fig
 
     @_support_units
-    def plot_cumulative_mass(self, fig=None, ax=None, *, kind='all'):
+    def plot_cumulative_mass(self, fig=None, ax=None, *,
+                             kind='all', x_unit='pc'):
 
         if kind == 'all':
             kind = {'MS', 'tot', 'BH', 'WD', 'NS'}
@@ -1063,24 +1070,31 @@ class CIModelVisualizer(_Visualizer):
 
         # Main sequence density
         if 'MS' in kind:
-            self._plot_model_CI(ax, self.cum_M_MS, label='Main Sequence')
+            self._plot_model_CI(ax, self.cum_M_MS,
+                                r_unit=x_unit, label='Main Sequence')
 
         # Total density
         if 'tot' in kind:
-            self._plot_model_CI(ax, self.cum_M_tot, label='Total')
+            self._plot_model_CI(ax, self.cum_M_tot,
+                                r_unit=x_unit, label='Total')
 
         # Black hole density
         if 'BH' in kind:
-            self._plot_model_CI(ax, self.cum_M_BH, label='Black Hole')
+            self._plot_model_CI(ax, self.cum_M_BH,
+                                r_unit=x_unit, label='Black Hole')
 
         if 'WD' in kind:
-            self._plot_model_CI(ax, self.cum_M_WD, label='White Dwarf')
+            self._plot_model_CI(ax, self.cum_M_WD,
+                                r_unit=x_unit, label='White Dwarf')
 
         if 'NS' in kind:
-            self._plot_model_CI(ax, self.cum_M_NS, label='Neutron Star')
+            self._plot_model_CI(ax, self.cum_M_NS,
+                                r_unit=x_unit, label='Neutron Star')
 
         ax.set_yscale("log")
         ax.set_xscale("log")
+
+        ax.set_ylabel(rf'$M_{{enc}} ({self.cum_M_tot.unit})$')
 
         ax.legend()
 
@@ -1456,7 +1470,7 @@ class CIModelVisualizer(_Visualizer):
             viz.d = file['metadata'].attrs['d'] << u.kpc
 
             viz.r = file['metadata']['r'][:] << u.pc
-            viz.r = file['metadata']['median_mj'][:] << u.Msun
+            viz.median_mj = file['metadata']['median_mj'][:] << u.Msun
 
             for key in file['percentiles']:
                 value = file['percentiles'][key][:]
