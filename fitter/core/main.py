@@ -116,6 +116,25 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     iter_rate = np.empty(Niters)
 
     # ----------------------------------------------------------------------
+    # Write run metadata to output (backend) file
+    # ----------------------------------------------------------------------
+
+    with h5py.File(backend_fn, 'r+') as backend_hdf:
+
+        meta_grp = backend_hdf.require_group(name='metadata')
+
+        meta_grp.attrs['mpi'] = mpi
+        meta_grp.attrs['Ncpu'] = Ncpu
+
+        fix_dset = meta_grp.create_dataset("fixed_params", dtype="f")
+        for k, v in fixed_initials.items():
+            fix_dset.attrs[k] = v
+
+        ex_dset = meta_grp.create_dataset("excluded_likelihoods", dtype='f')
+        for i, L in enumerate(excluded_likelihoods):
+            ex_dset.attrs[str(i)] = L
+
+    # ----------------------------------------------------------------------
     # Setup multi-processing pool
     # ----------------------------------------------------------------------
 
@@ -196,19 +215,8 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
         meta_grp = backend_hdf.require_group(name='metadata')
 
-        meta_grp.attrs['mpi'] = mpi
-        meta_grp.attrs['Ncpu'] = Ncpu
-
         meta_grp.attrs['runtime'] = time.time() - t0
         meta_grp.attrs['autocorr'] = tau
-
-        fix_dset = meta_grp.create_dataset("fixed_params", dtype="f")
-        for k, v in fixed_initials.items():
-            fix_dset.attrs[k] = v
-
-        ex_dset = meta_grp.create_dataset("excluded_likelihoods", dtype='f')
-        for i, L in enumerate(excluded_likelihoods):
-            ex_dset.attrs[str(i)] = L
 
         # Store run statistics
 
