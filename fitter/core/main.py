@@ -21,7 +21,7 @@ _here = pathlib.Path()
 
 def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         mpi=False, initials=None, fixed_params=None, excluded_likelihoods=None,
-        cont_run=False, savedir=_here, verbose=False):
+        cont_run=False, savedir=_here, backup=False, verbose=False):
 
     logging.info("BEGIN")
 
@@ -186,10 +186,10 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
             accept_rate[sampler.iteration - 1, :] = sampler.acceptance_fraction
 
             if sampler.iteration % 100 == 0:
-                # TODO the backup probably isn't necessary anymore
-                logging.debug(f"{sampler.iteration=}: Creating backup")
-                shutil.copyfile(f"{savedir}/{cluster}_sampler.hdf",
-                                f"{savedir}/.backup_{cluster}_sampler.hdf")
+                logging.debug(f"{sampler.iteration=}")
+                if backup:
+                    shutil.copyfile(f"{savedir}/{cluster}_sampler.hdf",
+                                    f"{savedir}/.backup_{cluster}_sampler.hdf")
 
         try:
             # Attempt to get autocorrelation time

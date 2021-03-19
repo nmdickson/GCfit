@@ -29,6 +29,9 @@ if __name__ == '__main__':
 
     parser.add_argument('--continue', dest='cont_run', action='store_true',
                         help='Continue from previous saved run')
+    parser.add_argument('--backup', action='store_true',
+                        help='Create continuous backups during run')
+
     parser.add_argument('--verbose', action='store_true')
     parser.add_argument('--debug', action='store_true')
 
