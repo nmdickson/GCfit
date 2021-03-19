@@ -19,8 +19,6 @@ if __name__ == '__main__':
 
     parser.add_argument('--savedir', default=default_dir,
                         help='location of saved sampling runs')
-    parser.add_argument('-o', '--outdir', default=default_dir,
-                        help='location to store output plots and data')
     parser.add_argument('-i', '--initials',
                         help='alternative JSON file with different intials')
 
@@ -65,7 +63,6 @@ if __name__ == '__main__':
         else:
             parser.error(f"Cannot access '{init_file}': No such file")
 
-    pathlib.Path(args.outdir).mkdir(exist_ok=True)
     pathlib.Path(args.savedir).mkdir(exist_ok=True)
 
     if debug := args.debug:

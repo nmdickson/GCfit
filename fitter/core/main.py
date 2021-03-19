@@ -21,7 +21,7 @@ _here = pathlib.Path()
 
 def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         mpi=False, initials=None, fixed_params=None, excluded_likelihoods=None,
-        cont_run=False, savedir=_here, outdir=_here, verbose=False):
+        cont_run=False, savedir=_here, verbose=False):
 
     logging.info("BEGIN")
 
@@ -41,10 +41,6 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     savedir = pathlib.Path(savedir)
     if not savedir.is_dir():
         raise ValueError(f"Cannot access '{savedir}': No such directory")
-
-    outdir = pathlib.Path(outdir)
-    if not outdir.is_dir():
-        raise ValueError(f"Cannot access '{outdir}': No such directory")
 
     # ----------------------------------------------------------------------
     # Load obeservational data, determine which likelihoods are valid/desired
