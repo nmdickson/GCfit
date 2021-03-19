@@ -22,9 +22,9 @@ if __name__ == '__main__':
     parser.add_argument('-i', '--initials',
                         help='alternative JSON file with different intials')
 
-    parser.add_argument('-N', '--Niters', default=3000, type=int,
+    parser.add_argument('-N', '--Niters', default=2000, type=int,
                         help='Number of sampling iterations')
-    parser.add_argument('--Nwalkers', default=32, type=int,
+    parser.add_argument('--Nwalkers', default=96, type=int,
                         help='Number of walkers for MCMC sampler')
 
     parser.add_argument('--continue', dest='cont_run', action='store_true',
