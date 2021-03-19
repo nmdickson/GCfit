@@ -12,8 +12,6 @@ from importlib import resources
 __all__ = ['DEFAULT_INITIALS', 'Model', 'Observations']
 
 
-# TODO better exception handling
-
 # The order of this is important!
 DEFAULT_INITIALS = {
     'W0': 6.0,
@@ -133,7 +131,11 @@ class Dataset:
         return key in self._dict_variables
 
     def __getitem__(self, key):
-        return self._dict_variables[key]
+        try:
+            return self._dict_variables[key]
+        except KeyError:
+            mssg = f"Variable '{key}' does not exist in '{self._name}'"
+            raise KeyError(mssg)
 
     def _init_variables(self, name, var):
         '''used by group.visit'''
@@ -192,7 +194,7 @@ class Dataset:
                 err_down = self[f'Δ{varname},down']
 
             except KeyError:
-                mssg = f"There are no error(Δ) values associated with {varname}"
+                mssg = f"No existing err (Δ) Variable associated with {varname}"
                 raise ValueError(mssg)
 
             err = np.zeros_like(quantity)
@@ -230,21 +232,26 @@ class Observations:
         try:
             # return a dataset
             return self._dict_datasets[key]
-        except KeyError:
+        except KeyError as err:
             try:
                 # return a variable within a dataset
                 group, name = key.rsplit('/', maxsplit=1)
-                return self._dict_datasets[group][name]
+
+                try:
+                    dset = self._dict_datasets[group]
+                except KeyError:
+                    mssg = f"Dataset '{group}' does not exist in {self}"
+                    raise KeyError(mssg) from err
+
+                try:
+                    return dset[name]
+                except KeyError as var_err:
+                    raise var_err from err
 
             except ValueError:
                 # not in _dict_datasets and no '/' to split on so not a variable
-                mssg = f"Dataset '{key}' does not exist"
-                raise KeyError(mssg)
-
-            except KeyError:
-                # looks like a "dataset/variable" but that variable don't exist
-                mssg = f"Dataset or variable '{key}' does not exist"
-                raise KeyError(mssg)
+                mssg = f"Dataset '{key}' does not exist in {self}"
+                raise KeyError(mssg) from err
 
     def _find_groups(self, root_group, exclude_initials=True):
         '''lists pathnames to all groups under root_group, excluding initials'''
