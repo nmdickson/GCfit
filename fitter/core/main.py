@@ -22,6 +22,75 @@ _here = pathlib.Path()
 def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         mpi=False, initials=None, fixed_params=None, excluded_likelihoods=None,
         cont_run=False, savedir=_here, backup=False, verbose=False):
+    '''Main MCMC fitting pipeline
+
+    Execute the full MCMC cluster fitting algorithm.
+
+    Based on the given clusters `Observations`, determines the relevant
+    likelihoods used to construct an MCMC ensemble sampler (`emcee`) and
+    initializes it based on the `initials` stored in the `Observations`.
+
+    MCMC chains and information is stored using an HDF file backend, within
+    the `savedir` directory under the filename "{cluster}_sampler.hdf". Also
+    stored within this file is various statistics and metadata surrounding the
+    fitter run. Alongside each walker's posterior probability profile is
+    stored the individual likelihood values of each used likelihood function.
+
+    The MCMC sampler is sampled for `Niters` iterations, parallelized over
+    `Ncpu` or using `mpi`, with calls to `fitter.posterior`.
+
+    parameters
+    ----------
+    cluster : str
+        Cluster common name, as used to load `fitter.Observations`
+
+    Niters : int
+        Number of sampler iterations
+
+    Nwalkers : int
+        Number of sampler walkers
+
+    Ncpu : int, optional
+        Number of CPU's to parallelize the sampling computation over. Is
+        ignored if `mpi` is True.
+
+    mpi : bool, optional
+        Parallelize sampling computation using mpi rather than multiprocessing.
+        Parallelization is handled by `schwimmbad`.
+
+    initials : dict, optional
+        Dictionary of initial walker positions for each parameter. If
+        None (default), uses the `initials` stored in the cluster's
+        `Observations`. Any missing parameters in `initials` will be filled
+        with the values stored in the `Observations`.
+
+    fixed_params : list of str, optional
+        List of parameters to fix to the initial value, and not allow to be
+        varied through the sampler.
+
+    excluded_likelihoods : list of str, optional
+        List of component likelihoods to exclude from the posterior probability
+        function. Each likelihood can be specified using either the name of
+        the function (as given by __name__) or the name of the relevant dataset.
+
+    cont_run : bool, optional
+        Not Implemented
+
+    savedir : path-like, optional
+        The directory within which the HDF output file is stored, defaults to
+        the current working directory.
+
+    backup : bool, optional
+        If True, create a continuous backup HDF file every 100 iterations
+
+    verbose : bool, optional
+        Increase verbosity (currently only affects output of run final summary)
+
+    See Also
+    --------
+    emcee : MCMC Ensemble sampler implementation
+    schwimmbad : Interface to parallel processing pools
+    '''
 
     logging.info("BEGIN")
 
