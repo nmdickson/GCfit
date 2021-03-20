@@ -6,12 +6,42 @@ __all__ = ['cluster_list', 'hdf_view']
 
 
 def cluster_list():
+    '''Return a list of cluster names, useable by `fitter.Observations`'''
     with resources.path('fitter', 'resources') as datadir:
         return [f.stem for f in pathlib.Path(datadir).glob('[!TEST]*.hdf5')]
 
 
 def hdf_view(cluster, attrs=False, spacing='normal', *, outfile="stdout"):
-    '''print out the contents of a given cluster hdf5 file in a pretty way'''
+    '''Write out a clean listing of a clusters contents
+
+    For a given cluster, crawl the corresponding hdf data file and write (or
+    return) a pretty-printed string listing of the files contents. In the
+    least, the file's groups and datasets, but optionally attributes and dataset
+    metadata.
+
+    parameters
+    ----------
+    cluster : string
+        Cluster common name, as used in cluster's hdf data file
+
+    attrs : bool, optional
+        If False (default) write only base dataset names, else include cluster
+        and dataset attributes, as well as dataset shape and datatypes, and
+        the 'initials' root dataset.
+
+    spacing : {'normal', 'tight', 'loose'}
+        Adjust amount of spacing between each data grouping. Default to 'normal'
+
+    outfile : {'stdout', 'return', file-like}
+        Output location of listing. Either written directly to stdout (default),
+        returned as string (return) or written to supplied IO object.
+
+    Returns
+    -------
+    None or string
+        if `outfile` is 'return', the full output as string, else None
+
+    '''
     import sys
     import h5py
 
