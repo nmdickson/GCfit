@@ -208,7 +208,7 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     # Write run metadata to output (backend) file
     # ----------------------------------------------------------------------
 
-    with h5py.File(backend_fn, 'r+') as backend_hdf:
+    with h5py.File(backend_fn, 'a') as backend_hdf:
 
         meta_grp = backend_hdf.require_group(name='metadata')
 
