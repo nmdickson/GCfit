@@ -9,7 +9,7 @@ import logging
 from importlib import resources
 
 
-__all__ = ['DEFAULT_INITIALS', 'Model', 'Observations']
+__all__ = ['DEFAULT_INITIALS', 'DEFAULT_PRIORS', 'Model', 'Observations']
 
 
 # The order of this is important!

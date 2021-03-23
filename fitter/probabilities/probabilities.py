@@ -20,6 +20,7 @@ __all__ = [
     'likelihood_pm_R',
     'likelihood_LOS',
     'likelihood_mass_func',
+    'prior_likelihood',
     'posterior'
 ]
 
