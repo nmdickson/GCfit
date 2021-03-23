@@ -1,6 +1,6 @@
 from .pulsars import *
 from .. import util
-from ..core.data import DEFAULT_INITIALS, Model
+from ..core.data import DEFAULT_INITIALS, DEFAULT_PRIORS, Model
 
 import numpy as np
 import astropy.units as u
@@ -850,6 +850,25 @@ def likelihood_mass_func(model, mf):
 # Composite likelihood functions
 # --------------------------------------------------------------------------
 
+def prior_likelihood(theta, prior_bounds):
+    '''return 1 if in bounds, 0 if outside, so they could technically
+    multiply the result with likelihoods, or just use as bool
+    '''
+
+    inv = [f"{k}={theta[k]}" for key in theta
+           if not (prior_bounds[key][0] < theta[key] < prior_bounds[key][1])]
+
+    if inv:
+
+        logging.debug(f"Theta outside priors domain: {'; '.join(inv)}")
+
+        return 0
+
+    else:
+
+        return 1
+
+
 # Main likelihood function, generates the model(theta) passes it to the
 # individual likelihood functions and collects their results.
 def log_likelihood(theta, observations, L_components):
@@ -870,12 +889,14 @@ def log_likelihood(theta, observations, L_components):
 
 
 # Combines the likelihood with the prior
-def posterior(theta, observations, fixed_initials=None, L_components=None):
+def posterior(theta, observations, fixed_initials=None, L_components=None,
+              prior_bounds=None):
     '''
     theta : array of theta values
     observations : data.Observations
     fixed_initials : dict of any theta values to fix
     L_components : output from determine_components
+    prior_bounds : dict of prior bounds
     '''
 
     if fixed_initials is None:
@@ -884,35 +905,19 @@ def posterior(theta, observations, fixed_initials=None, L_components=None):
     if L_components is None:
         L_components = observations.valid_likelihoods
 
+    if prior_bounds is None:
+        prior_bounds = DEFAULT_PRIORS
+
     # get a list of variable params, sorted for the unpacking of theta
     variable_params = DEFAULT_INITIALS.keys() - fixed_initials.keys()
     params = sorted(variable_params, key=list(DEFAULT_INITIALS).index)
 
     # Update to unions when 3.9 becomes enforced
+    # TODO add type check on theta, cause those exceptions aren't very pretty
     theta = dict(zip(params, theta), **fixed_initials)
 
-    # TODO add type check on theta, cause those exceptions aren't very pretty
-    # TODO if this fails on a fixed param, the run should be aborted
-    # TODO maybe allow bounds to be set explicilty by the user?
-    # Also these ranges will probably have to change a bunch when we expand
-    # Prior probability function
-    if not all(priors := (3 < theta['W0'] < 20,
-                          0.01 < theta['M'] < 10,
-                          0.5 < theta['rh'] < 15,
-                          0 < theta['ra'] < 5,
-                          0 < theta['g'] < 2.3,
-                          0.3 < theta['delta'] < 0.5,
-                          0 < theta['s2'] < 15,
-                          0 < theta['F'] < 0.5,
-                          -2 < theta['a1'] < 6,
-                          -2 < theta['a2'] < 6,
-                          1.6 < theta['a3'] < 6,
-                          0 < theta['BHret'] < 100,
-                          2 < theta['d'] < 8)):
-
-        inv = {f"{k}={theta[k]}" for i, k in enumerate(theta) if not priors[i]}
-        logging.debug(f"Theta outside priors domain: {'; '.join(inv)}")
-
+    # prior likelihoods
+    if not prior_likelihood(theta, prior_bounds):
         return -np.inf, *(-np.inf * np.ones(len(L_components)))
 
     probability, individuals = log_likelihood(theta, observations, L_components)

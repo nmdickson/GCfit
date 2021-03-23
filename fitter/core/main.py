@@ -1,5 +1,5 @@
-from .data import Observations
-from ..probabilities import posterior
+from .data import Observations, DEFAULT_PRIORS
+from ..probabilities import posterior, prior_likelihood
 
 import h5py
 import emcee
@@ -20,7 +20,8 @@ _here = pathlib.Path()
 
 
 def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
-        mpi=False, initials=None, fixed_params=None, excluded_likelihoods=None,
+        mpi=False, initials=None, bounds=None,
+        fixed_params=None, excluded_likelihoods=None,
         cont_run=False, savedir=_here, backup=False, verbose=False):
     '''Main MCMC fitting pipeline
 
@@ -63,6 +64,12 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         None (default), uses the `initials` stored in the cluster's
         `Observations`. Any missing parameters in `initials` will be filled
         with the values stored in the `Observations`.
+
+    bounds : dict, optional
+        Dictionary of prior bounds (2-tuple of min and max) for each parameter.
+        If None (default), uses `fitter.DEFAULT_PRIORS`.
+        Any missing parameters in `bounds` will be filled
+        with the values stored in the `fitter.DEFAULT_PRIORS`.
 
     fixed_params : list of str, optional
         List of parameters to fix to the initial value, and not allow to be
@@ -139,6 +146,8 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
     # *_params -> list of keys, *_initials -> dictionary
 
+    spec_initials = initials
+
     # get supplied initials, or read them from the data files if not given
     if initials is None:
         initials = observations.initials
@@ -167,6 +176,21 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     init_pos = 1e-4 * np.random.randn(Nwalkers, init_pos.size) + init_pos
 
     # ----------------------------------------------------------------------
+    # Setup and check prior bounds
+    # ----------------------------------------------------------------------
+
+    spec_bounds = bounds
+
+    if bounds is None:
+        bounds = DEFAULT_PRIORS
+    else:
+        bounds = {**DEFAULT_PRIORS, **bounds}
+
+    # check if initials are outside bounds, if so then error right here
+    if not prior_likelihood(initials, bounds):
+        raise ValueError("Initial positions outside prior boundaries")
+
+    # ----------------------------------------------------------------------
     # Setup MCMC backend
     # ----------------------------------------------------------------------
 
@@ -188,16 +212,33 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
         meta_grp = backend_hdf.require_group(name='metadata')
 
+        meta_grp.attrs['cluster'] = cluster
+
+        # parallelization setup
         meta_grp.attrs['mpi'] = mpi
         meta_grp.attrs['Ncpu'] = Ncpu
 
+        # Fixed parameters
         fix_dset = meta_grp.create_dataset("fixed_params", dtype="f")
         for k, v in fixed_initials.items():
             fix_dset.attrs[k] = v
 
+        # Excluded likelihoods
         ex_dset = meta_grp.create_dataset("excluded_likelihoods", dtype='f')
         for i, L in enumerate(excluded_likelihoods):
             ex_dset.attrs[str(i)] = L
+
+        # Specified initial values
+        if spec_initials is not None:
+            init_dset = meta_grp.create_dataset("specified_initials", dtype="f")
+            for k, v in spec_initials.items():
+                init_dset.attrs[k] = v
+
+        # Specified prior bounds
+        if spec_bounds is not None:
+            bnd_dset = meta_grp.create_dataset("specified_bounds", dtype="f")
+            for k, v in spec_bounds.items():
+                bnd_dset.attrs[k] = v
 
     # ----------------------------------------------------------------------
     # Setup multi-processing pool
@@ -224,7 +265,7 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
             Nwalkers,
             init_pos.shape[-1],
             posterior,
-            args=(observations, fixed_initials, likelihoods,),
+            args=(observations, fixed_initials, likelihoods, bounds),
             pool=pool,
             backend=backend,
             blobs_dtype=blobs_dtype
