@@ -205,42 +205,6 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     iter_rate = np.empty(Niters)
 
     # ----------------------------------------------------------------------
-    # Write run metadata to output (backend) file
-    # ----------------------------------------------------------------------
-
-    with h5py.File(backend_fn, 'a') as backend_hdf:
-
-        meta_grp = backend_hdf.require_group(name='metadata')
-
-        meta_grp.attrs['cluster'] = cluster
-
-        # parallelization setup
-        meta_grp.attrs['mpi'] = mpi
-        meta_grp.attrs['Ncpu'] = Ncpu
-
-        # Fixed parameters
-        fix_dset = meta_grp.create_dataset("fixed_params", dtype="f")
-        for k, v in fixed_initials.items():
-            fix_dset.attrs[k] = v
-
-        # Excluded likelihoods
-        ex_dset = meta_grp.create_dataset("excluded_likelihoods", dtype='f')
-        for i, L in enumerate(excluded_likelihoods):
-            ex_dset.attrs[str(i)] = L
-
-        # Specified initial values
-        if spec_initials is not None:
-            init_dset = meta_grp.create_dataset("specified_initials", dtype="f")
-            for k, v in spec_initials.items():
-                init_dset.attrs[k] = v
-
-        # Specified prior bounds
-        if spec_bounds is not None:
-            bnd_dset = meta_grp.create_dataset("specified_bounds", dtype="f")
-            for k, v in spec_bounds.items():
-                bnd_dset.attrs[k] = v
-
-    # ----------------------------------------------------------------------
     # Setup multi-processing pool
     # ----------------------------------------------------------------------
 
@@ -255,11 +219,47 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
             pool.wait()
             sys.exit(0)
 
-        logging.info("Initializing sampler")
+        # ----------------------------------------------------------------------
+        # Write run metadata to output (backend) file
+        # ----------------------------------------------------------------------
+
+        with h5py.File(backend_fn, 'a') as backend_hdf:
+
+            meta_grp = backend_hdf.require_group(name='metadata')
+
+            meta_grp.attrs['cluster'] = cluster
+
+            # parallelization setup
+            meta_grp.attrs['mpi'] = mpi
+            meta_grp.attrs['Ncpu'] = Ncpu
+
+            # Fixed parameters
+            fix_dset = meta_grp.create_dataset("fixed_params", dtype="f")
+            for k, v in fixed_initials.items():
+                fix_dset.attrs[k] = v
+
+            # Excluded likelihoods
+            ex_dset = meta_grp.create_dataset("excluded_likelihoods", dtype='f')
+            for i, L in enumerate(excluded_likelihoods):
+                ex_dset.attrs[str(i)] = L
+
+            # Specified initial values
+            init_dset = meta_grp.create_dataset("specified_initials", dtype="f")
+            if spec_initials is not None:
+                for k, v in spec_initials.items():
+                    init_dset.attrs[k] = v
+
+            # Specified prior bounds
+            bnd_dset = meta_grp.create_dataset("specified_bounds", dtype="f")
+            if spec_bounds is not None:
+                for k, v in spec_bounds.items():
+                    bnd_dset.attrs[k] = v
 
         # ------------------------------------------------------------------
         # Initialize the MCMC sampler
         # ------------------------------------------------------------------
+
+        logging.info("Initializing sampler")
 
         sampler = emcee.EnsembleSampler(
             Nwalkers,
