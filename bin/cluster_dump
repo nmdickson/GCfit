@@ -2,6 +2,7 @@
 
 import fitter.util
 
+import sys
 import argparse
 
 
@@ -20,4 +21,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    fitter.util.hdf_view(args.cluster, args.attrs, args.spacing)
+    if args.cluster.lower() == 'list':
+        sys.stdout.write('\n'.join(fitter.util.cluster_list()) + '\n')
+    else:
+        fitter.util.hdf_view(args.cluster, args.attrs, args.spacing)
