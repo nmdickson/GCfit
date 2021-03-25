@@ -1,3 +1,5 @@
+from ..util import QuantitySpline
+
 import scipy.stats
 import numpy as np
 import astropy.units as u
@@ -48,7 +50,7 @@ def cluster_component(model, R, mass_bin, *, logspaced=False):
     r = np.sqrt(R ** 2 + z ** 2)
 
     # Spline for enclosed mass
-    Mr = UnivariateSpline(model.r, model.mc, s=0, ext=1)(r) * model.mc.unit
+    Mr = QuantitySpline(model.r, model.mc, s=0, ext=1)(r)
 
     # LOS acceleration calculation
     az = model.G * Mr * z / r ** 3
@@ -58,11 +60,11 @@ def cluster_component(model, R, mass_bin, *, logspaced=False):
 
     # Spline for LOS acceleration
     # 4th order, as k=2 derivatives cannot find roots
-    az_spl = UnivariateSpline(z, az, k=4, s=0, ext=1)
+    az_spl = QuantitySpline(z, az, k=4, s=0, ext=1)
     az_der = az_spl.derivative()
 
     # Location of the maximum acceleration along this los
-    zmax = az_der.roots() * z.unit
+    zmax = az_der.roots()
 
     # Acceleration at zt
     azt = az[-1]
@@ -74,8 +76,8 @@ def cluster_component(model, R, mass_bin, *, logspaced=False):
         rho = model.rhoj[mass_bin]
 
     # Project the density along z
-    rho_spl = UnivariateSpline(model.r, rho, ext=1, s=0)
-    rhoz_spl = UnivariateSpline(z, rho_spl(r), ext=1, s=0)
+    rho_spl = QuantitySpline(model.r, rho, ext=1, s=0)
+    rhoz_spl = QuantitySpline(z, rho_spl(r), ext=1, s=0)
 
     # Now compute P(a_z|R)
     # There are 2 possibilities depending on R:
@@ -100,20 +102,20 @@ def cluster_component(model, R, mass_bin, *, logspaced=False):
 
         z2 = np.linspace(zmax, z[-1], nr)[::-1]
 
-        z1_spl = UnivariateSpline(az_spl(z1), z1, k=k, s=0, ext=1)
+        z1_spl = QuantitySpline(az_spl(z1), z1, k=k, s=0, ext=1)
 
         # Original implementation
         # changing the spline here doesn't fix the z2 interpolation error.
-        z2_spl = UnivariateSpline(az_spl(z2), z2, k=k, s=0, ext=1)
+        z2_spl = QuantitySpline(az_spl(z2), z2, k=k, s=0, ext=1)
 
     # Option 2: zmax = max(z)
     else:
         zmax = z[-1]
         z1 = np.linspace(z[0], zmax, nr)
-        z1_spl = UnivariateSpline(az_spl(z1), z1, k=k, s=0, ext=1)
+        z1_spl = QuantitySpline(az_spl(z1), z1, k=k, s=0, ext=1)
 
     # Value of the maximum acceleration, at the chosen root
-    azmax = az_spl(zmax) * az.unit
+    azmax = az_spl(zmax)
 
     # define the acceleration space domain, based on amax
 
@@ -133,23 +135,23 @@ def cluster_component(model, R, mass_bin, *, logspaced=False):
 
     # TODO look at the old new_Paz to get the comments for this stuff
 
-    z1 = np.maximum(z1_spl(az_domain[within_max]) * z1.unit, z[0])
+    z1 = np.maximum(z1_spl(az_domain[within_max]), z[0])
 
-    Paz_dist[within_max] = rhoz_spl(z1) / abs(az_der(z1))
+    Paz_dist[within_max] = (rhoz_spl(z1) / abs(az_der(z1))).value
 
     outside_azt = within_max & (az_domain > azt)
 
     # Only use z2 if any outside_azt values exist (ensures z2_spl exists)
     if np.any(outside_azt):
 
-        z2 = z2_spl(az_domain) * z2.unit
+        z2 = z2_spl(az_domain)
 
         within_bounds = outside_azt & (z2 < zt)
 
         Paz_dist[within_bounds] += (rhoz_spl(z2[within_bounds])
-                                    / abs(az_der(z2[within_bounds])))
+                                    / abs(az_der(z2[within_bounds]))).value
 
-    Paz_dist[within_max] /= rhoz_spl.integral(0., zt.value)
+    Paz_dist[within_max] /= rhoz_spl.integral(0. << z.unit, zt).value
 
     # Mirror the distributions
     Paz_dist = np.concatenate((np.flip(Paz_dist[1:]), Paz_dist))
