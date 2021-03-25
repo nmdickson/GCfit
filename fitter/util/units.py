@@ -92,5 +92,5 @@ class QuantitySpline(scipy.interpolate.UnivariateSpline):
         der_unit = self._yunit * self._xunit**-n
 
         return QuantitySpline._from_tck(
-            tck, x_unit=self._x_unit, y_unit=der_unit, ext=ext,
+            tck, x_unit=self._xunit, y_unit=der_unit, ext=ext,
         )
