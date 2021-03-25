@@ -129,29 +129,27 @@ def cluster_component(model, R, mass_bin, *, logspaced=False):
 
     Paz_dist = np.zeros(az_domain.shape) * u.dimensionless_unscaled
 
-    within_max = np.where(az_domain < azmax)
+    within_max = az_domain < azmax
 
     # TODO look at the old new_Paz to get the comments for this stuff
 
     z1 = np.maximum(z1_spl(az_domain[within_max]) * z1.unit, z[0])
 
-    Paz = rhoz_spl(z1) / abs(az_der(z1))
+    Paz_dist[within_max] = rhoz_spl(z1) / abs(az_der(z1))
 
-    outside_azt = np.where(az_domain[within_max] > azt)
+    outside_azt = within_max & (az_domain > azt)
 
     # Only use z2 if any outside_azt values exist (ensures z2_spl exists)
-    if outside_azt[0].size > 0:
+    if np.any(outside_azt):
 
-        z2 = z2_spl(az_domain[within_max][outside_azt]) * z2.unit
+        z2 = z2_spl(az_domain) * z2.unit
 
-        within_bounds = np.where(z2 < zt)
+        within_bounds = outside_azt & (z2 < zt)
 
-        Paz[outside_azt][within_bounds] += (rhoz_spl(z2[within_bounds])
-                                            / abs(az_der(z2[within_bounds])))
+        Paz_dist[within_bounds] += (rhoz_spl(z2[within_bounds])
+                                    / abs(az_der(z2[within_bounds])))
 
-        Paz[outside_azt][within_bounds] /= rhoz_spl.integral(0., zt.value)
-
-    Paz_dist[within_max] = Paz
+    Paz_dist[within_max] /= rhoz_spl.integral(0., zt.value)
 
     # Mirror the distributions
     Paz_dist = np.concatenate((np.flip(Paz_dist[1:]), Paz_dist))
