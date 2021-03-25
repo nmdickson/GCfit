@@ -856,7 +856,7 @@ def prior_likelihood(theta, prior_bounds):
     multiply the result with likelihoods, or just use as bool
     '''
 
-    inv = [f"{k}={theta[k]}" for key in theta
+    inv = [f"{key}={theta[key]}" for key in theta
            if not (prior_bounds[key][0] < theta[key] < prior_bounds[key][1])]
 
     if inv:
