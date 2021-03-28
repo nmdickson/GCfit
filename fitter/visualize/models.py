@@ -13,7 +13,6 @@ import astropy.visualization as astroviz
 
 __all__ = ['ModelVisualizer', 'CIModelVisualizer']
 
-
 # TODO fix spacings
 
 # TODO I thinkk this is somewhat out of date (20)
@@ -97,6 +96,24 @@ class ModelVisualizer(_Visualizer):
             except KeyError:
                 return None
 
+    def _add_residuals(self, ax, xmodel, ymodel, xdata, ydata,
+                       xerr=None, yerr=None):
+        from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+        divider = make_axes_locatable(ax)
+        res_ax = divider.append_axes('bottom', size="15%", pad=0, sharex=ax)
+
+        yspline = util.QuantitySpline(xmodel, ymodel)
+
+        res = yspline(xdata) - ydata
+
+        res_ax.errorbar(xdata, res, fmt='k.', xerr=xerr, yerr=yerr)
+
+        res_ax.grid()
+        res_ax.axhline(0., c='k')
+
+        res_ax.set_xscale(ax.get_xscale())
+
     # -----------------------------------------------------------------------
     # Plotting functions
     # -----------------------------------------------------------------------
@@ -167,7 +184,7 @@ class ModelVisualizer(_Visualizer):
         # return fig
 
     @_support_units
-    def plot_LOS(self, fig=None, ax=None, show_obs=True):
+    def plot_LOS(self, fig=None, ax=None, show_obs=True, residuals=True):
 
         mass_bin = self.model.nms - 1
 
@@ -176,6 +193,9 @@ class ModelVisualizer(_Visualizer):
         ax.set_title('Line of Sight Velocity Dispersion')
 
         ax.set_xscale("log")
+
+        model_r = self.model.r.to(u.arcsec)
+        model_LOS = np.sqrt(self.model.v2pj[mass_bin])
 
         if show_obs:
             try:
@@ -187,18 +207,20 @@ class ModelVisualizer(_Visualizer):
                 ax.errorbar(veldisp['r'], veldisp['σ'], fmt='k.',
                             xerr=xerr, yerr=yerr)
 
+                if residuals:
+                    self._add_residuals(ax, model_r, model_LOS,
+                                        veldisp['r'], veldisp['σ'], xerr, yerr)
+
             except KeyError as err:
                 if show_obs != 'attempt':
                     raise err
 
-        model_r = self.model.r.to(u.arcsec)
-
-        ax.plot(model_r, np.sqrt(self.model.v2pj[mass_bin]))
+        ax.plot(model_r, model_LOS)
 
         return fig
 
     @_support_units
-    def plot_pm_tot(self, fig=None, ax=None, show_obs=True):
+    def plot_pm_tot(self, fig=None, ax=None, show_obs=True, residuals=True):
 
         mass_bin = self.model.nms - 1
 
@@ -207,6 +229,13 @@ class ModelVisualizer(_Visualizer):
         ax.set_title("Total Proper Motion")
 
         ax.set_xscale("log")
+
+        model_t = np.sqrt(
+            0.5 * (self.model.v2Tj[mass_bin] + self.model.v2Rj[mass_bin])
+        )
+
+        model_r = self.model.r.to(u.arcsec)
+        model_t = model_t.to(u.mas / u.yr)
 
         if show_obs:
             try:
@@ -218,23 +247,20 @@ class ModelVisualizer(_Visualizer):
                 ax.errorbar(pm['r'], pm['PM_tot'], fmt='k.',
                             xerr=xerr, yerr=yerr)
 
+                if residuals:
+                    self._add_residuals(ax, model_r, model_t,
+                                        pm['r'], pm['PM_tot'], xerr, yerr)
+
             except KeyError as err:
                 if show_obs != 'attempt':
                     raise err
-
-        model_t = np.sqrt(
-            0.5 * (self.model.v2Tj[mass_bin] + self.model.v2Rj[mass_bin])
-        )
-
-        model_r = self.model.r.to(u.arcsec)
-        model_t = model_t.to(u.mas / u.yr)
 
         ax.plot(model_r, model_t)
 
         return fig
 
     @_support_units
-    def plot_pm_ratio(self, fig=None, ax=None, show_obs=True):
+    def plot_pm_ratio(self, fig=None, ax=None, show_obs=True, residuals=True):
 
         mass_bin = self.model.nms - 1
 
@@ -243,6 +269,10 @@ class ModelVisualizer(_Visualizer):
         ax.set_title("Proper Motion Ratio")
 
         ax.set_xscale("log")
+
+        model_ratio = np.sqrt(self.model.v2Tj[mass_bin] / self.model.v2Rj[mass_bin])
+
+        model_r = self.model.r.to(u.arcsec)
 
         if show_obs:
             try:
@@ -255,20 +285,20 @@ class ModelVisualizer(_Visualizer):
                 ax.errorbar(pm['r'], pm['PM_ratio'], fmt='k.',
                             xerr=xerr, yerr=yerr)
 
+                if residuals:
+                    self._add_residuals(ax, model_r, model_ratio,
+                                        pm['r'], pm['PM_ratio'], xerr, yerr)
+
             except KeyError as err:
                 if show_obs != 'attempt':
                     raise err
 
-        model_ratio2 = self.model.v2Tj[mass_bin] / self.model.v2Rj[mass_bin]
-
-        model_r = self.model.r.to(u.arcsec)
-
-        ax.plot(model_r, np.sqrt(model_ratio2))
+        ax.plot(model_r, model_ratio)
 
         return fig
 
     @_support_units
-    def plot_pm_T(self, fig=None, ax=None, show_obs=True):
+    def plot_pm_T(self, fig=None, ax=None, show_obs=True, residuals=True):
         # TODO capture all mass bins which have data (high_mass, low_mass, etc)
 
         mass_bin = self.model.nms - 1
@@ -278,6 +308,11 @@ class ModelVisualizer(_Visualizer):
         ax.set_title("Tangential Proper Motion [High Mass]")
 
         ax.set_xscale("log")
+
+        model_T = np.sqrt(self.model.v2Tj[mass_bin])
+
+        model_r = self.model.r.to(u.arcsec)
+        model_T = model_T.to(u.mas / u.yr)
 
         if show_obs:
             try:
@@ -290,21 +325,20 @@ class ModelVisualizer(_Visualizer):
                 ax.errorbar(pm['r'], pm["PM_T"], fmt='k.',
                             xerr=xerr, yerr=yerr)
 
+                if residuals:
+                    self._add_residuals(ax, model_r, model_T,
+                                        pm['r'], pm['PM_T'], xerr, yerr)
+
             except KeyError as err:
                 if show_obs != 'attempt':
                     raise err
-
-        model_T = np.sqrt(self.model.v2Tj[mass_bin])
-
-        model_r = self.model.r.to(u.arcsec)
-        model_T = model_T.to(u.mas / u.yr)
 
         ax.plot(model_r, model_T)
 
         return fig
 
     @_support_units
-    def plot_pm_R(self, fig=None, ax=None, show_obs=True):
+    def plot_pm_R(self, fig=None, ax=None, show_obs=True, residuals=True):
 
         mass_bin = self.model.nms - 1
 
@@ -313,6 +347,11 @@ class ModelVisualizer(_Visualizer):
         ax.set_title("Radial Proper Motion [High Mass]")
 
         ax.set_xscale("log")
+
+        model_R = np.sqrt(self.model.v2Rj[mass_bin])
+
+        model_r = self.model.r.to(u.arcsec)
+        model_R = model_R.to(u.mas / u.yr)
 
         if show_obs:
             try:
@@ -325,21 +364,20 @@ class ModelVisualizer(_Visualizer):
                 ax.errorbar(pm['r'], pm["PM_R"], fmt='k.',
                             xerr=xerr, yerr=yerr)
 
+                if residuals:
+                    self._add_residuals(ax, model_r, model_R,
+                                        pm['r'], pm['PM_R'], xerr, yerr)
+
             except KeyError as err:
                 if show_obs != 'attempt':
                     raise err
-
-        model_R = np.sqrt(self.model.v2Rj[mass_bin])
-
-        model_r = self.model.r.to(u.arcsec)
-        model_R = model_R.to(u.mas / u.yr)
 
         ax.plot(model_r, model_R)
 
         return fig
 
     @_support_units
-    def plot_number_density(self, fig=None, ax=None, show_obs=True):
+    def plot_number_density(self, fig=None, ax=None, show_obs=True, residuals=True):
         # numdens is a bit different cause we want to compute K based on obs
         # whenever possible, even if we're not showing obs
 
@@ -366,6 +404,9 @@ class ModelVisualizer(_Visualizer):
         except KeyError:
             K = 1.
 
+        model_r = self.model.r.to(u.arcmin)
+        model_Σ = K * self.model.Sigmaj[mass_bin] / self.model.mj[mass_bin]
+
         if show_obs:
             try:
 
@@ -379,12 +420,13 @@ class ModelVisualizer(_Visualizer):
                 ax.errorbar(numdens['r'], numdens["Σ"], fmt='k.',
                             xerr=xerr, yerr=yerr)
 
+                if residuals:
+                    self._add_residuals(ax, model_r, model_Σ,
+                                        numdens['r'], numdens['Σ'], xerr, yerr)
+
             except KeyError as err:
                 if show_obs != 'attempt':
                     raise err
-
-        model_r = self.model.r.to(u.arcmin)
-        model_Σ = K * self.model.Sigmaj[mass_bin] / self.model.mj[mass_bin]
 
         ax.plot(model_r, model_Σ)
 
@@ -605,14 +647,18 @@ class ModelVisualizer(_Visualizer):
 
         fig.suptitle(str(self.obs))
 
-        self.plot_pulsar(fig=fig, ax=axes[0], show_obs=show_obs)
-        self.plot_number_density(fig=fig, ax=axes[1], show_obs='attempt')
-        self.plot_pm_tot(fig=fig, ax=axes[2], show_obs=show_obs)
-        self.plot_pm_ratio(fig=fig, ax=axes[3], show_obs=show_obs)
-        self.plot_pm_T(fig=fig, ax=axes[4], show_obs=show_obs)
-        self.plot_pm_R(fig=fig, ax=axes[5], show_obs=show_obs)
+        kw = {'show_obs': show_obs, 'residuals': False}
 
-        self.plot_LOS(fig=fig, ax=axes[7], show_obs=show_obs)
+        # self.plot_pulsar(fig=fig, ax=axes[0], show_obs=show_obs)
+        self.plot_number_density(fig=fig, ax=axes[1], **kw)
+        self.plot_pm_tot(fig=fig, ax=axes[2], **kw)
+        self.plot_pm_ratio(fig=fig, ax=axes[3], **kw)
+        self.plot_pm_T(fig=fig, ax=axes[4], **kw)
+        self.plot_pm_R(fig=fig, ax=axes[5], **kw)
+
+        # self.plot_mass_func(fig=fig, ax=axes[6], show_obs=show_obs)
+
+        self.plot_LOS(fig=fig, ax=axes[7], **kw)
 
         # TODO maybe have some written info in one of the empty panels (ax6)
         # fig.tight_layout()
