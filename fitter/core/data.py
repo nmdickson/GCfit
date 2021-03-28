@@ -438,7 +438,11 @@ class Model(lp.limepy):
 
     def __getattr__(self, key):
         '''If `key` is not defined in the limepy model, try to get it from θ'''
-        return self._theta[key]
+        try:
+            return self._theta[key]
+        except KeyError as err:
+            msg = f"'{self.__class__.__name__}' object has no attribute '{key}'"
+            raise AttributeError(msg) from err
 
     def _init_mf(self):
 
@@ -496,14 +500,13 @@ class Model(lp.limepy):
         )
 
     # def _get_scale(self):
+    #     TODO I have no idea how the scaling is supposed to work in limepy
     #     G_scale, M_scale, R_scale = self._GS, self._MS, self._RS
 
     def _assign_units(self):
         # TODO this needs to be much more general
         #   Right now it is only applied to those params we use in likelihoods?
         #   Also the actualy units used are being set manually
-
-        # TODO I have no idea how the scaling is supposed to work in limepy
 
         if not self.scale:
             return
@@ -589,6 +592,7 @@ class Model(lp.limepy):
         # append tracer mass bins (must be appended to end to not affect nms)
         if observations is not None:
 
+            # TODO should only append tracer masses for valid likelihood dsets
             tracer_mj = np.unique([
                 dataset.mdata['m'] for dataset in observations.datasets.values()
                 if 'm' in dataset.mdata
