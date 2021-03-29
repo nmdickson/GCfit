@@ -4,7 +4,6 @@ import scipy.stats
 import numpy as np
 import astropy.units as u
 from astropy.constants import c
-from scipy.interpolate import UnivariateSpline
 
 import pathlib
 from importlib import resources
@@ -23,16 +22,16 @@ __all__ = [
 # --------------------------------------------------------------------------
 
 
-def cluster_component(model, R, mass_bin, *, logspaced=False):
+def cluster_component(model, R, mass_bin, *, eps=1e-4):
     """
     Computes probability distribution for a range of line of sight
     accelerations at projected R : P(az|R)
     Returns the an array containing the probability distribution and the Pdot/P
     domain of said distribution
 
-    `logspaced` uses a logspace for the acceleration domain, rather than linear
-
     """
+
+    R = R.to(model.rt.unit)
 
     if R >= model.rt:
         raise ValueError(f"Pulsar position outside cluster bound ({model.rt})")
@@ -117,29 +116,19 @@ def cluster_component(model, R, mass_bin, *, logspaced=False):
     # Value of the maximum acceleration, at the chosen root
     azmax = az_spl(zmax)
 
-    # define the acceleration space domain, based on amax
+    # increment density by 2 order of magn. smaller than azmax
+    Δa = 10**(np.floor(np.log10(azmax.value)) - 2)
 
-    # TODO this (especially w/ logspaced) requires care to ensure its normalized
-    bound = azmax + (5e-9 * az.unit)
-    num = int(bound.value / 15e-9 * 150)
-    if logspaced:
-        az_domain = np.r_[0., np.geomspace(5e-11 * az.unit, bound, num - 1)]
-    else:
-        az_domain = np.linspace(0. * az.unit, bound, num)
-
-    # All invalid acceleratoin space (outside azmax) will have probability = 0
-
-    Paz_dist = np.zeros(az_domain.shape) * u.dimensionless_unscaled
-
-    within_max = az_domain < azmax
+    # define the acceleration space domain, based on amax and Δa
+    az_domain = np.arange(0., azmax.value, Δa) << azmax.unit
 
     # TODO look at the old new_Paz to get the comments for this stuff
 
-    z1 = np.maximum(z1_spl(az_domain[within_max]), z[0])
+    z1 = np.maximum(z1_spl(az_domain), z[0])
 
-    Paz_dist[within_max] = (rhoz_spl(z1) / abs(az_der(z1))).value
+    Paz_dist = (rhoz_spl(z1) / abs(az_der(z1))).value * u.dimensionless_unscaled
 
-    outside_azt = within_max & (az_domain > azt)
+    outside_azt = az_domain > azt
 
     # Only use z2 if any outside_azt values exist (ensures z2_spl exists)
     if np.any(outside_azt):
@@ -151,7 +140,35 @@ def cluster_component(model, R, mass_bin, *, logspaced=False):
         Paz_dist[within_bounds] += (rhoz_spl(z2[within_bounds])
                                     / abs(az_der(z2[within_bounds]))).value
 
-    Paz_dist[within_max] /= rhoz_spl.integral(0. << z.unit, zt).value
+    Paz_dist /= rhoz_spl.integral(0. << z.unit, zt).value
+
+    # Ensure Paz is normalized
+
+    norm = 0.
+    for ind, P_b in enumerate(Paz_dist[1:], 1):
+        P_a = Paz_dist[ind - 1]
+
+        # Integrate using trapezoid rule cumulatively
+        norm += 0.5 * Δa * (P_a + P_b)
+
+        # If converges, cut domain at this index
+        if abs(0.5 - norm) < eps:
+            break
+
+        # If passes normalization, backup a step to cut domain close as possible
+        elif norm > 0.5:
+            ind -= 1
+            break
+
+    else:
+        # integral didn't reach 0.5 before end of distribution
+        # should not happen, means Δa needs to shrink to reach closer to asymp.
+        mssg = 'Paz distribution unable to reach normalization before azmax'
+        raise RuntimeError(mssg)
+
+    # Cut domain and distribution at index of normalization
+    az_domain = az_domain[:ind + 1]
+    Paz_dist = Paz_dist[:ind + 1]
 
     # Mirror the distributions
     Paz_dist = np.concatenate((np.flip(Paz_dist[1:]), Paz_dist))
