@@ -162,7 +162,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
 
         err = util.gaussian(x=Pdot_domain, sigma=ΔPdot_meas, mu=0)
 
-        err_spl = interp.UnivariateSpline(Pdot_domain, err, k=3, s=0, ext=1)
+        err_spl = interp.UnivariateSpline(Pdot_domain, err, k=1, s=0, ext=1)
 
         # ------------------------------------------------------------------
         # Create a slice of the P-Pdot space, along this pulsars P
@@ -181,7 +181,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         Pdot_int_prob = Pdot_kde(np.vstack([P_grid, Pdot_int_domain]))
 
         Pdot_int_spl = interp.UnivariateSpline(
-            Pdot_int_domain, Pdot_int_prob, k=3, s=0, ext=1
+            Pdot_int_domain, Pdot_int_prob, k=1, s=0, ext=1
         )
 
         Pdot_int_prob = util.RV_transform(
@@ -190,7 +190,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         )
 
         Pdot_int_spl = interp.UnivariateSpline(
-            10**Pdot_int_domain, Pdot_int_prob, k=3, s=0, ext=1
+            10**Pdot_int_domain, Pdot_int_prob, k=1, s=0, ext=1
         )
 
         # ------------------------------------------------------------------
@@ -217,7 +217,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
 
         # Normalize
         conv2 /= interp.UnivariateSpline(
-            lin_domain, conv2, k=3, s=0, ext=1
+            lin_domain, conv2, k=1, s=0, ext=1
         ).integral(-np.inf, np.inf)
 
         # ------------------------------------------------------------------
@@ -249,9 +249,11 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
     # Multiply all the probabilities and return the total log probability.
     # ----------------------------------------------------------------------
 
-    # TODO should a probs of zero or less return a final 0 or -inf?
+    # TODO should a probs of zero (or less) return a final 0 or -inf?
 
     logprobs = np.log(probs)
+
+    # Should never occur anymore, but leave it here for now just in case
     logprobs[np.isnan(logprobs)] = np.NINF
 
     return np.sum(logprobs)
@@ -350,7 +352,7 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
 
         # Normalize
         conv /= interp.UnivariateSpline(
-            Pdot_domain, conv, k=3, s=0, ext=1
+            Pdot_domain, conv, k=1, s=0, ext=1
         ).integral(-np.inf, np.inf)
 
         # ------------------------------------------------------------------

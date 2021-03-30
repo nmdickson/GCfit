@@ -170,6 +170,7 @@ def cluster_component(model, R, mass_bin, *, eps=1e-4):
     az_domain = az_domain[:ind + 1]
     Paz_dist = Paz_dist[:ind + 1]
 
+    # TODO not sure if should pad with some zeros. not needed but makes it clear
     # Mirror the distributions
     Paz_dist = np.concatenate((np.flip(Paz_dist[1:]), Paz_dist))
     az_domain = np.concatenate((np.flip(-az_domain[1:]), az_domain))
