@@ -587,6 +587,8 @@ class Model(lp.limepy):
         self._star_bins = slice(0, self.nms)
         self._remnant_bins = slice(self.nms, self.nms + self.nmr)
 
+        # mj is middle of mass bins, mes are edges, widths are sizes of bins
+        # self.mbin_widths = np.diff(self._mf.mes[-1]) ??
         self.mes_widths = np.diff(self._mf.mes[-1])
 
         # append tracer mass bins (must be appended to end to not affect nms)
