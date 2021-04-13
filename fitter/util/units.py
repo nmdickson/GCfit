@@ -38,6 +38,7 @@ def angular_speed(D):
     return [((u.km / u.s), (u.arcsec / u.yr), kms2asyr, asyr2kms)]
 
 
+# TODO probably time this supports normal numpy arrays too
 class QuantitySpline(scipy.interpolate.UnivariateSpline):
     '''Subclass of SciPy's UnivariateSpline, supporting AstroPy `Quantity`s'''
 
