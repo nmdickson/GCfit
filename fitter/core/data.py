@@ -49,6 +49,7 @@ DEFAULT_PRIORS = {
 # --------------------------------------------------------------------------
 # Cluster Observational Data
 # --------------------------------------------------------------------------
+# TODO maybe define a new excepton for when a req'd thing is not in an obs
 
 
 class Variable(u.Quantity):
@@ -296,6 +297,7 @@ class Observations:
 
     def __init__(self, cluster):
 
+        # TODO add a common names sort of thing for cluster names
         self.cluster = cluster
 
         self.mdata = {}
@@ -587,6 +589,7 @@ class Model(lp.limepy):
         self._star_bins = slice(0, self.nms)
         self._remnant_bins = slice(self.nms, self.nms + self.nmr)
 
+        # TODO still don't entriely understand when this is to be used
         # mj is middle of mass bins, mes are edges, widths are sizes of bins
         # self.mbin_widths = np.diff(self._mf.mes[-1]) ??
         self.mes_widths = np.diff(self._mf.mes[-1])
