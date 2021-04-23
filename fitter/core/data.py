@@ -50,12 +50,16 @@ DEFAULT_PRIORS = {
 # Cluster Observational Data
 # --------------------------------------------------------------------------
 # TODO maybe define a new excepton for when a req'd thing is not in an obs
+# TODO need to add sources to mass function data
+# TODO could use a nice way of generating and showing what sources are used
 
 
 class Variable(u.Quantity):
     '''simple readonly Quantity subclass to allow metadata on the variable
     '''
     # TODO better way to handle string arrays, and with nicer method failures
+    #   Fails in the __eq__ we need for mass function fields, see mf likelihood
+    #   Should also probably do astype(str)
     # TODO the "readonly" part of Variable is currently not functional
     def __new__(cls, value, unit=None, mdata=None, *args, **kwargs):
 

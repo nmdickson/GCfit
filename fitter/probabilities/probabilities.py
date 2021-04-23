@@ -4,7 +4,6 @@ from ..core.data import DEFAULT_INITIALS, DEFAULT_PRIORS, Model
 
 import numpy as np
 import astropy.units as u
-import scipy.integrate as integ
 import scipy.interpolate as interp
 
 import logging
@@ -569,6 +568,7 @@ def likelihood_pm_ratio(model, pm, *, mass_bin=None):
     .. math:: PM_{ratio} = \sqrt{\frac{PM_{T}^2}{PM_{R}^2}}
 
     '''
+    # TODO is there some way we could be using model.betaj instead of this frac
 
     if mass_bin is None:
         if 'm' in pm.mdata:
@@ -761,8 +761,10 @@ def likelihood_LOS(model, vlos, *, mass_bin=None):
 
 
 @_angular_units
-def likelihood_mass_func(model, mf):
+def likelihood_mass_func(model, mf, fields):
     r'''Compute the log likelihood of the cluster mass function
+
+    (OUT OF DATE)
 
     Computes the log likelihood component of a cluster's present day mass
     function distribution of visible stars. Profiles of the relative number
@@ -794,55 +796,61 @@ def likelihood_mass_func(model, mf):
     .. math:: N = \int_{r_0}^{r_1} 2 \pi r \Sigma(r) dr
 
     '''
-    # TODO the units in mf are messy, due to all the interpolations
+    # TODO same as numdens, the units are ignored cause 1/pc^2 != 1/arcmin^2
 
-    tot_likelihood = 0
+    tot_likelihood = 0.0
+    M = 300
 
-    rbin_size = 0.4 * u.arcmin
+    # TODO could probably do the radial slicing beforehand as well
+    # if not fields:
+    #     cen = (obs.mdata['RA'], obs.mdata['DEC'])
+    #     fields = mass.initialize_fields(mf['fields'], cen)
 
-    for annulus_ind in np.unique(mf['bin']):
+    # Generate the mass splines before the loops
+    densityj = [util.QuantitySpline(model.r, model.Sigmaj[j])
+                for j in range(model.nms)]
 
-        # we only want to use the obs data for this r bin
-        r_mask = (mf['bin'] == annulus_ind)
+    for PI, field in fields.items():
 
-        r1 = (rbin_size * annulus_ind).to(model.r.unit)
-        r2 = (rbin_size * (annulus_ind + 1)).to(model.r.unit)
+        # Have to use 'value' because str-based `Variable`s are broken
+        PI_mask = (mf['fields'].astype(str).value == PI)
 
-        # Get a binned version of N_model (an Nstars for each mbin)
-        binned_N_model = np.empty(model.nms)
-        for mbin_ind in range(model.nms):
+        rbins = np.c_[mf['r1'][PI_mask], mf['r2'][PI_mask]]
 
-            # Interpolate the model density at the data locations
-            density = interp.interp1d(
-                model.r, 2 * np.pi * model.r * model.Sigmaj[mbin_ind],
-                kind="cubic"
-            )
+        mbin_mean = (mf['m1'][PI_mask] + mf['m2'][PI_mask]) / 2.
+        mbin_width = mf['m2'][PI_mask] - mf['m1'][PI_mask]
 
-            # Convert density spline into Nstars
-            binned_N_model[mbin_ind] = (
-                integ.quad(density, r1.value, r2.value)[0]
-                / (model.mj[mbin_ind] * model.mes_widths[mbin_ind]).value
-            )
+        # TODO which of these is right?
+        # Δmbin = np.sqrt(N[PI_mask]) / mbin_width
+        Δmbin = mf['ΔN'][PI_mask] / mbin_width
+        # Δmbin = mf['ΔN'][PI_mask]
 
-        # interpolate a func N_model = f(mean mass) from the binned N_model
-        interp_N_model = interp.interp1d(
-            model.mj[:model.nms], binned_N_model, fill_value="extrapolate"
-        )
-        # Grab the interpolated N_model's at the data mean masses
-        N_model = interp_N_model(mf['mbin_mean'][r_mask])
+        for r_in, r_out in np.unique(rbins, axis=0):
+            r_mask = (mf['r1'][PI_mask] == r_in) & (mf['r2'][PI_mask] == r_out)
 
-        # Grab the N_data (adjusted by width to get an average
-        #                   dr of a bin (like average-interpolating almost))
-        N_data = (mf['N'][r_mask] / mf['mbin_width'][r_mask]).value
-        err_data = (mf['Δmbin'][r_mask] / mf['mbin_width'][r_mask]).value
+            field_slice = field.slice_radially(r_in, r_out)
 
-        # Compute δN_model from poisson error, and nuisance factor
-        err = np.sqrt(err_data**2 + (model.F * N_data)**2)
+            sample_radii = field_slice.MC_sample(M).to(u.pc)
 
-        # compute final gaussian log likelihood
-        tot_likelihood += -0.5 * np.sum(
-            (N_data - N_model)**2 / err**2 + np.log(err**2)
-        )
+            binned_N_model = np.empty(model.nms)  # << u.pc**-2
+            for j in range(model.nms):
+                # TODO dont forget units on area if we ever fix the units
+                Nj = (field_slice.area / M) * np.sum(densityj[j](sample_radii))
+                widthj = (model.mj[j] * model.mes_widths[j])
+                binned_N_model[j] = (Nj / widthj).value
+
+            N_model = util.QuantitySpline(model.mj[:model.nms], binned_N_model,
+                                          ext=0, k=1)(mbin_mean[r_mask])
+
+            N_data = (mf['N'][PI_mask][r_mask] / mbin_width[r_mask]).value
+
+            err_data = (Δmbin[r_mask] / mbin_width[r_mask]).value
+
+            err = np.sqrt(err_data**2 + (model.F * N_data)**2)
+
+            L = -0.5 * np.sum((N_data - N_model)**2 / err**2 + np.log(err**2))
+
+            tot_likelihood += L
 
     return tot_likelihood
 
