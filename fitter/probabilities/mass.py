@@ -54,6 +54,10 @@ def initialize_fields(fields_var, cen):
 
 class Field:
     '''helper class to handle the polygons for mf fields
+
+    preprep means the preped polygons will be made once at the start, which
+    obviously saves on the time taken to prep them, but this geometry cannot be
+    pickled, so if you want to pickle Field (i.e. for mpi) this will fail
     '''
 
     def __contains__(self, other):
@@ -79,7 +83,15 @@ class Field:
 
         return np.c_[RA, DEC]
 
-    def __init__(self, coords, cen=(0, 0), unit=None):
+    def prep(self):
+        if self._multi:
+            self._prepped = [prepgeom.prep(p) for p in self.polygon]
+        else:
+            self._prepped = prepgeom.prep(self.polygon)
+
+        return self._prepped
+
+    def __init__(self, coords, cen=(0, 0), unit=None, preprep=False):
 
         # ------------------------------------------------------------------
         # Parse the coords argument
@@ -105,17 +117,18 @@ class Field:
         # Set up the polygons
         # ------------------------------------------------------------------
 
+        # TODO prepared geometries can't be pickled, shit
+
         if self._multi:
             polys = [geom.Polygon(c).buffer(0) for c in coords]
 
             self.polygon = geom.MultiPolygon(polys)
 
-            self._prepped = [prepgeom.prep(p) for p in polys]
-
         else:
             self.polygon = geom.Polygon(coords).buffer(0)
 
-            self._prepped = prepgeom.prep(self.polygon)
+        if preprep:
+            self.prep()
 
         self.area = self.polygon.area << u.arcmin**2
 
@@ -158,6 +171,10 @@ class Field:
                     points.append(test_pnt)
 
             return points
+
+        # If this field hasn't been prepped yet, do that now, once
+        if not hasattr(self, '_prepped'):
+            self.prep()
 
         # Do each poly of a multipoly seperate so the bounds aren't huge
         if self._multi:

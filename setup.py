@@ -6,7 +6,7 @@ here = os.path.abspath(os.path.dirname(__file__))
 
 # Package information
 NAME = 'GCfit'
-VERSION = "0.6.0"
+VERSION = "0.6.1"
 
 DESCRIPTION = 'Multimass MCMC fitting of Limepy globular cluster analytic model'
 with io.open(os.path.join(here, 'README.md'), encoding='utf-8') as f:
@@ -18,6 +18,7 @@ CONTACT_EMAIL = 'ndickson@ap.smu.ca'
 
 # Installation information
 # TODO This is not the right way to get ssptools, currently need to dload first
+# TODO document the subrequirements like geos, gsl, etc
 REQUIRED = [
     "corner",
     "astro-limepy",
