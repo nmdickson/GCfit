@@ -67,14 +67,18 @@ class Field:
         '''centre, convert and RA correct the given array of crds'''
         RA, DEC = crd[:, 0], crd[:, 1]
 
-        # Centre and correct RA
-        RA, DEC = (RA - cen[0]) * np.cos(DEC), DEC - cen[1]
-
         # Add and convert units to arcmin
         if not hasattr(crd, 'unit'):
             RA, DEC = RA << u.Unit(unit), DEC << u.Unit(unit)
 
+        cen <<= RA.unit
+
+        # Centre and correct RA
+        RA, DEC = (RA - cen[0]) * np.cos(DEC), DEC - cen[1]
+
         RA, DEC = RA.to_value(u.arcmin), DEC.to_value(u.arcmin)
+
+        print('\t', RA, DEC)
 
         return np.c_[RA, DEC]
 
@@ -84,8 +88,6 @@ class Field:
         # Parse the coords argument
         # ------------------------------------------------------------------
 
-        print(coords)
-
         # if already a polygon, assume its already been corrected
         if isinstance(coords, geom.Polygon):
             self._multi = False
@@ -94,17 +96,13 @@ class Field:
 
         # is a single polygon of coordinates
         elif isinstance(coords, np.ndarray) and coords.ndim == 2:
-            print('was a single coord')
             self._multi = False
             coords = self._correct(coords, cen, unit)
-            print('here it was corrected', coords)
 
         # assume it's iterable of coords or polygons
         else:
-            print('its a list of coords')
             self._multi = True
             coords = [self._correct(c, cen, unit) for c in coords]
-            print('here it was corrected', coords)
 
         # ------------------------------------------------------------------
         # Set up the polygons
@@ -122,9 +120,12 @@ class Field:
 
             self._prepped = prepgeom.prep(self.polygon)
 
+        self.area = self.polygon.area
+
     def slice_radially(self, r1, r2):
         '''Return a new field which is this field and a radial slice'''
         # make sure that r1,r2 are in arcmin
+        r1, r2 = r1.to_value('arcmin'), r2.to_value('arcmin')
 
         origin = geom.Point((0, 0))
 
@@ -132,10 +133,13 @@ class Field:
 
         return Field(self.polygon & shell)
 
-    def MC_sample(self, M):
+    def MC_sample(self, M, return_points=False):
         '''Random sampling of `M` points from this field
         will create a new sample every time,
         (psst, will also store last_sample in self._prev_sample, fyi)
+
+        if return_points is True, returns a MultiPoint, otherwise returns the
+        r values for all the points, in arcmin
         '''
 
         def rejection_sample(poly, prep_poly, M_i):
@@ -168,19 +172,13 @@ class Field:
                 points += rejection_sample(poly, prep_poly, M_i)
 
         else:
-            points = rejection_sample(poly, M)
+            points = rejection_sample(self.polygon, self._prepped, M)
 
         # return the sample of points
+        if return_points:
+            self._prev_sample = geom.MultiPoint(points)
+        else:
+            origin = geom.Point((0, 0))
+            self._prev_sample = [p.distance(origin) for p in points] << u.arcmin
 
-        self._prev_sample = geom.MultiPoint(points)
         return self._prev_sample
-
-
-# --------------------------------------------------------------------------
-# Integration functions
-# --------------------------------------------------------------------------
-
-# def integrate
-#     density = fitter.util.QuantitySpline(model.r, model.Sigmaj[j])
-#     sample_radii = ([pnt.distance(origin) for pnt in poly_sample(field_slice, M)] * u.arcmin).to(u.pc)
-#     Nj = (field_slice.area / M) * np.sum(density(sample_radii))
