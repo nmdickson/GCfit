@@ -3,6 +3,7 @@ import random
 
 import numpy as np
 import astropy.units as u
+from shapely import ops
 import shapely.geometry as geom
 import shapely.prepared as prepgeom
 
@@ -117,12 +118,10 @@ class Field:
         # Set up the polygons
         # ------------------------------------------------------------------
 
-        # TODO prepared geometries can't be pickled, shit
-
         if self._multi:
-            polys = [geom.Polygon(c).buffer(0) for c in coords]
 
-            self.polygon = geom.MultiPolygon(polys)
+            self.polygon = ops.unary_union([geom.Polygon(c).buffer(0)
+                                            for c in coords])
 
         else:
             self.polygon = geom.Polygon(coords).buffer(0)
