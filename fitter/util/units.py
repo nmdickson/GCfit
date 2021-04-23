@@ -1,3 +1,5 @@
+import warnings
+
 import scipy.stats
 import numpy as np
 import astropy.units as u
@@ -38,28 +40,28 @@ def angular_speed(D):
     return [((u.km / u.s), (u.arcsec / u.yr), kms2asyr, asyr2kms)]
 
 
-# TODO probably time this supports normal numpy arrays too
+# TODO this really needs unittest, the unitless stuff made it complicated
 class QuantitySpline(scipy.interpolate.UnivariateSpline):
     '''Subclass of SciPy's UnivariateSpline, supporting AstroPy `Quantity`s'''
 
     def __init__(self, x, y, w=None, bbox=[None] * 2, k=3, s=0,
                  ext=1, check_finite=False):
 
-        self._xunit = x.unit
-        self._yunit = y.unit
+        self._xunit = getattr(x, 'unit', None)
+        self._yunit = getattr(y, 'unit', None)
 
         # Convert boundary box, if needed
-        if bbox[0] is not None:
+        if bbox[0] is not None and hasattr(bbox[0], 'unit'):
             bbox[0] = bbox[0].to_value(self._xunit)
 
-        if bbox[1] is not None:
+        if bbox[1] is not None and hasattr(bbox[1], 'unit'):
             bbox[1] = bbox[1].to_value(self._xunit)
 
         super().__init__(x, y, w=w, bbox=bbox, k=k, s=s,
                          ext=ext, check_finite=check_finite)
 
     @classmethod
-    def _from_tck(cls, tck, x_unit, y_unit, ext=0):
+    def _from_tck(cls, tck, x_unit=None, y_unit=None, ext=0):
 
         obj = super()._from_tck(tck, ext=ext)
 
@@ -69,28 +71,68 @@ class QuantitySpline(scipy.interpolate.UnivariateSpline):
         return obj
 
     def __call__(self, x, nu=0, ext=None):
-        x = x.to_value(self._xunit)
-        return super().__call__(x, nu=nu, ext=ext) << self._yunit
+        '''
+        if no _xunit, but x has a unit, assume it matches
+        '''
+
+        if hasattr(x, 'unit'):
+            x = x.to_value(self._xunit)
+
+        res = super().__call__(x, nu=nu, ext=ext)
+
+        if self._yunit:
+            res <<= self._yunit
+
+        return res
 
     def integral(self, a, b):
-        a = a.to_value(self._xunit)
-        b = b.to_value(self._xunit)
+        '''
+        if no xunit, but a,b does have units, assumes they match
+        '''
 
-        integ_unit = self._xunit * self._yunit
+        if (hasattr(a, 'unit') and hasattr(b, 'unit')):
 
-        return super().integral(a, b) << integ_unit
+            # TODO if only one has units, error is ugly
+
+            a = a.to_value(self._xunit)
+            b = b.to_value(self._xunit)
+
+        else:
+            if self._xunit:
+                mssg = f"a and b must have units matching x ({self._xunit})"
+                raise ValueError(mssg)
+
+        res = super().integral(a, b)
+
+        # if either unit is missing, just ignore final units completely
+        if self._xunit and self._yunit:
+            res <<= (self._xunit * self._yunit)
+
+        return res
 
     def roots(self):
-        return super().roots() << self._xunit
+
+        res = super().roots()
+
+        if self._xunit:
+            res <<= self._xunit
+
+        return res
 
     def derivative(self, n=1):
         from scipy.interpolate import fitpack
 
         tck = fitpack.splder(self._eval_args, n)
+
         # if self.ext is 'const', derivative.ext will be 'zeros'
         ext = 1 if self.ext == 3 else self.ext
 
-        der_unit = self._yunit * self._xunit**-n
+        # if either unit is missing, just ignore final units completely
+        if self._xunit and self._yunit:
+            der_unit = self._yunit * self._xunit**-n
+        else:
+            warnings.warn("Missing units, resulting spline will have no y-unit")
+            der_unit = None
 
         return QuantitySpline._from_tck(
             tck, x_unit=self._xunit, y_unit=der_unit, ext=ext,
