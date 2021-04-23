@@ -345,7 +345,7 @@ class Observations:
             # Some datasets could have multiple probabilities, depending on what
             # variables they contain
             #
-            # Each component is a tuple of where the first two elements are,
+            # Each component is a tuple where the first two elements are,
             # respectively, the observation key and likelihood function, and all
             # remaining elements are the extra arguments to pass to the function
             # --------------------------------------------------------------
@@ -430,7 +430,12 @@ class Observations:
 
                 func = probabilities.likelihood_mass_func
 
-                comps.append((key, func, ))
+                fields_var = self[key]['fields']
+                cen = (self.mdata['RA'], self.mdata['DEC'])
+
+                fields = probabilities.mass.initialize_fields(fields_var, cen)
+
+                comps.append((key, func, fields))
 
         return comps
 

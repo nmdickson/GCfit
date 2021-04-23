@@ -29,7 +29,6 @@ def initialize_fields(fields_var, cen):
     unit = fields_var.mdata['field_unit']
 
     for PI in PI_list:
-        print(PI)
 
         # Single polygon
         try:
@@ -77,8 +76,6 @@ class Field:
         RA, DEC = (RA - cen[0]) * np.cos(DEC), DEC - cen[1]
 
         RA, DEC = RA.to_value(u.arcmin), DEC.to_value(u.arcmin)
-
-        print('\t', RA, DEC)
 
         return np.c_[RA, DEC]
 
