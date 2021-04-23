@@ -117,7 +117,7 @@ class Field:
 
             self._prepped = prepgeom.prep(self.polygon)
 
-        self.area = self.polygon.area
+        self.area = self.polygon.area << u.arcmin**2
 
     def slice_radially(self, r1, r2):
         '''Return a new field which is this field and a radial slice'''
@@ -179,3 +179,26 @@ class Field:
             self._prev_sample = [p.distance(origin) for p in points] << u.arcmin
 
         return self._prev_sample
+
+    def MC_integrate(self, func, sample=None, M=None):
+        '''Monte carlo integrate func over this field, using sample points, or
+        generating own sample if not given
+        '''
+        # TODO could optioanlly return the error as well
+
+        if sample is None:
+
+            if M is None:
+                mssg = "must supply one of `sample` or `M`"
+                raise TypeError(mssg)
+
+            sample = self.MC_sample(M)
+
+        M = sample.size
+
+        res = np.sum(func(sample))
+
+        # Only use area units if the integrand has units as well
+        V = self.area if hasattr(res, 'unit') else self.area.value
+
+        return (V / M) * res

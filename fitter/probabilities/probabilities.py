@@ -832,10 +832,9 @@ def likelihood_mass_func(model, mf, fields):
 
             sample_radii = field_slice.MC_sample(M).to(u.pc)
 
-            binned_N_model = np.empty(model.nms)  # << u.pc**-2
+            binned_N_model = np.empty(model.nms)
             for j in range(model.nms):
-                # TODO dont forget units on area if we ever fix the units
-                Nj = (field_slice.area / M) * np.sum(densityj[j](sample_radii))
+                Nj = field_slice.MC_integrate(densityj[j], sample=sample_radii)
                 widthj = (model.mj[j] * model.mes_widths[j])
                 binned_N_model[j] = (Nj / widthj).value
 
