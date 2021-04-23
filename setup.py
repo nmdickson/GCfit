@@ -31,6 +31,7 @@ REQUIRED = [
     "h5py",
     "tqdm",
     "gala",
+    "shapely"
 ]
 
 REQUIRES_PYTHON = '>=3.7'
