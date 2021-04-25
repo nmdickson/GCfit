@@ -820,10 +820,11 @@ def likelihood_mass_func(model, mf, fields):
         mbin_mean = (mf['m1'][PI_mask] + mf['m2'][PI_mask]) / 2.
         mbin_width = mf['m2'][PI_mask] - mf['m1'][PI_mask]
 
+        N = mf['N'][PI_mask] / mbin_width
+
         # TODO which of these is right?
         # Δmbin = np.sqrt(N[PI_mask]) / mbin_width
         Δmbin = mf['ΔN'][PI_mask] / mbin_width
-        # Δmbin = mf['ΔN'][PI_mask]
 
         for r_in, r_out in np.unique(rbins, axis=0):
             r_mask = (mf['r1'][PI_mask] == r_in) & (mf['r2'][PI_mask] == r_out)
@@ -841,9 +842,8 @@ def likelihood_mass_func(model, mf, fields):
             N_model = util.QuantitySpline(model.mj[:model.nms], binned_N_model,
                                           ext=0, k=1)(mbin_mean[r_mask])
 
-            N_data = (mf['N'][PI_mask][r_mask] / mbin_width[r_mask]).value
-
-            err_data = (Δmbin[r_mask] / mbin_width[r_mask]).value
+            N_data = N[r_mask].value
+            err_data = Δmbin[r_mask].value
 
             err = np.sqrt(err_data**2 + (model.F * N_data)**2)
 
