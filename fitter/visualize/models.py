@@ -1,12 +1,11 @@
 from .. import util
 from ..core.data import Observations, Model
-from ..probabilities.pulsars import cluster_component
+from ..probabilities import pulsars, mass
 
 import h5py
 import numpy as np
 import astropy.units as u
 import matplotlib.pyplot as plt
-import scipy.integrate as integ
 import matplotlib.colors as mpl_clr
 import astropy.visualization as astroviz
 
@@ -435,65 +434,78 @@ class ModelVisualizer(_Visualizer):
     @_support_units
     def plot_mass_func(self, fig=None, ax=None, show_obs=True, rbin_size=0.4):
 
-        import scipy.interpolate as interp
-
         fig, ax = self._setup_artist(fig, ax)
+        scale = 10
+        yticks = []
+        ylabels = []
 
         mf = self.obs['mass_function']
 
-        # TODO rbin size should actually come from the data,
-        #   sollima is always 0.4' I think but still it should be an attr/smthn
-        rbin_size <<= u.arcmin
+        # Have to use 'value' because str-based `Variable`s are still broken
+        PI_arr = mf['fields'].astype(str).value
 
-        # TODO I have tho think about how this all works, should it depend so
-        #   much on the obs?
-        for annulus_ind in np.unique(mf['bin']):
+        M = 300
 
-            scale = 10**annulus_ind
+        # Generate the mass splines before the loops
+        densityj = [util.QuantitySpline(self.model.r, self.model.Sigmaj[j])
+                    for j in range(self.model.nms)]
 
-            # we only want to use the obs data for this r bin
-            r_mask = (mf['bin'] == annulus_ind)
+        cen = (self.obs.mdata['RA'], self.obs.mdata['DEC'])
+        fields = mass.initialize_fields(mf['fields'], cen)
 
-            # Convert the radial bin baounds from arcmin to model units
-            r1 = (rbin_size * annulus_ind).to(u.parsec)
-            r2 = (rbin_size * (annulus_ind + 1)).to(u.parsec)
+        # sort based on the first r1 value of each PI, for better viz
+        fields = {PI: fields[PI] for PI in
+                  sorted(fields, key=lambda PI: mf['r1'][PI_arr == PI].min())}
 
-            # Get a binned version of N_model (an Nstars for each mbin)
-            binned_N_model = np.empty(self.model.nms)
-            for mbin_ind in range(self.model.nms):
+        for PI, field in fields.items():
 
-                # Interpolate the self.model density at the data locations
-                density = interp.interp1d(
-                    self.model.r,
-                    2 * np.pi * self.model.r * self.model.Sigmaj[mbin_ind],
-                    kind="cubic"
-                )
+            PI_mask = (PI_arr == PI)
 
-                # Convert density spline into Nstars
-                mper = self.model.mj[mbin_ind] * self.model.mes_widths[mbin_ind]
+            rbins = np.c_[mf['r1'][PI_mask], mf['r2'][PI_mask]]
 
-                binned_N_model[mbin_ind] = (
-                    integ.quad(density, r1.value, r2.value)[0] / mper.value
-                )
+            mbin_mean = (mf['m1'][PI_mask] + mf['m2'][PI_mask]) / 2.
+            mbin_width = mf['m2'][PI_mask] - mf['m1'][PI_mask]
 
-            # Grab the N_data (adjusted by width to get an average
-            #                   dr of a bin (like average-interpolating almost))
-            N_data = (mf['N'][r_mask] / mf['mbin_width'][r_mask]).value
-            err_data = (mf['Δmbin'][r_mask] / mf['mbin_width'][r_mask]).value
+            N = mf['N'][PI_mask] / mbin_width
+            ΔN = mf['ΔN'][PI_mask] / mbin_width
 
-            # Compute δN_model from poisson error, and nuisance factor
-            err = np.sqrt(err_data**2 + (self.model.F * N_data)**2)
+            for r_in, r_out in np.unique(rbins, axis=0):
+                r_mask = ((mf['r1'][PI_mask] == r_in)
+                          & (mf['r2'][PI_mask] == r_out))
 
-            pnts = ax.errorbar(mf['mbin_mean'][r_mask], N_data * scale,
-                               fmt='o', yerr=err * scale)
+                field_slice = field.slice_radially(r_in, r_out)
 
-            ax.plot(self.model.mj[:self.model.nms], binned_N_model * scale,
-                    'x--', c=pnts[0].get_color(), label=f"R={r1:.1f}-{r2:.1f}")
+                sample_radii = field_slice.MC_sample(M).to(u.pc)
+
+                binned_N_model = np.empty(self.model.nms)
+                for j in range(self.model.nms):
+                    Nj = field_slice.MC_integrate(densityj[j], sample_radii)
+                    widthj = (self.model.mj[j] * self.model.mes_widths[j])
+                    binned_N_model[j] = (Nj / widthj).value
+
+                N_data = N[r_mask].value
+                err_data = ΔN[r_mask].value
+
+                err = np.sqrt(err_data**2 + (self.model.F * N_data)**2)
+
+                pnts = ax.errorbar(mbin_mean[r_mask], N_data * 10**scale, fmt='o', yerr=err * 10**scale)
+                slp, = ax.plot(self.model.mj[:self.model.nms], binned_N_model * 10**scale, '-', c=pnts[0].get_color())
+
+                yticks.append(slp.get_ydata()[0])
+                ylabels.append(f"{r_in.value:.2f}'-{r_out.value:.2f}'")
+
+                scale -= 1
 
         ax.set_yscale("log")
         ax.set_xscale("log")
 
-        ax.legend()
+        ax.set_yticks(yticks)
+        ax.set_yticklabels(ylabels)
+
+        ax.set_ylabel('dN/dm')
+        ax.set_xlabel(r'Mass [$M_\odot$]')
+
+        fig.tight_layout()
 
         return fig
 
