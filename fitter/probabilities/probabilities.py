@@ -783,14 +783,14 @@ def likelihood_LOS(model, vlos, *, mass_bin=None):
 
 @_angular_units
 def likelihood_mass_func(model, mf, fields):
-    r'''Compute the log likelihood of the cluster mass function
-
-    (OUT OF DATE)
+    r'''Compute the log likelihood of the cluster's PDMF
 
     Computes the log likelihood component of a cluster's present day mass
-    function distribution of visible stars. Profiles of the relative number
-    of stars in each mass bin are compared against the computed mass function
-    N of the model, given by it's density profile.
+    function (PDMF) distribution of visible stars. Radial profiles of the
+    relative number of stars counted in each mass bin, within each observation's
+    boundary polygons, are compared against the computed mass function
+    N of the model, given by it's density profile and integrated over the same
+    field.
 
     A Gaussian likelihood is assumed, with a δN Poisson error accompanying the
     mass function nuisance parameter `F`.
@@ -804,6 +804,10 @@ def likelihood_mass_func(model, mf, fields):
         Mass function profile dataset used to compute probability distribution
         and evaluate log likelihood
 
+    fields : dict
+        Dictionary of `fitter.probability.mass.Field` fields, as given by
+        `fitter.probability.mass.initialize_fields`
+
     Returns
     -------
     float
@@ -812,10 +816,16 @@ def likelihood_mass_func(model, mf, fields):
     Notes
     -----
     The model mass function N is given for each stellar mass bin by the
-    integral of the surface density profile within each radial bin:
+    integral of the surface density profile within each radial bin, within the
+    relevant field boundaries:
 
-    .. math:: N = \int_{r_0}^{r_1} 2 \pi r \Sigma(r) dr
+    .. math:: N = \int_{r_0}^{r_1} \Sigma(r) dr
 
+    See Also
+    --------
+    `fitter.probability.mass.Field.MC_integrate` :
+        Monte Carlo integration method used to integrate the surface density
+        profile
     '''
     # TODO same as numdens, the units are ignored cause 1/pc^2 != 1/arcmin^2
 
@@ -827,11 +837,22 @@ def likelihood_mass_func(model, mf, fields):
     #     cen = (obs.mdata['RA'], obs.mdata['DEC'])
     #     fields = mass.initialize_fields(mf['fields'], cen)
 
-    # Generate the mass splines before the loops
+    # ----------------------------------------------------------------------
+    # Generate the mass splines before the loops, to save repetition
+    # ----------------------------------------------------------------------
+
     densityj = [util.QuantitySpline(model.r, model.Sigmaj[j])
                 for j in range(model.nms)]
 
+    # ----------------------------------------------------------------------
+    # Iterate over each PI / Field
+    # ----------------------------------------------------------------------
+
     for PI, field in fields.items():
+
+        # ------------------------------------------------------------------
+        # Determine the observation data which corresponds to this field
+        # ------------------------------------------------------------------
 
         # Have to use 'value' because str-based `Variable`s are broken
         PI_mask = (mf['fields'].astype(str).value == PI)
@@ -845,10 +866,19 @@ def likelihood_mass_func(model, mf, fields):
 
         ΔN = mf['ΔN'][PI_mask] / mbin_width
 
+        # ------------------------------------------------------------------
+        # Iterate over each radial bin in this field, slicing out the radial
+        # shell from the field
+        # ------------------------------------------------------------------
+
         for r_in, r_out in np.unique(rbins, axis=0):
             r_mask = (mf['r1'][PI_mask] == r_in) & (mf['r2'][PI_mask] == r_out)
 
             field_slice = field.slice_radially(r_in, r_out)
+
+            # --------------------------------------------------------------
+            # Sample this slice of the field M times, and integrate to get N
+            # --------------------------------------------------------------
 
             sample_radii = field_slice.MC_sample(M).to(u.pc)
 
@@ -860,6 +890,10 @@ def likelihood_mass_func(model, mf, fields):
 
             N_model = util.QuantitySpline(model.mj[:model.nms], binned_N_model,
                                           ext=0, k=1)(mbin_mean[r_mask])
+
+            # --------------------------------------------------------------
+            # Add the error and compute the log likelihood
+            # --------------------------------------------------------------
 
             N_data = N[r_mask].value
             err_data = ΔN[r_mask].value
