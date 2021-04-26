@@ -134,7 +134,7 @@ class ModelVisualizer(_Visualizer):
 
         maz = u.Quantity(np.empty(self.model.nstep - 1), '1/s')
         for i in range(self.model.nstep - 1):
-            a_domain, Paz = cluster_component(self.model, self.model.r[i], -1)
+            a_domain, Paz = pulsars.cluster_component(self.model, self.model.r[i], -1)
             maz[i] = a_domain[Paz.argmax()] << maz.unit
 
         maz = (self.obs['pulsar/P'] * maz).decompose()
@@ -159,28 +159,181 @@ class ModelVisualizer(_Visualizer):
 
         return fig
 
-    # def plot_pulsar_distributions(self, fig=None, ax=None, show_obs=True):
-        # '''plot the prob dists and the convolutions for all pulsars'''
+    @_support_units
+    def plot_pulsar_spin_dist(self, fig=None, ax=None, pulsar_ind=0,
+                              show_obs=True, show_conv=False):
 
-        # N_pulsars = obs_r.size
-        # prob_dist = np.array([
-        #     cluster_component(self.model, A_SPACE, obs_r[i], i)
-        #     for i in range(N_pulsars)
-        # ])
-        # max_probs = prob_dist.max(axis=1)
+        import scipy.interpolate as interp
 
-        # err = scipy.stats.norm.pdf(A_SPACE, 0, np.c_[obs_pulsar['Δa_los']])
+        fig, ax = self._setup_artist(fig, ax)
 
-        # prob_dist = likelihood_pulsars(self.model, obs_pulsar, err, True)
-        # for ind in range(len(obs_pulsar['r'])):
-        #     clr = f'C{ind + 1}'
-        #     print(prob_dist[ind])
-        #     # TO-DO lots of nans?
-        #     plt.plot(A_SPACE, prob_dist[ind], c=clr)
-        #     plt.axvline(obs_pulsar['r'][ind], c=clr)
-        #     plt.axhline(obs_pulsar['a_los'][ind], c=clr)
+        # pulsars = self.obs['pulsar']
+        puls_obs = self.obs['pulsar/spin']
 
-        # return fig
+        id_ = puls_obs['id'][pulsar_ind].value.decode()
+        ax.set_title(f'Pulsar "{id_}" Period Derivative Likelihood')
+
+        ax.set_ylabel('Probability')
+        ax.set_xlabel(r'$\dot{P}/P$ $\left[s^{-1}\right]$')
+
+        mass_bin = -1
+
+        kde = pulsars.field_Pdot_KDE()
+        Pdot_min, Pdot_max = kde.dataset[1].min(), kde.dataset[1].max()
+
+        R = puls_obs['r'][pulsar_ind].to(u.pc)
+
+        P = puls_obs['P'][pulsar_ind].to('s')
+
+        Pdot_meas = puls_obs['Pdot_meas'][pulsar_ind]
+        ΔPdot_meas = np.abs(puls_obs['ΔPdot_meas'][pulsar_ind])
+
+        PdotP_domain, PdotP_c_prob = pulsars.cluster_component(self.model,
+                                                               R, mass_bin)
+        Pdot_domain = (P * PdotP_domain).decompose()
+
+        # linear to avoid effects around asymptote
+        Pdot_c_spl = interp.UnivariateSpline(
+            Pdot_domain, PdotP_c_prob, k=1, s=0, ext=1
+        )
+
+        err = util.gaussian(x=Pdot_domain, sigma=ΔPdot_meas, mu=0)
+
+        err_spl = interp.UnivariateSpline(Pdot_domain, err, k=3, s=0, ext=1)
+
+        lg_P = np.log10(P / P.unit)
+
+        P_grid, Pdot_int_domain = np.mgrid[lg_P:lg_P:1j, Pdot_min:Pdot_max:200j]
+
+        P_grid, Pdot_int_domain = P_grid.ravel(), Pdot_int_domain.ravel()
+
+        Pdot_int_prob = kde(np.vstack([P_grid, Pdot_int_domain]))
+
+        Pdot_int_spl = interp.UnivariateSpline(
+            Pdot_int_domain, Pdot_int_prob, k=3, s=0, ext=1
+        )
+
+        Pdot_int_prob = util.RV_transform(
+            domain=10**Pdot_int_domain, f_X=Pdot_int_spl,
+            h=np.log10, h_prime=lambda y: (1 / (np.log(10) * y))
+        )
+
+        Pdot_int_spl = interp.UnivariateSpline(
+            10**Pdot_int_domain, Pdot_int_prob, k=3, s=0, ext=1
+        )
+
+        lin_domain = np.linspace(0., 1e-18, 5_000 // 2)
+        lin_domain = np.concatenate((np.flip(-lin_domain[1:]), lin_domain))
+
+        conv1 = np.convolve(err_spl(lin_domain), Pdot_c_spl(lin_domain), 'same')
+
+        conv2 = np.convolve(conv1, Pdot_int_spl(lin_domain), 'same')
+
+        # Normalize
+        conv2 /= interp.UnivariateSpline(
+            lin_domain, conv2, k=3, s=0, ext=1
+        ).integral(-np.inf, np.inf)
+
+        cluster_μ = self.obs.mdata['μ'] << u.Unit("mas/yr")
+        PdotP_pm = pulsars.shklovskii_component(cluster_μ, self.model.d)
+
+        cluster_coords = (self.obs.mdata['b'], self.obs.mdata['l']) * u.deg
+        PdotP_gal = pulsars.galactic_component(*cluster_coords, D=self.model.d)
+
+        x_total = (lin_domain / P) + PdotP_pm + PdotP_gal
+        ax.plot(x_total, conv2)
+
+        if show_conv:
+            # Will really mess the scaling up, usually
+            ax.plot(x_total, Pdot_c_spl(lin_domain))
+            ax.plot(x_total, conv1)
+
+        if show_obs:
+            ax.axvline((Pdot_meas / P).decompose(), c='r', ls=':')
+
+        prob_dist = interp.interp1d(
+            (lin_domain / P) + PdotP_pm + PdotP_gal, conv2,
+            assume_sorted=True, bounds_error=False, fill_value=0.0
+        )
+
+        print('prob=', prob_dist((Pdot_meas / P).decompose()))
+
+        return fig
+
+    @_support_units
+    def plot_pulsar_orbital_dist(self, fig=None, ax=None, pulsar_ind=0,
+                                 show_obs=True, show_conv=False):
+
+        import scipy.interpolate as interp
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        # pulsars = self.obs['pulsar']
+        puls_obs = self.obs['pulsar/orbital']
+
+        id_ = puls_obs['id'][pulsar_ind].value.decode()
+        ax.set_title(f'Pulsar "{id_}" Period Derivative Likelihood')
+
+        ax.set_ylabel('Probability')
+        ax.set_xlabel(r'$\dot{P}/P$ $\left[s^{-1}\right]$')
+
+        mass_bin = -1
+
+        R = puls_obs['r'][pulsar_ind].to(u.pc)
+
+        P = puls_obs['Pb'][pulsar_ind].to('s')
+
+        Pdot_meas = puls_obs['Pbdot_meas'][pulsar_ind]
+        ΔPdot_meas = np.abs(puls_obs['ΔPbdot_meas'][pulsar_ind])
+
+        PdotP_domain, PdotP_c_prob = pulsars.cluster_component(self.model,
+                                                               R, mass_bin)
+        Pdot_domain = (P * PdotP_domain).decompose()
+
+        Pdot_c_spl = interp.UnivariateSpline(
+            Pdot_domain, PdotP_c_prob, k=1, s=0, ext=1
+        )
+
+        err = util.gaussian(x=Pdot_domain, sigma=ΔPdot_meas, mu=0)
+
+        err_spl = interp.UnivariateSpline(Pdot_domain, err, k=3, s=0, ext=1)
+
+        lin_domain = np.linspace(0., 1e-11, 5_000 // 2)
+        lin_domain = np.concatenate((np.flip(-lin_domain[1:]), lin_domain))
+
+        conv = np.convolve(err_spl(lin_domain), Pdot_c_spl(lin_domain), 'same')
+        # conv = np.convolve(err, PdotP_c_prob, 'same')
+
+        # Normalize
+        conv /= interp.UnivariateSpline(
+            lin_domain, conv, k=3, s=0, ext=1
+        ).integral(-np.inf, np.inf)
+
+        cluster_μ = self.obs.mdata['μ'] << u.Unit("mas/yr")
+        PdotP_pm = pulsars.shklovskii_component(cluster_μ, self.model.d)
+
+        cluster_coords = (self.obs.mdata['b'], self.obs.mdata['l']) * u.deg
+        PdotP_gal = pulsars.galactic_component(*cluster_coords, D=self.model.d)
+
+        x_total = (lin_domain / P) + PdotP_pm + PdotP_gal
+        ax.plot(x_total, conv)
+
+        if show_conv:
+            # Will really mess the scaling up, usually
+            ax.plot(x_total, PdotP_c_prob)
+            ax.plot(x_total, conv)
+
+        if show_obs:
+            ax.axvline((Pdot_meas / P).decompose(), c='r', ls=':')
+
+        prob_dist = interp.interp1d(
+            x_total, conv,
+            assume_sorted=True, bounds_error=False, fill_value=0.0
+        )
+
+        print('prob=', prob_dist((Pdot_meas / P).decompose()))
+
+        return fig
 
     @_support_units
     def plot_LOS(self, fig=None, ax=None, show_obs=True, residuals=True):
