@@ -634,15 +634,18 @@ class ModelVisualizer(_Visualizer):
                 for j in range(self.model.nms):
                     Nj = field_slice.MC_integrate(densityj[j], sample_radii)
                     widthj = (self.model.mj[j] * self.model.mes_widths[j])
-                    binned_N_model[j] = (Nj / widthj).value
+                    binned_N_model[j] = (Nj / widthj).value * 10**scale
 
                 N_data = N[r_mask].value
                 err_data = ΔN[r_mask].value
 
                 err = np.sqrt(err_data**2 + (self.model.F * N_data)**2)
 
-                pnts = ax.errorbar(mbin_mean[r_mask], N_data * 10**scale, fmt='o', yerr=err * 10**scale)
-                slp, = ax.plot(self.model.mj[:self.model.nms], binned_N_model * 10**scale, '-', c=pnts[0].get_color())
+                pnts = ax.errorbar(mbin_mean[r_mask], N_data * 10**scale,
+                                   fmt='o', yerr=err * 10**scale)
+
+                slp, = ax.plot(self.model.mj[:self.model.nms], binned_N_model,
+                               fmt='-', c=pnts[0].get_color())
 
                 yticks.append(slp.get_ydata()[0])
                 ylabels.append(f"{r_in.value:.2f}'-{r_out.value:.2f}'")
@@ -748,8 +751,8 @@ class ModelVisualizer(_Visualizer):
         sig_MS = 2 * np.pi * self.model.r * np.sum(Sigma_MS, axis=0)
         dM_MS = util.QuantitySpline(self.model.r, sig_MS)
 
-        cum_M_MS = [dM_MS.integral(r0, ri) for ri in self.model.r]
-
+        cum_M_MS = [dM_MS.integral(r0, ri) for ri in self.model.r] << u.Msun
+        print(cum_M_MS)
         ax.plot(r_domain, cum_M_MS, label='Main Sequence')
 
         # Total mass
@@ -757,7 +760,7 @@ class ModelVisualizer(_Visualizer):
         sig_tot = 2 * np.pi * self.model.r * np.sum(self.model.Sigmaj, axis=0)
         dM_tot = util.QuantitySpline(self.model.r, sig_tot)
 
-        cum_M_tot = [dM_tot.integral(r0, ri) for ri in self.model.r]
+        cum_M_tot = [dM_tot.integral(r0, ri) for ri in self.model.r] << u.Msun
 
         ax.plot(r_domain, cum_M_tot, label='Total')
 
@@ -766,7 +769,7 @@ class ModelVisualizer(_Visualizer):
         sig_BH = 2 * np.pi * self.model.r * np.sum(self.model.BH_Sigmaj, axis=0)
         dM_BH = util.QuantitySpline(self.model.r, sig_BH)
 
-        cum_M_BH = [dM_BH.integral(r0, ri) for ri in self.model.r]
+        cum_M_BH = [dM_BH.integral(r0, ri) for ri in self.model.r] << u.Msun
 
         ax.plot(r_domain, cum_M_BH, label='Black Hole')
 
@@ -775,7 +778,7 @@ class ModelVisualizer(_Visualizer):
         sig_WD = 2 * np.pi * self.model.r * np.sum(self.model.WD_Sigmaj, axis=0)
         dM_WD = util.QuantitySpline(self.model.r, sig_WD)
 
-        cum_M_WD = [dM_WD.integral(r0, ri) for ri in self.model.r]
+        cum_M_WD = [dM_WD.integral(r0, ri) for ri in self.model.r] << u.Msun
 
         ax.plot(r_domain, cum_M_WD, label='White Dwarf')
 
@@ -784,7 +787,7 @@ class ModelVisualizer(_Visualizer):
         sig_NS = 2 * np.pi * self.model.r * np.sum(self.model.NS_Sigmaj, axis=0)
         dM_NS = util.QuantitySpline(self.model.r, sig_NS)
 
-        cum_M_NS = [dM_NS.integral(r0, ri) for ri in self.model.r]
+        cum_M_NS = [dM_NS.integral(r0, ri) for ri in self.model.r] << u.Msun
 
         ax.plot(r_domain, cum_M_NS, label='Neutron Star')
 
@@ -949,14 +952,14 @@ class CIModelVisualizer(_Visualizer):
                 xerr = self.get_err(veldisp, 'r')
                 yerr = self.get_err(veldisp, 'σ')
 
-                ax.errorbar(veldisp['r'], veldisp['σ'], fmt='k.',
+                ax.errorbar(veldisp['r'].to(u.pc), veldisp['σ'], fmt='k.',
                             xerr=xerr, yerr=yerr)
 
             except KeyError as err:
                 if show_obs != 'attempt':
                     raise err
 
-        self._plot_model_CI(ax, np.sqrt(self.v2pj))
+        self._plot_model_CI(ax, self.vpj)
 
         return fig
 
@@ -973,21 +976,17 @@ class CIModelVisualizer(_Visualizer):
             try:
                 pm = self.obs['proper_motion']
 
-                xerr = self.get_err(pm, 'r')
+                xerr = self.get_err(pm, 'r').to(u.pc)
                 yerr = self.get_err(pm, 'PM_tot')
 
-                ax.errorbar(pm['r'], pm['PM_tot'], fmt='k.',
+                ax.errorbar(pm['r'].to(u.pc), pm['PM_tot'], fmt='k.',
                             xerr=xerr, yerr=yerr)
 
             except KeyError as err:
                 if show_obs != 'attempt':
                     raise err
 
-        model_t = np.sqrt(
-            0.5 * (self.v2Tj + self.v2Rj)
-        )
-
-        self._plot_model_CI(ax, model_t.to(u.mas / u.yr))
+        self._plot_model_CI(ax, self.vtotj.to(u.mas / u.yr))
 
         return fig
 
@@ -996,7 +995,7 @@ class CIModelVisualizer(_Visualizer):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        ax.set_title("Proper Motion Ratio")
+        ax.set_title("Proper Motion Anisotropy")
 
         ax.set_xscale("log")
 
@@ -1005,19 +1004,17 @@ class CIModelVisualizer(_Visualizer):
 
                 pm = self.obs['proper_motion']
 
-                xerr = self.get_err(pm, 'r')
+                xerr = self.get_err(pm, 'r').to(u.pc)
                 yerr = self.get_err(pm, 'PM_ratio')
 
-                ax.errorbar(pm['r'], pm['PM_ratio'], fmt='k.',
+                ax.errorbar(pm['r'].to(u.pc), pm['PM_ratio'], fmt='k.',
                             xerr=xerr, yerr=yerr)
 
             except KeyError as err:
                 if show_obs != 'attempt':
                     raise err
 
-        model_ratio2 = self.v2Tj / self.v2Rj
-
-        self._plot_model_CI(ax, np.sqrt(model_ratio2))
+        self._plot_model_CI(ax, self.vTj / self.vRj)
 
         return fig
 
@@ -1027,7 +1024,7 @@ class CIModelVisualizer(_Visualizer):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        ax.set_title("Tangential Proper Motion [High Mass]")
+        ax.set_title("Tangential Proper Motion")
 
         ax.set_xscale("log")
 
@@ -1046,9 +1043,7 @@ class CIModelVisualizer(_Visualizer):
                 if show_obs != 'attempt':
                     raise err
 
-        model_T = np.sqrt(self.v2Tj)
-
-        self._plot_model_CI(ax, model_T.to(u.mas / u.yr))
+        self._plot_model_CI(ax, self.vTj.to(u.mas / u.yr))
 
         return fig
 
@@ -1057,7 +1052,7 @@ class CIModelVisualizer(_Visualizer):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        ax.set_title("Radial Proper Motion [High Mass]")
+        ax.set_title("Radial Proper Motion")
 
         ax.set_xscale("log")
 
@@ -1076,9 +1071,7 @@ class CIModelVisualizer(_Visualizer):
                 if show_obs != 'attempt':
                     raise err
 
-        model_R = np.sqrt(self.v2Rj)
-
-        self._plot_model_CI(ax, model_R.to(u.mas / u.yr))
+        self._plot_model_CI(ax, self.vRj.to(u.mas / u.yr))
 
         return fig
 
@@ -1119,60 +1112,81 @@ class CIModelVisualizer(_Visualizer):
 
         fig, ax = self._setup_artist(fig, ax)
 
+        scale = 10
+        yticks = []
+        ylabels = []
+
         mf = self.obs['mass_function']
 
-        # TODO rbin size should actually come from the data,
-        #   sollima is always 0.4' I think but still it should be an attr/smthn
-        rbin_size <<= u.arcmin
+        PI_arr = mf['fields'].astype(str).value
 
-        for annulus_ind in np.unique(mf['bin']):
+        rbin = 0
 
-            scale = 10**annulus_ind
+        for PI in sorted(np.unique(PI_arr),
+                         key=lambda k: mf['r1'][PI_arr == k].min()):
 
-            # Convert the radial bin baounds from arcmin to model units
-            r1 = (rbin_size * annulus_ind).to(u.parsec)
-            r2 = (rbin_size * (annulus_ind + 1)).to(u.parsec)
+            PI_mask = (PI_arr == PI)
 
-            # we only want to use the obs data for this r bin
-            r_mask = (mf['bin'] == annulus_ind)
+            rbins = np.c_[mf['r1'][PI_mask], mf['r2'][PI_mask]]
 
-            # Grab the N_data (adjusted by width to get an average
-            #                   dr of a bin (like average-interpolating almost))
-            N_data = (mf['N'][r_mask] / mf['mbin_width'][r_mask]).value
-            err_data = (mf['Δmbin'][r_mask] / mf['mbin_width'][r_mask]).value
+            mbin_mean = (mf['m1'][PI_mask] + mf['m2'][PI_mask]) / 2.
+            mbin_width = mf['m2'][PI_mask] - mf['m1'][PI_mask]
 
-            # Compute δN_model from poisson error, and nuisance factor
-            err = np.sqrt(err_data**2 + (self.F * N_data)**2)
+            N = mf['N'][PI_mask] / mbin_width
+            ΔN = mf['ΔN'][PI_mask] / mbin_width
 
-            pnts = ax.errorbar(mf['mbin_mean'][r_mask], N_data * scale,
-                               fmt='o', yerr=err * scale)
+            for r_in, r_out in np.unique(rbins, axis=0):
+                r_mask = ((mf['r1'][PI_mask] == r_in)
+                          & (mf['r2'][PI_mask] == r_out))
 
-            # plot contours
+                N_data = N[r_mask].value
+                err_data = ΔN[r_mask].value
 
-            midpoint = self.mass_func.shape[0] // 2
+                err = np.sqrt(err_data**2 + (self.F * N_data)**2)
 
-            m_domain = self.median_mj[:self.mass_func.shape[-1]]
-            median_ = self.mass_func[midpoint, int(annulus_ind)] * scale
+                pnts = ax.errorbar(mbin_mean[r_mask], N_data * 10**scale,
+                                   fmt='o', yerr=err * 10**scale)
 
-            med_plot, = ax.plot(m_domain, median_, 'x--', c=pnts[0].get_color(),
-                                label=f"R={r1:.1f}-{r2:.1f}")
+                clr = pnts[0].get_color()
 
-            alpha = 0.8 / (midpoint + 1)
-            for sigma in range(1, midpoint + 1):
+                # plot contours
 
-                ax.fill_between(
-                    m_domain,
-                    self.mass_func[midpoint + sigma, int(annulus_ind)] * scale,
-                    self.mass_func[midpoint - sigma, int(annulus_ind)] * scale,
-                    alpha=1 - alpha, color=med_plot.get_color()
-                )
+                midpoint = self.mass_func.shape[0] // 2
 
-                alpha += alpha
+                m_domain = self.median_mj[:self.mass_func.shape[-1]]
+                median_ = self.mass_func[midpoint, rbin] * 10**scale
+
+                med_plot, = ax.plot(m_domain, median_, '--', c=clr,
+                                    label=f"R={r_in:.1f}-{r_out:.1f}")
+
+                alpha = 0.8 / (midpoint + 1)
+                for sigma in range(1, midpoint + 1):
+
+                    ax.fill_between(
+                        m_domain,
+                        self.mass_func[midpoint + sigma, rbin] * 10**scale,
+                        self.mass_func[midpoint - sigma, rbin] * 10**scale,
+                        alpha=1 - alpha, color=clr
+                    )
+
+                    alpha += alpha
+
+                yticks.append(med_plot.get_ydata()[0])
+                ylabels.append(f"{r_in.value:.2f}'-{r_out.value:.2f}'")
+
+                scale -= 1
+                rbin += 1
 
         ax.set_yscale("log")
         ax.set_xscale("log")
 
-        ax.legend()
+        ax.set_yticks(yticks)
+        ax.set_yticklabels(ylabels)
+
+        ax.set_ylabel('dN/dm')
+        ax.set_xlabel(r'Mass [$M_\odot$]')
+
+        fig.tight_layout()
 
         return fig
 
@@ -1279,15 +1293,15 @@ class CIModelVisualizer(_Visualizer):
 
         ax.set_title('Cumulative Mass')
 
-        # Main sequence density
-        if 'MS' in kind:
-            self._plot_model_CI(ax, self.cum_M_MS,
-                                r_unit=x_unit, label='Main Sequence')
-
         # Total density
         if 'tot' in kind:
             self._plot_model_CI(ax, self.cum_M_tot,
                                 r_unit=x_unit, label='Total')
+
+        # Main sequence density
+        if 'MS' in kind:
+            self._plot_model_CI(ax, self.cum_M_MS,
+                                r_unit=x_unit, label='Main Sequence')
 
         # Black hole density
         if 'BH' in kind:
@@ -1315,22 +1329,33 @@ class CIModelVisualizer(_Visualizer):
     def plot_all(self, fig=None, axes=None, show_obs=False):
 
         # TODO a better method for being able to overplot multiple show_alls
-        if fig is None:
-            fig, axes = plt.subplots(4, 2)
-            axes = axes.flatten()
-        else:
-            axes = fig.axes
+        fig, axes = plt.subplots(4, 2)
+        # if fig is None:
+        #     axes = axes.flatten()
+        # else:
+        #     axes = fig.axes
 
         fig.suptitle(str(self.obs))
 
         # self.plot_pulsar(fig=fig, ax=axes[0], show_obs=show_obs)
-        self.plot_number_density(fig=fig, ax=axes[1], show_obs=show_obs)
-        self.plot_pm_tot(fig=fig, ax=axes[2], show_obs=show_obs)
-        self.plot_pm_ratio(fig=fig, ax=axes[3], show_obs=show_obs)
-        self.plot_pm_T(fig=fig, ax=axes[4], show_obs=show_obs)
-        self.plot_pm_R(fig=fig, ax=axes[5], show_obs=show_obs)
+        self.plot_number_density(fig=fig, ax=axes[0, 0], show_obs=show_obs)
+        self.plot_LOS(fig=fig, ax=axes[1, 0], show_obs=show_obs)
+        self.plot_pm_tot(fig=fig, ax=axes[0, 1], show_obs=show_obs)
+        self.plot_pm_T(fig=fig, ax=axes[1, 1], show_obs=show_obs)
+        self.plot_pm_R(fig=fig, ax=axes[2, 1], show_obs=show_obs)
+        self.plot_pm_ratio(fig=fig, ax=axes[3, 1], show_obs=show_obs)
 
-        self.plot_LOS(fig=fig, ax=axes[7], show_obs=show_obs)
+        gs = axes[2, 0].get_gridspec()
+
+        for ax in axes[2:, 0]:
+            ax.remove()
+
+        axbig = fig.add_subplot(gs[2:, 0])
+
+        self.plot_mass_func(fig=fig, ax=axbig, show_obs=show_obs)
+
+        for ax in axes.flatten():
+            ax.set_xlabel('')
 
         return fig
 
@@ -1348,12 +1373,12 @@ class CIModelVisualizer(_Visualizer):
         viz.obs = observations
 
         median_chain = np.median(chain[-N:], axis=0)
-        median_model = Model(median_chain, viz.obs)
+        # median_model = Model(median_chain, viz.obs)
 
         viz.F = median_chain[7]
         viz.s2 = median_chain[6]
         viz.d = median_chain[12] << u.kpc
-        viz.median_mj = median_model.mj
+        # viz.median_mj = median_model.mj
 
         if verbose:
             import tqdm
@@ -1361,7 +1386,16 @@ class CIModelVisualizer(_Visualizer):
         else:
             chain_loader = chain[-N:]
 
+        # model_sample = []
+        # for i, θ in enumerate(chain_loader):
+        #     try:
+        #         model_sample.append(Model(θ, viz.obs))
+        #     except ValueError:
+        #         print(f"{i} did not converge")
+        #         continue
         model_sample = [Model(θ, viz.obs) for θ in chain_loader]
+
+        viz.median_mj = model_sample[0].mj
 
         # Setup the radial domain to interpolate everything onto
 
@@ -1369,14 +1403,20 @@ class CIModelVisualizer(_Visualizer):
         viz.r = np.r_[0, np.geomspace(1e-5, max_r.value, num=99)] << u.pc
 
         # Setup the final full parameters arrays
-        # TODO composite stuff like ratio prob need to be computed here,
-        #   not in the plotting. seems to be creating errors
 
-        vel_unit = model_sample[0].v2Tj.unit
+        # velocities
 
-        v2Tj_full = np.empty((N, viz.r.size)) << vel_unit
-        v2Rj_full = np.empty((N, viz.r.size)) << vel_unit
-        v2pj_full = np.empty((N, viz.r.size)) << vel_unit
+        vel_unit = np.sqrt(model_sample[0].v2Tj).unit
+
+        vTj_full = np.empty((N, viz.r.size)) << vel_unit
+        vRj_full = np.empty((N, viz.r.size)) << vel_unit
+
+        vtotj_full = np.empty((N, viz.r.size)) << vel_unit
+        vaj_full = np.empty((N, viz.r.size)) << u.dimensionless_unscaled
+
+        vpj_full = np.empty((N, viz.r.size)) << vel_unit
+
+        # mass density
 
         rho_unit = model_sample[0].rhoj.unit
 
@@ -1386,6 +1426,8 @@ class CIModelVisualizer(_Visualizer):
         rho_WD_full = np.empty((N, viz.r.size)) << rho_unit
         rho_NS_full = np.empty((N, viz.r.size)) << rho_unit
 
+        # surface density
+
         Sigma_unit = model_sample[0].Sigmaj.unit
 
         Sigma_MS_full = np.empty((N, viz.r.size)) << Sigma_unit
@@ -1393,6 +1435,8 @@ class CIModelVisualizer(_Visualizer):
         Sigma_BH_full = np.empty((N, viz.r.size)) << Sigma_unit
         Sigma_WD_full = np.empty((N, viz.r.size)) << Sigma_unit
         Sigma_NS_full = np.empty((N, viz.r.size)) << Sigma_unit
+
+        # Cumulative mass
 
         mass_unit = model_sample[0].M.unit
 
@@ -1402,11 +1446,17 @@ class CIModelVisualizer(_Visualizer):
         cum_M_WD_full = np.empty((N, viz.r.size)) << mass_unit
         cum_M_NS_full = np.empty((N, viz.r.size)) << mass_unit
 
+        # number density
+
         nd_full = np.empty((N, viz.r.size)) << u.arcmin**-2
 
-        N_rbins = np.unique(viz.obs['mass_function/bin']).size
+        # mass function
+
+        N_rbins = np.unique(viz.obs['mass_function/r1']).size
         N_mbins = max(model_sample, key=lambda m: m.nms).nms
         mf_full = np.empty((N, N_rbins, N_mbins))
+
+        # BH mass
 
         BH_mass = np.empty(N) << u.Msun
         BH_num = np.empty(N) << u.dimensionless_unscaled
@@ -1416,17 +1466,30 @@ class CIModelVisualizer(_Visualizer):
         for ind, model in enumerate(model_sample):
 
             mass_bin = model.nms - 1
+            equivs = util.angular_width(model.d)
 
             # Velocities
 
-            v2Tj_interp = util.QuantitySpline(model.r, model.v2Tj[mass_bin])
-            v2Tj_full[ind, :] = v2Tj_interp(viz.r)
+            vT = np.sqrt(model.v2Tj[mass_bin])
+            vTj_interp = util.QuantitySpline(model.r, vT)
+            vTj_full[ind, :] = vTj_interp(viz.r)
 
-            v2Rj_interp = util.QuantitySpline(model.r, model.v2Rj[mass_bin])
-            v2Rj_full[ind, :] = v2Rj_interp(viz.r)
+            vR = np.sqrt(model.v2Rj[mass_bin])
+            vRj_interp = util.QuantitySpline(model.r, vR)
+            vRj_full[ind, :] = vRj_interp(viz.r)
 
-            v2pj_interp = util.QuantitySpline(model.r, model.v2pj[mass_bin])
-            v2pj_full[ind, :] = v2pj_interp(viz.r)
+            vtot = np.sqrt(0.5 * (model.v2Tj[mass_bin] + model.v2Rj[mass_bin]))
+            vtotj_interp = util.QuantitySpline(model.r, vtot)
+            vtotj_full[ind, :] = vtotj_interp(viz.r)
+
+            va = np.sqrt(model.v2Tj[mass_bin] / model.v2Rj[mass_bin])
+            finite = np.isnan(va)
+            vaj_interp = util.QuantitySpline(model.r[~finite], va[~finite])
+            vaj_full[ind, :] = vaj_interp(viz.r)
+
+            vp = np.sqrt(model.v2pj[mass_bin])
+            vpj_interp = util.QuantitySpline(model.r, vp)
+            vpj_full[ind, :] = vpj_interp(viz.r)
 
             # Mass Densities
 
@@ -1503,7 +1566,7 @@ class CIModelVisualizer(_Visualizer):
             # Number Densities
 
             obs_nd = viz.obs['number_density']
-            obs_r = obs_nd['r'].to(model.r.unit, util.angular_width(model.d))
+            obs_r = obs_nd['r'].to(model.r.unit, equivs)
             # TODO maybe this should actually be a part of `Model`
             model_nd = model.Sigmaj[mass_bin] / model.mj[mass_bin]
 
@@ -1516,31 +1579,39 @@ class CIModelVisualizer(_Visualizer):
 
             # Mass Functions
 
-            rbin_size = 0.4 * u.arcmin
+            mf = viz.obs['mass_function']
 
-            for rbin_ind in np.unique(viz.obs['mass_function/bin']):
+            # Have to use 'value' because str-based `Variable`s are still broken
+            PI_arr = mf['fields'].astype(str).value
 
-                # Convert the radial bin baounds from arcmin to model units
-                with u.set_enabled_equivalencies(util.angular_width(model.d)):
-                    r1 = (rbin_size * rbin_ind).to(u.parsec)
-                    r2 = (rbin_size * (rbin_ind + 1)).to(u.parsec)
+            # Generate the mass splines before the loops
+            densityj = [util.QuantitySpline(model.r, model.Sigmaj[j])
+                        for j in range(model.nms)]
 
-                # Get a binned version of N_model (an Nstars for each mbin)
-                for mbin_ind in range(model.nms):
+            cen = (viz.obs.mdata['RA'], viz.obs.mdata['DEC'])
+            fields = mass.initialize_fields(mf['fields'], cen)
+            fields = {PI: fields[PI] for PI in
+                      sorted(fields, key=lambda k: mf['r1'][PI_arr == k].min())}
 
-                    # Interpolate the viz.model density at the data locations
+            rbin_ind = -1
 
-                    density = util.QuantitySpline(
-                        model.r,
-                        2 * np.pi * model.r * model.Sigmaj[mbin_ind]
-                    )
+            for PI, field in fields.items():
 
-                    # Convert density spline into Nstars
-                    mper = model.mj[mbin_ind] * model.mes_widths[mbin_ind]
+                PI_mask = (PI_arr == PI)
 
-                    mf_full[ind, int(rbin_ind), mbin_ind] = (
-                        density.integral(r1, r2) / mper
-                    )
+                rbins = np.c_[mf['r1'][PI_mask], mf['r2'][PI_mask]]
+
+                for r_in, r_out in np.unique(rbins, axis=0):
+                    rbin_ind += 1
+
+                    with u.set_enabled_equivalencies(equivs):
+                        field_slice = field.slice_radially(r_in, r_out)
+                        sample_radii = field_slice.MC_sample(300).to(u.pc)
+
+                    for j in range(model.nms):
+                        Nj = field_slice.MC_integrate(densityj[j], sample_radii)
+                        widthj = (model.mj[j] * model.mes_widths[j])
+                        mf_full[ind, rbin_ind, j] = (Nj / widthj).value
 
             # Black holes
             BH_mass[ind] = np.sum(model.BH_Mj)
@@ -1557,9 +1628,13 @@ class CIModelVisualizer(_Visualizer):
         viz.rho_WD = np.percentile(rho_WD_full, q, axis=0)
         viz.rho_NS = np.percentile(rho_NS_full, q, axis=0)
 
-        viz.v2Tj = np.percentile(v2Tj_full, q, axis=0)
-        viz.v2Rj = np.percentile(v2Rj_full, q, axis=0)
-        viz.v2pj = np.percentile(v2pj_full, q, axis=0)
+        viz.vTj = np.percentile(vTj_full, q, axis=0)
+        viz.vRj = np.percentile(vRj_full, q, axis=0)
+        viz.vtotj = np.percentile(vtotj_full, q, axis=0)
+        # print(vaj_full)
+        viz.vaj = np.nanpercentile(vaj_full, q, axis=0)
+        # print(viz.vaj)
+        viz.vpj = np.percentile(vpj_full, q, axis=0)
 
         viz.Sigma_MS = np.percentile(Sigma_MS_full, q, axis=0)
         viz.Sigma_tot = np.percentile(Sigma_tot_full, q, axis=0)
@@ -1614,14 +1689,20 @@ class CIModelVisualizer(_Visualizer):
             ds = perc_grp.create_dataset('rho_NS', data=self.rho_NS)
             ds.attrs['unit'] = self.rho_NS.unit.to_string()
 
-            ds = perc_grp.create_dataset('v2Tj', data=self.v2Tj)
-            ds.attrs['unit'] = self.v2Tj.unit.to_string()
+            ds = perc_grp.create_dataset('vTj', data=self.vTj)
+            ds.attrs['unit'] = self.vTj.unit.to_string()
 
-            ds = perc_grp.create_dataset('v2Rj', data=self.v2Rj)
-            ds.attrs['unit'] = self.v2Rj.unit.to_string()
+            ds = perc_grp.create_dataset('vRj', data=self.vRj)
+            ds.attrs['unit'] = self.vRj.unit.to_string()
 
-            ds = perc_grp.create_dataset('v2pj', data=self.v2pj)
-            ds.attrs['unit'] = self.v2pj.unit.to_string()
+            ds = perc_grp.create_dataset('vtotj', data=self.vtotj)
+            ds.attrs['unit'] = self.vtotj.unit.to_string()
+
+            ds = perc_grp.create_dataset('vaj', data=self.vaj)
+            ds.attrs['unit'] = self.vaj.unit.to_string()
+
+            ds = perc_grp.create_dataset('vpj', data=self.vpj)
+            ds.attrs['unit'] = self.vpj.unit.to_string()
 
             ds = perc_grp.create_dataset('Sigma_MS', data=self.Sigma_MS)
             ds.attrs['unit'] = self.Sigma_MS.unit.to_string()
