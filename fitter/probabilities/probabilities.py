@@ -54,6 +54,9 @@ def _angular_units(func):
 # --------------------------------------------------------------------------
 
 
+# TODO I wonder if the pulsar likelihoods are too harsh,
+#   any single pulsar outside trashes the entire walker position,
+#   -inf might not be the best choice
 @_angular_units
 def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
                            mass_bin=None):
@@ -337,21 +340,39 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
         PdotP_domain, PdotP_c_prob = cluster_component(model, R, mass_bin)
         Pdot_domain = (Pb * PdotP_domain).decompose()
 
+        # linear to avoid effects around asymptote
+        Pdot_c_spl = interp.UnivariateSpline(
+            Pdot_domain, PdotP_c_prob, k=1, s=0, ext=1
+        )
+
         # ------------------------------------------------------------------
         # Compute gaussian measurement error distribution
         # ------------------------------------------------------------------
 
         err = util.gaussian(x=Pdot_domain, sigma=ΔPbdot_meas, mu=0)
 
+        err_spl = interp.UnivariateSpline(Pdot_domain, err, k=1, s=0, ext=1)
+
+        # ------------------------------------------------------------------
+        # Set up the equally-spaced linear convolution domain
+        # ------------------------------------------------------------------
+
+        # mirrored/starting at zero so very small gaussians become the δ-func
+        lin_domain = np.linspace(0., 1e-18, 5_000 // 2)
+        lin_domain = np.concatenate((np.flip(-lin_domain[1:]), lin_domain))
+
         # ------------------------------------------------------------------
         # Convolve the different distributions
         # ------------------------------------------------------------------
 
-        conv = np.convolve(err, PdotP_c_prob, 'same')
+        ## DEBUG TESTING ON ORBITAL PULSARS ##
+
+        # conv = np.convolve(err, PdotP_c_prob, 'same')
+        conv = np.convolve(err_spl(lin_domain), Pdot_c_spl(lin_domain), 'same')
 
         # Normalize
         conv /= interp.UnivariateSpline(
-            Pdot_domain, conv, k=1, s=0, ext=1
+            lin_domain, conv, k=1, s=0, ext=1
         ).integral(-np.inf, np.inf)
 
         # ------------------------------------------------------------------
@@ -373,7 +394,7 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
         # ------------------------------------------------------------------
 
         prob_dist = interp.interp1d(
-            (PdotP_domain) + PdotP_pm + PdotP_gal, conv,
+            (lin_domain / Pb) + PdotP_pm + PdotP_gal, conv,
             assume_sorted=True, bounds_error=False, fill_value=0.0
         )
 
@@ -822,9 +843,7 @@ def likelihood_mass_func(model, mf, fields):
 
         N = mf['N'][PI_mask] / mbin_width
 
-        # TODO which of these is right?
-        # Δmbin = np.sqrt(N[PI_mask]) / mbin_width
-        Δmbin = mf['ΔN'][PI_mask] / mbin_width
+        ΔN = mf['ΔN'][PI_mask] / mbin_width
 
         for r_in, r_out in np.unique(rbins, axis=0):
             r_mask = (mf['r1'][PI_mask] == r_in) & (mf['r2'][PI_mask] == r_out)
@@ -843,7 +862,7 @@ def likelihood_mass_func(model, mf, fields):
                                           ext=0, k=1)(mbin_mean[r_mask])
 
             N_data = N[r_mask].value
-            err_data = Δmbin[r_mask].value
+            err_data = ΔN[r_mask].value
 
             err = np.sqrt(err_data**2 + (model.F * N_data)**2)
 
