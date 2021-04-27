@@ -1,4 +1,4 @@
-from .models import _Visualizer, CIModelVisualizer, ModelVisualizer
+from . import _Visualizer, CIModelVisualizer, ModelVisualizer
 
 import sys
 
