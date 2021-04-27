@@ -10,28 +10,35 @@
     \hline
     Variable & Dataset Name & Supplementary Datasets &  attributes \\
     \hline\hline
-    Number of stars & \texttt{N\(^*\)} & & \\
+    Number of stars & \texttt{N\(^*\)} & \texttt{\(\Delta\)N\(^*\)} & \\
     \hline
-    Mass bin number & \texttt{bin\(^*\)} & & \\
+    Radial bin inner bound & \texttt{r1\(^*\)} & & \texttt{units} \\
     \hline
-    Mass bin width & \texttt{mbin\_width\(^*\)} & &
-    \texttt{units}\\ &&& \texttt{method} \\
+    Radial bin outer bound & \texttt{r2\(^*\)} & & \texttt{units} \\
     \hline
-    Mass bin mean & \texttt{mbin\_mean\(^*\)} & &
-    \texttt{units}\\ &&& \texttt{method} \\
+    Mass bin inner bound & \texttt{m1\(^*\)} & & \texttt{units} \\
     \hline
-    Poisson measurement error & \texttt{\(\Delta\)mbin\(^*\)} & & \texttt{method} \\
+    Mass bin outer bound & \texttt{m2\(^*\)} & & \texttt{units} \\
     \hline
-    Mass bin left boundary & \texttt{mbin\_left} & & \texttt{units}\\
-    \hline
-    Mass bin right boundary & \texttt{mbin\_right} & & \texttt{units}\\
+    Observation fields & \texttt{fields\(^*\)} & &
+    \texttt{field\_unit}\\ &&& See caption \\
     \hline
 \end{tabular}
+\caption*{
+    The \texttt{fields} dataset is an array of string names of different
+    observational program's PIs. Each name has a corresponding attribute entry
+    within the dataset, which consists of a 2d-array of (RA, DEC) coordinates
+    which define the polygonal boundaries of this observation. If a single
+    program has multiple polygons, they are denoted by the addition of an
+    underscore followed by a single alphanumeric character (\_a, \_b, etc.).
+    All coordinates are given in the units defined by \texttt{field\_unit}.
+}
 \end{table}
 \end{center}
 
-\subsubsection{Attributes}
 
+
+\subsubsection{Attributes}
 
 \begin{center}
 \begin{table}[H]
@@ -40,6 +47,7 @@
     Attribute & Description \\
     \hline\hline
     \texttt{source} & Literature source(s) of data \\
+    % TODO each field technically has it's own source as well
     \hline
 \end{tabular}
 \end{table}
