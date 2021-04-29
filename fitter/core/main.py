@@ -109,6 +109,9 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     if excluded_likelihoods is None:
         excluded_likelihoods = []
 
+    if bounds is None:
+        bounds = {}
+
     if cont_run:
         raise NotImplementedError
 
@@ -182,7 +185,7 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     prior_likelihood = Priors(bounds)
 
     # check if initials are outside bounds, if so then error right here
-    if not prior_likelihood(initials, bounds):
+    if not prior_likelihood(initials):
         raise ValueError("Initial positions outside prior boundaries")
 
     # ----------------------------------------------------------------------
