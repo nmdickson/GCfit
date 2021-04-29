@@ -1,5 +1,5 @@
-from .data import Observations, DEFAULT_PRIORS
-from ..probabilities import posterior, prior_likelihood
+from .data import Observations
+from ..probabilities import posterior, Priors
 
 import h5py
 import emcee
@@ -66,10 +66,8 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         with the values stored in the `Observations`.
 
     bounds : dict, optional
-        Dictionary of prior bounds (2-tuple of min and max) for each parameter.
-        If None (default), uses `fitter.DEFAULT_PRIORS`.
-        Any missing parameters in `bounds` will be filled
-        with the values stored in the `fitter.DEFAULT_PRIORS`.
+        Dictionary of prior bounds for each parameter.
+        See `probabilities.Priors` for formatting of bounds and defaults.
 
     fixed_params : list of str, optional
         List of parameters to fix to the initial value, and not allow to be
@@ -176,15 +174,12 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     init_pos = 1e-4 * np.random.randn(Nwalkers, init_pos.size) + init_pos
 
     # ----------------------------------------------------------------------
-    # Setup and check prior bounds
+    # Setup and check priors
     # ----------------------------------------------------------------------
 
     spec_bounds = bounds
 
-    if bounds is None:
-        bounds = DEFAULT_PRIORS
-    else:
-        bounds = {**DEFAULT_PRIORS, **bounds}
+    prior_likelihood = Priors(bounds)
 
     # check if initials are outside bounds, if so then error right here
     if not prior_likelihood(initials, bounds):
@@ -253,6 +248,7 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
             bnd_dset = meta_grp.create_dataset("specified_bounds", dtype="f")
             if spec_bounds is not None:
                 for k, v in spec_bounds.items():
+                    # TODO this will store as objects, which I don't love
                     bnd_dset.attrs[k] = v
 
         # ------------------------------------------------------------------
@@ -262,10 +258,10 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         logging.info("Initializing sampler")
 
         sampler = emcee.EnsembleSampler(
-            Nwalkers,
-            init_pos.shape[-1],
-            posterior,
-            args=(observations, fixed_initials, likelihoods, bounds),
+            nwalkers=Nwalkers,
+            ndim=init_pos.shape[-1],
+            log_prob_fn=posterior,
+            args=(observations, fixed_initials, likelihoods, prior_likelihood),
             pool=pool,
             backend=backend,
             blobs_dtype=blobs_dtype

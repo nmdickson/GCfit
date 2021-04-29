@@ -9,7 +9,7 @@ import logging
 from importlib import resources
 
 
-__all__ = ['DEFAULT_INITIALS', 'DEFAULT_PRIORS', 'Model', 'Observations']
+__all__ = ['DEFAULT_INITIALS', 'Model', 'Observations']
 
 
 # The order of this is important!
@@ -27,22 +27,6 @@ DEFAULT_INITIALS = {
     'a3': 2.5,
     'BHret': 0.5,
     'd': 6.405,
-}
-
-DEFAULT_PRIORS = {
-    'W0': (3, 20),
-    'M': (0.01, 10),
-    'rh': (0.5, 15),
-    'ra': (0, 5),
-    'g': (0, 2.3),
-    'delta': (0.3, 0.5),
-    's2': (0, 15),
-    'F': (0, 0.5),
-    'a1': (-2, 6),
-    'a2': (-2, 6),
-    'a3': (1.6, 6),
-    'BHret': (0, 100),
-    'd': (2, 8),
 }
 
 
