@@ -200,7 +200,6 @@ class Field:
         '''Monte carlo integrate func over this field, using sample points, or
         generating own sample if not given
         '''
-        # TODO could optioanlly return the error as well
 
         if sample is None:
 

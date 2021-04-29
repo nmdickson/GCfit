@@ -54,9 +54,6 @@ def _angular_units(func):
 # --------------------------------------------------------------------------
 
 
-# TODO I wonder if the pulsar likelihoods are too harsh,
-#   any single pulsar outside trashes the entire walker position,
-#   -inf might not be the best choice
 @_angular_units
 def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
                            mass_bin=None):
@@ -346,29 +343,27 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
         )
 
         # ------------------------------------------------------------------
-        # Compute gaussian measurement error distribution
-        # ------------------------------------------------------------------
-
-        err = util.gaussian(x=Pdot_domain, sigma=ΔPbdot_meas, mu=0)
-
-        err_spl = interp.UnivariateSpline(Pdot_domain, err, k=1, s=0, ext=1)
-
-        # ------------------------------------------------------------------
         # Set up the equally-spaced linear convolution domain
         # ------------------------------------------------------------------
 
         # mirrored/starting at zero so very small gaussians become the δ-func
-        lin_domain = np.linspace(0., 1e-18, 5_000 // 2)
+        lin_domain = np.linspace(0., 1e-11, 5_000 // 2)
         lin_domain = np.concatenate((np.flip(-lin_domain[1:]), lin_domain))
+
+        # ------------------------------------------------------------------
+        # Compute gaussian measurement error distribution
+        # ------------------------------------------------------------------
+
+        err = util.gaussian(x=lin_domain, sigma=ΔPbdot_meas, mu=0)
+
+        # err_spl = interp.UnivariateSpline(Pdot_domain, err, k=1, s=0, ext=1)
 
         # ------------------------------------------------------------------
         # Convolve the different distributions
         # ------------------------------------------------------------------
 
-        ## DEBUG TESTING ON ORBITAL PULSARS ##
-
         # conv = np.convolve(err, PdotP_c_prob, 'same')
-        conv = np.convolve(err_spl(lin_domain), Pdot_c_spl(lin_domain), 'same')
+        conv = np.convolve(err, Pdot_c_spl(lin_domain), 'same')
 
         # Normalize
         conv /= interp.UnivariateSpline(
