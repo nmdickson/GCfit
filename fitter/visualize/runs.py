@@ -1,4 +1,4 @@
-from . import _Visualizer, CIModelVisualizer, ModelVisualizer
+from .models import _Visualizer, CIModelVisualizer, ModelVisualizer
 
 import sys
 
@@ -43,6 +43,7 @@ class RunVisualizer(_Visualizer):
     # ----------------------------------------------------------------------
     # Dimensions - Walkers
     # ----------------------------------------------------------------------
+    # TODO also support an array of indices, or like a condition.
 
     @property
     def walkers(self):
