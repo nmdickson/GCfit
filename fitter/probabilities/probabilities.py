@@ -248,8 +248,6 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
     # Multiply all the probabilities and return the total log probability.
     # ----------------------------------------------------------------------
 
-    # TODO should a probs of zero (or less) return a final 0 or -inf?
-
     logprobs = np.log(probs)
 
     # Should never occur anymore, but leave it here for now just in case
@@ -354,6 +352,7 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
         # Compute gaussian measurement error distribution
         # ------------------------------------------------------------------
 
+        # TODO may want to also do the err in spin pulsars like this
         err = util.gaussian(x=lin_domain, sigma=ΔPbdot_meas, mu=0)
 
         # err_spl = interp.UnivariateSpline(Pdot_domain, err, k=1, s=0, ext=1)
@@ -1019,9 +1018,11 @@ class Priors:
             raise NotImplementedError
 
 
-# Main likelihood function, generates the model(theta) passes it to the
-# individual likelihood functions and collects their results.
 def log_likelihood(theta, observations, L_components):
+    '''
+    Main likelihood function, generates the model(theta) passes it to the
+    individual likelihood functions and collects their results.
+    '''
 
     try:
         model = Model(theta, observations)
@@ -1038,10 +1039,11 @@ def log_likelihood(theta, observations, L_components):
     return sum(probs), probs
 
 
-# Combines the likelihood with the prior
 def posterior(theta, observations, fixed_initials=None, L_components=None,
               prior_likelihood=None):
     '''
+    Combines the likelihood with the prior
+
     theta : array of theta values
     observations : data.Observations
     fixed_initials : dict of any theta values to fix
@@ -1056,7 +1058,7 @@ def posterior(theta, observations, fixed_initials=None, L_components=None,
         L_components = observations.valid_likelihoods
 
     if prior_likelihood is None:
-        prior_likelihood = Priors()
+        prior_likelihood = Priors(dict())
 
     # get a list of variable params, sorted for the unpacking of theta
     variable_params = DEFAULT_INITIALS.keys() - fixed_initials.keys()
