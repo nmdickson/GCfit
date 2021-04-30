@@ -1010,10 +1010,10 @@ class Priors:
                         lower_bnd, upper_bnd = bounds
 
                         if lower_bnd is not None:
-                            self._eval[key].append((oper_map['>'], lower_bnd))
+                            self._eval[key].append((oper_map['>='], lower_bnd))
 
                         if upper_bnd is not None:
-                            self._eval[key].append((oper_map['<'], upper_bnd))
+                            self._eval[key].append((oper_map['<='], upper_bnd))
 
         else:
             raise NotImplementedError
