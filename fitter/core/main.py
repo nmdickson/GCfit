@@ -251,8 +251,8 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
             bnd_dset = meta_grp.create_dataset("specified_bounds", dtype="f")
             if spec_bounds is not None:
                 for k, v in spec_bounds.items():
-                    # TODO this will store as objects, which I don't love
-                    bnd_dset.attrs[k] = v
+                    # TODO this needs to be fixed up
+                    bnd_dset.attrs[k] = np.array(v).astype('|S10')
 
         # ------------------------------------------------------------------
         # Initialize the MCMC sampler
