@@ -327,8 +327,10 @@ class RunVisualizer(_Visualizer):
             axes[i].tick_params(axis='y', direction='in', right=True)
             # pad=-18, labelrotation=90??
 
-    def print_summary(self, out=None, results_only=False, mathtext=False):
-        '''write a summary of the run results, to a `out` file-like or stdout'''
+    def print_summary(self, out=None, content='all'):
+        '''write a summary of the run results, to a `out` file-like or stdout
+        content : {'all', 'results', 'metadata'}
+        '''
         # TODO add more 2nd level results, like comments on BH masses, etc
 
         if out is None:
@@ -339,25 +341,29 @@ class RunVisualizer(_Visualizer):
 
         # RESULTS
 
-        # median and 16, 84 percentiles of all params
-        labels, chain = self._get_chains()
+        # organize this more like it is in cum_mass plots
+        if content == 'all' or content == 'results':
 
-        chain = chain.reshape((-1, chain.shape[-1]))
+            # median and 16, 84 percentiles of all params
+            labels, chain = self._get_chains()
 
-        p16, p50, p84 = np.percentile(chain, [16, 50, 84], axis=0)
+            chain = chain.reshape((-1, chain.shape[-1]))
 
-        uncert_minus, uncert_plus = p50 - p16, p84 - p50
+            p16, p50, p84 = np.percentile(chain, [16, 50, 84], axis=0)
 
-        for ind, param in enumerate(labels):
+            uncert_minus, uncert_plus = p50 - p16, p84 - p50
 
-            if 'fixed' in param:
-                mssg += (f'{param[:-8]:>5} = {p50[ind]:.3f} ({"fixed":^14})\n')
-            else:
-                mssg += (f'{param:>5} = {p50[ind]:.3f} '
-                         f'(+{uncert_plus[ind]:.3f}, '
-                         f'-{uncert_minus[ind]:.3f})\n')
+            for ind, param in enumerate(labels):
 
-        if not results_only:
+                if 'fixed' in param:
+                    mssg += (f'{param[:-8]:>5} = {p50[ind]:.3f} '
+                             f'({"fixed":^14})\n')
+                else:
+                    mssg += (f'{param:>5} = {p50[ind]:.3f} '
+                             f'(+{uncert_plus[ind]:.3f}, '
+                             f'-{uncert_minus[ind]:.3f})\n')
+
+        if content == 'all' or content == 'metadata':
 
             # INFO OF RUN
             mssg += f'\nRun Metadata'
@@ -395,6 +401,9 @@ class RunVisualizer(_Visualizer):
                         mssg += f'    ({i}) {v}\n'
                 else:
                     mssg += '    None\n'
+
+                # TODO add specified bounds/priors
+                # mssg += 'Specified prior bounds'
 
         out.write(mssg)
 
