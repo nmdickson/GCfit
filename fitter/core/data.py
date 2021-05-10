@@ -229,8 +229,11 @@ class Observations:
 
     @property
     def valid_likelihoods(self):
-        # TODO Set this up so they're only generated once since shouldnt change
-        return self._determine_likelihoods()
+
+        if self._valid_likelihoods is not None:
+            self._valid_likelihoods = self._determine_likelihoods()
+
+        return self._valid_likelihoods
 
     def __getitem__(self, key):
 
