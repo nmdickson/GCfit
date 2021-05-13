@@ -1,8 +1,9 @@
+import warning
 import pathlib
 from importlib import resources
 
 
-__all__ = ['cluster_list', 'hdf_view']
+__all__ = ['cluster_list', 'hdf_view', 'get_std_cluster_name']
 
 
 def cluster_list():
@@ -109,3 +110,49 @@ def hdf_view(cluster, attrs=False, spacing='normal', *, outfile="stdout"):
     else:
         with open(outfile, 'a') as output:
             output.write(out)
+
+
+COMMON_NAMES = {
+    '47tuc': 'NGC0104',
+    '47tucanae': 'NGC0104',
+    'm62': 'NGC6266',
+}
+
+
+def get_std_cluster_name(name):
+    '''From a given cluster name, convert it to a standard name, which
+    can be used to find the cluster data file.
+    i.e. 47Tuc, 47_Tuc, NGC104,NGC_104, NGC 104 to NGC0104
+
+    need a naming standard for our files:
+        - if in New General Catalogue: NGC####
+            NGC, no space, 4 numbers, left padded by 0
+        - if palomar, PAL##
+            PAL, no space, 2 numbers, left padded by 0
+
+        I don't think we'll be using anything else, I think it'll be mostly
+        NGC, so this is safe to go with for now.
+    '''
+    import re
+
+    # remove whitespace
+    name = re.sub(r'\s+', '', name)
+
+    # lowercase
+    name = name.lower()
+
+    # common names to NGC, Pal
+    if name in COMMON_NAMES:
+        name = COMMON_NAMES[name]
+
+    # pad zeroes
+    if name[:3] == 'NGC':
+        name = f'NGC{int(name[3:]:04)}'
+
+    elif name[:3] == 'Pal':
+        name = f'Pal{int(name[3:]:02)}'
+
+    else:
+        warning.warn("Cluster Catalogue not recognized, leaving untouched")
+
+    return name

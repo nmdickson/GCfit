@@ -1,3 +1,5 @@
+from .. import util
+
 import h5py
 import numpy as np
 import limepy as lp
@@ -227,10 +229,12 @@ class Observations:
     def datasets(self):
         return self._dict_datasets
 
+    _valid_likelihoods = None
+
     @property
     def valid_likelihoods(self):
 
-        if self._valid_likelihoods is not None:
+        if self._valid_likelihoods is None:
             self._valid_likelihoods = self._determine_likelihoods()
 
         return self._valid_likelihoods
@@ -288,17 +292,16 @@ class Observations:
 
     def __init__(self, cluster):
 
-        # TODO add a common names sort of thing for cluster names
-        self.cluster = cluster
+        self.cluster = util.get_std_cluster_name(cluster)
 
         self.mdata = {}
         self._dict_datasets = {}
         self.initials = DEFAULT_INITIALS.copy()
 
         with resources.path('fitter', 'resources') as datadir:
-            with h5py.File(f'{datadir}/{cluster}.hdf5', 'r') as file:
+            with h5py.File(f'{datadir}/{self.cluster}.hdf5', 'r') as file:
 
-                logging.info(f"Observations read from {datadir}/{cluster}.hdf5")
+                logging.info(f"Observations read from {file.filename}")
 
                 for group in self._find_groups(file):
                     self._dict_datasets[group] = Dataset(file[group])
