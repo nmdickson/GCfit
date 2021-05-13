@@ -1,4 +1,4 @@
-import warning
+import warnings
 import pathlib
 from importlib import resources
 
@@ -135,8 +135,8 @@ def get_std_cluster_name(name):
     '''
     import re
 
-    # remove whitespace
-    name = re.sub(r'\s+', '', name)
+    # remove whitespace, dashes and underscores
+    name = re.sub(r'[\s\-\_]+', '', name)
 
     # lowercase
     name = name.lower()
@@ -147,12 +147,13 @@ def get_std_cluster_name(name):
 
     # pad zeroes
     if name[:3] == 'NGC':
-        name = f'NGC{int(name[3:]:04)}'
+        name = f'NGC{int(name[3:]):04}'
 
     elif name[:3] == 'Pal':
-        name = f'Pal{int(name[3:]:02)}'
+        name = f'Pal{int(name[3:]):02}'
 
     else:
-        warning.warn("Cluster Catalogue not recognized, leaving untouched")
+        mssg = f"Cluster Catalogue {name[:3]} not recognized, leaving untouched"
+        warnings.warn(mssg)
 
     return name
