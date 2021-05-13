@@ -9,27 +9,61 @@ import numpy as np
 import astropy.units as u
 
 
-# class TestModel(unittest.TestCase):
+# Hard to do well, as alot of Model testing should be in ssptools and limepy
+class TestModel(unittest.TestCase):
 
-#     def setUp(self):
-#         self.obs = data.Observations('TEST')
-#         self.model = data.Model(self.obs.initials, self.obs)
+    def setUp(self):
+        self.obs = data.Observations('TEST')
+        self.theta = self.obs.initials
+        self.model = data.Model(self.theta, self.obs)
 
-#     def test_getattr(self):
-#         '''test the getattr, it should be able to retrieve values from theta
-#         and from limepy'''
+    def test_getattr(self):
+        '''test the getattr, it should be able to retrieve values from theta
+        and from limepy'''
+        self.assertEqual(self.W0, self.theta['W0'])
+        self.assertIs(self.converged, True)
 
-#     def test_mf(self):
-#         '''actually maybe not this one, these test should maybe go in ssptool'''
+    def test_values(self):
+        '''test that the values of everything are what we would expect'''
+        pass
 
-#     def test_values(self):
-#         '''test that the values of everything are what we would expect'''
+    def test_tracer_masses(self):
+        '''test that the tracer masses were correctly stored'''
+        mj_pm = 0.38 << u.Msun
+        mj_pulsar = 1.5 << u.Msun
 
+        # Proper motion tracer is appended to end
+        self.assertEqual(mj_pm, self.model.mj[-1])
+        # Pulsar tracer not included as not valid likelihood
+        self.assertNotIn(mj_pulsar, self.model.mj)
 
-#     def test_units(self):
-#         '''test that all the units are assigned correctly'''
+    def test_units(self):
+        '''test that all the units are assigned correctly'''
 
-#       TEST THAT THE THETA VALUES ARE RIGHT< LIKE I MESSED UP THE s2 THING
+        self.assertTrue(self.model.d.unit.physical_type, 'length')
+
+        self.assertTrue(self.M.unit.physical_type, 'mass')
+        self.assertTrue(self.mj.unit.physical_type, 'mass')
+        self.assertTrue(self.Mj.unit.physical_type, 'mass')
+        self.assertTrue(self.mc.unit.physical_type, 'mass')
+
+        self.assertTrue(self.r.unit.physical_type, 'length')
+        self.assertTrue(self.rh.unit.physical_type, 'length')
+        self.assertTrue(self.rt.unit.physical_type, 'length')
+        self.assertTrue(self.ra.unit.physical_type, 'length')
+
+        self.assertTrue(np.sqrt(self.v2Tj).unit.physical_type, 'speed')
+        self.assertTrue(np.sqrt(self.v2Rj).unit.physical_type, 'speed')
+        self.assertTrue(np.sqrt(self.v2pj).unit.physical_type, 'speed')
+
+        self.assertTrue(self.rhoj.unit.physical_type, 'mass density')
+
+    def test_theta(self):
+        '''test that getting the theta values are correct'''
+
+        for k, v in self.theta.items():
+            self.assertEqual(getattr(self, k), v)
+
 
 class TestObservations(unittest.TestCase):
 
