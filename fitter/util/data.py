@@ -135,6 +135,9 @@ def get_std_cluster_name(name):
     '''
     import re
 
+    if name == 'TEST':
+        return name
+
     # remove whitespace, dashes and underscores
     name = re.sub(r'[\s\-\_]+', '', name)
 
@@ -146,10 +149,10 @@ def get_std_cluster_name(name):
         name = COMMON_NAMES[name]
 
     # pad zeroes
-    if name[:3] == 'NGC':
+    if name[:3] == 'ngc':
         name = f'NGC{int(name[3:]):04}'
 
-    elif name[:3] == 'Pal':
+    elif name[:3] == 'pal':
         name = f'Pal{int(name[3:]):02}'
 
     else:
