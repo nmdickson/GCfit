@@ -1,4 +1,6 @@
+import string
 import fnmatch
+import warnings
 import unittest
 
 from fitter import util
@@ -225,6 +227,12 @@ class TestResources(unittest.TestCase):
     def _check_for_units(self, key, dataset):
         self.assertIsNot(dataset[key].unit, u.dimensionless_unscaled)
 
+    def _check_for_field(self, PI, fields):
+        if any([f'{PI}_{ch}' in fields.mdata for ch in string.ascii_letters]):
+            self.assertTrue(True)
+        else:
+            self.assertIn(PI, fields.mdata)
+
     def test_data_compliance(self):
 
         for cluster in util.cluster_list():
@@ -317,14 +325,23 @@ class TestResources(unittest.TestCase):
 
                     elif fnmatch.fnmatch(key, '*mass_function*'):
                         self.assertIn('N', dataset)
-                        self.assertIn('bin', dataset)
-                        self.assertIn('Δmbin', dataset)
+                        self.assertIn('ΔN', dataset)
 
-                        self.assertIn('mbin_mean', dataset)
-                        self._check_for_units('mbin_mean', dataset)
+                        self.assertIn('r1', dataset)
+                        self._check_for_units('r1', dataset)
+                        self.assertIn('r2', dataset)
+                        self._check_for_units('r2', dataset)
 
-                        self.assertIn('mbin_width', dataset)
-                        self._check_for_units('mbin_width', dataset)
+                        self.assertIn('m1', dataset)
+                        self._check_for_units('m1', dataset)
+                        self.assertIn('m2', dataset)
+                        self._check_for_units('m2', dataset)
+
+                        self.assertIn('fields', dataset)
+                        self.assertIn('field_unit', dataset['fields'].mdata)
+
+                        for PI in np.unique(dataset['fields']).astype(str):
+                            self._check_for_field(PI, dataset['fields'])
 
 
 if __name__ == '__main__':
