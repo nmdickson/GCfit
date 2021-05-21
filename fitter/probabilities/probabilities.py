@@ -52,16 +52,18 @@ def _angular_units(func):
 def _hyperparam_likelihood(x_data, x_model, err):
     '''compute the log likelihood of a Gaussian process with marginalized
     scaling hyperparameters (see Hobson et al., 2002)'''
-    from sicpy.special import gammaln
+    from scipy.special import gammaln
 
     n = (x_data.size / 2.) + 1
     chi2 = (x_data - x_model)**2 / err**2
+
+    err = (err / err.unit) if hasattr(err, 'unit') else err
 
     return np.sum(
         np.log(2. / np.pi**(n - 1))
         + gammaln(n)
         - (n * (np.log(chi2 + 2)))
-        - (0.5 * np.log((err / err.unit)**2))
+        - (0.5 * np.log(err**2))
     )
 
 
