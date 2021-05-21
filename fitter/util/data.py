@@ -113,9 +113,9 @@ def hdf_view(cluster, attrs=False, spacing='normal', *, outfile="stdout"):
 
 
 COMMON_NAMES = {
-    '47tuc': 'NGC0104',
-    '47tucanae': 'NGC0104',
-    'm62': 'NGC6266',
+    '47tuc': 'ngc0104',
+    '47tucanae': 'ngc0104',
+    'm62': 'ngc6266',
 }
 
 

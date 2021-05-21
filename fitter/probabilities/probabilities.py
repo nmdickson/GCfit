@@ -24,7 +24,7 @@ __all__ = [
 ]
 
 
-# TODO standardize which interpolation funciton we're using, 3 are in play rn
+# TODO standardize which interpolation function we're using, 3 are in play rn
 
 
 # TODO this messes up the error messages sometimes (when .get(model) fails)
@@ -922,7 +922,8 @@ def likelihood_mass_func(model, mf, fields):
             N_data = N[r_mask].value
             err_data = ΔN[r_mask].value
 
-            err = np.sqrt(err_data**2 + (model.F * N_data)**2)
+            # err = np.sqrt(err_data**2 + (model.F * N_data)**2)
+            err = model.F * err_data
 
             # L = -0.5 * np.sum((N_data - N_model)**2 / err**2 + np.log(err**2))
             L = _hyperparam_likelihood(N_data, N_model, err)
@@ -945,7 +946,7 @@ DEFAULT_PRIORS = {
     'g': [(0, 2.3)],
     'delta': [(0.3, 0.5)],
     's2': [(0, 15)],
-    'F': [(0, 0.5)],
+    'F': [(1, 3)],
     'a1': [(0, 6)],
     'a2': [(0, 6), ('>=', 'a1')],
     'a3': [(1.6, 6), ('>=', 'a2')],
