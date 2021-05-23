@@ -49,6 +49,9 @@ class Variable(u.Quantity):
     # TODO the "readonly" part of Variable is currently not functional
     def __new__(cls, value, unit=None, mdata=None, *args, **kwargs):
 
+        if value.shape is None:
+            value = []
+
         value = np.asanyarray(value)
 
         is_str = value.dtype.kind in 'US'
@@ -149,7 +152,7 @@ class Dataset:
 
         if isinstance(var, h5py.Dataset):
             mdata = dict(var.attrs)
-            self._dict_variables[name] = Variable(var[:], mdata=mdata)
+            self._dict_variables[name] = Variable(var, mdata=mdata)
 
     def __init__(self, group):
 
