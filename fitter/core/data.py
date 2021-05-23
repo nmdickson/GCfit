@@ -43,13 +43,24 @@ DEFAULT_INITIALS = {
 class Variable(u.Quantity):
     '''simple readonly Quantity subclass to allow metadata on the variable
     '''
+
+    def __repr__(self):
+        prefix = f'<{self.__class__.__name__} '
+
+        if self.is_empty:
+            view = 'Empty'
+        else:
+            view = np.array2string(
+                self.view(np.ndarray), separator=', ', prefix=prefix
+            )
+
+        return f'{prefix}{view}{self._unitstr:s}>'
+
     # TODO better way to handle string arrays, and with nicer method failures
-    #   Fails in the __eq__ we need for mass function fields, see mf likelihood
-    #   Should also probably do astype(str)
     # TODO the "readonly" part of Variable is currently not functional
     def __new__(cls, value, unit=None, mdata=None, *args, **kwargs):
 
-        if value.shape is None:
+        if is_empty := (value.shape is None):
             value = []
 
         value = np.asanyarray(value)
@@ -91,6 +102,9 @@ class Variable(u.Quantity):
         else:
             raise TypeError('`mdata` must be a dict or None')
 
+        # flag if empty
+        quant.is_empty = is_empty
+
         # quant.flags.writeable = False
 
         return quant
@@ -101,6 +115,8 @@ class Variable(u.Quantity):
             return
 
         self.mdata = getattr(obj, 'mdata', dict(defaulted=True))
+
+        self.is_empty = getattr(obj, 'is_empty', False)
 
         try:
 
@@ -265,6 +281,7 @@ class Observations:
 
             except ValueError:
                 # not in _dict_datasets and no '/' to split on so not a variable
+                # TODO if key does exist but has subgroups; mention that in err
                 mssg = f"Dataset '{key}' does not exist in {self}"
                 raise KeyError(mssg) from err
 
