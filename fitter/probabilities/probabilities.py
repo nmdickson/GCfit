@@ -806,7 +806,7 @@ def likelihood_LOS(model, vlos, *, mass_bin=None):
 
 
 @_angular_units
-def likelihood_mass_func(model, mf, fields):
+def likelihood_mass_func(model, mf, field):
     r'''Compute the log likelihood of the cluster's PDMF
 
     Computes the log likelihood component of a cluster's present day mass
@@ -828,8 +828,8 @@ def likelihood_mass_func(model, mf, fields):
         Mass function profile dataset used to compute probability distribution
         and evaluate log likelihood
 
-    fields : dict
-        Dictionary of `fitter.probability.mass.Field` fields, as given by
+    field : dict
+        Dictionary of `fitter.probability.mass.Field` field, as given by
         `fitter.probability.mass.initialize_fields`
 
     Returns
@@ -857,9 +857,9 @@ def likelihood_mass_func(model, mf, fields):
     M = 300
 
     # TODO could probably do the radial slicing beforehand as well
-    # if not fields:
+    # if not field:
     #     cen = (obs.mdata['RA'], obs.mdata['DEC'])
-    #     fields = mass.initialize_fields(mf['fields'], cen)
+    #     field = mass.Field(mf['fields'], cen)
 
     # ----------------------------------------------------------------------
     # Generate the mass splines before the loops, to save repetition
@@ -868,67 +868,53 @@ def likelihood_mass_func(model, mf, fields):
     densityj = [util.QuantitySpline(model.r, model.Sigmaj[j])
                 for j in range(model.nms)]
 
-    # ----------------------------------------------------------------------
-    # Iterate over each PI / Field
-    # ----------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # Determine the observation data which corresponds to this field
+    # ------------------------------------------------------------------
 
-    for PI, field in fields.items():
+    rbins = np.c_[mf['r1'], mf['r2']]
 
-        # ------------------------------------------------------------------
-        # Determine the observation data which corresponds to this field
-        # ------------------------------------------------------------------
+    mbin_mean = (mf['m1'] + mf['m2']) / 2.
+    mbin_width = mf['m2'] - mf['m1']
 
-        # Have to use 'value' because str-based `Variable`s are broken
-        PI_mask = (mf['fields'].astype(str).value == PI)
+    N = mf['N'] / mbin_width
+    ΔN = mf['ΔN'] / mbin_width
 
-        rbins = np.c_[mf['r1'][PI_mask], mf['r2'][PI_mask]]
+    # ------------------------------------------------------------------
+    # Iterate over each radial bin in this field, slicing out the radial
+    # shell from the field
+    # ------------------------------------------------------------------
 
-        mbin_mean = (mf['m1'][PI_mask] + mf['m2'][PI_mask]) / 2.
-        mbin_width = mf['m2'][PI_mask] - mf['m1'][PI_mask]
+    for r_in, r_out in np.unique(rbins, axis=0):
+        r_mask = (mf['r1'] == r_in) & (mf['r2'] == r_out)
 
-        N = mf['N'][PI_mask] / mbin_width
+        field_slice = field.slice_radially(r_in, r_out)
 
-        ΔN = mf['ΔN'][PI_mask] / mbin_width
+        # --------------------------------------------------------------
+        # Sample this slice of the field M times, and integrate to get N
+        # --------------------------------------------------------------
 
-        # ------------------------------------------------------------------
-        # Iterate over each radial bin in this field, slicing out the radial
-        # shell from the field
-        # ------------------------------------------------------------------
+        sample_radii = field_slice.MC_sample(M).to(u.pc)
 
-        for r_in, r_out in np.unique(rbins, axis=0):
-            r_mask = (mf['r1'][PI_mask] == r_in) & (mf['r2'][PI_mask] == r_out)
+        binned_N_model = np.empty(model.nms)
+        for j in range(model.nms):
+            Nj = field_slice.MC_integrate(densityj[j], sample=sample_radii)
+            widthj = (model.mj[j] * model.mes_widths[j])
+            binned_N_model[j] = (Nj / widthj).value
 
-            field_slice = field.slice_radially(r_in, r_out)
+        N_model = util.QuantitySpline(model.mj[:model.nms], binned_N_model,
+                                      ext=0, k=1)(mbin_mean[r_mask])
 
-            # --------------------------------------------------------------
-            # Sample this slice of the field M times, and integrate to get N
-            # --------------------------------------------------------------
+        # --------------------------------------------------------------
+        # Add the error and compute the log likelihood
+        # --------------------------------------------------------------
 
-            sample_radii = field_slice.MC_sample(M).to(u.pc)
+        N_data = N[r_mask].value
+        err_data = ΔN[r_mask].value
 
-            binned_N_model = np.empty(model.nms)
-            for j in range(model.nms):
-                Nj = field_slice.MC_integrate(densityj[j], sample=sample_radii)
-                widthj = (model.mj[j] * model.mes_widths[j])
-                binned_N_model[j] = (Nj / widthj).value
+        err = model.F * err_data
 
-            N_model = util.QuantitySpline(model.mj[:model.nms], binned_N_model,
-                                          ext=0, k=1)(mbin_mean[r_mask])
-
-            # --------------------------------------------------------------
-            # Add the error and compute the log likelihood
-            # --------------------------------------------------------------
-
-            N_data = N[r_mask].value
-            err_data = ΔN[r_mask].value
-
-            # err = np.sqrt(err_data**2 + (model.F * N_data)**2)
-            err = model.F * err_data
-
-            # L = -0.5 * np.sum((N_data - N_model)**2 / err**2 + np.log(err**2))
-            L = _hyperparam_likelihood(N_data, N_model, err)
-
-            tot_likelihood += L
+        tot_likelihood += _hyperparam_likelihood(N_data, N_model, err)
 
     return tot_likelihood
 

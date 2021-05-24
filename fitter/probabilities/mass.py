@@ -1,4 +1,3 @@
-import string
 import random
 
 import numpy as np
@@ -9,48 +8,8 @@ import shapely.prepared as prepgeom
 
 
 __all__ = [
-    "initialize_fields",
     "Field",
 ]
-
-
-def initialize_fields(fields_var, cen):
-    '''
-    return a list of Field objects, one for each PI
-    each field, make the coords use dset's 'fields_unit'
-
-    cen is a tuple, aka (obs.mdata['RA'], obs.mdata['DEC'])
-
-    returns fields: dict of PI:Field pairs, for each PI in
-    '''
-
-    PI_list = np.unique(fields_var).astype(str)
-    fields = dict()
-
-    unit = fields_var.mdata['field_unit']
-
-    for PI in PI_list:
-
-        # Single polygon
-        try:
-            coords = fields_var.mdata[PI]
-        except KeyError:
-            # try gathering all the '_a, _b' style fields
-            coords = []
-            for ch in string.ascii_letters:
-                try:
-                    coords.append(fields_var.mdata[f'{PI}_{ch}'])
-                except KeyError:
-                    # once it stops working, we're done here
-                    break
-
-            if not coords:
-                mssg = f"PI {PI} has no field bounds in `fields_var.mdata`"
-                raise RuntimeError(mssg)
-
-        fields[PI] = Field(coords, cen=cen, unit=unit)
-
-    return fields
 
 
 class Field:
@@ -217,3 +176,5 @@ class Field:
         V = self.area if hasattr(res, 'unit') else self.area.value
 
         return (V / M) * res
+
+    # TODO def plot()
