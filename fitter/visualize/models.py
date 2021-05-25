@@ -20,7 +20,7 @@ class _Visualizer:
 
     _REDUC_METHODS = {'median': np.median, 'mean': np.mean}
 
-    def _setup_artist(self, fig, ax):
+    def _setup_artist(self, fig, ax, *, use_name=True):
         # TODO should maybe attempt to use gcf, gca first
         if ax is None:
             if fig is None:
@@ -32,12 +32,15 @@ class _Visualizer:
             if fig is None:
                 fig = ax.get_figure()
 
+        if hasattr(self, 'name') and use_name:
+            fig.suptitle(self.name)
+
         return fig, ax
 
     # TODO this shsould handle an axes arg as well
     #   The whole point of these methods is so we can reuse the fig, but thats
     #   not currenlty possible with the multi artist like it is for singles
-    def _setup_multi_artist(self, fig, shape, **subplot_kw):
+    def _setup_multi_artist(self, fig, shape, *, use_name=True, **subplot_kw):
         '''setup a subplot with multiple axes, don't supply ax cause it doesnt
         really make sense in this case, you would need to supply the same
         amount of axes as shape and everything, just don't deal with it'''
@@ -49,6 +52,7 @@ class _Visualizer:
                 fig = plt.figure()
 
         else:
+            # TODO axarr should always be an arr, even if shape=1
 
             if fig is None:
                 fig, axarr = plt.subplots(*shape, **subplot_kw)
@@ -62,6 +66,9 @@ class _Visualizer:
                 # we shouldn't add axes to a fig that already has some
                 # maybe just warn or error if the shape doesn't match `shape`
                 pass
+
+        if hasattr(self, 'name') and use_name:
+            fig.suptitle(self.name)
 
         return fig, axarr
 
