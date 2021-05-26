@@ -6,7 +6,7 @@ here = os.path.abspath(os.path.dirname(__file__))
 
 # Package information
 NAME = 'GCfit'
-VERSION = "0.6.3"
+VERSION = "0.6.4"
 
 DESCRIPTION = 'Multimass MCMC fitting of Limepy globular cluster analytic model'
 with io.open(os.path.join(here, 'README.md'), encoding='utf-8') as f:
@@ -51,7 +51,7 @@ setuptools.setup(
     install_requires=REQUIRED,
     python_requires=REQUIRES_PYTHON,
 
-    packages=['fitter'],
+    packages=setuptools.find_packages(),
     scripts=[
         'bin/GCfitter', 'bin/view_chain', 'bin/cluster_dump', 'bin/run_summary'
     ],
