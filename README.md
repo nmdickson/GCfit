@@ -28,7 +28,8 @@ explore the results of those fitting runs.
 ### Fitting
 
 Fitting of the clusters is done through the `fit` function of `fitter`.
-For ease of use, a command-line script is provided in `bin/GCfitter`.
+For ease of use, a command-line script is provided in `GCfitter`, which should
+be automatically placed in your path upon installation.
 
 `GCfitter` takes the name of the cluster you wish to fit, as well as a
 number of sampler directives. See `GCfitter -h` for a full list of arguments.
@@ -39,7 +40,7 @@ Fitting cluster "NGC0104" (also known as 47 Tucanae) for 2000 iterations of 100
 MCMC walkers, parallelized locally over 2 CPUs (default). Sampler output is
 saved to `~/.GCfit/47Tuc_sampler.hdf` (default).
 ```
-bin/GCfitter 47Tuc -N 2000 --Nwalkers 100 --verbose
+GCfitter 47Tuc -N 2000 --Nwalkers 100 --verbose
 ```
 
 Fitting cluster "NGC6397" for 1850 iterations of 150 walkers (default), using
@@ -47,14 +48,14 @@ MPI. MPI parameters and allocations must be handled by your job
 script/scheduler separately. Output and debug info is saved to a local `results`
 folder.
 ```
-srun bin/GCfitter NGC6397 -N 1850 --mpi --savedir ./results --debug
+srun GCfitter NGC6397 -N 1850 --mpi --savedir ./results --debug
 ```
 
 Fitting cluster "NGC0104" for 2000 iterations of 150 walkers, with custom prior
 bounds specified in the file `alt_bounds`, parallelized locally with 4 CPUs.
 ```
 echo '{"a3": [">=", "a2"], "delta": [0.45, 0.5]}' > alt_bounds.json
-bin/GCfitter NGC104 -N 2000 --Ncpu 4 --bounds alt_bounds.json --debug
+GCfitter NGC104 -N 2000 --Ncpu 4 --bounds alt_bounds.json --debug
 ```
 
 ### Investigating Fitting Results
