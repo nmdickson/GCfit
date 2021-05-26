@@ -14,8 +14,8 @@ A fork of the `ssptools` library must be installed seperately, as below. All
 other requisite packages will be installed automatically.
 
 ```
-pip install git+https://github.com/nmdickson/ssptools.git
-pip install git+https://github.com/nmdickson/GCfit.git
+pip install git+ssh://git@github.com/nmdickson/ssptools.git
+pip install git+ssh://git@github.com/nmdickson/GCfit.git
 ```
 
 or this repo can be cloned locally and installed with pip.
