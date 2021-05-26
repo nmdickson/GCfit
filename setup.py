@@ -35,7 +35,7 @@ REQUIRED = [
     "shapely"
 ]
 
-REQUIRES_PYTHON = '>=3.7'
+REQUIRES_PYTHON = '>=3.8'
 
 # setup parameters
 setuptools.setup(
