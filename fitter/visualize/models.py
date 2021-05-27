@@ -2,6 +2,9 @@ from .. import util
 from ..core.data import Observations, Model
 from ..probabilities import pulsars, mass
 
+import fnmatch
+import string
+
 import h5py
 import numpy as np
 import astropy.units as u
@@ -591,17 +594,16 @@ class ModelVisualizer(_Visualizer):
         return fig
 
     @_support_units
-    def plot_mass_func(self, fig=None, ax=None, show_obs=True, rbin_size=0.4):
+    def plot_mass_func(self, fig=None, ax=None, show_obs=True):
 
         fig, ax = self._setup_artist(fig, ax)
-        scale = 10
-        yticks = []
-        ylabels = []
+        scale = 15  # + 4
+        # yticks = []
+        # ylabels = []
 
-        mf = self.obs['mass_function']
-
-        # Have to use 'value' because str-based `Variable`s are still broken
-        PI_arr = mf['fields'].astype(str).value
+        XTEXT = 0.81 * u.Msun
+        # ax.annotate("Radial Bins", (XTEXT, 10**scale), fontsize=12)
+        # scale -= 4
 
         M = 300
 
@@ -609,29 +611,41 @@ class ModelVisualizer(_Visualizer):
         densityj = [util.QuantitySpline(self.model.r, self.model.Sigmaj[j])
                     for j in range(self.model.nms)]
 
-        cen = (self.obs.mdata['RA'], self.obs.mdata['DEC'])
-        fields = mass.initialize_fields(mf['fields'], cen)
+        PI_list = fnmatch.filter([k[0] for k in self.obs.valid_likelihoods],
+                                 '*mass_function*')
 
-        # sort based on the first r1 value of each PI, for better viz
-        fields = {PI: fields[PI] for PI in
-                  sorted(fields, key=lambda PI: mf['r1'][PI_arr == PI].min())}
+        PI_list = sorted(PI_list, key=lambda k: self.obs[k]['r1'].min())
 
-        for PI, field in fields.items():
+        for key in PI_list:
+            mf = self.obs[key]
 
-            PI_mask = (PI_arr == PI)
+            # get field
+            cen = (self.obs.mdata['RA'], self.obs.mdata['DEC'])
+            unit = mf.mdata['field_unit']
+            coords = []
+            for ch in string.ascii_letters:
+                try:
+                    coords.append(mf['fields'].mdata[f'{ch}'])
+                except KeyError:
+                    break
 
-            rbins = np.c_[mf['r1'][PI_mask], mf['r2'][PI_mask]]
+            field = mass.Field(coords, cen=cen, unit=unit)
 
-            mbin_mean = (mf['m1'][PI_mask] + mf['m2'][PI_mask]) / 2.
-            mbin_width = mf['m2'][PI_mask] - mf['m1'][PI_mask]
+            # get data
+            rbins = np.c_[mf['r1'], mf['r2']]
 
-            N = mf['N'][PI_mask] / mbin_width
-            ΔN = mf['ΔN'][PI_mask] / mbin_width
+            mbin_mean = (mf['m1'] + mf['m2']) / 2.
+            mbin_width = mf['m2'] - mf['m1']
 
+            N = mf['N'] / mbin_width
+            ΔN = mf['ΔN'] / mbin_width
+
+            # iterate over radial bins
             for r_in, r_out in np.unique(rbins, axis=0):
-                r_mask = ((mf['r1'][PI_mask] == r_in)
-                          & (mf['r2'][PI_mask] == r_out))
+                r_mask = ((mf['r1'] == r_in)
+                          & (mf['r2'] == r_out))
 
+                # slice and integrate field
                 field_slice = field.slice_radially(r_in, r_out)
 
                 sample_radii = field_slice.MC_sample(M).to(u.pc)
@@ -645,26 +659,35 @@ class ModelVisualizer(_Visualizer):
                 N_data = N[r_mask].value
                 err_data = ΔN[r_mask].value
 
-                err = np.sqrt(err_data**2 + (self.model.F * N_data)**2)
+                err = self.model.F * err_data
 
+                # plot
                 pnts = ax.errorbar(mbin_mean[r_mask], N_data * 10**scale,
                                    fmt='o', yerr=err * 10**scale)
 
-                slp, = ax.plot(self.model.mj[:self.model.nms], binned_N_model,
-                               fmt='-', c=pnts[0].get_color())
+                clr = pnts[0].get_color()
 
-                yticks.append(slp.get_ydata()[0])
-                ylabels.append(f"{r_in.value:.2f}'-{r_out.value:.2f}'")
+                slp, = ax.plot(self.model.mj[:self.model.nms], binned_N_model,
+                               ls='-', c=clr)
+
+                xy_pnt = (slp.get_xdata()[-1], slp.get_ydata()[-1])
+                xy_txt = (XTEXT, slp.get_ydata()[-1])
+                text = f"{r_in.value:.2f}'-{r_out.value:.2f}'"
+
+                ax.annotate(text, xy_pnt, xytext=xy_txt, fontsize=12, color=clr)
+
+                # yticks.append(slp.get_ydata()[0])
+                # ylabels.append(f"{r_in.value:.2f}'-{r_out.value:.2f}'")
 
                 scale -= 1
 
         ax.set_yscale("log")
         ax.set_xscale("log")
 
-        ax.set_yticks(yticks)
-        ax.set_yticklabels(ylabels)
+        # ax.set_yticks(yticks)
+        # ax.set_yticklabels(ylabels)
 
-        ax.set_ylabel('dN/dm')
+        ax.set_ylabel(r'$dN/dm + C$')
         ax.set_xlabel(r'Mass [$M_\odot$]')
 
         fig.tight_layout()
@@ -806,6 +829,8 @@ class ModelVisualizer(_Visualizer):
 
         return fig
 
+    # TODO plot_remnant_fraction (see baumgardt cat)
+
     @_support_units
     def plot_all(self, fig=None, axes=None, show_obs='attempt'):
 
@@ -813,26 +838,38 @@ class ModelVisualizer(_Visualizer):
         #   excepts and dont plot the ones that fail
 
         # TODO a better method for being able to overplot multiple show_alls
-        if fig is None:
-            fig, axes = plt.subplots(4, 2)
-            axes = axes.flatten()
-        else:
-            axes = fig.axes
+        fig, axes = plt.subplots(4, 2)
+        # if fig is None:
+        #     fig, axes = plt.subplots(4, 2)
+        #     axes = axes.flatten()
+        # else:
+        #     axes = fig.axes
 
         fig.suptitle(str(self.obs))
 
         kw = {'show_obs': show_obs, 'residuals': False}
 
         # self.plot_pulsar(fig=fig, ax=axes[0], show_obs=show_obs)
-        self.plot_number_density(fig=fig, ax=axes[1], **kw)
-        self.plot_pm_tot(fig=fig, ax=axes[2], **kw)
-        self.plot_pm_ratio(fig=fig, ax=axes[3], **kw)
-        self.plot_pm_T(fig=fig, ax=axes[4], **kw)
-        self.plot_pm_R(fig=fig, ax=axes[5], **kw)
 
-        # self.plot_mass_func(fig=fig, ax=axes[6], show_obs=show_obs)
+        self.plot_number_density(fig=fig, ax=axes[0, 0], **kw)
+        self.plot_LOS(fig=fig, ax=axes[1, 0], **kw)
+        self.plot_pm_tot(fig=fig, ax=axes[0, 1], **kw)
+        self.plot_pm_T(fig=fig, ax=axes[1, 1], **kw)
+        self.plot_pm_R(fig=fig, ax=axes[2, 1], **kw)
+        self.plot_pm_ratio(fig=fig, ax=axes[3, 1], **kw)
 
-        self.plot_LOS(fig=fig, ax=axes[7], **kw)
+        gs = axes[2, 0].get_gridspec()
+
+        for ax in axes[2:, 0]:
+            ax.remove()
+
+        # Is this what is messing up the spacing?
+        axbig = fig.add_subplot(gs[2:, 0])
+
+        self.plot_mass_func(fig=fig, ax=axbig, show_obs=show_obs)
+
+        for ax in axes.flatten():
+            ax.set_xlabel('')
 
         # TODO maybe have some written info in one of the empty panels (ax6)
         # fig.tight_layout()
@@ -970,7 +1007,7 @@ class CIModelVisualizer(_Visualizer):
         return fig
 
     @_support_units
-    def plot_pm_tot(self, fig=None, ax=None, show_obs=True):
+    def plot_pm_tot(self, fig=None, ax=None, show_obs=True, x_unit='pc'):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -985,14 +1022,14 @@ class CIModelVisualizer(_Visualizer):
                 xerr = self.get_err(pm, 'r').to(u.pc)
                 yerr = self.get_err(pm, 'PM_tot')
 
-                ax.errorbar(pm['r'].to(u.pc), pm['PM_tot'], fmt='k.',
+                ax.errorbar(pm['r'].to(x_unit), pm['PM_tot'], fmt='k.',
                             xerr=xerr, yerr=yerr)
 
             except KeyError as err:
                 if show_obs != 'attempt':
                     raise err
 
-        self._plot_model_CI(ax, self.vtotj.to(u.mas / u.yr))
+        self._plot_model_CI(ax, self.vtotj.to(u.mas / u.yr), r_unit=x_unit)
 
         return fig
 
@@ -1112,43 +1149,46 @@ class CIModelVisualizer(_Visualizer):
         return fig
 
     @_support_units
-    def plot_mass_func(self, fig=None, ax=None, show_obs=True, rbin_size=0.4):
+    def plot_mass_func(self, fig=None, ax=None, show_obs=True):
 
         # TODO cause this doesn't use _plot_model_CI its less robust
 
         fig, ax = self._setup_artist(fig, ax)
 
         scale = 10
-        yticks = []
-        ylabels = []
+        # yticks = []
+        # ylabels = []
 
-        mf = self.obs['mass_function']
+        XTEXT = 0.81 * u.Msun
+        # ax.annotate("Radial Bins", (XTEXT, 10**scale), fontsize=12)
+        # scale -= 4
 
-        PI_arr = mf['fields'].astype(str).value
+        PI_list = fnmatch.filter([k[0] for k in self.obs.valid_likelihoods],
+                                 '*mass_function*')
+
+        PI_list = sorted(PI_list, key=lambda k: self.obs[k]['r1'].min())
 
         rbin = 0
 
-        for PI in sorted(np.unique(PI_arr),
-                         key=lambda k: mf['r1'][PI_arr == k].min()):
+        for key in PI_list:
+            mf = self.obs[key]
 
-            PI_mask = (PI_arr == PI)
+            rbins = np.c_[mf['r1'], mf['r2']]
 
-            rbins = np.c_[mf['r1'][PI_mask], mf['r2'][PI_mask]]
+            mbin_mean = (mf['m1'] + mf['m2']) / 2.
+            mbin_width = mf['m2'] - mf['m1']
 
-            mbin_mean = (mf['m1'][PI_mask] + mf['m2'][PI_mask]) / 2.
-            mbin_width = mf['m2'][PI_mask] - mf['m1'][PI_mask]
-
-            N = mf['N'][PI_mask] / mbin_width
-            ΔN = mf['ΔN'][PI_mask] / mbin_width
+            N = mf['N'] / mbin_width
+            ΔN = mf['ΔN'] / mbin_width
 
             for r_in, r_out in np.unique(rbins, axis=0):
-                r_mask = ((mf['r1'][PI_mask] == r_in)
-                          & (mf['r2'][PI_mask] == r_out))
+                r_mask = ((mf['r1'] == r_in)
+                          & (mf['r2'] == r_out))
 
                 N_data = N[r_mask].value
                 err_data = ΔN[r_mask].value
 
-                err = np.sqrt(err_data**2 + (self.F * N_data)**2)
+                err = self.F * err_data
 
                 pnts = ax.errorbar(mbin_mean[r_mask], N_data * 10**scale,
                                    fmt='o', yerr=err * 10**scale)
@@ -1177,8 +1217,14 @@ class CIModelVisualizer(_Visualizer):
 
                     alpha += alpha
 
-                yticks.append(med_plot.get_ydata()[0])
-                ylabels.append(f"{r_in.value:.2f}'-{r_out.value:.2f}'")
+                # yticks.append(med_plot.get_ydata()[0])
+                # ylabels.append(f"{r_in.value:.2f}'-{r_out.value:.2f}'")
+
+                xy_pnt = (med_plot.get_xdata()[-1], med_plot.get_ydata()[-1])
+                xy_txt = (XTEXT, med_plot.get_ydata()[-1])
+                text = f"{r_in.value:.2f}'-{r_out.value:.2f}'"
+
+                ax.annotate(text, xy_pnt, xytext=xy_txt, fontsize=12, color=clr)
 
                 scale -= 1
                 rbin += 1
@@ -1186,9 +1232,8 @@ class CIModelVisualizer(_Visualizer):
         ax.set_yscale("log")
         ax.set_xscale("log")
 
-        # TODO this messes up the subplot spacings
-        ax.set_yticks(yticks)
-        ax.set_yticklabels(ylabels)
+        # ax.set_yticks(yticks)
+        # ax.set_yticklabels(ylabels)
 
         ax.set_ylabel('dN/dm')
         ax.set_xlabel(r'Mass [$M_\odot$]')
@@ -1298,42 +1343,45 @@ class CIModelVisualizer(_Visualizer):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        ax.set_title('Cumulative Mass')
+        # ax.set_title('Cumulative Mass')
 
         # Total density
         if 'tot' in kind:
             self._plot_model_CI(ax, self.cum_M_tot,
-                                r_unit=x_unit, label='Total')
+                                r_unit=x_unit, label='Total', c='tab:cyan')
 
         # Main sequence density
         if 'MS' in kind:
             self._plot_model_CI(ax, self.cum_M_MS,
-                                r_unit=x_unit, label='Main Sequence')
+                                r_unit=x_unit, label='Main Sequence', c='tab:orange')
+
+        if 'WD' in kind:
+            self._plot_model_CI(ax, self.cum_M_WD,
+                                r_unit=x_unit, label='White Dwarf', c='tab:green')
+
+        if 'NS' in kind:
+            self._plot_model_CI(ax, self.cum_M_NS,
+                                r_unit=x_unit, label='Neutron Star', c='tab:red')
 
         # Black hole density
         if 'BH' in kind:
             self._plot_model_CI(ax, self.cum_M_BH,
-                                r_unit=x_unit, label='Black Hole')
-
-        if 'WD' in kind:
-            self._plot_model_CI(ax, self.cum_M_WD,
-                                r_unit=x_unit, label='White Dwarf')
-
-        if 'NS' in kind:
-            self._plot_model_CI(ax, self.cum_M_NS,
-                                r_unit=x_unit, label='Neutron Star')
+                                r_unit=x_unit, label='Black Hole', c='tab:gray')
 
         ax.set_yscale("log")
         ax.set_xscale("log")
 
-        ax.set_ylabel(rf'$M_{{enc}} ({self.cum_M_tot.unit})$')
+        # ax.set_ylabel(rf'$M_{{enc}} ({self.cum_M_tot.unit})$')
+        ax.set_ylabel(rf'$M_{{enc}}$ $[M_\odot]$')
+        ax.set_xlabel('arcsec')
 
-        ax.legend()
+        # ax.legend()
+        fig.legend(loc='upper center', bbox_to_anchor=(0.5, 1.), ncol=5, fancybox=True)
 
         return fig
 
     @_support_units
-    def plot_all(self, fig=None, axes=None, show_obs=False):
+    def plot_all(self, fig=None, axes=None, show_obs='attempt'):
 
         # TODO a better method for being able to overplot multiple show_alls
         fig, axes = plt.subplots(4, 2)
@@ -1357,6 +1405,7 @@ class CIModelVisualizer(_Visualizer):
         for ax in axes[2:, 0]:
             ax.remove()
 
+        # Is this what is messing up the spacing?
         axbig = fig.add_subplot(gs[2:, 0])
 
         self.plot_mass_func(fig=fig, ax=axbig, show_obs=show_obs)
@@ -1393,14 +1442,15 @@ class CIModelVisualizer(_Visualizer):
         else:
             chain_loader = chain[-N:]
 
-        # model_sample = []
-        # for i, θ in enumerate(chain_loader):
-        #     try:
-        #         model_sample.append(Model(θ, viz.obs))
-        #     except ValueError:
-        #         print(f"{i} did not converge")
-        #         continue
-        model_sample = [Model(θ, viz.obs) for θ in chain_loader]
+        model_sample = []
+        for i, θ in enumerate(chain_loader):
+            try:
+                model_sample.append(Model(θ, viz.obs))
+            except ValueError:
+                print(f"{i} did not converge")
+                continue
+        N = len(model_sample)
+        # model_sample = [Model(θ, viz.obs) for θ in chain_loader]
 
         viz.median_mj = model_sample[0].mj
 
@@ -1459,7 +1509,12 @@ class CIModelVisualizer(_Visualizer):
 
         # mass function
 
-        N_rbins = np.unique(viz.obs['mass_function/r1']).size
+        PI_list = fnmatch.filter([k[0] for k in viz.obs.valid_likelihoods],
+                                 '*mass_function*')
+
+        PI_list = sorted(PI_list, key=lambda k: viz.obs[k]['r1'].min())
+
+        N_rbins = sum([np.unique(viz.obs[k]['r1']).size for k in PI_list])
         N_mbins = max(model_sample, key=lambda m: m.nms).nms
         mf_full = np.empty((N, N_rbins, N_mbins))
 
@@ -1586,27 +1641,26 @@ class CIModelVisualizer(_Visualizer):
 
             # Mass Functions
 
-            mf = viz.obs['mass_function']
-
-            # Have to use 'value' because str-based `Variable`s are still broken
-            PI_arr = mf['fields'].astype(str).value
-
-            # Generate the mass splines before the loops
             densityj = [util.QuantitySpline(model.r, model.Sigmaj[j])
                         for j in range(model.nms)]
 
-            cen = (viz.obs.mdata['RA'], viz.obs.mdata['DEC'])
-            fields = mass.initialize_fields(mf['fields'], cen)
-            fields = {PI: fields[PI] for PI in
-                      sorted(fields, key=lambda k: mf['r1'][PI_arr == k].min())}
-
             rbin_ind = -1
 
-            for PI, field in fields.items():
+            for key in PI_list:
+                mf = viz.obs[key]
 
-                PI_mask = (PI_arr == PI)
+                cen = (viz.obs.mdata['RA'], viz.obs.mdata['DEC'])
+                unit = mf.mdata['field_unit']
+                coords = []
+                for ch in string.ascii_letters:
+                    try:
+                        coords.append(mf['fields'].mdata[f'{ch}'])
+                    except KeyError:
+                        break
 
-                rbins = np.c_[mf['r1'][PI_mask], mf['r2'][PI_mask]]
+                field = mass.Field(coords, cen=cen, unit=unit)
+
+                rbins = np.c_[mf['r1'], mf['r2']]
 
                 for r_in, r_out in np.unique(rbins, axis=0):
                     rbin_ind += 1
