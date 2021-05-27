@@ -49,24 +49,6 @@ def _angular_units(func):
     return angular_units_decorator
 
 
-def _hyperparam_likelihood(x_data, x_model, err):
-    '''compute the log likelihood of a Gaussian process with marginalized
-    scaling hyperparameters (see Hobson et al., 2002)'''
-    from scipy.special import gammaln
-
-    n = (x_data.size / 2.) + 1
-    chi2 = (x_data - x_model)**2 / err**2
-
-    err = (err / err.unit) if hasattr(err, 'unit') else err
-
-    return np.sum(
-        np.log(2. / np.pi**(n - 1))
-        + gammaln(n)
-        - (n * (np.log(chi2 + 2)))
-        - (0.5 * np.log(err**2))
-    )
-
-
 # --------------------------------------------------------------------------
 # Component likelihood functions
 # --------------------------------------------------------------------------
@@ -505,7 +487,7 @@ def likelihood_number_density(model, ndensity, *, mass_bin=None):
     #     (obs_Σ - interpolated)**2 / yerr**2 + np.log(yerr**2)
     # )
 
-    return _hyperparam_likelihood(obs_Σ, interpolated, yerr)
+    return util.hyperparam_likelihood(obs_Σ, interpolated, yerr)
 
 
 @_angular_units
@@ -568,7 +550,7 @@ def likelihood_pm_tot(model, pm, *, mass_bin=None):
     #     + np.log((obs_err / obs_err.unit)**2)
     # )
 
-    return _hyperparam_likelihood(pm['PM_tot'], interpolated, obs_err)
+    return util.hyperparam_likelihood(pm['PM_tot'], interpolated, obs_err)
 
 
 @_angular_units
@@ -631,7 +613,7 @@ def likelihood_pm_ratio(model, pm, *, mass_bin=None):
     #     + np.log((obs_err / obs_err.unit)**2)
     # )
 
-    return _hyperparam_likelihood(pm['PM_ratio'], interpolated, obs_err)
+    return util.hyperparam_likelihood(pm['PM_ratio'], interpolated, obs_err)
 
 
 @_angular_units
@@ -688,7 +670,7 @@ def likelihood_pm_T(model, pm, *, mass_bin=None):
     #     + np.log((obs_err / obs_err.unit)**2)
     # )
 
-    return _hyperparam_likelihood(pm['PM_T'], interpolated, obs_err)
+    return util.hyperparam_likelihood(pm['PM_T'], interpolated, obs_err)
 
 
 @_angular_units
@@ -745,7 +727,7 @@ def likelihood_pm_R(model, pm, *, mass_bin=None):
     #     + np.log((obs_err / obs_err.unit)**2)
     # )
 
-    return _hyperparam_likelihood(pm['PM_R'], interpolated, obs_err)
+    return util.hyperparam_likelihood(pm['PM_R'], interpolated, obs_err)
 
 
 @_angular_units
@@ -802,7 +784,7 @@ def likelihood_LOS(model, vlos, *, mass_bin=None):
     #     + np.log((obs_err / obs_err.unit)**2)
     # )
 
-    return _hyperparam_likelihood(vlos['σ'], interpolated, obs_err)
+    return util.hyperparam_likelihood(vlos['σ'], interpolated, obs_err)
 
 
 @_angular_units
@@ -914,7 +896,7 @@ def likelihood_mass_func(model, mf, field):
 
         err = model.F * err_data
 
-        tot_likelihood += _hyperparam_likelihood(N_data, N_model, err)
+        tot_likelihood += util.hyperparam_likelihood(N_data, N_model, err)
 
     return tot_likelihood
 
