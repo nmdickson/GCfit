@@ -34,8 +34,12 @@ class Priors:
 
         for param, prior in self.priors.items():
 
-            # evaluate prior
-            P = prior(theta[param])
+            if prior.dependants:
+                deps = {d: theta[d] for d in prior.dependants}
+                P = prior(theta[param], **deps)
+
+            else:
+                P = prior(theta[param])
 
             # if invalid (i.e. -inf, outside of bounds) record it's reason
             if not np.isfinite(P):
@@ -64,7 +68,7 @@ class Priors:
 
         self._strict = err_on_fail
 
-        if extraneous_params := (DEFAULT_PRIORS.keys() - priors.keys()):
+        if extraneous_params := (priors.keys() - DEFAULT_PRIORS.keys()):
             raise ValueError(f"Invalid parameters: {extraneous_params}")
 
         # Fill in unspecified parameters with default priors bounds
@@ -88,6 +92,8 @@ class _PriorBase:
     '''remember *logged*
     '''
 
+    dependants = None
+
     def __repr__(self):
         return 'repr prior'
 
@@ -104,7 +110,7 @@ class UniformPrior(_PriorBase):
     -inf if <= 0, else 0
     '''
 
-    def __call__(self, param_val):
+    def __call__(self, param_val, *args, **kwargs):
 
         L = 0.
 
@@ -118,7 +124,7 @@ class UniformPrior(_PriorBase):
                 #   everything
                 #   Could instead have some sort of flag that tells Priors to
                 #   pass certain values in?
-                check = oper(param_val, theta[bnd])
+                check = oper(param_val, kwargs[bnd])
 
             if not check:
                 L = -np.inf
@@ -134,6 +140,7 @@ class UniformPrior(_PriorBase):
         '''
 
         self._eval = []
+        self.dependants = []
 
         for bounds in edges:
 
@@ -151,8 +158,10 @@ class UniformPrior(_PriorBase):
                 except ValueError:
                     # bound is a name of a param
 
-                    if bnd not in DEFAULT_PRIORS:
+                    if bnd not in DEFAULT_INITIALS:
                         raise ValueError(f'Invalid dependant parameter {bnd}')
+
+                    self.dependants.append(bnd)
 
                 self._eval.append((_OPER_MAP[oper_str], bnd))
 
@@ -168,7 +177,12 @@ class UniformPrior(_PriorBase):
 
 
 class GaussianPrior(_PriorBase):
-    pass
+
+    def __call__(self, val):
+        return 10
+
+    def __init__(self, *args, **kwargs):
+        pass
 
 
 class BoundedGaussianPrior(_PriorBase):

@@ -1,5 +1,5 @@
 from .data import Observations
-from ..probabilities import posterior, Priors
+from ..probabilities import posterior, priors
 
 import h5py
 import emcee
@@ -186,7 +186,7 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
     spec_bounds = bounds
 
-    prior_likelihood = Priors(bounds)
+    prior_likelihood = priors.Priors(bounds)
 
     # check if initials are outside bounds, if so then error right here
     if not prior_likelihood(initials):
