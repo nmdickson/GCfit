@@ -108,12 +108,12 @@ class ModelVisualizer(_Visualizer):
                        xerr=None, yerr=None):
         from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-        divider = make_axes_locatable(ax)
-        res_ax = divider.append_axes('bottom', size="15%", pad=0, sharex=ax)
-
         yspline = util.QuantitySpline(xmodel, ymodel)
 
         res = yspline(xdata) - ydata
+
+        divider = make_axes_locatable(ax)
+        res_ax = divider.append_axes('bottom', size="15%", pad=0, sharex=ax)
 
         res_ax.errorbar(xdata, res, fmt='k.', xerr=xerr, yerr=yerr)
 
@@ -121,6 +121,18 @@ class ModelVisualizer(_Visualizer):
         res_ax.axhline(0., c='k')
 
         res_ax.set_xscale(ax.get_xscale())
+
+    def _add_hyperparam(self, ax, xmodel, ymodel, xdata, ydata, yerr):
+
+        fig = ax.figure
+
+        yspline = util.QuantitySpline(xmodel, ymodel)
+
+        aeff = util.hyperparam_effective(ydata, yspline(xdata), yerr)
+
+        # TODO figure out best place to place this at
+        # fig.text(0.1, 0.3, fr'$\alpha_{{eff}}=${aeff:.4f}')
+        ax.set_title(fr'{ax.get_title()} ($\alpha_{{eff}}=${aeff:.4f})')
 
     # -----------------------------------------------------------------------
     # Plotting functions
@@ -345,7 +357,8 @@ class ModelVisualizer(_Visualizer):
         return fig
 
     @_support_units
-    def plot_LOS(self, fig=None, ax=None, show_obs=True, residuals=True):
+    def plot_LOS(self, fig=None, ax=None, show_obs=True,
+                 residuals=True, hyperparam=True):
 
         mass_bin = self.model.nms - 1
 
@@ -360,17 +373,22 @@ class ModelVisualizer(_Visualizer):
 
         if show_obs:
             try:
-                veldisp = self.obs['velocity_dispersion']
+                LOS = self.obs['velocity_dispersion']
 
-                xerr = self.get_err(veldisp, 'r')
-                yerr = self.get_err(veldisp, 'σ')
+                xerr = self.get_err(LOS, 'r')
+                yerr = self.get_err(LOS, 'σ')
 
-                ax.errorbar(veldisp['r'], veldisp['σ'], fmt='k.',
+                ax.errorbar(LOS['r'], LOS['σ'], fmt='k.',
                             xerr=xerr, yerr=yerr)
+
+                if hyperparam:
+                    sig = LOS.build_err('σ', model_r, model_LOS, strict=False)
+                    self._add_hyperparam(ax, model_r, model_LOS,
+                                         LOS['r'], LOS['σ'], yerr=sig)
 
                 if residuals:
                     self._add_residuals(ax, model_r, model_LOS,
-                                        veldisp['r'], veldisp['σ'], xerr, yerr)
+                                        LOS['r'], LOS['σ'], xerr, yerr)
 
             except KeyError as err:
                 if show_obs != 'attempt':
@@ -381,7 +399,8 @@ class ModelVisualizer(_Visualizer):
         return fig
 
     @_support_units
-    def plot_pm_tot(self, fig=None, ax=None, show_obs=True, residuals=True):
+    def plot_pm_tot(self, fig=None, ax=None, show_obs=True,
+                    residuals=True, hyperparam=True):
 
         mass_bin = self.model.nms - 1
 
@@ -408,6 +427,11 @@ class ModelVisualizer(_Visualizer):
                 ax.errorbar(pm['r'], pm['PM_tot'], fmt='k.',
                             xerr=xerr, yerr=yerr)
 
+                if hyperparam:
+                    sig = pm.build_err('PM_tot', model_r, model_t, False)
+                    self._add_hyperparam(ax, model_r, model_t,
+                                         pm['r'], pm['PM_tot'], yerr=sig)
+
                 if residuals:
                     self._add_residuals(ax, model_r, model_t,
                                         pm['r'], pm['PM_tot'], xerr, yerr)
@@ -421,7 +445,8 @@ class ModelVisualizer(_Visualizer):
         return fig
 
     @_support_units
-    def plot_pm_ratio(self, fig=None, ax=None, show_obs=True, residuals=True):
+    def plot_pm_ratio(self, fig=None, ax=None, show_obs=True,
+                      residuals=True, hyperparam=True):
 
         mass_bin = self.model.nms - 1
 
@@ -446,6 +471,11 @@ class ModelVisualizer(_Visualizer):
                 ax.errorbar(pm['r'], pm['PM_ratio'], fmt='k.',
                             xerr=xerr, yerr=yerr)
 
+                if hyperparam:
+                    sig = pm.build_err('PM_ratio', model_r, model_ratio, False)
+                    self._add_hyperparam(ax, model_r, model_ratio,
+                                         pm['r'], pm['PM_ratio'], yerr=sig)
+
                 if residuals:
                     self._add_residuals(ax, model_r, model_ratio,
                                         pm['r'], pm['PM_ratio'], xerr, yerr)
@@ -459,7 +489,8 @@ class ModelVisualizer(_Visualizer):
         return fig
 
     @_support_units
-    def plot_pm_T(self, fig=None, ax=None, show_obs=True, residuals=True):
+    def plot_pm_T(self, fig=None, ax=None, show_obs=True,
+                  residuals=True, hyperparam=True):
         # TODO capture all mass bins which have data (high_mass, low_mass, etc)
 
         mass_bin = self.model.nms - 1
@@ -486,6 +517,11 @@ class ModelVisualizer(_Visualizer):
                 ax.errorbar(pm['r'], pm["PM_T"], fmt='k.',
                             xerr=xerr, yerr=yerr)
 
+                if hyperparam:
+                    sig = pm.build_err('PM_T', model_r, model_T, False)
+                    self._add_hyperparam(ax, model_r, model_T,
+                                         pm['r'], pm['PM_T'], yerr=sig)
+
                 if residuals:
                     self._add_residuals(ax, model_r, model_T,
                                         pm['r'], pm['PM_T'], xerr, yerr)
@@ -499,7 +535,8 @@ class ModelVisualizer(_Visualizer):
         return fig
 
     @_support_units
-    def plot_pm_R(self, fig=None, ax=None, show_obs=True, residuals=True):
+    def plot_pm_R(self, fig=None, ax=None, show_obs=True,
+                  residuals=True, hyperparam=True):
 
         mass_bin = self.model.nms - 1
 
@@ -525,6 +562,11 @@ class ModelVisualizer(_Visualizer):
                 ax.errorbar(pm['r'], pm["PM_R"], fmt='k.',
                             xerr=xerr, yerr=yerr)
 
+                if hyperparam:
+                    sig = pm.build_err('PM_R', model_r, model_R, False)
+                    self._add_hyperparam(ax, model_r, model_R,
+                                         pm['r'], pm['PM_R'], yerr=sig)
+
                 if residuals:
                     self._add_residuals(ax, model_r, model_R,
                                         pm['r'], pm['PM_R'], xerr, yerr)
@@ -538,7 +580,8 @@ class ModelVisualizer(_Visualizer):
         return fig
 
     @_support_units
-    def plot_number_density(self, fig=None, ax=None, show_obs=True, residuals=True):
+    def plot_number_density(self, fig=None, ax=None, show_obs=True,
+                            residuals=True, hyperparam=True):
         # numdens is a bit different cause we want to compute K based on obs
         # whenever possible, even if we're not showing obs
 
@@ -581,6 +624,11 @@ class ModelVisualizer(_Visualizer):
                 ax.errorbar(numdens['r'], numdens["Σ"], fmt='k.',
                             xerr=xerr, yerr=yerr)
 
+                if hyperparam:
+                    sig = numdens.build_err('Σ', model_r, model_Σ, False)
+                    self._add_hyperparam(ax, model_r, model_Σ,
+                                         numdens['r'], numdens['Σ'], yerr=sig)
+
                 if residuals:
                     self._add_residuals(ax, model_r, model_Σ,
                                         numdens['r'], numdens['Σ'], xerr, yerr)
@@ -594,7 +642,8 @@ class ModelVisualizer(_Visualizer):
         return fig
 
     @_support_units
-    def plot_mass_func(self, fig=None, ax=None, show_obs=True):
+    def plot_mass_func(self, fig=None, ax=None, show_obs=True,
+                       residuals=True, hyperparam=True):
 
         fig, ax = self._setup_artist(fig, ax)
         scale = 15  # + 4
@@ -675,6 +724,13 @@ class ModelVisualizer(_Visualizer):
                 text = f"{r_in.value:.2f}'-{r_out.value:.2f}'"
 
                 ax.annotate(text, xy_pnt, xytext=xy_txt, fontsize=12, color=clr)
+
+                if hyperparam:
+                    # TODO adds way too many alphas, need to sum them or smthn
+
+                    self._add_hyperparam(ax, self.model.mj[:self.model.nms],
+                                         binned_N_model, mbin_mean[r_mask],
+                                         N_data, yerr=err)
 
                 # yticks.append(slp.get_ydata()[0])
                 # ylabels.append(f"{r_in.value:.2f}'-{r_out.value:.2f}'")
@@ -847,7 +903,7 @@ class ModelVisualizer(_Visualizer):
 
         fig.suptitle(str(self.obs))
 
-        kw = {'show_obs': show_obs, 'residuals': False}
+        kw = {'show_obs': show_obs, 'residuals': False, 'hyperparam': True}
 
         # self.plot_pulsar(fig=fig, ax=axes[0], show_obs=show_obs)
 
@@ -866,7 +922,8 @@ class ModelVisualizer(_Visualizer):
         # Is this what is messing up the spacing?
         axbig = fig.add_subplot(gs[2:, 0])
 
-        self.plot_mass_func(fig=fig, ax=axbig, show_obs=show_obs)
+        self.plot_mass_func(fig=fig, ax=axbig, show_obs=show_obs,
+                            residuals=False, hyperparam=False)
 
         for ax in axes.flatten():
             ax.set_xlabel('')

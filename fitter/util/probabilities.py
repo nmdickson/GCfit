@@ -28,13 +28,13 @@ def RV_transform(domain, f_X, h, h_prime):
 # --------------------------------------------------------------------------
 
 
-def hyperparam_likelihood(x_data, x_model, err):
+def hyperparam_likelihood(X_data, X_model, err):
     '''compute the log likelihood of a Gaussian process with marginalized
     scaling hyperparameters (see Hobson et al., 2002)'''
     from scipy.special import gammaln
 
-    n = (x_data.size / 2.) + 1
-    chi2 = (x_data - x_model)**2 / err**2
+    n = (X_data.size / 2.) + 1
+    chi2 = (X_data - X_model)**2 / err**2
 
     err = (err / err.unit) if hasattr(err, 'unit') else err
 
@@ -46,11 +46,11 @@ def hyperparam_likelihood(x_data, x_model, err):
     )
 
 
-def hyperparam_effective(x_data, x_model, err):
-    '''Compute the "effective" α_k scaling value for a given x_model
+def hyperparam_effective(X_data, X_model, err):
+    '''Compute the "effective" α_k scaling value for a given X_model
     (see Hobson et al., 2002), eq.44'''
 
-    n_k = x_data.size
-    chi2 = np.sum((x_data - x_model)**2 / err**2)
+    n_k = X_data.size
+    chi2 = np.sum((X_data - X_model)**2 / err**2)
 
     return n_k / chi2

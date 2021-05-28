@@ -183,13 +183,15 @@ class Dataset:
     def variables(self):
         return self._dict_variables
 
-    def build_err(self, varname, model_r, model_val):
+    def build_err(self, varname, model_r, model_val, strict=True):
         '''
         varname is the variable we want to get the error for
         quantity is the actual model data we will be comparing this with
 
         model_r, _val must be in equivalent units to the var already.
         conversion will be attempted, but with no equivalencies
+
+        if strict, if no error values exists, returns None instead of erroring
         '''
 
         quantity = self[varname]
