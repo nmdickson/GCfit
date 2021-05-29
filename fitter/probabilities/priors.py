@@ -1,3 +1,4 @@
+from ..util import gaussian
 from ..core.data import DEFAULT_INITIALS
 
 import numpy as np
@@ -119,11 +120,6 @@ class UniformPrior(_PriorBase):
             try:
                 check = oper(param_val, bnd)
             except TypeError:
-                # TODO the parameter dependant one, need to get the bnd from θ
-                #   But don't really love the idea of always passing theta to
-                #   everything
-                #   Could instead have some sort of flag that tells Priors to
-                #   pass certain values in?
                 check = oper(param_val, kwargs[bnd])
 
             if not check:
@@ -178,11 +174,31 @@ class UniformPrior(_PriorBase):
 
 class GaussianPrior(_PriorBase):
 
-    def __call__(self, val):
-        return 10
+    def __call__(self, param_val, *args, **kwargs):
 
-    def __init__(self, *args, **kwargs):
-        pass
+        try:
+            L = gaussian(param_val, mu=self.mu, sigma=self.sigma)
+
+        except TypeError:
+            L = gaussian(param_val, mu=kwargs[self.mu], sigma=self.sigma)
+
+        return L
+
+    def __init__(self, mu, sigma):
+        '''
+        μ is a number (or I guess you could do another param but just cause
+        you can do something, doesn't mean you should)
+        σ is a number
+        '''
+
+        self.mu, self.sigma = mu, sigma
+
+        if isinstance(self.mu, str):
+
+            if self.mu not in DEFAULT_INITIALS:
+                raise ValueError(f'Invalid dependant parameter {self.mu}')
+
+            self.dependants = [self.mu]
 
 
 class BoundedGaussianPrior(_PriorBase):
@@ -206,7 +222,7 @@ DEFAULT_PRIORS = {
     'a2': UniformPrior([(0, 6), ('>=', 'a1')]),
     'a3': UniformPrior([(1.6, 6), ('>=', 'a2')]),
     'BHret': UniformPrior([(0, 100)]),
-    'd': GaussianPrior(mu=4, sigma=1),
+    'd': GaussianPrior(mu=DEFAULT_INITIALS['d'], sigma=1),
 }
 
 _PRIORS_MAP = {
