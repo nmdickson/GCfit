@@ -20,18 +20,16 @@
     \hline
     Mass bin outer bound & \texttt{m2\(^*\)} & & \texttt{unit} \\
     \hline
-    Observation fields & \texttt{fields\(^*\)} & &
-    \texttt{field\_unit}\\ &&& See caption \\
+    Observation fields & \texttt{fields\(^*\)} & & See caption \\
     \hline
 \end{tabular}
 \caption*{
-    The \texttt{fields} dataset is an array of string names of different
-    observational program's PIs. Each name has a corresponding attribute entry
-    within the dataset, which consists of a 2d-array of (RA, DEC) coordinates
-    which define the polygonal boundaries of this observation. If a single
-    program has multiple polygons, they are denoted by the addition of an
-    underscore followed by a single alphanumeric character (\_a, \_b, etc.).
-    All coordinates are given in the units defined by \texttt{field\_unit}.
+    The \texttt{fields} dataset is an empty dataset and exists only as a
+    container for it's attributes. Each mass function will have some number of
+    field boundary polygon attributes, each denoted by a single alphanumeric
+    character (a, b, c, etc.). Each attribute consists of a 2d-array of
+    (RA, DEC) coordinates which define the polygonal boundaries of this
+    observation
 }
 \end{table}
 \end{center}
@@ -46,8 +44,10 @@
     \hline
     Attribute & Description \\
     \hline\hline
-    \texttt{source} & Literature source(s) of data \\
     % TODO each field technically has it's own source as well
+    \texttt{source} & Literature source(s) of data \\
+    \hline
+    \texttt{field\_unit} & Coordinate units of all \texttt{fields} boundaries \\
     \hline
 \end{tabular}
 \end{table}
