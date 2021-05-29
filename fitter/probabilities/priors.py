@@ -82,11 +82,18 @@ class Priors:
                 continue
 
             else:
+                # TODO Not happy with how nested the uniform args have to be
                 prior_key, *args = self.priors[param]
 
                 prior_key = prior_key.lower().replace('prior', '').strip()
 
                 self.priors[param] = _PRIORS_MAP[prior_key](*args)
+
+    # TODO def check(theta):
+    #     '''
+    #     only evaluate the uniform, bounded priors,
+    #     return only (theta is in bounds?) true or false
+    #     '''
 
 
 class _PriorBase:
@@ -174,13 +181,13 @@ class UniformPrior(_PriorBase):
 
 class GaussianPrior(_PriorBase):
 
-    def __call__(self, param_val, *args, **kwargs):
+    def __call__(self, param_val, *args, **kw):
 
         try:
-            L = gaussian(param_val, mu=self.mu, sigma=self.sigma)
+            L = np.log(gaussian(param_val, mu=self.mu, sigma=self.sigma))
 
         except TypeError:
-            L = gaussian(param_val, mu=kwargs[self.mu], sigma=self.sigma)
+            L = np.log(gaussian(param_val, mu=kw[self.mu], sigma=self.sigma))
 
         return L
 
@@ -222,7 +229,7 @@ DEFAULT_PRIORS = {
     'a2': UniformPrior([(0, 6), ('>=', 'a1')]),
     'a3': UniformPrior([(1.6, 6), ('>=', 'a2')]),
     'BHret': UniformPrior([(0, 100)]),
-    'd': GaussianPrior(mu=DEFAULT_INITIALS['d'], sigma=1),
+    'd': GaussianPrior(mu=DEFAULT_INITIALS['d'], sigma=0.5),
 }
 
 _PRIORS_MAP = {

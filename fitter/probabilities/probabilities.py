@@ -957,9 +957,14 @@ def posterior(theta, observations, fixed_initials=None, L_components=None,
     theta = dict(zip(params, theta), **fixed_initials)
 
     # prior likelihoods
-    if not prior_likelihood(theta):
+    if not np.isfinite(log_Pθ := prior_likelihood(theta)):
         return -np.inf, *(-np.inf * np.ones(len(L_components)))
 
-    probability, individuals = log_likelihood(theta, observations, L_components)
+    log_L, individuals = log_likelihood(theta, observations, L_components)
+
+    print(f'{log_L=}')
+    print(f'{log_Pθ=}')
+
+    probability = log_L + log_Pθ
 
     return probability, *individuals

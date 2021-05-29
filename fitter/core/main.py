@@ -21,7 +21,7 @@ _here = pathlib.Path()
 
 
 def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
-        mpi=False, initials=None, bounds=None,
+        mpi=False, initials=None, param_priors=None,
         fixed_params=None, excluded_likelihoods=None,
         cont_run=False, savedir=_here, backup=False, verbose=False):
     '''Main MCMC fitting pipeline
@@ -66,9 +66,9 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         `Observations`. Any missing parameters in `initials` will be filled
         with the values stored in the `Observations`.
 
-    bounds : dict, optional
-        Dictionary of prior bounds for each parameter.
-        See `probabilities.Priors` for formatting of bounds and defaults.
+    param_priors : dict, optional
+        Dictionary of prior bounds/args for each parameter.
+        See `probabilities.priors` for formatting of args and defaults.
 
     fixed_params : list of str, optional
         List of parameters to fix to the initial value, and not allow to be
@@ -110,8 +110,8 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     if excluded_likelihoods is None:
         excluded_likelihoods = []
 
-    if bounds is None:
-        bounds = {}
+    if param_priors is None:
+        param_priors = {}
 
     if cont_run:
         raise NotImplementedError
@@ -181,15 +181,15 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     init_pos = 1e-4 * np.random.randn(Nwalkers, init_pos.size) + init_pos
 
     # ----------------------------------------------------------------------
-    # Setup and check priors
+    # Setup and check param_priors
     # ----------------------------------------------------------------------
 
-    spec_bounds = bounds
+    spec_priors = param_priors
 
-    prior_likelihood = priors.Priors(bounds)
+    prior_likelihood = priors.Priors(param_priors)
 
-    # check if initials are outside bounds, if so then error right here
-    if not prior_likelihood(initials):
+    # check if initials are outside priors, if so then error right here
+    if not np.isfinite(prior_likelihood(initials)):
         raise ValueError("Initial positions outside prior boundaries")
 
     # ----------------------------------------------------------------------
@@ -251,10 +251,10 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
                 for k, v in spec_initials.items():
                     init_dset.attrs[k] = v
 
-            # Specified prior bounds
+            # Specified prior priors
             bnd_dset = meta_grp.create_dataset("specified_bounds", dtype="f")
-            if spec_bounds is not None:
-                for k, v in spec_bounds.items():
+            if spec_priors:
+                for k, v in spec_priors.items():
                     # TODO this needs to be fixed up
                     bnd_dset.attrs[k] = np.array(v).astype('|S10')
 
