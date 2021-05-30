@@ -963,9 +963,6 @@ def posterior(theta, observations, fixed_initials=None, L_components=None,
 
     log_L, individuals = log_likelihood(theta, observations, L_components)
 
-    print(f'{log_L=}')
-    print(f'{log_Pθ=}')
-
     probability = log_L + log_Pθ
 
     return probability, *individuals
