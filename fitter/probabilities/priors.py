@@ -87,13 +87,7 @@ class Priors:
 
                 prior_key = prior_key.lower().replace('prior', '').strip()
 
-                self.priors[param] = _PRIORS_MAP[prior_key](*args)
-
-    # TODO def check(theta):
-    #     '''
-    #     only evaluate the uniform, bounded priors,
-    #     return only (theta is in bounds?) true or false
-    #     '''
+                self.priors[param] = _PRIORS_MAP[prior_key](param, *args)
 
 
 class _PriorBase:
@@ -110,7 +104,10 @@ class _PriorBase:
 
     @property
     def inv_mssg(self):
-        return self._inv_mssg
+        try:
+            return self._inv_mssg
+        except AttributeError:
+            return f"Invalid {self.__class__.__name__}"
 
 
 class UniformPrior(_PriorBase):
@@ -130,17 +127,22 @@ class UniformPrior(_PriorBase):
                 check = oper(param_val, kwargs[bnd])
 
             if not check:
-                L = -np.inf
+                self._inv_mssg = (f'{self.param}={param_val}, '
+                                  f'not {oper.__name__} {bnd}')
+                return -np.inf
 
         return L
 
-    def __init__(self, edges):
+    def __init__(self, param, edges):
         '''
+        param is the name, just for mssgs
         edges is a list of bounds
             eahc is either (lower bound, upper bound)
             or (operation, param name)
             or (operation, bound)
         '''
+
+        self.param = param
 
         self._eval = []
         self.dependants = []
@@ -191,12 +193,13 @@ class GaussianPrior(_PriorBase):
 
         return L
 
-    def __init__(self, mu, sigma):
+    def __init__(self, param, mu, sigma):
         '''
         μ is a number (or I guess you could do another param but just cause
         you can do something, doesn't mean you should)
         σ is a number
         '''
+        self.param = param
 
         self.mu, self.sigma = mu, sigma
 
@@ -217,19 +220,19 @@ class CromwellUniformPrior(_PriorBase):
 
 
 DEFAULT_PRIORS = {
-    'W0': UniformPrior([(3, 20)]),
-    'M': UniformPrior([(0.01, 10)]),
-    'rh': UniformPrior([(0.5, 15)]),
-    'ra': UniformPrior([(0, 5)]),
-    'g': UniformPrior([(0, 2.3)]),
-    'delta': UniformPrior([(0.3, 0.5)]),
-    's2': UniformPrior([(0, 15)]),
-    'F': UniformPrior([(1, 3)]),
-    'a1': UniformPrior([(0, 6)]),
-    'a2': UniformPrior([(0, 6), ('>=', 'a1')]),
-    'a3': UniformPrior([(1.6, 6), ('>=', 'a2')]),
-    'BHret': UniformPrior([(0, 100)]),
-    'd': GaussianPrior(mu=DEFAULT_INITIALS['d'], sigma=0.5),
+    'W0': UniformPrior('W0', [(3, 20)]),
+    'M': UniformPrior('M', [(0.01, 10)]),
+    'rh': UniformPrior('rh', [(0.5, 15)]),
+    'ra': UniformPrior('ra', [(0, 5)]),
+    'g': UniformPrior('g', [(0, 2.3)]),
+    'delta': UniformPrior('delta', [(0.3, 0.5)]),
+    's2': UniformPrior('s2', [(0, 15)]),
+    'F': UniformPrior('F', [(1, 3)]),
+    'a1': UniformPrior('a1', [(0, 6)]),
+    'a2': UniformPrior('a2', [(0, 6), ('>=', 'a1')]),
+    'a3': UniformPrior('a3', [(1.6, 6), ('>=', 'a2')]),
+    'BHret': UniformPrior('BHret', [(0, 100)]),
+    'd': GaussianPrior('d', mu=DEFAULT_INITIALS['d'], sigma=0.5),
 }
 
 _PRIORS_MAP = {
