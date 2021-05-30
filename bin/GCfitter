@@ -21,8 +21,8 @@ if __name__ == '__main__':
                         help='location of saved sampling runs')
     parser.add_argument('-i', '--initials',
                         help='alternative JSON file with different intials')
-    parser.add_argument('-b', '--bounds',
-                        help='alternative JSON file with different prior bound')
+    parser.add_argument('-p', '--priors', dest='param_priors',
+                        help='alternative JSON file with different priors')
 
     parser.add_argument('-N', '--Niters', default=2000, type=int,
                         help='Number of sampling iterations')
@@ -68,12 +68,12 @@ if __name__ == '__main__':
         else:
             parser.error(f"Cannot access '{init_file}': No such file")
 
-    if args.bounds:
+    if args.param_priors:
 
-        if (bnd_file := pathlib.Path(args.bounds)).is_file():
+        if (bnd_file := pathlib.Path(args.param_priors)).is_file():
 
             with open(bnd_file, 'r') as init_of:
-                args.bounds = json.load(init_of)
+                args.param_priors = json.load(init_of)
 
         else:
             parser.error(f"Cannot access '{bnd_file}': No such file")

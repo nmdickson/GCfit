@@ -866,9 +866,9 @@ def likelihood_mass_func(model, mf, field):
     # shell from the field
     # ------------------------------------------------------------------
 
-    N_data = np.empty_like(N)
-    N_model = np.empty_like(N)
-    err = np.empty_like(N)
+    N_data = np.empty(N.shape)
+    N_model = np.empty(N.shape)
+    err = np.empty(N.shape)
 
     for r_in, r_out in np.unique(rbins, axis=0):
         r_mask = (mf['r1'] == r_in) & (mf['r2'] == r_out)
