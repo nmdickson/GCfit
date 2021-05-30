@@ -251,12 +251,13 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
                 for k, v in spec_initials.items():
                     init_dset.attrs[k] = v
 
-            # Specified prior priors
-            bnd_dset = meta_grp.create_dataset("specified_bounds", dtype="f")
+            # Specified priors
+            bnd_dset = meta_grp.create_dataset("specified_priors", dtype="f")
             if spec_priors:
                 for k, v in spec_priors.items():
-                    # TODO this needs to be fixed up
-                    bnd_dset.attrs[k] = np.array(v).astype('|S10')
+                    # TODO I don't even think theres a good way to do this
+                    bnd_dset.attrs[f'{k}_type'] = np.array(v[0]).astype('|S10')
+                    bnd_dset.attrs[f'{k}_args'] = np.array(v[1:]).astype('|S10')
 
         # ------------------------------------------------------------------
         # Initialize the MCMC sampler
