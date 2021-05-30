@@ -835,10 +835,9 @@ def likelihood_mass_func(model, mf, field):
     '''
     # TODO same as numdens, the units are ignored cause 1/pc^2 != 1/arcmin^2
 
-    tot_likelihood = 0.0
     M = 300
 
-    # TODO could probably do the radial slicing beforehand as well
+    # TODO could probably do the radial slicing beforehand as well, if its slow
     # if not field:
     #     cen = (obs.mdata['RA'], obs.mdata['DEC'])
     #     field = mass.Field(mf['fields'], cen)
@@ -867,6 +866,10 @@ def likelihood_mass_func(model, mf, field):
     # shell from the field
     # ------------------------------------------------------------------
 
+    N_data = np.empty_like(N)
+    N_model = np.empty_like(N)
+    err = np.empty_like(N)
+
     for r_in, r_out in np.unique(rbins, axis=0):
         r_mask = (mf['r1'] == r_in) & (mf['r2'] == r_out)
 
@@ -884,21 +887,19 @@ def likelihood_mass_func(model, mf, field):
             widthj = (model.mj[j] * model.mes_widths[j])
             binned_N_model[j] = (Nj / widthj).value
 
-        N_model = util.QuantitySpline(model.mj[:model.nms], binned_N_model,
-                                      ext=0, k=1)(mbin_mean[r_mask])
+        N_spline = util.QuantitySpline(model.mj[:model.nms],
+                                       binned_N_model,
+                                       ext=0, k=1)
 
         # --------------------------------------------------------------
         # Add the error and compute the log likelihood
         # --------------------------------------------------------------
 
-        N_data = N[r_mask].value
-        err_data = ΔN[r_mask].value
+        N_data[r_mask] = N[r_mask].value
+        N_model[r_mask] = N_spline(mbin_mean[r_mask])
+        err[r_mask] = model.F * ΔN[r_mask].value
 
-        err = model.F * err_data
-
-        tot_likelihood += util.hyperparam_likelihood(N_data, N_model, err)
-
-    return tot_likelihood
+    return util.hyperparam_likelihood(N_data, N_model, err)
 
 
 # --------------------------------------------------------------------------
