@@ -19,7 +19,7 @@ def gaussian(x, sigma, mu):
 
 def RV_transform(domain, f_X, h, h_prime):
     '''Transformation of a random variable over a function :math:`g=h^{-1}`'''
-    f_Y = f_X(h(domain)) * h_prime(domain)
+    f_Y = f_X(h(domain)) * np.abs(h_prime(domain))
     return np.nan_to_num(f_Y)
 
 
