@@ -4,6 +4,10 @@ __pycache__/
 *.egg-info/
 
 devnotes*
+*vscode*
+/build
+/dist
+/results
 
 # Core latex/pdflatex auxiliary files:
 *.aux
