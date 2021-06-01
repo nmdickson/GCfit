@@ -157,6 +157,10 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         # Compute gaussian measurement error distribution
         # ------------------------------------------------------------------
 
+
+        # TODO Check the convolution here, make sure we're sampling zero so we don't
+        # get a flat convolution
+
         # TODO if width << Pint width, maybe don't bother with first conv.
 
         err = util.gaussian(x=Pdot_domain, sigma=ΔPdot_meas, mu=0)
@@ -199,7 +203,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         # TODO both 5000 and 1e-18 need to be computed dynamically
         #   5000 to be enough steps to sample the gaussian and int peaks
         #   1e-18 to be far enough for the int distribution to go to zero
-        #   Both balanced so as to use way too much memory uneccessarily
+        #   Both balanced so as to use way too much memory unnecessarily
         #   Must be symmetric, to avoid bound effects
 
         # mirrored/starting at zero so very small gaussians become the δ-func
