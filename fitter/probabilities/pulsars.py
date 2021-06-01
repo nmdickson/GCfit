@@ -1,4 +1,4 @@
-from ..util import QuantitySpline
+from ..util import QuantitySpline, norm_sample
 
 import scipy.stats
 import numpy as np
@@ -22,7 +22,7 @@ __all__ = [
 # --------------------------------------------------------------------------
 
 
-def cluster_component(model, R, mass_bin, *, eps=1e-4):
+def cluster_component(model, R, mass_bin, *, eps=1e-5):
     """
     Computes probability distribution for a range of line of sight
     accelerations at projected R : P(az|R)
@@ -117,10 +117,12 @@ def cluster_component(model, R, mass_bin, *, eps=1e-4):
     azmax = az_spl(zmax)
 
     # increment density by 2 order of magn. smaller than azmax
-    Δa = 10**(np.floor(np.log10(azmax.value)) - 2)
+    # Δa = 10**(np.floor(np.log10(azmax.value)) - 2)
 
     # define the acceleration space domain, based on amax and Δa
-    az_domain = np.arange(0., azmax.value, Δa) << azmax.unit
+    az_domain = np.linspace(0., 20e-9, 5000) << azmax.unit
+
+    Δa = np.diff(az_domain)
 
     # TODO look at the old new_Paz to get the comments for this stuff
 
@@ -130,33 +132,50 @@ def cluster_component(model, R, mass_bin, *, eps=1e-4):
 
     outside_azt = az_domain > azt
 
+    import matplotlib.pyplot as plt
+    plt.figure()
+    plt.plot(az_domain, Paz_dist)
+    plt.xlabel("az")
+    plt.ylabel("Paz")
+
     # Only use z2 if any outside_azt values exist (ensures z2_spl exists)
     if np.any(outside_azt):
 
         z2 = z2_spl(az_domain)
 
         within_bounds = outside_azt & (z2 < zt)
-
+        # print(az_der(z2[within_bounds]))
+        # TODO: Here some of these are zero which makes a bunch of NANs
         Paz_dist[within_bounds] += (rhoz_spl(z2[within_bounds])
                                     / abs(az_der(z2[within_bounds]))).value
 
+    # TODO: Let's see what this does
+    Paz_dist = np.nan_to_num(Paz_dist)
     Paz_dist /= rhoz_spl.integral(0. << z.unit, zt).value
 
+
+    plt.figure()
+    plt.plot(az_domain, Paz_dist)
+    plt.xlabel("az")
+    plt.ylabel("Paz")
     # Ensure Paz is normalized
 
-    norm = 0.
+    norm = 0.0
     for ind, P_b in enumerate(Paz_dist[1:], 1):
         P_a = Paz_dist[ind - 1]
 
         # Integrate using trapezoid rule cumulatively
-        norm += 0.5 * Δa * (P_a + P_b)
+        norm += (0.5 * Δa[ind] * (P_a + P_b)).value
 
         # If converges, cut domain at this index
-        if abs(0.5 - norm) < eps:
+        if abs(1.0 - norm) < eps:
             break
 
         # If passes normalization, backup a step to cut domain close as possible
-        elif norm > 0.5:
+        # TODO: I think this should be normed to 1.0 on each side because we only use
+        # one side in the actual evaluation of the likelihood, maybe 1.0 across zero for the isolated case?
+        # double check either way
+        elif norm > 1.0:
             ind -= 1
             break
 
@@ -167,8 +186,9 @@ def cluster_component(model, R, mass_bin, *, eps=1e-4):
         raise RuntimeError(mssg)
 
     # Cut domain and distribution at index of normalization
-    az_domain = az_domain[:ind + 1]
-    Paz_dist = Paz_dist[:ind + 1]
+    # Let's keep the zero padding for now
+    # az_domain = az_domain[:ind + 1]
+    Paz_dist[ind + 1:] = 0
 
     # TODO not sure if should pad with some zeros. not needed but makes it clear
     #       atleast 1 zero, at azmax? or maybe just ind+1
@@ -188,7 +208,7 @@ def galactic_component(lat, lon, D):
 
     from astropy.coordinates import SkyCoord
 
-    # Mikly Way Potential
+    # Milky Way Potential
     mw = pot.BovyMWPotential2014()
 
     # Pulsar position in galactocentric coordinates
@@ -200,7 +220,7 @@ def galactic_component(lat, lon, D):
     l_sun = np.zeros_like(lon)
     D_sun = np.zeros_like(D)
 
-    # TODO the transformations are kinda slow, and are prob uneccessary here
+    # TODO the transformations are kinda slow, and are prob unnecessary here
     sun = SkyCoord(b=b_sun, l=l_sun, distance=D_sun, frame='galactic')
     XYZ_sun = sun.galactocentric.cartesian.xyz
 
