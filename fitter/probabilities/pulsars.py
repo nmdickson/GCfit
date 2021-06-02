@@ -146,6 +146,7 @@ def cluster_component(model, R, mass_bin, *, eps=1e-5):
         within_bounds = outside_azt & (z2 < zt)
         # print(az_der(z2[within_bounds]))
         # TODO: Here some of these are zero which makes a bunch of NANs
+        # pretty sure anywhere we have NANs we can just say probability of 0
         Paz_dist[within_bounds] += (rhoz_spl(z2[within_bounds])
                                     / abs(az_der(z2[within_bounds]))).value
 

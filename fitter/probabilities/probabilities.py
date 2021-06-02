@@ -146,6 +146,14 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         # ------------------------------------------------------------------
 
         PdotP_domain, PdotP_c_prob = cluster_component(model, R, mass_bin)
+
+        import matplotlib.pyplot as plt
+        plt.figure()
+        plt.plot(PdotP_domain, PdotP_c_prob)
+        plt.xlabel("PdotP domain")
+        plt.ylabel("Prob")
+        plt.show()
+
         Pdot_domain = (P * PdotP_domain).decompose()
 
         # linear to avoid effects around asymptote
@@ -220,7 +228,20 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
 
         conv1 = np.convolve(err_spl(lin_domain), Pdot_c_spl(lin_domain), 'same')
 
+        plt.figure()
+        plt.plot(lin_domain, conv1)
+        plt.xlabel("lin domain")
+        plt.ylabel("error conv")
+        plt.show()
+
         conv2 = np.convolve(conv1, Pdot_int_spl(lin_domain), 'same')
+
+        plt.figure()
+        plt.plot(lin_domain, conv2)
+        plt.xlabel("lin domain")
+        plt.ylabel("int conv")
+        plt.axvline(Pdot_meas, color="orange")
+        plt.show()
 
         # Normalize
         conv2 /= interp.UnivariateSpline(
@@ -249,6 +270,8 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
             (lin_domain / P) + PdotP_pm + PdotP_gal, conv2,
             assume_sorted=True, bounds_error=False, fill_value=0.0
         )
+
+        print(f"prob dist: {prob_dist}")
 
         probs[i] = prob_dist((Pdot_meas / P).decompose())
 
