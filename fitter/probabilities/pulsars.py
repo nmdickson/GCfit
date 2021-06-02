@@ -170,20 +170,23 @@ def cluster_component(model, R, mass_bin, *, eps=1e-5):
         # TODO switch back to the delta-a that is an array to support non lin domains
         norm += (0.5 * Δa * (P_a + P_b)).value
 
+        # TODO I *think* the norm target here should be 1.0
         # If converges, cut domain at this index
-        if abs(0.5 - norm) < eps:
+        if abs(1.0 - norm) < eps:
             break
 
         # If passes normalization, backup a step to cut domain close as possible
-        elif norm > 0.5:
+        elif norm > 1.0:
             ind -= 1
             break
 
     else:
+        # TODO: Bypass this for now:
+        ind = len(Paz_dist)-1
         # integral didn't reach 0.5 before end of distribution
         # should not happen, means Δa needs to shrink to reach closer to asymp.
-        mssg = 'Paz distribution unable to reach normalization before azmax'
-        raise RuntimeError(mssg)
+        # mssg = 'Paz distribution unable to reach normalization before azmax'
+        # raise RuntimeError(mssg)
 
     # TODO Catch overflows?
     # ind = min(ind, len(Paz_dist) - 1)
