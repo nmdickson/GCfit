@@ -10,3 +10,6 @@ range.
 
 We unfortunately are also seeing the bizarre bug where the normalization sometimes overflows the bounds of the array? Still
 have no idea what causes that, definitely not good.
+
+Update: with the pulsars I have locally (eg not from the ATNF catalogue) all pulsars fall into the non-zero probability range,
+should have a look at the pulsar that doesn't and see if we can locate it in one of the two 47 Tuc pulsar papers.
