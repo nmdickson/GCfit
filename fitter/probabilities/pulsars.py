@@ -122,7 +122,8 @@ def cluster_component(model, R, mass_bin, *, eps=1e-5):
     # define the acceleration space domain, based on amax and Δa
     az_domain = np.linspace(0., 20e-9, 5000) << azmax.unit
 
-    Δa = np.diff(az_domain)
+    # TODO check what this is in the notebook
+    Δa = np.median(np.diff(az_domain))
 
     # TODO look at the old new_Paz to get the comments for this stuff
 
@@ -132,11 +133,11 @@ def cluster_component(model, R, mass_bin, *, eps=1e-5):
 
     outside_azt = az_domain > azt
 
-    import matplotlib.pyplot as plt
-    plt.figure()
-    plt.plot(az_domain, Paz_dist)
-    plt.xlabel("az")
-    plt.ylabel("Paz")
+    # import matplotlib.pyplot as plt
+    # plt.figure()
+    # plt.plot(az_domain, Paz_dist)
+    # plt.xlabel("az")
+    # plt.ylabel("Paz")
 
     # Only use z2 if any outside_azt values exist (ensures z2_spl exists)
     if np.any(outside_azt):
@@ -155,10 +156,10 @@ def cluster_component(model, R, mass_bin, *, eps=1e-5):
     Paz_dist /= rhoz_spl.integral(0. << z.unit, zt).value
 
 
-    plt.figure()
-    plt.plot(az_domain, Paz_dist)
-    plt.xlabel("az")
-    plt.ylabel("Paz")
+    # plt.figure()
+    # plt.plot(az_domain, Paz_dist)
+    # plt.xlabel("az")
+    # plt.ylabel("Paz")
     # Ensure Paz is normalized
 
     norm = 0.0
@@ -166,17 +167,15 @@ def cluster_component(model, R, mass_bin, *, eps=1e-5):
         P_a = Paz_dist[ind - 1]
 
         # Integrate using trapezoid rule cumulatively
-        norm += (0.5 * Δa[ind] * (P_a + P_b)).value
+        # TODO switch back to the delta-a that is an array to support non lin domains
+        norm += (0.5 * Δa * (P_a + P_b)).value
 
         # If converges, cut domain at this index
-        if abs(1.0 - norm) < eps:
+        if abs(0.5 - norm) < eps:
             break
 
         # If passes normalization, backup a step to cut domain close as possible
-        # TODO: I think this should be normed to 1.0 on each side because we only use
-        # one side in the actual evaluation of the likelihood, maybe 1.0 across zero for the isolated case?
-        # double check either way
-        elif norm > 1.0:
+        elif norm > 0.5:
             ind -= 1
             break
 
@@ -185,6 +184,9 @@ def cluster_component(model, R, mass_bin, *, eps=1e-5):
         # should not happen, means Δa needs to shrink to reach closer to asymp.
         mssg = 'Paz distribution unable to reach normalization before azmax'
         raise RuntimeError(mssg)
+
+    # TODO Catch overflows?
+    # ind = min(ind, len(Paz_dist) - 1)
 
     # Cut domain and distribution at index of normalization
     # Let's keep the zero padding for now
