@@ -11,5 +11,7 @@ range.
 We unfortunately are also seeing the bizarre bug where the normalization sometimes overflows the bounds of the array? Still
 have no idea what causes that, definitely not good.
 
-Update: with the pulsars I have locally (eg not from the ATNF catalogue) all pulsars fall into the non-zero probability range,
-should have a look at the pulsar that doesn't and see if we can locate it in one of the two 47 Tuc pulsar papers.
+Update: with the pulsars I have locally (not from the ATNF catalogue) all pulsars fall into the non-zero probability range,
+should have a look at the pulsar that doesn't and see if we can locate it in one of the two 47 Tuc pulsar papers. Otherwise see
+what paper it's in and if there's any notes or anything. It could be a perfectly fine timing solution that just isn't compatible
+with the current best fit models though I'd be pretty surprised if that was the case.
