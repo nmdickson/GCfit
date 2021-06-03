@@ -15,3 +15,7 @@ Update: with the pulsars I have locally (not from the ATNF catalogue) all pulsar
 should have a look at the pulsar that doesn't and see if we can locate it in one of the two 47 Tuc pulsar papers. Otherwise see
 what paper it's in and if there's any notes or anything. It could be a perfectly fine timing solution that just isn't compatible
 with the current best fit models though I'd be pretty surprised if that was the case.
+
+Further update: The pulsar in question is Pulsar S which is a pulsar that we have both orbital and spin periods for. The reason
+hadn't come up in my own testing is that I was only using the spin period likelihoods for pulsars that didn't have binary periods
+available. Going to test this with my version and see if it's broken there too.
