@@ -49,6 +49,10 @@ if __name__ == '__main__':
     parser.add_argument('--exclude', dest='excluded_likelihoods', nargs='*',
                         help='Likelihood components to exclude from posteriors')
 
+    parser.add_argument('--no-hyperparams', dest='hyperparams',
+                        action='store_false',
+                        help="Don't use Bayesian hyperparams")
+
     args = parser.parse_args()
 
     # ----------------------------------------------------------------------
