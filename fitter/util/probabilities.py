@@ -24,7 +24,19 @@ def RV_transform(domain, f_X, h, h_prime):
 
 
 # --------------------------------------------------------------------------
-# Bayesian Hyperparameters
+# Gaussian Likelihood
+# --------------------------------------------------------------------------
+
+
+def gaussian_likelihood(X_data, X_model, err):
+
+    chi2 = (X_data - X_model)**2 / err**2
+
+    return -0.5 * np.sum(chi2 + np.log(err**2))
+
+
+# --------------------------------------------------------------------------
+# Gaussian Likelihood with Bayesian Hyperparameters
 # --------------------------------------------------------------------------
 
 
