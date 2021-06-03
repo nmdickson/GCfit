@@ -89,6 +89,9 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         Index of `model.mj` mass bin to use in all calculations.
         If None (default), attempts to read 'm' from `pulsars.mdata`, else -1
 
+    hyperparams : bool, optional
+        Not implemented
+
     Returns
     -------
     float
@@ -285,6 +288,9 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
         Index of `model.mj` mass bin to use in all calculations.
         If None (default), attempts to read 'm' from `pulsars.mdata`, else -1
 
+    hyperparams : bool, optional
+        Not implemented
+
     Returns
     -------
     float
@@ -426,6 +432,9 @@ def likelihood_number_density(model, ndensity, *,
         If None (default), attempts to read 'm' from `pulsars.mdata`, else
         assumes
 
+    hyperparams : bool, optional
+        Whether to include bayesian hyperparameters
+
     Returns
     -------
     float
@@ -514,6 +523,9 @@ def likelihood_pm_tot(model, pm, *,
         If None (default), attempts to read 'm' from `pulsars.mdata`, else
         uses largest of the main sequence bins, given by `model.nms`
 
+    hyperparams : bool, optional
+        Whether to include bayesian hyperparameters
+
     Returns
     -------
     float
@@ -576,6 +588,9 @@ def likelihood_pm_ratio(model, pm, *,
         Index of `model.mj` mass bin to use in all calculations.
         If None (default), attempts to read 'm' from `pulsars.mdata`, else
         uses largest of the main sequence bins, given by `model.nms`
+
+    hyperparams : bool, optional
+        Whether to include bayesian hyperparameters
 
     Returns
     -------
@@ -640,6 +655,9 @@ def likelihood_pm_T(model, pm, *,
         If None (default), attempts to read 'm' from `pulsars.mdata`, else
         uses largest of the main sequence bins, given by `model.nms`
 
+    hyperparams : bool, optional
+        Whether to include bayesian hyperparameters
+
     Returns
     -------
     float
@@ -697,6 +715,9 @@ def likelihood_pm_R(model, pm, *,
         If None (default), attempts to read 'm' from `pulsars.mdata`, else
         uses largest of the main sequence bins, given by `model.nms`
 
+    hyperparams : bool, optional
+        Whether to include bayesian hyperparameters
+
     Returns
     -------
     float
@@ -753,6 +774,9 @@ def likelihood_LOS(model, vlos, *,
         Index of `model.mj` mass bin to use in all calculations.
         If None (default), attempts to read 'm' from `pulsars.mdata`, else
         uses largest of the main sequence bins, given by `model.nms`
+
+    hyperparams : bool, optional
+        Whether to include bayesian hyperparameters
 
     Returns
     -------
@@ -815,6 +839,9 @@ def likelihood_mass_func(model, mf, field, *,
     field : dict
         Dictionary of `fitter.probability.mass.Field` field, as given by
         `fitter.probability.mass.initialize_fields`
+
+    hyperparams : bool, optional
+        Whether to include bayesian hyperparameters
 
     Returns
     -------
@@ -945,6 +972,7 @@ def posterior(theta, observations, fixed_initials=None, L_components=None,
     fixed_initials : dict of any theta values to fix
     L_components : output from determine_components
     prior_likelihood : Priors()
+    hyperparams : use hyperparam_likelihood or gaussian_likelihood
     '''
 
     if fixed_initials is None:

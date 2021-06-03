@@ -79,6 +79,10 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         function. Each likelihood can be specified using either the name of
         the function (as given by __name__) or the name of the relevant dataset.
 
+    hyperparams : bool, optional
+        Whether to include bayesian hyperparameters (see Hobson et al., 2002)
+        in all likelihood functions.
+
     cont_run : bool, optional
         Not Implemented
 
