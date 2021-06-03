@@ -123,7 +123,7 @@ def cluster_component(model, R, mass_bin, *, eps=1e-5):
     az_domain = np.linspace(0., 20e-9, 5000) << azmax.unit
 
     # TODO check what this is in the notebook
-    Δa = np.median(np.diff(az_domain))
+    Δa = np.diff(az_domain)
 
     # TODO look at the old new_Paz to get the comments for this stuff
 
@@ -168,7 +168,7 @@ def cluster_component(model, R, mass_bin, *, eps=1e-5):
 
         # Integrate using trapezoid rule cumulatively
         # TODO switch back to the delta-a that is an array to support non lin domains
-        norm += (0.5 * Δa * (P_a + P_b)).value
+        norm += (0.5 * Δa[ind] * (P_a + P_b)).value
 
         # TODO I *think* the norm target here should be 1.0
         # If converges, cut domain at this index
@@ -200,6 +200,12 @@ def cluster_component(model, R, mass_bin, *, eps=1e-5):
     #       atleast 1 zero, at azmax? or maybe just ind+1
     # Mirror the distributions
     Paz_dist = np.concatenate((np.flip(Paz_dist[1:]), Paz_dist))
+
+    # Normalize the Paz dist, before this step the area should be ~2 because each 
+    # side of the dist needs to be cutoff at an area of 1.0.
+    Paz_dist /=2 
+
+
     az_domain = np.concatenate((np.flip(-az_domain[1:]), az_domain))
 
     # Change the acceleration domain to a Pdot / P domain

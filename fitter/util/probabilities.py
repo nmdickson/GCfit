@@ -24,7 +24,7 @@ def RV_transform(domain, f_X, h, h_prime):
 
 
 # TODO: I think this only needed for the DM based calculation which is exclusive
-# to 47 Tuc where we have the internal gas models
+# to 47 Tuc where we have the internal gas models (maybe Terzan 5 in future)
 def norm_sample(x_array, y_array, target=1.0):
     """
     Lets us cut the domain of the Paz dists (or any other dist) before the numerical
