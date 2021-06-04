@@ -646,13 +646,9 @@ class ModelVisualizer(_Visualizer):
                        residuals=True, hyperparam=True):
 
         fig, ax = self._setup_artist(fig, ax)
-        scale = 15  # + 4
-        # yticks = []
-        # ylabels = []
+        scale = 15
 
         XTEXT = 0.81 * u.Msun
-        # ax.annotate("Radial Bins", (XTEXT, 10**scale), fontsize=12)
-        # scale -= 4
 
         M = 300
 
@@ -725,23 +721,10 @@ class ModelVisualizer(_Visualizer):
 
                 ax.annotate(text, xy_pnt, xytext=xy_txt, fontsize=12, color=clr)
 
-                if hyperparam:
-                    # TODO adds way too many alphas, need to sum them or smthn
-
-                    self._add_hyperparam(ax, self.model.mj[:self.model.nms],
-                                         binned_N_model, mbin_mean[r_mask],
-                                         N_data, yerr=err)
-
-                # yticks.append(slp.get_ydata()[0])
-                # ylabels.append(f"{r_in.value:.2f}'-{r_out.value:.2f}'")
-
                 scale -= 1
 
         ax.set_yscale("log")
         ax.set_xscale("log")
-
-        # ax.set_yticks(yticks)
-        # ax.set_yticklabels(ylabels)
 
         ax.set_ylabel(r'$dN/dm + C$')
         ax.set_xlabel(r'Mass [$M_\odot$]')
