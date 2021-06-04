@@ -1,7 +1,7 @@
 import numpy as np
 
 
-__all__ = ['gaussian', 'RV_transform',
+__all__ = ['gaussian', 'RV_transform', 'gaussian_likelihood',
            'hyperparam_likelihood', 'hyperparam_effective']
 
 
@@ -31,6 +31,8 @@ def RV_transform(domain, f_X, h, h_prime):
 def gaussian_likelihood(X_data, X_model, err):
 
     chi2 = (X_data - X_model)**2 / err**2
+
+    err = (err / err.unit) if hasattr(err, 'unit') else err
 
     return -0.5 * np.sum(chi2 + np.log(err**2))
 
