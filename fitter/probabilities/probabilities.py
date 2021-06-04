@@ -273,6 +273,10 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
 
         probs[i] = prob_dist((Pdot_meas / P).decompose())
 
+        # TODO: figure out a cleaner way of doing this (for now this is fine):
+        if pulsars["id"][i] == "b'J0024-7204S'":
+            probs[i] = 1
+
     # ----------------------------------------------------------------------
     # Multiply all the probabilities and return the total log probability.
     # ----------------------------------------------------------------------
