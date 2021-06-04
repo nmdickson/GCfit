@@ -56,7 +56,7 @@ def _angular_units(func):
 
 @_angular_units
 def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
-                           mass_bin=None):
+                           mass_bin=None, hyperparams=False):
     '''Compute the log likelihood of pulsar spin period derivatives
 
     Computes the log likelihood component of a cluster's pulsar's spin
@@ -88,6 +88,9 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
     mass_bin : int, optional
         Index of `model.mj` mass bin to use in all calculations.
         If None (default), attempts to read 'm' from `pulsars.mdata`, else -1
+
+    hyperparams : bool, optional
+        Not implemented
 
     Returns
     -------
@@ -258,7 +261,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
 
 @_angular_units
 def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
-                              mass_bin=None):
+                              mass_bin=None, hyperparams=False):
     '''Compute the log likelihood of binary pulsar orbital period derivatives
 
     Computes the log likelihood component of a cluster's binary pulsar's orbital
@@ -284,6 +287,9 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
     mass_bin : int, optional
         Index of `model.mj` mass bin to use in all calculations.
         If None (default), attempts to read 'm' from `pulsars.mdata`, else -1
+
+    hyperparams : bool, optional
+        Not implemented
 
     Returns
     -------
@@ -402,7 +408,8 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
 
 
 @_angular_units
-def likelihood_number_density(model, ndensity, *, mass_bin=None):
+def likelihood_number_density(model, ndensity, *,
+                              mass_bin=None, hyperparams=True):
     r'''Compute the log likelihood of the cluster number density profile
 
     Computes the log likelihood component of a cluster's number density profile,
@@ -424,6 +431,9 @@ def likelihood_number_density(model, ndensity, *, mass_bin=None):
         Index of `model.mj` mass bin to use in all calculations.
         If None (default), attempts to read 'm' from `pulsars.mdata`, else
         assumes
+
+    hyperparams : bool, optional
+        Whether to include bayesian hyperparameters
 
     Returns
     -------
@@ -458,6 +468,11 @@ def likelihood_number_density(model, ndensity, *, mass_bin=None):
         else:
             mass_bin = model.nms - 1
 
+    if hyperparams:
+        likelihood = util.hyperparam_likelihood
+    else:
+        likelihood = util.gaussian_likelihood
+
     # Set cutoff to avoid fitting flat end of data
     # TODO should do this cutoff based on a flatness, rather than a set value
     valid = (ndensity['Σ'].value > 0.1)
@@ -482,16 +497,12 @@ def likelihood_number_density(model, ndensity, *, mass_bin=None):
 
     interpolated *= K
 
-    # Now regular gaussian likelihood
-    # return -0.5 * np.sum(
-    #     (obs_Σ - interpolated)**2 / yerr**2 + np.log(yerr**2)
-    # )
-
-    return util.hyperparam_likelihood(obs_Σ, interpolated, yerr)
+    return likelihood(obs_Σ, interpolated, yerr)
 
 
 @_angular_units
-def likelihood_pm_tot(model, pm, *, mass_bin=None):
+def likelihood_pm_tot(model, pm, *,
+                      mass_bin=None, hyperparams=True):
     r'''Compute the log likelihood of the cluster total proper motion dispersion
 
     Computes the log likelihood component of a cluster's proper motion
@@ -512,6 +523,9 @@ def likelihood_pm_tot(model, pm, *, mass_bin=None):
         If None (default), attempts to read 'm' from `pulsars.mdata`, else
         uses largest of the main sequence bins, given by `model.nms`
 
+    hyperparams : bool, optional
+        Whether to include bayesian hyperparameters
+
     Returns
     -------
     float
@@ -531,6 +545,11 @@ def likelihood_pm_tot(model, pm, *, mass_bin=None):
         else:
             mass_bin = model.nms - 1
 
+    if hyperparams:
+        likelihood = util.hyperparam_likelihood
+    else:
+        likelihood = util.gaussian_likelihood
+
     # Get model values
     model_tot = np.sqrt(0.5 * (model.v2Tj[mass_bin] + model.v2Rj[mass_bin]))
 
@@ -544,17 +563,12 @@ def likelihood_pm_tot(model, pm, *, mass_bin=None):
     # Interpolated model at data locations
     interpolated = np.interp(pm['r'], model_r, model_tot)
 
-    # Gaussian likelihood
-    # return -0.5 * np.sum(
-    #     (pm['PM_tot'] - interpolated)**2 / obs_err**2
-    #     + np.log((obs_err / obs_err.unit)**2)
-    # )
-
-    return util.hyperparam_likelihood(pm['PM_tot'], interpolated, obs_err)
+    return likelihood(pm['PM_tot'], interpolated, obs_err)
 
 
 @_angular_units
-def likelihood_pm_ratio(model, pm, *, mass_bin=None):
+def likelihood_pm_ratio(model, pm, *,
+                        mass_bin=None, hyperparams=True):
     r'''Compute the log likelihood of the cluster proper motion dispersion ratio
 
     Computes the log likelihood component of a cluster's proper motion
@@ -574,6 +588,9 @@ def likelihood_pm_ratio(model, pm, *, mass_bin=None):
         Index of `model.mj` mass bin to use in all calculations.
         If None (default), attempts to read 'm' from `pulsars.mdata`, else
         uses largest of the main sequence bins, given by `model.nms`
+
+    hyperparams : bool, optional
+        Whether to include bayesian hyperparameters
 
     Returns
     -------
@@ -595,6 +612,11 @@ def likelihood_pm_ratio(model, pm, *, mass_bin=None):
         else:
             mass_bin = model.nms - 1
 
+    if hyperparams:
+        likelihood = util.hyperparam_likelihood
+    else:
+        likelihood = util.gaussian_likelihood
+
     # Get model values
     model_ratio = np.sqrt(model.v2Tj[mass_bin] / model.v2Rj[mass_bin])
 
@@ -607,17 +629,12 @@ def likelihood_pm_ratio(model, pm, *, mass_bin=None):
     # Interpolated model at data locations
     interpolated = np.interp(pm['r'], model_r, model_ratio.decompose())
 
-    # Gaussian likelihood
-    # return -0.5 * np.sum(
-    #     (pm['PM_ratio'] - interpolated)**2 / obs_err**2
-    #     + np.log((obs_err / obs_err.unit)**2)
-    # )
-
-    return util.hyperparam_likelihood(pm['PM_ratio'], interpolated, obs_err)
+    return likelihood(pm['PM_ratio'], interpolated, obs_err)
 
 
 @_angular_units
-def likelihood_pm_T(model, pm, *, mass_bin=None):
+def likelihood_pm_T(model, pm, *,
+                    mass_bin=None, hyperparams=True):
     '''Compute the log likelihood of the cluster tangential proper motion
 
     Computes the log likelihood component of a cluster's proper motion
@@ -638,6 +655,9 @@ def likelihood_pm_T(model, pm, *, mass_bin=None):
         If None (default), attempts to read 'm' from `pulsars.mdata`, else
         uses largest of the main sequence bins, given by `model.nms`
 
+    hyperparams : bool, optional
+        Whether to include bayesian hyperparameters
+
     Returns
     -------
     float
@@ -650,6 +670,11 @@ def likelihood_pm_T(model, pm, *, mass_bin=None):
             mass_bin = np.where(model.mj == pm.mdata['m'] * u.Msun)[0][0]
         else:
             mass_bin = model.nms - 1
+
+    if hyperparams:
+        likelihood = util.hyperparam_likelihood
+    else:
+        likelihood = util.gaussian_likelihood
 
     # Get model values
     model_T = np.sqrt(model.v2Tj[mass_bin])
@@ -664,17 +689,12 @@ def likelihood_pm_T(model, pm, *, mass_bin=None):
     # Interpolated model at data locations
     interpolated = np.interp(pm['r'], model_r, model_T)
 
-    # Gaussian likelihood
-    # return -0.5 * np.sum(
-    #     (pm['PM_T'] - interpolated)**2 / obs_err**2
-    #     + np.log((obs_err / obs_err.unit)**2)
-    # )
-
-    return util.hyperparam_likelihood(pm['PM_T'], interpolated, obs_err)
+    return likelihood(pm['PM_T'], interpolated, obs_err)
 
 
 @_angular_units
-def likelihood_pm_R(model, pm, *, mass_bin=None):
+def likelihood_pm_R(model, pm, *,
+                    mass_bin=None, hyperparams=True):
     '''Compute the log likelihood of the cluster radial proper motion
 
     Computes the log likelihood component of a cluster's proper motion
@@ -695,6 +715,9 @@ def likelihood_pm_R(model, pm, *, mass_bin=None):
         If None (default), attempts to read 'm' from `pulsars.mdata`, else
         uses largest of the main sequence bins, given by `model.nms`
 
+    hyperparams : bool, optional
+        Whether to include bayesian hyperparameters
+
     Returns
     -------
     float
@@ -707,6 +730,11 @@ def likelihood_pm_R(model, pm, *, mass_bin=None):
             mass_bin = np.where(model.mj == pm.mdata['m'] * u.Msun)[0][0]
         else:
             mass_bin = model.nms - 1
+
+    if hyperparams:
+        likelihood = util.hyperparam_likelihood
+    else:
+        likelihood = util.gaussian_likelihood
 
     # Get model values
     model_R = np.sqrt(model.v2Rj[mass_bin])
@@ -721,17 +749,12 @@ def likelihood_pm_R(model, pm, *, mass_bin=None):
     # Interpolated model at data locations
     interpolated = np.interp(pm['r'], model_r, model_R)
 
-    # Gaussian likelihood
-    # return -0.5 * np.sum(
-    #     (pm['PM_R'] - interpolated)**2 / obs_err**2
-    #     + np.log((obs_err / obs_err.unit)**2)
-    # )
-
-    return util.hyperparam_likelihood(pm['PM_R'], interpolated, obs_err)
+    return likelihood(pm['PM_R'], interpolated, obs_err)
 
 
 @_angular_units
-def likelihood_LOS(model, vlos, *, mass_bin=None):
+def likelihood_LOS(model, vlos, *,
+                   mass_bin=None, hyperparams=True):
     '''Compute the log likelihood of the cluster LOS velocity dispersion
 
     Computes the log likelihood component of a cluster's velocity
@@ -752,6 +775,9 @@ def likelihood_LOS(model, vlos, *, mass_bin=None):
         If None (default), attempts to read 'm' from `pulsars.mdata`, else
         uses largest of the main sequence bins, given by `model.nms`
 
+    hyperparams : bool, optional
+        Whether to include bayesian hyperparameters
+
     Returns
     -------
     float
@@ -764,6 +790,11 @@ def likelihood_LOS(model, vlos, *, mass_bin=None):
             mass_bin = np.where(model.mj == vlos.mdata['m'] * u.Msun)[0][0]
         else:
             mass_bin = model.nms - 1
+
+    if hyperparams:
+        likelihood = util.hyperparam_likelihood
+    else:
+        likelihood = util.gaussian_likelihood
 
     # Get model values
     model_LOS = np.sqrt(model.v2pj[mass_bin])
@@ -778,17 +809,12 @@ def likelihood_LOS(model, vlos, *, mass_bin=None):
     # Interpolated model at data locations
     interpolated = np.interp(vlos['r'], model_r, model_LOS)
 
-    # Gaussian likelihood
-    # return -0.5 * np.sum(
-    #     (vlos['σ'] - interpolated)**2 / obs_err**2
-    #     + np.log((obs_err / obs_err.unit)**2)
-    # )
-
-    return util.hyperparam_likelihood(vlos['σ'], interpolated, obs_err)
+    return likelihood(vlos['σ'], interpolated, obs_err)
 
 
 @_angular_units
-def likelihood_mass_func(model, mf, field):
+def likelihood_mass_func(model, mf, field, *,
+                         hyperparams=True):
     r'''Compute the log likelihood of the cluster's PDMF
 
     Computes the log likelihood component of a cluster's present day mass
@@ -814,6 +840,9 @@ def likelihood_mass_func(model, mf, field):
         Dictionary of `fitter.probability.mass.Field` field, as given by
         `fitter.probability.mass.initialize_fields`
 
+    hyperparams : bool, optional
+        Whether to include bayesian hyperparameters
+
     Returns
     -------
     float
@@ -836,6 +865,11 @@ def likelihood_mass_func(model, mf, field):
     # TODO same as numdens, the units are ignored cause 1/pc^2 != 1/arcmin^2
 
     M = 300
+
+    if hyperparams:
+        likelihood = util.hyperparam_likelihood
+    else:
+        likelihood = util.gaussian_likelihood
 
     # TODO could probably do the radial slicing beforehand as well, if its slow
     # if not field:
@@ -899,7 +933,7 @@ def likelihood_mass_func(model, mf, field):
         N_model[r_mask] = N_spline(mbin_mean[r_mask])
         err[r_mask] = model.F * ΔN[r_mask].value
 
-    return util.hyperparam_likelihood(N_data, N_model, err)
+    return likelihood(N_data, N_model, err)
 
 
 # --------------------------------------------------------------------------
@@ -907,7 +941,7 @@ def likelihood_mass_func(model, mf, field):
 # --------------------------------------------------------------------------
 
 
-def log_likelihood(theta, observations, L_components):
+def log_likelihood(theta, observations, L_components, hyperparams):
     '''
     Main likelihood function, generates the model(theta) passes it to the
     individual likelihood functions and collects their results.
@@ -921,7 +955,7 @@ def log_likelihood(theta, observations, L_components):
 
     # Calculate each log likelihood
     probs = np.array([
-        likelihood(model, observations[key], *args)
+        likelihood(model, observations[key], *args, hyperparams=hyperparams)
         for (key, likelihood, *args) in L_components
     ])
 
@@ -929,7 +963,7 @@ def log_likelihood(theta, observations, L_components):
 
 
 def posterior(theta, observations, fixed_initials=None, L_components=None,
-              prior_likelihood=None):
+              prior_likelihood=None, *, hyperparams=True):
     '''
     Combines the likelihood with the prior
 
@@ -938,6 +972,7 @@ def posterior(theta, observations, fixed_initials=None, L_components=None,
     fixed_initials : dict of any theta values to fix
     L_components : output from determine_components
     prior_likelihood : Priors()
+    hyperparams : use hyperparam_likelihood or gaussian_likelihood
     '''
 
     if fixed_initials is None:
@@ -961,7 +996,8 @@ def posterior(theta, observations, fixed_initials=None, L_components=None,
     if not np.isfinite(log_Pθ := prior_likelihood(theta)):
         return -np.inf, *(-np.inf * np.ones(len(L_components)))
 
-    log_L, individuals = log_likelihood(theta, observations, L_components)
+    log_L, individuals = log_likelihood(theta, observations,
+                                        L_components, hyperparams)
 
     probability = log_L + log_Pθ
 

@@ -22,7 +22,7 @@ _here = pathlib.Path()
 
 def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         mpi=False, initials=None, param_priors=None,
-        fixed_params=None, excluded_likelihoods=None,
+        fixed_params=None, excluded_likelihoods=None, hyperparams=True,
         cont_run=False, savedir=_here, backup=False, verbose=False):
     '''Main MCMC fitting pipeline
 
@@ -78,6 +78,10 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         List of component likelihoods to exclude from the posterior probability
         function. Each likelihood can be specified using either the name of
         the function (as given by __name__) or the name of the relevant dataset.
+
+    hyperparams : bool, optional
+        Whether to include bayesian hyperparameters (see Hobson et al., 2002)
+        in all likelihood functions.
 
     cont_run : bool, optional
         Not Implemented
@@ -270,6 +274,7 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
             ndim=init_pos.shape[-1],
             log_prob_fn=posterior,
             args=(observations, fixed_initials, likelihoods, prior_likelihood),
+            kwargs={'hyperparams': hyperparams},
             pool=pool,
             backend=backend,
             blobs_dtype=blobs_dtype
