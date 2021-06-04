@@ -19,7 +19,11 @@ Giersz, Heggie 2011 (MC models of 47Tuc):
     surface brightness, on the one hand, and the acceleration of 47 Tuc S, on the other hand, was the single most important constraint in
     our attempts to find a satisfactory model."
 
-Generally the orbital periods have less assumptions but actually provife similar leverage so fine to prefer the orbital
+
+This specific starting position can accomodate pulsar S without a crazy amount of BHs (~670 Msol)
+`theta = [6.427, 0.959, 7.37, 1.293, 0.884, 0.454, 0.006, 0.262, 0.493, 0.563, 2.581, 1.1, 4.438]`
+
+Generally the orbital periods have less assumptions but actually provide similar leverage so fine to prefer the orbital
 data over the spin data when one is obviously inconsistent. 
 
 
