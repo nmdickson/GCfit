@@ -22,7 +22,7 @@ __all__ = [
 # --------------------------------------------------------------------------
 
 
-def cluster_component(model, R, mass_bin, *, eps=1e-5):
+def cluster_component(model, R, mass_bin, *, eps=1e-6):
     """
     Computes probability distribution for a range of line of sight
     accelerations at projected R : P(az|R)
@@ -116,14 +116,17 @@ def cluster_component(model, R, mass_bin, *, eps=1e-5):
     # Value of the maximum acceleration, at the chosen root
     azmax = az_spl(zmax)
 
+    # TODO trying this with 3 ords smaller
     # increment density by 2 order of magn. smaller than azmax
-    # Δa = 10**(np.floor(np.log10(azmax.value)) - 2)
+    Δa = 10**(np.floor(np.log10(azmax.value)) - 3)
 
-    # define the acceleration space domain, based on amax and Δa
-    az_domain = np.linspace(0., 20e-9, 5000) << azmax.unit
+    # define the acceleration space domain, here we just use huge resolution and then
+    # cut off the domain where it's correct
+    az_domain = np.arange(0., azmax.value   *   1.1, Δa) << azmax.unit
+    # az_domain = np.linspace(0., 20e-9, 6000) << azmax.unit
 
     # TODO check what this is in the notebook
-    Δa = np.diff(az_domain)
+    # Δa = np.diff(az_domain)
 
     # TODO look at the old new_Paz to get the comments for this stuff
 
@@ -133,11 +136,6 @@ def cluster_component(model, R, mass_bin, *, eps=1e-5):
 
     outside_azt = az_domain > azt
 
-    # import matplotlib.pyplot as plt
-    # plt.figure()
-    # plt.plot(az_domain, Paz_dist)
-    # plt.xlabel("az")
-    # plt.ylabel("Paz")
 
     # Only use z2 if any outside_azt values exist (ensures z2_spl exists)
     if np.any(outside_azt):
@@ -156,10 +154,6 @@ def cluster_component(model, R, mass_bin, *, eps=1e-5):
     Paz_dist /= rhoz_spl.integral(0. << z.unit, zt).value
 
 
-    # plt.figure()
-    # plt.plot(az_domain, Paz_dist)
-    # plt.xlabel("az")
-    # plt.ylabel("Paz")
     # Ensure Paz is normalized
 
     norm = 0.0
@@ -167,10 +161,10 @@ def cluster_component(model, R, mass_bin, *, eps=1e-5):
         P_a = Paz_dist[ind - 1]
 
         # Integrate using trapezoid rule cumulatively
-        # TODO switch back to the delta-a that is an array to support non lin domains
-        norm += (0.5 * Δa[ind] * (P_a + P_b)).value
+        norm += (0.5 * Δa * (P_a + P_b)).value
 
-        # TODO I *think* the norm target here should be 1.0
+        # NOTE: Norm target here needs to be 1.0 not 0.5 in order to fully sample
+        # the distribution, this means we need to divide by 2 somewhere along the way.
         # If converges, cut domain at this index
         if abs(1.0 - norm) < eps:
             break
@@ -182,17 +176,18 @@ def cluster_component(model, R, mass_bin, *, eps=1e-5):
 
     else:
         # TODO: Bypass this for now:
-        ind = len(Paz_dist)-1
+        # ind = len(Paz_dist) - 1
         # integral didn't reach 0.5 before end of distribution
         # should not happen, means Δa needs to shrink to reach closer to asymp.
         # mssg = 'Paz distribution unable to reach normalization before azmax'
         # raise RuntimeError(mssg)
+        ind = ind
 
     # TODO Catch overflows?
     # ind = min(ind, len(Paz_dist) - 1)
 
     # Cut domain and distribution at index of normalization
-    # Let's keep the zero padding for now
+    # TODO: Let's keep the zero padding for now
     # az_domain = az_domain[:ind + 1]
     Paz_dist[ind + 1:] = 0
 
@@ -201,9 +196,9 @@ def cluster_component(model, R, mass_bin, *, eps=1e-5):
     # Mirror the distributions
     Paz_dist = np.concatenate((np.flip(Paz_dist[1:]), Paz_dist))
 
-    # Normalize the Paz dist, before this step the area should be ~2 because each 
+    # Normalize the Paz dist, before this step the area should be ~2 because each
     # side of the dist needs to be cutoff at an area of 1.0.
-    Paz_dist /=2 
+    Paz_dist /= 2
 
 
     az_domain = np.concatenate((np.flip(-az_domain[1:]), az_domain))
