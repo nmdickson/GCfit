@@ -147,13 +147,6 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
 
         PdotP_domain, PdotP_c_prob = cluster_component(model, R, mass_bin)
 
-        # import matplotlib.pyplot as plt
-        # plt.figure()
-        # plt.plot(PdotP_domain, PdotP_c_prob)
-        # plt.xlabel("PdotP domain")
-        # plt.ylabel("Prob")
-        # plt.show()
-
         Pdot_domain = (P * PdotP_domain).decompose()
 
         # linear to avoid effects around asymptote
@@ -164,10 +157,6 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         # ------------------------------------------------------------------
         # Compute gaussian measurement error distribution
         # ------------------------------------------------------------------
-
-
-        # TODO Check the convolution here, make sure we're sampling zero so we don't
-        # get a flat convolution
 
         # TODO if width << Pint width, maybe don't bother with first conv.
 
@@ -214,10 +203,6 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         #   Both balanced so as to use way too much memory unnecessarily
         #   Must be symmetric, to avoid bound effects
 
-
-        # TODO re-work this to match current (mostly) working version
-
-
         # mirrored/starting at zero so very small gaussians become the δ-func
         lin_domain = np.linspace(0., 1e-18, 5_000 // 2)
         lin_domain = np.concatenate((np.flip(-lin_domain[1:]), lin_domain))
@@ -227,21 +212,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         # ------------------------------------------------------------------
 
         conv1 = np.convolve(err_spl(lin_domain), Pdot_c_spl(lin_domain), 'same')
-
-        # plt.figure()
-        # plt.plot(lin_domain, conv1)
-        # plt.xlabel("lin domain")
-        # plt.ylabel("error conv")
-        # plt.show()
-
         conv2 = np.convolve(conv1, Pdot_int_spl(lin_domain), 'same')
-
-        # plt.figure()
-        # plt.plot(lin_domain, conv2)
-        # plt.xlabel("lin domain")
-        # plt.ylabel("int conv")
-        # plt.axvline(Pdot_meas, color="orange")
-        # plt.show()
 
         # Normalize
         conv2 /= interp.UnivariateSpline(
@@ -272,10 +243,6 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         )
 
         probs[i] = prob_dist((Pdot_meas / P).decompose())
-
-        # TODO: figure out a cleaner way of doing this (for now this is fine):
-        if pulsars["id"][i] == "b'J0024-7204S'":
-            probs[i] = 1
 
     # ----------------------------------------------------------------------
     # Multiply all the probabilities and return the total log probability.

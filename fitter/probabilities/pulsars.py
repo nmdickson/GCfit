@@ -116,17 +116,13 @@ def cluster_component(model, R, mass_bin, *, eps=1e-6):
     # Value of the maximum acceleration, at the chosen root
     azmax = az_spl(zmax)
 
-    # TODO trying this with 3 ords smaller
+    # TODO trying this with 3 ords smaller:
+    # overflow still happens, probably not a resolution problem
     # increment density by 2 order of magn. smaller than azmax
     Δa = 10**(np.floor(np.log10(azmax.value)) - 3)
 
-    # define the acceleration space domain, here we just use huge resolution and then
-    # cut off the domain where it's correct
-    az_domain = np.arange(0., azmax.value   *   1.1, Δa) << azmax.unit
-    # az_domain = np.linspace(0., 20e-9, 6000) << azmax.unit
-
-    # TODO check what this is in the notebook
-    # Δa = np.diff(az_domain)
+    # define the acceleration space domain based on azmax
+    az_domain = np.arange(0., azmax.value * 1.1, Δa) << azmax.unit
 
     # TODO look at the old new_Paz to get the comments for this stuff
 
@@ -146,10 +142,12 @@ def cluster_component(model, R, mass_bin, *, eps=1e-6):
         # print(az_der(z2[within_bounds]))
         # TODO: Here some of these are zero which makes a bunch of NANs
         # pretty sure anywhere we have NANs we can just say probability of 0
+        # check if this is needed, was only added for plotting
         Paz_dist[within_bounds] += (rhoz_spl(z2[within_bounds])
                                     / abs(az_der(z2[within_bounds]))).value
 
     # TODO: Let's see what this does
+    # check if this is needed, was only added for plotting
     Paz_dist = np.nan_to_num(Paz_dist)
     Paz_dist /= rhoz_spl.integral(0. << z.unit, zt).value
 
@@ -175,7 +173,9 @@ def cluster_component(model, R, mass_bin, *, eps=1e-6):
             break
 
     else:
-        # TODO: Bypass this for now:
+        # TODO: No clue why this overflows, seems like it only happens under emcee?
+        # check if it's still happening with just 1 thread
+
         # ind = len(Paz_dist) - 1
         # integral didn't reach 0.5 before end of distribution
         # should not happen, means Δa needs to shrink to reach closer to asymp.
@@ -183,12 +183,8 @@ def cluster_component(model, R, mass_bin, *, eps=1e-6):
         # raise RuntimeError(mssg)
         ind = ind
 
-    # TODO Catch overflows?
-    # ind = min(ind, len(Paz_dist) - 1)
 
-    # Cut domain and distribution at index of normalization
-    # TODO: Let's keep the zero padding for now
-    # az_domain = az_domain[:ind + 1]
+    # Set the rest to zero
     Paz_dist[ind + 1:] = 0
 
     # TODO not sure if should pad with some zeros. not needed but makes it clear
