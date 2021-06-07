@@ -1,4 +1,4 @@
-from ..util import QuantitySpline, norm_sample
+from ..util import QuantitySpline
 
 import scipy.stats
 import numpy as np
@@ -22,7 +22,7 @@ __all__ = [
 # --------------------------------------------------------------------------
 
 
-def cluster_component(model, R, mass_bin, *, eps=1e-6):
+def cluster_component(model, R, mass_bin, *, eps=1e-4):
     """
     Computes probability distribution for a range of line of sight
     accelerations at projected R : P(az|R)
@@ -121,7 +121,7 @@ def cluster_component(model, R, mass_bin, *, eps=1e-6):
     # increment density by 2 order of magn. smaller than azmax
     Δa = 10**(np.floor(np.log10(azmax.value)) - 3)
 
-    # define the acceleration space domain based on azmax
+    # define the acceleration space domain, based on amax and Δa
     az_domain = np.arange(0., azmax.value * 1.1, Δa) << azmax.unit
 
     # TODO look at the old new_Paz to get the comments for this stuff
@@ -132,28 +132,25 @@ def cluster_component(model, R, mass_bin, *, eps=1e-6):
 
     outside_azt = az_domain > azt
 
-
     # Only use z2 if any outside_azt values exist (ensures z2_spl exists)
     if np.any(outside_azt):
 
         z2 = z2_spl(az_domain)
 
         within_bounds = outside_azt & (z2 < zt)
-        # print(az_der(z2[within_bounds]))
-        # TODO: Here some of these are zero which makes a bunch of NANs
+        # Here some of these are zero which makes a bunch of NANs
         # pretty sure anywhere we have NANs we can just say probability of 0
-        # check if this is needed, was only added for plotting
+        # TODO: check if this is needed, was only added for plotting
         Paz_dist[within_bounds] += (rhoz_spl(z2[within_bounds])
                                     / abs(az_der(z2[within_bounds]))).value
 
-    # TODO: Let's see what this does
-    # check if this is needed, was only added for plotting
+    # Let's see what this does
+    # TODO: check if this is needed, was only added for plotting
     Paz_dist = np.nan_to_num(Paz_dist)
     Paz_dist /= rhoz_spl.integral(0. << z.unit, zt).value
 
 
     # Ensure Paz is normalized
-
     norm = 0.0
     for ind, P_b in enumerate(Paz_dist[1:], 1):
         P_a = Paz_dist[ind - 1]
@@ -176,11 +173,11 @@ def cluster_component(model, R, mass_bin, *, eps=1e-6):
         # TODO: No clue why this overflows, seems like it only happens under emcee?
         # check if it's still happening with just 1 thread
 
-        # ind = len(Paz_dist) - 1
         # integral didn't reach 0.5 before end of distribution
         # should not happen, means Δa needs to shrink to reach closer to asymp.
         # mssg = 'Paz distribution unable to reach normalization before azmax'
         # raise RuntimeError(mssg)
+        # TODO: for now ignore it?
         ind = ind
 
 
