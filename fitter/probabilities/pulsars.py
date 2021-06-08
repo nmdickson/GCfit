@@ -22,7 +22,7 @@ __all__ = [
 # --------------------------------------------------------------------------
 
 
-def cluster_component(model, R, mass_bin, *, eps=1e-4):
+def cluster_component(model, R, mass_bin, *, eps=1e-2):
     """
     Computes probability distribution for a range of line of sight
     accelerations at projected R : P(az|R)
@@ -122,7 +122,10 @@ def cluster_component(model, R, mass_bin, *, eps=1e-4):
     Δa = 10**(np.floor(np.log10(azmax.value)) - 3)
 
     # define the acceleration space domain, based on amax and Δa
-    az_domain = np.arange(0., azmax.value * 1.1, Δa) << azmax.unit
+    # az_domain = np.arange(0., azmax.value * 1.1, Δa) << azmax.unit
+    az_domain = np.linspace(0.0, azmax.value, 2*nr) << azmax.unit
+    
+    # print("len of az_domain: ", len(az_domain))
 
     # TODO look at the old new_Paz to get the comments for this stuff
 
@@ -175,8 +178,16 @@ def cluster_component(model, R, mass_bin, *, eps=1e-4):
 
         # integral didn't reach 0.5 before end of distribution
         # should not happen, means Δa needs to shrink to reach closer to asymp.
-        # mssg = 'Paz distribution unable to reach normalization before azmax'
-        # raise RuntimeError(mssg)
+        mssg = 'Paz distribution unable to reach normalization before azmax'
+        import matplotlib.pyplot as plt
+        area = scipy.integrate.simpson(x=az_domain, y=Paz_dist)
+        plt.plot(az_domain, Paz_dist, label=f"Area: {area}")
+        plt.legend()
+        plt.xlabel("az domain")
+        plt.yscale("symlog")
+        plt.ylabel("Paz")
+        plt.show()
+        raise RuntimeError(mssg)
         # TODO: for now ignore it?
         ind = ind
 

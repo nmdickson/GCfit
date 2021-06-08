@@ -211,6 +211,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         # ------------------------------------------------------------------
 
         conv1 = np.convolve(err_spl(lin_domain), Pdot_c_spl(lin_domain), 'same')
+
         conv2 = np.convolve(conv1, Pdot_int_spl(lin_domain), 'same')
 
         # Normalize
