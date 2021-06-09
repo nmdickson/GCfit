@@ -26,9 +26,8 @@ def RV_transform(domain, f_X, h, h_prime):
 # TODO: I think this only needed for the DM based calculation which is exclusive
 # to 47 Tuc where we have the internal gas models (maybe Terzan 5 in future)
 
-# TODO: this is broken in the same way the single-side trapezoid is, it sometimes
-# overflows the bounds of the arrays. seems to only happen under emcee so we should
-# try testing with just one thread and see
+# TODO: this was broken in the same way the single-side trapezoid was, make sure it's
+# ok with the changed sampling
 
 def norm_sample(x_array, y_array, target=1.0):
     """
@@ -50,7 +49,7 @@ def norm_sample(x_array, y_array, target=1.0):
     x_array = np.array(x_array)
 
     # tolerance
-    eps = 1e-8
+    eps = 1e-2
 
     # mid point of array
     mid = len(y_array) // 2

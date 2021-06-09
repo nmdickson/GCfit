@@ -1,3 +1,4 @@
+from astropy.units.equivalencies import doppler_optical
 from ..util import QuantitySpline
 
 import scipy.stats
@@ -119,12 +120,14 @@ def cluster_component(model, R, mass_bin, *, eps=1e-2):
     # TODO trying this with 3 ords smaller:
     # overflow still happens, probably not a resolution problem
     # increment density by 2 order of magn. smaller than azmax
-    Δa = 10**(np.floor(np.log10(azmax.value)) - 3)
+    # Δa = 10**(np.floor(np.log10(azmax.value)) - 3)
 
     # define the acceleration space domain, based on amax and Δa
-    # az_domain = np.arange(0., azmax.value * 1.1, Δa) << azmax.unit
-    az_domain = np.linspace(0.0, azmax.value, 2*nr) << azmax.unit
-    
+    # az_domain = np.arange(0.0, azmax.value + Δa, Δa) << azmax.unit
+
+    az_domain = np.linspace(0.0, azmax.value, 2 * nr) << azmax.unit
+    Δa = np.diff(az_domain)[1]
+
     # print("len of az_domain: ", len(az_domain))
 
     # TODO look at the old new_Paz to get the comments for this stuff
