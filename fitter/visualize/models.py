@@ -124,15 +124,20 @@ class ModelVisualizer(_Visualizer):
 
     def _add_hyperparam(self, ax, xmodel, ymodel, xdata, ydata, yerr):
 
-        fig = ax.figure
-
         yspline = util.QuantitySpline(xmodel, ymodel)
 
-        aeff = util.hyperparam_effective(ydata, yspline(xdata), yerr)
+        if hasattr(ax, 'aeff_text'):
+            aeff_str = ax.aeff_text.get_text()
+            aeff = float(aeff_str[aeff_str.rfind('$') + 1:])
 
-        # TODO figure out best place to place this at
-        # fig.text(0.1, 0.3, fr'$\alpha_{{eff}}=${aeff:.4f}')
-        ax.set_title(fr'{ax.get_title()} ($\alpha_{{eff}}=${aeff:.4f})')
+        else:
+            # TODO figure out best place to place this at
+            ax.aeff_text = ax.text(0.1, 0.3, '')
+            aeff = 0.
+
+        aeff += util.hyperparam_effective(ydata, yspline(xdata), yerr)
+
+        ax.aeff_text.set_text(fr'$\alpha_{{eff}}=${aeff:.4e}')
 
     # -----------------------------------------------------------------------
     # Plotting functions
@@ -723,6 +728,11 @@ class ModelVisualizer(_Visualizer):
 
                 scale -= 1
 
+                if hyperparam:
+                    self._add_hyperparam(ax, self.model.mj[:self.model.nms],
+                                         binned_N_model, mbin_mean[r_mask],
+                                         N_data, yerr=err)
+
         ax.set_yscale("log")
         ax.set_xscale("log")
 
@@ -906,7 +916,7 @@ class ModelVisualizer(_Visualizer):
         axbig = fig.add_subplot(gs[2:, 0])
 
         self.plot_mass_func(fig=fig, ax=axbig, show_obs=show_obs,
-                            residuals=False, hyperparam=False)
+                            residuals=False, hyperparam=True)
 
         for ax in axes.flatten():
             ax.set_xlabel('')
