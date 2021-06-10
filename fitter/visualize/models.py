@@ -374,7 +374,7 @@ class ModelVisualizer(_Visualizer):
         ax.set_xscale("log")
 
         model_r = self.model.r.to(u.arcsec)
-        model_LOS = np.sqrt(self.model.v2pj[mass_bin]).to('mas/yr')
+        model_LOS = np.sqrt(self.model.v2pj[mass_bin])
 
         if show_obs:
             try:
@@ -383,7 +383,7 @@ class ModelVisualizer(_Visualizer):
                 xerr = self.get_err(LOS, 'r')
                 yerr = self.get_err(LOS, 'σ')
 
-                ax.errorbar(LOS['r'], LOS['σ'].to('mas/yr'), fmt='k.',
+                ax.errorbar(LOS['r'], LOS['σ'], fmt='k.',
                             xerr=xerr, yerr=yerr)
 
                 if hyperparam:
