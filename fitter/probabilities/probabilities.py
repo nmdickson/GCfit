@@ -199,7 +199,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         # TODO both 5000 and 1e-18 need to be computed dynamically
         #   5000 to be enough steps to sample the gaussian and int peaks
         #   1e-18 to be far enough for the int distribution to go to zero
-        #   Both balanced so as to use way too much memory unnecessarily
+        #   Both balanced so as to use way too much memory uneccessarily
         #   Must be symmetric, to avoid bound effects
 
         # mirrored/starting at zero so very small gaussians become the δ-func

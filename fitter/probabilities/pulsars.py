@@ -117,14 +117,14 @@ def cluster_component(model, R, mass_bin, *, eps=1e-2):
     # Value of the maximum acceleration, at the chosen root
     azmax = az_spl(zmax)
 
-    # TODO trying this with 3 ords smaller:
-    # overflow still happens, probably not a resolution problem
+    # Old version here for future reference 
     # increment density by 2 order of magn. smaller than azmax
     # Δa = 10**(np.floor(np.log10(azmax.value)) - 2)
 
     # define the acceleration space domain, based on amax and Δa
     # az_domain = np.arange(0.0, azmax.value + Δa, Δa) << azmax.unit
 
+    # Define the acceleration domain, using 2*nr points
     az_domain = np.linspace(0.0, azmax.value, 2 * nr) << azmax.unit
     Δa = np.diff(az_domain)[1]
 
@@ -173,8 +173,9 @@ def cluster_component(model, R, mass_bin, *, eps=1e-2):
         # This is the case where our probability distribution doesn't integrate
         # to one, just don't cut anything off, log the normalization and
         # manually normalize it.
-        logging.warning(f"Proability distribution failed to integrate to unity,"
-                        "area: {norm:.6f}")
+        logging.warning("Probability distribution failed to integrate to 1.0,"
+                        f" area: {norm:.6f}")
+
 
         # Manual normalization
         Paz_dist /= norm
