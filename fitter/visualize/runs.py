@@ -4,6 +4,7 @@ import sys
 
 import h5py
 import numpy as np
+import matplotlib.colors as mpl_clr
 
 
 __all__ = ['RunVisualizer']
@@ -138,6 +139,10 @@ class RunVisualizer(_Visualizer):
 
         return labels, chain
 
+    # ----------------------------------------------------------------------
+    # Model Visualizers
+    # ----------------------------------------------------------------------
+
     def get_model(self, iterations=None, walkers=None, method='median'):
         '''
         if iterations, walkers is None, will use self.iterations, self.walkers
@@ -228,10 +233,15 @@ class RunVisualizer(_Visualizer):
         return corner.corner(chain, labels=labels, fig=fig,
                              range=ranges, plot_datapoints=False, **corner_kw)
 
-    def plot_params(self, params, fig=None, *, colors=None, math_labels=None):
+    def plot_params(self, params, quants=None, fig=None, *,
+                    colors=None, math_labels=None, bins=None):
         # TODO handle colors in more plots, and handle iterator based colors
 
         fig, ax = self._setup_multi_artist(fig, shape=(1, len(params)))
+
+        # this shouldn't be necessary
+        if len(params) == 1:
+            ax = [ax]
 
         labels, chain = self._get_chains()
 
@@ -243,14 +253,17 @@ class RunVisualizer(_Visualizer):
         for ind, key in enumerate(params):
             vals = chain[..., labels.index(key)]
 
-            ax[ind].hist(vals, histtype='stepfilled', alpha=0.33,
-                         color=colors[ind])  # , ec=colors[ind], lw=1.2)
+            edgecolor = mpl_clr.to_rgb(colors[ind])
+            facecolor = edgecolor + (0.33, )
 
-            # TODO this is to make a clearer hist border, but should switch to
-            #   explicitly creating a color with alpha for facecolor only
-            ax[ind].hist(vals, histtype='step', color=colors[ind])
+            ax[ind].hist(vals, histtype='stepfilled', density=True,
+                         bins=bins, ec=edgecolor, fc=facecolor, lw=2)
 
-            # TODO optionally plot a line for the median
+            if quants is not None:
+                for q in np.percentile(vals, quants):
+                    ax[ind].axvline(q, color=colors[ind], ls='--')
+                # TODO annotate the quants on the top axis (c. mpl_ticker)
+                # ax.set_xticks(np.r_[ax[ind].get_xticks()), q])
 
             ax[ind].set_xlabel(key if math_labels is None else math_labels[ind])
 
@@ -326,6 +339,8 @@ class RunVisualizer(_Visualizer):
 
             if violin:
                 axes[i].violinplot(chain[..., i])
+
+            axes[i].set_xlabel(labels[i])
 
             axes[i].tick_params(axis='y', direction='in', right=True)
             # pad=-18, labelrotation=90??
