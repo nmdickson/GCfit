@@ -287,7 +287,7 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
         # TODO implement cont_run
         # Set initial state to None if resuming run (`cont_run`)
-        for _ in sampler.sample(init_pos, iterations=Niters, progress=True):
+        for _ in sampler.sample(init_pos, iterations=Niters):
 
             # --------------------------------------------------------------
             # Store some iteration metadata

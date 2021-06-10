@@ -8,6 +8,7 @@ from astropy.constants import c
 
 import pathlib
 from importlib import resources
+import logging
 
 
 __all__ = [
@@ -120,7 +121,7 @@ def cluster_component(model, R, mass_bin, *, eps=1e-2):
     # TODO trying this with 3 ords smaller:
     # overflow still happens, probably not a resolution problem
     # increment density by 2 order of magn. smaller than azmax
-    # Δa = 10**(np.floor(np.log10(azmax.value)) - 3)
+    # Δa = 10**(np.floor(np.log10(azmax.value)) - 2)
 
     # define the acceleration space domain, based on amax and Δa
     # az_domain = np.arange(0.0, azmax.value + Δa, Δa) << azmax.unit
@@ -128,7 +129,6 @@ def cluster_component(model, R, mass_bin, *, eps=1e-2):
     az_domain = np.linspace(0.0, azmax.value, 2 * nr) << azmax.unit
     Δa = np.diff(az_domain)[1]
 
-    # print("len of az_domain: ", len(az_domain))
 
     # TODO look at the old new_Paz to get the comments for this stuff
 
@@ -144,15 +144,10 @@ def cluster_component(model, R, mass_bin, *, eps=1e-2):
         z2 = z2_spl(az_domain)
 
         within_bounds = outside_azt & (z2 < zt)
-        # Here some of these are zero which makes a bunch of NANs
-        # pretty sure anywhere we have NANs we can just say probability of 0
-        # TODO: check if this is needed, was only added for plotting
+
         Paz_dist[within_bounds] += (rhoz_spl(z2[within_bounds])
                                     / abs(az_der(z2[within_bounds]))).value
 
-    # Let's see what this does
-    # TODO: check if this is needed, was only added for plotting
-    Paz_dist = np.nan_to_num(Paz_dist)
     Paz_dist /= rhoz_spl.integral(0. << z.unit, zt).value
 
 
@@ -176,24 +171,13 @@ def cluster_component(model, R, mass_bin, *, eps=1e-2):
             break
 
     else:
-        # TODO: No clue why this overflows, seems like it only happens under emcee?
-        # check if it's still happening with just 1 thread
-
-        # integral didn't reach 0.5 before end of distribution
-        # should not happen, means Δa needs to shrink to reach closer to asymp.
-        mssg = 'Paz distribution unable to reach normalization before azmax'
-        import matplotlib.pyplot as plt
-        area = scipy.integrate.simpson(x=az_domain, y=Paz_dist)
-        plt.plot(az_domain, Paz_dist, label=f"Area: {area}")
-        plt.legend()
-        plt.xlabel("az domain")
-        plt.yscale("symlog")
-        plt.ylabel("Paz")
-        plt.show()
-        raise RuntimeError(mssg)
-        # TODO: for now ignore it?
-        ind = ind
-
+        # This is the case where our probability distribution doesn't integrate
+        # to one, just don't cut anything off, log the normalization and 
+        # manually normalize it. 
+        mssg = f"Proability distribution failed to integrate to unity, area: {norm:.6f}"
+        logging.warning(mssg)
+        # Manual normalization
+        Paz_dist /= norm
 
     # Set the rest to zero
     Paz_dist[ind + 1:] = 0
