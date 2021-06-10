@@ -183,8 +183,6 @@ def cluster_component(model, R, mass_bin, *, eps=1e-2):
     # Set the rest to zero
     Paz_dist[ind + 1:] = 0
 
-    # TODO not sure if should pad with some zeros. not needed but makes it clear
-    #       atleast 1 zero, at azmax? or maybe just ind+1
     # Mirror the distributions
     Paz_dist = np.concatenate((np.flip(Paz_dist[1:]), Paz_dist))
 
