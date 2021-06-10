@@ -20,7 +20,7 @@ class RunVisualizer(_Visualizer):
     def __str__(self):
         return f'{self.file.filename} - Run Results'
 
-    def __init__(self, file, observations, group='mcmc'):
+    def __init__(self, file, observations, group='mcmc', name=None):
 
         # TODO this needs to be closed properly, probably
         if isinstance(file, h5py.File):
@@ -29,6 +29,9 @@ class RunVisualizer(_Visualizer):
             self.file = h5py.File(file, 'r')
 
         self._gname = group
+
+        if name is not None:
+            self.name = name
 
         self.obs = observations
 
@@ -75,6 +78,7 @@ class RunVisualizer(_Visualizer):
 
     @iterations.setter
     def iterations(self, value):
+        # TODO if using an `iterations` keyword, these checks aren't done
         if not isinstance(value, slice):
             mssg = f"`iteration` must be a slice, not {type(value)}"
             raise TypeError(mssg)
@@ -313,7 +317,6 @@ class RunVisualizer(_Visualizer):
 
         # gridspec to hspace, wspace = 0
         # subplot spacing to use more of grid
-        # replace bottom ticks with labels
         # Maybe set ylims ased on prior bounds? if they're not too large
 
         for i in range(chain.shape[-1]):
