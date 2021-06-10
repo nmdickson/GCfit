@@ -56,12 +56,16 @@ class RunVisualizer(_Visualizer):
 
     @walkers.setter
     def walkers(self, value):
-        if not isinstance(value, slice) and value not in self._REDUC_METHODS:
-            mssg = (f"`walkers` must be slice or one of "
-                    f"{set(self._REDUC_METHODS)}, not {type(value)}")
-            raise TypeError(mssg)
+        # if not isinstance(value, slice) and value not in self._REDUC_METHODS:
+        #     mssg = (f"`walkers` must be slice or one of "
+        #             f"{set(self._REDUC_METHODS)}, not {type(value)}")
+        #     raise TypeError(mssg)
 
-        self._walkers = value
+        if value is None:
+            self._walkers = slice(None)
+
+        else:
+            self._walkers = value
 
     # ----------------------------------------------------------------------
     # Dimensions - Iterations
@@ -118,13 +122,13 @@ class RunVisualizer(_Visualizer):
 
         chain = self.file[self._gname]['chain'][iterations]
 
-        if isinstance(walkers, slice):
-            chain = chain[:, walkers]
-        else:
+        if isinstance(walkers, str):
             reduc = self._REDUC_METHODS[walkers]
             chain = reduc(chain, axis=1)
+        else:
+            chain = chain[:, walkers]
 
-        # Hanlde fixed parameters
+        # Handle fixed parameters
         if self.has_meta:
 
             fixed = sorted(
@@ -191,11 +195,6 @@ class RunVisualizer(_Visualizer):
 
         probs = self.file[self._gname]['blobs'][self.iterations]
 
-        if isinstance(self.walkers, slice):
-            reduc = None
-        else:
-            reduc = self._REDUC_METHODS[self.walkers]
-
         fig, axes = self._setup_multi_artist(fig, (len(probs.dtype), ),
                                              sharex=True)
 
@@ -205,8 +204,11 @@ class RunVisualizer(_Visualizer):
 
             indiv = probs[:][label]
 
-            if reduc:
+            if isinstance(self.walkers, str):
+                reduc = self._REDUC_METHODS[self.walkers]
                 indiv = reduc(indiv, axis=1)
+            else:
+                indiv = indiv[:, self.walkers]
 
             ax.plot(self._iteration_domain, indiv)
 
@@ -280,11 +282,11 @@ class RunVisualizer(_Visualizer):
 
         acc = stat_grp['acceptance_rate'][self.iterations]
 
-        if isinstance(self.walkers, slice):
-            acc = acc[:, self.walkers]
-        else:
+        if isinstance(self.walkers, str):
             reduc = self._REDUC_METHODS[self.walkers]
             acc = reduc(acc, axis=1)
+        else:
+            acc = acc[:, self.walkers]
 
         ax.plot(self._iteration_domain, acc)
 
@@ -299,11 +301,11 @@ class RunVisualizer(_Visualizer):
 
         prob = self.file[self._gname]['log_prob'][self.iterations]
 
-        if isinstance(self.walkers, slice):
-            prob = prob[:, self.walkers]
-        else:
+        if isinstance(self.walkers, str):
             reduc = self._REDUC_METHODS[self.walkers]
             prob = reduc(prob, axis=1)
+        else:
+            prob = prob[:, self.walkers]
 
         ax.plot(self._iteration_domain, prob)
 
