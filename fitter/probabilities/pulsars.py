@@ -1,4 +1,3 @@
-from astropy.units.equivalencies import doppler_optical
 from ..util import QuantitySpline
 
 import scipy.stats
@@ -172,10 +171,11 @@ def cluster_component(model, R, mass_bin, *, eps=1e-2):
 
     else:
         # This is the case where our probability distribution doesn't integrate
-        # to one, just don't cut anything off, log the normalization and 
-        # manually normalize it. 
-        mssg = f"Proability distribution failed to integrate to unity, area: {norm:.6f}"
-        logging.warning(mssg)
+        # to one, just don't cut anything off, log the normalization and
+        # manually normalize it.
+        logging.warning(f"Proability distribution failed to integrate to unity,"
+                        "area: {norm:.6f}")
+
         # Manual normalization
         Paz_dist /= norm
 
