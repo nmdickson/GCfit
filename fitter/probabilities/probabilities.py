@@ -141,6 +141,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
 
         P = pulsars['P'][i].to('s')
 
+        # TODO the actual variable shouldn't be named "meas"; that parts obvious
         Pdot_meas = pulsars['Pdot_meas'][i]
         ΔPdot_meas = np.abs(pulsars['ΔPdot_meas'][i])
 
