@@ -554,6 +554,7 @@ def likelihood_pm_tot(model, pm, *,
     # Get model values
     model_tot = np.sqrt(0.5 * (model.v2Tj[mass_bin] + model.v2Rj[mass_bin]))
 
+    # TODO some datasets have Δr, should probably account for those as well
     # Convert model units
     model_r = model.r.to(pm['r'].unit)
     model_tot = model_tot.to(pm['PM_tot'].unit)
