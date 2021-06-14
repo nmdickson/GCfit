@@ -14,3 +14,4 @@ D'Amico et al. (2001)           2001ApJ...548L.171D
 Ferraro et al. (2001)           2001ApJ...561L..93F
 Lynch et al. (2012)             2012ApJ...745..109L
 Possenti et al. (2003)          2003ApJ...599..475P  <- replace abbate in M62 pulsars with this and add damico
+McNamara et al. (2012)          2012ApJ...745..175M
