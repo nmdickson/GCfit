@@ -240,25 +240,13 @@ class Observations:
     '''Collection of Datasets, read from a corresponding hdf5 file (READONLY)'''
     # TODO interesting errors occur when trying to iterate over Observ
 
+    _valid_likelihoods = None
+
     def __repr__(self):
         return f'Observations(cluster="{self.cluster}")'
 
     def __str__(self):
         return f'{self.cluster} Observations'
-
-    @property
-    def datasets(self):
-        return self._dict_datasets
-
-    _valid_likelihoods = None
-
-    @property
-    def valid_likelihoods(self):
-
-        if self._valid_likelihoods is None:
-            self._valid_likelihoods = self._determine_likelihoods()
-
-        return self._valid_likelihoods
 
     def __getitem__(self, key):
 
@@ -287,6 +275,18 @@ class Observations:
                 mssg = f"Dataset '{key}' does not exist in {self}"
                 raise KeyError(mssg) from err
 
+    @property
+    def datasets(self):
+        return self._dict_datasets
+
+    @property
+    def valid_likelihoods(self):
+
+        if self._valid_likelihoods is None:
+            self._valid_likelihoods = self._determine_likelihoods()
+
+        return self._valid_likelihoods
+
     def _find_groups(self, root_group, exclude_initials=True):
         '''lists pathnames to all groups under root_group, excluding initials'''
 
@@ -311,6 +311,34 @@ class Observations:
         root_group.visititems(_walker)
 
         return groups
+
+    def get_sources(self, fmt='bibtex'):
+        '''return a dict of all used sources
+
+        fmt : 'bibtex', 'bibcode', 'citep'
+        '''
+
+        res = {}
+
+        for key, *_ in self.valid_likelihoods:
+
+            try:
+                bibcode = self[key].mdata['source'].split(';')
+            except KeyError:
+                res[key] = None
+                continue
+
+            if fmt == 'bibcode':
+                res[key] = bibcode
+
+            elif fmt == 'bibtex' or fmt is None:
+                res[key] = util.bibcode2bibtex(bibcode)
+
+            elif fmt == 'citep':
+                # TODO allow some formats which we parse the bibtex into
+                raise NotImplementedError
+
+        return res
 
     def __init__(self, cluster):
 
@@ -460,6 +488,7 @@ class Observations:
                 comps.append((key, func, field))
 
         return comps
+
 
 # --------------------------------------------------------------------------
 # Cluster Modelled data

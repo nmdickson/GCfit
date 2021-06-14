@@ -3,7 +3,8 @@ import pathlib
 from importlib import resources
 
 
-__all__ = ['cluster_list', 'hdf_view', 'get_std_cluster_name', 'get_bibtex']
+__all__ = ['cluster_list', 'hdf_view', 'get_std_cluster_name',
+           'bibcode2bibtex', 'doi2bibtex']
 
 
 def cluster_list():
