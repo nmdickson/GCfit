@@ -13,5 +13,5 @@ D'Amico et al. (2001)           10.1086/324562
 D'Amico et al. (2001)           10.1086/319096
 Ferraro et al. (2001)           10.1086/324563
 Lynch et al. (2012)             10.1088/0004-637X/745/2/109
-Possenti et al. (2003)          10.1086/379190  <- replace abbate in M62 pulsars with this and add damico
+Possenti et al. (2003)          10.1086/379190
 McNamara et al. (2012)          10.1088/0004-637X/745/2/175

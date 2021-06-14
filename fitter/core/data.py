@@ -397,7 +397,7 @@ class Observations:
 
                 metadata = self.mdata['μ'], (self.mdata['b'], self.mdata['l'])
 
-                if 'Pdot_meas' in self[key]:
+                if 'Pdot' in self[key]:
 
                     func = probabilities.likelihood_pulsar_spin
 
@@ -405,7 +405,7 @@ class Observations:
 
                     comps.append((key, func, kde, *metadata))
 
-                if 'Pbdot_meas' in self[key]:
+                if 'Pbdot' in self[key]:
 
                     func = probabilities.likelihood_pulsar_orbital
 
