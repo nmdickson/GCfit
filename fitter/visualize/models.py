@@ -13,7 +13,7 @@ import matplotlib.colors as mpl_clr
 import astropy.visualization as astroviz
 
 
-__all__ = ['ModelVisualizer', 'CIModelVisualizer']
+__all__ = ['ModelVisualizer', 'CIModelVisualizer', 'ObservationsVisualizer']
 
 # TODO I thinkk this is somewhat out of date (20)
 # TODO fix all spacings
@@ -21,9 +21,13 @@ __all__ = ['ModelVisualizer', 'CIModelVisualizer']
 # TODO fix all the plots to utilize all data (sugroups) for that likelihood (10)
 
 
-class _Visualizer:
+class _ClusterVisualizer:
 
     _REDUC_METHODS = {'median': np.median, 'mean': np.mean}
+
+    # -----------------------------------------------------------------------
+    # Artist setups
+    # -----------------------------------------------------------------------
 
     def _setup_artist(self, fig, ax, *, use_name=True):
         # TODO should maybe attempt to use gcf, gca first
@@ -77,11 +81,9 @@ class _Visualizer:
 
         return fig, axarr
 
-
-class ModelVisualizer(_Visualizer):
-    '''
-    class for making, showing, saving all the plots related to a model
-    '''
+    # -----------------------------------------------------------------------
+    # Unit support
+    # -----------------------------------------------------------------------
 
     def _support_units(method):
         import functools
@@ -89,15 +91,21 @@ class ModelVisualizer(_Visualizer):
         @functools.wraps(method)
         def _unit_decorator(self, *args, **kwargs):
 
-            eqvs = [util.angular_width(self.model.d)[0],
-                    util.angular_speed(self.model.d)[0]]
+            # convert based on median distance parameter
+            eqvs = [util.angular_width(self.d)[0],
+                    util.angular_speed(self.d)[0]]
 
             with astroviz.quantity_support(), u.set_enabled_equivalencies(eqvs):
                 return method(self, *args, **kwargs)
 
         return _unit_decorator
 
-    def get_err(self, dataset, key):
+    # -----------------------------------------------------------------------
+    # Plotting functionality
+    # -----------------------------------------------------------------------
+
+    def _get_err(self, dataset, key):
+        '''gather the error variables corresponding to `key` from `dataset`'''
         try:
             return dataset[f'Δ{key}']
         except KeyError:
@@ -105,6 +113,63 @@ class ModelVisualizer(_Visualizer):
                 return (dataset[f'Δ{key},down'], dataset[f'Δ{key},up'])
             except KeyError:
                 return None
+
+    def _add_residuals(self, ax, xmodel, ymodel, xdata, ydata,
+                       xerr=None, yerr=None):
+        from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+        yspline = util.QuantitySpline(xmodel, ymodel)
+
+        res = yspline(xdata) - ydata
+
+        divider = make_axes_locatable(ax)
+        res_ax = divider.append_axes('bottom', size="15%", pad=0, sharex=ax)
+
+        res_ax.errorbar(xdata, res, fmt='k.', xerr=xerr, yerr=yerr)
+
+        res_ax.grid()
+        res_ax.axhline(0., c='k')
+
+        res_ax.set_xscale(ax.get_xscale())
+
+    def _plot(self, ax, percs, intervals=2, r_unit='pc', *,
+              CI_kwargs=None, **kwargs):
+
+        CI_kwargs = dict() if CI_kwargs is None else CI_kwargs
+
+        if not (percs.shape[0] % 2):
+            mssg = 'Invalid `percs`, must have odd-numbered zeroth axis shape'
+            raise ValueError(mssg)
+
+        midpoint = percs.shape[0] // 2
+
+        if intervals > midpoint:
+            mssg = f'{intervals}σ is outside stored range of {midpoint}σ'
+            raise ValueError(mssg)
+
+        r_domain = self.r.to(r_unit)
+
+        median_ = percs[midpoint]
+
+        med_plot, = ax.plot(r_domain, median_, **kwargs)
+
+        CI_kwargs.setdefault('color', med_plot.get_color())
+
+        alpha = 0.8 / (intervals + 1)
+        for sigma in range(1, intervals + 1):
+
+            ax.fill_between(
+                r_domain, percs[midpoint + sigma], percs[midpoint - sigma],
+                alpha=(1 - alpha), **CI_kwargs
+            )
+
+            alpha += alpha
+
+        return ax
+
+    # -----------------------------------------------------------------------
+    # Plot extras
+    # -----------------------------------------------------------------------
 
     def _add_residuals(self, ax, xmodel, ymodel, xdata, ydata,
                        xerr=None, yerr=None):
@@ -142,893 +207,7 @@ class ModelVisualizer(_Visualizer):
         ax.aeff_text.set_text(fr'$\alpha_{{eff}}=${aeff:.4e}')
 
     # -----------------------------------------------------------------------
-    # Plotting functions
-    # -----------------------------------------------------------------------
-
-    # TODO a better term than 'attempt' should be used
-    # TODO change all these to check data for mass bin like in likelihoods
-
-    @_support_units
-    def plot_pulsar(self, fig=None, ax=None, show_obs=True):
-        # TODO this is out of date with the new pulsar probability code
-        # TODO I dont even think this is what we should use anymore, but the
-        #   new convolved distributions peak
-
-        fig, ax = self._setup_artist(fig, ax)
-
-        ax.set_title('Pulsar LOS Acceleration')
-        ax.set_xlabel('R')
-        ax.set_ylabel(r'$a_{los}$')
-
-        maz = u.Quantity(np.empty(self.model.nstep - 1), '1/s')
-        for i in range(self.model.nstep - 1):
-            a_domain, Paz = pulsars.cluster_component(self.model, self.model.r[i], -1)
-            maz[i] = a_domain[Paz.argmax()] << maz.unit
-
-        maz = (self.obs['pulsar/P'] * maz).decompose()
-
-        if show_obs:
-            try:
-                obs_pulsar = self.obs['pulsar']
-
-                ax.errorbar(obs_pulsar['r'],
-                            self.obs['pulsar/Pdot'],
-                            yerr=self.obs['pulsar/ΔPdot'],
-                            fmt='k.')
-
-            except KeyError as err:
-                if show_obs != 'attempt':
-                    raise err
-
-        model_r = self.model.r.to(u.arcmin, util.angular_width(self.model.d))
-
-        upper_az, = ax.plot(model_r[:-1], maz)
-        ax.plot(model_r[:-1], -maz, c=upper_az.get_color())
-
-        return fig
-
-    @_support_units
-    def plot_pulsar_spin_dist(self, fig=None, ax=None, pulsar_ind=0,
-                              show_obs=True, show_conv=False):
-
-        import scipy.interpolate as interp
-
-        fig, ax = self._setup_artist(fig, ax)
-
-        # pulsars = self.obs['pulsar']
-        puls_obs = self.obs['pulsar/spin']
-
-        id_ = puls_obs['id'][pulsar_ind].value.decode()
-        ax.set_title(f'Pulsar "{id_}" Period Derivative Likelihood')
-
-        ax.set_ylabel('Probability')
-        ax.set_xlabel(r'$\dot{P}/P$ $\left[s^{-1}\right]$')
-
-        mass_bin = -1
-
-        kde = pulsars.field_Pdot_KDE()
-        Pdot_min, Pdot_max = kde.dataset[1].min(), kde.dataset[1].max()
-
-        R = puls_obs['r'][pulsar_ind].to(u.pc)
-
-        P = puls_obs['P'][pulsar_ind].to('s')
-
-        Pdot_meas = puls_obs['Pdot'][pulsar_ind]
-        ΔPdot_meas = np.abs(puls_obs['ΔPdot'][pulsar_ind])
-
-        PdotP_domain, PdotP_c_prob = pulsars.cluster_component(self.model,
-                                                               R, mass_bin)
-        Pdot_domain = (P * PdotP_domain).decompose()
-
-        # linear to avoid effects around asymptote
-        Pdot_c_spl = interp.UnivariateSpline(
-            Pdot_domain, PdotP_c_prob, k=1, s=0, ext=1
-        )
-
-        err = util.gaussian(x=Pdot_domain, sigma=ΔPdot_meas, mu=0)
-
-        err_spl = interp.UnivariateSpline(Pdot_domain, err, k=3, s=0, ext=1)
-
-        lg_P = np.log10(P / P.unit)
-
-        P_grid, Pdot_int_domain = np.mgrid[lg_P:lg_P:1j, Pdot_min:Pdot_max:200j]
-
-        P_grid, Pdot_int_domain = P_grid.ravel(), Pdot_int_domain.ravel()
-
-        Pdot_int_prob = kde(np.vstack([P_grid, Pdot_int_domain]))
-
-        Pdot_int_spl = interp.UnivariateSpline(
-            Pdot_int_domain, Pdot_int_prob, k=3, s=0, ext=1
-        )
-
-        Pdot_int_prob = util.RV_transform(
-            domain=10**Pdot_int_domain, f_X=Pdot_int_spl,
-            h=np.log10, h_prime=lambda y: (1 / (np.log(10) * y))
-        )
-
-        Pdot_int_spl = interp.UnivariateSpline(
-            10**Pdot_int_domain, Pdot_int_prob, k=3, s=0, ext=1
-        )
-
-        lin_domain = np.linspace(0., 1e-18, 5_000 // 2)
-        lin_domain = np.concatenate((np.flip(-lin_domain[1:]), lin_domain))
-
-        conv1 = np.convolve(err_spl(lin_domain), Pdot_c_spl(lin_domain), 'same')
-
-        conv2 = np.convolve(conv1, Pdot_int_spl(lin_domain), 'same')
-
-        # Normalize
-        conv2 /= interp.UnivariateSpline(
-            lin_domain, conv2, k=3, s=0, ext=1
-        ).integral(-np.inf, np.inf)
-
-        cluster_μ = self.obs.mdata['μ'] << u.Unit("mas/yr")
-        PdotP_pm = pulsars.shklovskii_component(cluster_μ, self.model.d)
-
-        cluster_coords = (self.obs.mdata['b'], self.obs.mdata['l']) * u.deg
-        PdotP_gal = pulsars.galactic_component(*cluster_coords, D=self.model.d)
-
-        x_total = (lin_domain / P) + PdotP_pm + PdotP_gal
-        ax.plot(x_total, conv2)
-
-        if show_conv:
-            # Will really mess the scaling up, usually
-            ax.plot(x_total, Pdot_c_spl(lin_domain))
-            ax.plot(x_total, conv1)
-
-        if show_obs:
-            ax.axvline((Pdot_meas / P).decompose(), c='r', ls=':')
-
-        prob_dist = interp.interp1d(
-            (lin_domain / P) + PdotP_pm + PdotP_gal, conv2,
-            assume_sorted=True, bounds_error=False, fill_value=0.0
-        )
-
-        print('prob=', prob_dist((Pdot_meas / P).decompose()))
-
-        return fig
-
-    @_support_units
-    def plot_pulsar_orbital_dist(self, fig=None, ax=None, pulsar_ind=0,
-                                 show_obs=True, show_conv=False):
-
-        import scipy.interpolate as interp
-
-        fig, ax = self._setup_artist(fig, ax)
-
-        # pulsars = self.obs['pulsar']
-        puls_obs = self.obs['pulsar/orbital']
-
-        id_ = puls_obs['id'][pulsar_ind].value.decode()
-        ax.set_title(f'Pulsar "{id_}" Period Derivative Likelihood')
-
-        ax.set_ylabel('Probability')
-        ax.set_xlabel(r'$\dot{P}/P$ $\left[s^{-1}\right]$')
-
-        mass_bin = -1
-
-        R = puls_obs['r'][pulsar_ind].to(u.pc)
-
-        P = puls_obs['Pb'][pulsar_ind].to('s')
-
-        Pdot_meas = puls_obs['Pbdot'][pulsar_ind]
-        ΔPdot_meas = np.abs(puls_obs['ΔPbdot'][pulsar_ind])
-
-        PdotP_domain, PdotP_c_prob = pulsars.cluster_component(self.model,
-                                                               R, mass_bin)
-        Pdot_domain = (P * PdotP_domain).decompose()
-
-        Pdot_c_spl = interp.UnivariateSpline(
-            Pdot_domain, PdotP_c_prob, k=1, s=0, ext=1
-        )
-
-        err = util.gaussian(x=Pdot_domain, sigma=ΔPdot_meas, mu=0)
-
-        err_spl = interp.UnivariateSpline(Pdot_domain, err, k=3, s=0, ext=1)
-
-        lin_domain = np.linspace(0., 1e-11, 5_000 // 2)
-        lin_domain = np.concatenate((np.flip(-lin_domain[1:]), lin_domain))
-
-        conv = np.convolve(err_spl(lin_domain), Pdot_c_spl(lin_domain), 'same')
-        # conv = np.convolve(err, PdotP_c_prob, 'same')
-
-        # Normalize
-        conv /= interp.UnivariateSpline(
-            lin_domain, conv, k=3, s=0, ext=1
-        ).integral(-np.inf, np.inf)
-
-        cluster_μ = self.obs.mdata['μ'] << u.Unit("mas/yr")
-        PdotP_pm = pulsars.shklovskii_component(cluster_μ, self.model.d)
-
-        cluster_coords = (self.obs.mdata['b'], self.obs.mdata['l']) * u.deg
-        PdotP_gal = pulsars.galactic_component(*cluster_coords, D=self.model.d)
-
-        x_total = (lin_domain / P) + PdotP_pm + PdotP_gal
-        ax.plot(x_total, conv)
-
-        if show_conv:
-            # Will really mess the scaling up, usually
-            ax.plot(x_total, PdotP_c_prob)
-            ax.plot(x_total, conv)
-
-        if show_obs:
-            ax.axvline((Pdot_meas / P).decompose(), c='r', ls=':')
-
-        prob_dist = interp.interp1d(
-            x_total, conv,
-            assume_sorted=True, bounds_error=False, fill_value=0.0
-        )
-
-        print('prob=', prob_dist((Pdot_meas / P).decompose()))
-
-        return fig
-
-    @_support_units
-    def plot_LOS(self, fig=None, ax=None, show_obs=True,
-                 residuals=True, hyperparam=True):
-
-        mass_bin = self.model.nms - 1
-
-        fig, ax = self._setup_artist(fig, ax)
-
-        ax.set_title('Line of Sight Velocity Dispersion')
-
-        ax.set_xscale("log")
-
-        model_r = self.model.r.to(u.arcsec)
-        model_LOS = np.sqrt(self.model.v2pj[mass_bin])
-
-        if show_obs:
-            try:
-                LOS = self.obs['velocity_dispersion']
-
-                xerr = self.get_err(LOS, 'r')
-                yerr = self.get_err(LOS, 'σ')
-
-                ax.errorbar(LOS['r'], LOS['σ'], fmt='k.',
-                            xerr=xerr, yerr=yerr)
-
-                if hyperparam:
-                    sig = LOS.build_err('σ', model_r, model_LOS, strict=False)
-                    self._add_hyperparam(ax, model_r, model_LOS,
-                                         LOS['r'], LOS['σ'], yerr=sig)
-
-                if residuals:
-                    self._add_residuals(ax, model_r, model_LOS,
-                                        LOS['r'], LOS['σ'], xerr, yerr)
-
-            except KeyError as err:
-                if show_obs != 'attempt':
-                    raise err
-
-        ax.plot(model_r, model_LOS)
-
-        return fig
-
-    @_support_units
-    def plot_pm_tot(self, fig=None, ax=None, show_obs=True,
-                    residuals=True, hyperparam=True):
-
-        mass_bin = self.model.nms - 1
-
-        fig, ax = self._setup_artist(fig, ax)
-
-        ax.set_title("Total Proper Motion")
-
-        ax.set_xscale("log")
-
-        model_t = np.sqrt(
-            0.5 * (self.model.v2Tj[mass_bin] + self.model.v2Rj[mass_bin])
-        )
-
-        model_r = self.model.r.to(u.arcsec)
-        model_t = model_t.to(u.mas / u.yr)
-
-        if show_obs:
-            try:
-                pm = self.obs['proper_motion']
-
-                xerr = self.get_err(pm, 'r')
-                yerr = self.get_err(pm, 'PM_tot')
-
-                ax.errorbar(pm['r'], pm['PM_tot'], fmt='k.',
-                            xerr=xerr, yerr=yerr)
-
-                if hyperparam:
-                    sig = pm.build_err('PM_tot', model_r, model_t, False)
-                    self._add_hyperparam(ax, model_r, model_t,
-                                         pm['r'], pm['PM_tot'], yerr=sig)
-
-                if residuals:
-                    self._add_residuals(ax, model_r, model_t,
-                                        pm['r'], pm['PM_tot'], xerr, yerr)
-
-            except KeyError as err:
-                if show_obs != 'attempt':
-                    raise err
-
-        ax.plot(model_r, model_t)
-
-        return fig
-
-    @_support_units
-    def plot_pm_ratio(self, fig=None, ax=None, show_obs=True,
-                      residuals=True, hyperparam=True):
-
-        mass_bin = self.model.nms - 1
-
-        fig, ax = self._setup_artist(fig, ax)
-
-        ax.set_title("Proper Motion Ratio")
-
-        ax.set_xscale("log")
-
-        model_ratio = np.sqrt(self.model.v2Tj[mass_bin] / self.model.v2Rj[mass_bin])
-
-        model_r = self.model.r.to(u.arcsec)
-
-        if show_obs:
-            try:
-
-                pm = self.obs['proper_motion']
-
-                xerr = self.get_err(pm, 'r')
-                yerr = self.get_err(pm, 'PM_ratio')
-
-                ax.errorbar(pm['r'], pm['PM_ratio'], fmt='k.',
-                            xerr=xerr, yerr=yerr)
-
-                if hyperparam:
-                    sig = pm.build_err('PM_ratio', model_r, model_ratio, False)
-                    self._add_hyperparam(ax, model_r, model_ratio,
-                                         pm['r'], pm['PM_ratio'], yerr=sig)
-
-                if residuals:
-                    self._add_residuals(ax, model_r, model_ratio,
-                                        pm['r'], pm['PM_ratio'], xerr, yerr)
-
-            except KeyError as err:
-                if show_obs != 'attempt':
-                    raise err
-
-        ax.plot(model_r, model_ratio)
-
-        return fig
-
-    @_support_units
-    def plot_pm_T(self, fig=None, ax=None, show_obs=True,
-                  residuals=True, hyperparam=True):
-        # TODO capture all mass bins which have data (high_mass, low_mass, etc)
-
-        mass_bin = self.model.nms - 1
-
-        fig, ax = self._setup_artist(fig, ax)
-
-        ax.set_title("Tangential Proper Motion [High Mass]")
-
-        ax.set_xscale("log")
-
-        model_T = np.sqrt(self.model.v2Tj[mass_bin])
-
-        model_r = self.model.r.to(u.arcsec)
-        model_T = model_T.to(u.mas / u.yr)
-
-        if show_obs:
-            try:
-
-                pm = self.obs['proper_motion/high_mass']
-
-                xerr = self.get_err(pm, 'r')
-                yerr = self.get_err(pm, 'PM_T')
-
-                ax.errorbar(pm['r'], pm["PM_T"], fmt='k.',
-                            xerr=xerr, yerr=yerr)
-
-                if hyperparam:
-                    sig = pm.build_err('PM_T', model_r, model_T, False)
-                    self._add_hyperparam(ax, model_r, model_T,
-                                         pm['r'], pm['PM_T'], yerr=sig)
-
-                if residuals:
-                    self._add_residuals(ax, model_r, model_T,
-                                        pm['r'], pm['PM_T'], xerr, yerr)
-
-            except KeyError as err:
-                if show_obs != 'attempt':
-                    raise err
-
-        ax.plot(model_r, model_T)
-
-        return fig
-
-    @_support_units
-    def plot_pm_R(self, fig=None, ax=None, show_obs=True,
-                  residuals=True, hyperparam=True):
-
-        mass_bin = self.model.nms - 1
-
-        fig, ax = self._setup_artist(fig, ax)
-
-        ax.set_title("Radial Proper Motion [High Mass]")
-
-        ax.set_xscale("log")
-
-        model_R = np.sqrt(self.model.v2Rj[mass_bin])
-
-        model_r = self.model.r.to(u.arcsec)
-        model_R = model_R.to(u.mas / u.yr)
-
-        if show_obs:
-            try:
-
-                pm = self.obs['proper_motion/high_mass']
-
-                xerr = self.get_err(pm, 'r')
-                yerr = self.get_err(pm, 'PM_R')
-
-                ax.errorbar(pm['r'], pm["PM_R"], fmt='k.',
-                            xerr=xerr, yerr=yerr)
-
-                if hyperparam:
-                    sig = pm.build_err('PM_R', model_r, model_R, False)
-                    self._add_hyperparam(ax, model_r, model_R,
-                                         pm['r'], pm['PM_R'], yerr=sig)
-
-                if residuals:
-                    self._add_residuals(ax, model_r, model_R,
-                                        pm['r'], pm['PM_R'], xerr, yerr)
-
-            except KeyError as err:
-                if show_obs != 'attempt':
-                    raise err
-
-        ax.plot(model_r, model_R)
-
-        return fig
-
-    @_support_units
-    def plot_number_density(self, fig=None, ax=None, show_obs=True,
-                            residuals=True, hyperparam=True):
-        # numdens is a bit different cause we want to compute K based on obs
-        # whenever possible, even if we're not showing obs
-
-        mass_bin = self.model.nms - 1
-
-        fig, ax = self._setup_artist(fig, ax)
-
-        ax.set_title('Number Density')
-
-        ax.loglog()
-
-        try:
-            numdens = self.obs['number_density']
-
-            # interpolate number density to the observed data points r
-            interp_model = util.QuantitySpline(
-                self.model.r,
-                self.model.Sigmaj[mass_bin] / self.model.mj[mass_bin]
-            )(numdens['r'])
-
-            K = (np.sum(numdens['Σ'] * interp_model / numdens["Σ"] ** 2)
-                 / np.sum(interp_model ** 2 / numdens["Σ"] ** 2))
-
-        except KeyError:
-            K = 1.
-
-        model_r = self.model.r.to(u.arcmin)
-        model_Σ = K * self.model.Sigmaj[mass_bin] / self.model.mj[mass_bin]
-
-        if show_obs:
-            try:
-
-                numdens = self.obs['number_density']
-
-                xerr = self.get_err(numdens, 'r')
-
-                ΔΣ = self.get_err(numdens, "Σ")
-                yerr = np.sqrt(ΔΣ**2 + (self.model.s2 << ΔΣ.unit**2))
-
-                ax.errorbar(numdens['r'], numdens["Σ"], fmt='k.',
-                            xerr=xerr, yerr=yerr)
-
-                if hyperparam:
-                    sig = numdens.build_err('Σ', model_r, model_Σ, False)
-                    self._add_hyperparam(ax, model_r, model_Σ,
-                                         numdens['r'], numdens['Σ'], yerr=sig)
-
-                if residuals:
-                    self._add_residuals(ax, model_r, model_Σ,
-                                        numdens['r'], numdens['Σ'], xerr, yerr)
-
-            except KeyError as err:
-                if show_obs != 'attempt':
-                    raise err
-
-        ax.plot(model_r, model_Σ)
-
-        return fig
-
-    @_support_units
-    def plot_mass_func(self, fig=None, ax=None, show_obs=True,
-                       residuals=True, hyperparam=True):
-
-        fig, ax = self._setup_artist(fig, ax)
-        scale = 15
-
-        XTEXT = 0.81 * u.Msun
-
-        M = 300
-
-        # Generate the mass splines before the loops
-        densityj = [util.QuantitySpline(self.model.r, self.model.Sigmaj[j])
-                    for j in range(self.model.nms)]
-
-        PI_list = fnmatch.filter([k[0] for k in self.obs.valid_likelihoods],
-                                 '*mass_function*')
-
-        PI_list = sorted(PI_list, key=lambda k: self.obs[k]['r1'].min())
-
-        for key in PI_list:
-            mf = self.obs[key]
-
-            # get field
-            cen = (self.obs.mdata['RA'], self.obs.mdata['DEC'])
-            unit = mf.mdata['field_unit']
-            coords = []
-            for ch in string.ascii_letters:
-                try:
-                    coords.append(mf['fields'].mdata[f'{ch}'])
-                except KeyError:
-                    break
-
-            field = mass.Field(coords, cen=cen, unit=unit)
-
-            # get data
-            rbins = np.c_[mf['r1'], mf['r2']]
-
-            mbin_mean = (mf['m1'] + mf['m2']) / 2.
-            mbin_width = mf['m2'] - mf['m1']
-
-            N = mf['N'] / mbin_width
-            ΔN = mf['ΔN'] / mbin_width
-
-            # iterate over radial bins
-            for r_in, r_out in np.unique(rbins, axis=0):
-                r_mask = ((mf['r1'] == r_in)
-                          & (mf['r2'] == r_out))
-
-                # slice and integrate field
-                field_slice = field.slice_radially(r_in, r_out)
-
-                sample_radii = field_slice.MC_sample(M).to(u.pc)
-
-                binned_N_model = np.empty(self.model.nms)
-                for j in range(self.model.nms):
-                    Nj = field_slice.MC_integrate(densityj[j], sample_radii)
-                    widthj = (self.model.mj[j] * self.model.mes_widths[j])
-                    binned_N_model[j] = (Nj / widthj).value * 10**scale
-
-                N_data = N[r_mask].value
-                err_data = ΔN[r_mask].value
-
-                err = self.model.F * err_data
-
-                # plot
-                pnts = ax.errorbar(mbin_mean[r_mask], N_data * 10**scale,
-                                   fmt='o', yerr=err * 10**scale)
-
-                clr = pnts[0].get_color()
-
-                slp, = ax.plot(self.model.mj[:self.model.nms], binned_N_model,
-                               ls='-', c=clr)
-
-                xy_pnt = (slp.get_xdata()[-1], slp.get_ydata()[-1])
-                xy_txt = (XTEXT, slp.get_ydata()[-1])
-                text = f"{r_in.value:.2f}'-{r_out.value:.2f}'"
-
-                ax.annotate(text, xy_pnt, xytext=xy_txt, fontsize=12, color=clr)
-
-                scale -= 1
-
-                if hyperparam:
-                    self._add_hyperparam(ax, self.model.mj[:self.model.nms],
-                                         binned_N_model, mbin_mean[r_mask],
-                                         N_data, yerr=err)
-
-        ax.set_yscale("log")
-        ax.set_xscale("log")
-
-        ax.set_ylabel(r'$dN/dm + C$')
-        ax.set_xlabel(r'Mass [$M_\odot$]')
-
-        fig.tight_layout()
-
-        return fig
-
-    @_support_units
-    def plot_density(self, fig=None, ax=None):
-
-        fig, ax = self._setup_artist(fig, ax)
-
-        ax.set_title('Mass Density')
-
-        # Main sequence density
-        rho_MS = np.sum(self.model.rhoj[:self.model.nms], axis=0)
-        ax.plot(self.model.r, rho_MS, label='Main Sequence')
-
-        # Total density
-        rho_tot = np.sum(self.model.rhoj, axis=0)
-        ax.plot(self.model.r, rho_tot, label='Total')
-
-        # Black hole density
-        rho_BH = np.sum(self.model.BH_rhoj, axis=0)
-        ax.plot(self.model.r, rho_BH, label='Black Hole')
-
-        # White Dwarf density
-        rho_WD = np.sum(self.model.WD_rhoj, axis=0)
-        ax.plot(self.model.r, rho_WD, label='White Dwarf')
-
-        # Neutron Stars density
-        rho_NS = np.sum(self.model.NS_rhoj, axis=0)
-        ax.plot(self.model.r, rho_NS, label='Neutron Stars')
-
-        ax.set_yscale("log")
-        ax.set_xscale("log")
-
-        ax.legend()
-
-        return fig
-
-    @_support_units
-    def plot_surface_density(self, fig=None, ax=None):
-
-        fig, ax = self._setup_artist(fig, ax)
-
-        ax.set_title('Surface Mass Density')
-
-        # Main sequence density
-        sig_MS = np.sum(self.model.Sigmaj[:self.model.nms], axis=0)
-        ax.plot(self.model.r, sig_MS, label='Main Sequence')
-
-        # Total density
-        sig_MS = np.sum(self.model.Sigmaj, axis=0)
-        ax.plot(self.model.r, sig_MS, label='Total')
-
-        # Black hole density
-        sig_MS = np.sum(self.model.BH_Sigmaj, axis=0)
-        ax.plot(self.model.r, sig_MS, label='Black Hole')
-
-        # White Dwarf density
-        sig_WD = np.sum(self.model.WD_Sigmaj, axis=0)
-        ax.plot(self.model.r, sig_WD, label='White Dwarf')
-
-        # Neutron Stars density
-        sig_NS = np.sum(self.model.NS_Sigmaj, axis=0)
-        ax.plot(self.model.r, sig_NS, label='Neutron Stars')
-
-        ax.set_yscale("log")
-        ax.set_xscale("log")
-
-        ax.legend()
-
-        return fig
-
-    @_support_units
-    def plot_cumulative_mass(self, fig=None, ax=None, x_unit='pc'):
-
-        fig, ax = self._setup_artist(fig, ax)
-
-        ax.set_title('Cumulative Mass')
-
-        r0 = self.model.r[0]
-
-        # for plotting in other units
-        r_domain = self.model.r.to(x_unit)
-
-        # Main sequence mass
-
-        Sigma_MS = self.model.Sigmaj[:self.model.nms]
-        sig_MS = 2 * np.pi * self.model.r * np.sum(Sigma_MS, axis=0)
-        dM_MS = util.QuantitySpline(self.model.r, sig_MS)
-
-        cum_M_MS = [dM_MS.integral(r0, ri) for ri in self.model.r] << u.Msun
-        print(cum_M_MS)
-        ax.plot(r_domain, cum_M_MS, label='Main Sequence')
-
-        # Total mass
-
-        sig_tot = 2 * np.pi * self.model.r * np.sum(self.model.Sigmaj, axis=0)
-        dM_tot = util.QuantitySpline(self.model.r, sig_tot)
-
-        cum_M_tot = [dM_tot.integral(r0, ri) for ri in self.model.r] << u.Msun
-
-        ax.plot(r_domain, cum_M_tot, label='Total')
-
-        # Black hole mass
-
-        sig_BH = 2 * np.pi * self.model.r * np.sum(self.model.BH_Sigmaj, axis=0)
-        dM_BH = util.QuantitySpline(self.model.r, sig_BH)
-
-        cum_M_BH = [dM_BH.integral(r0, ri) for ri in self.model.r] << u.Msun
-
-        ax.plot(r_domain, cum_M_BH, label='Black Hole')
-
-        # White Dwarf mass
-
-        sig_WD = 2 * np.pi * self.model.r * np.sum(self.model.WD_Sigmaj, axis=0)
-        dM_WD = util.QuantitySpline(self.model.r, sig_WD)
-
-        cum_M_WD = [dM_WD.integral(r0, ri) for ri in self.model.r] << u.Msun
-
-        ax.plot(r_domain, cum_M_WD, label='White Dwarf')
-
-        # Neutron Star mass
-
-        sig_NS = 2 * np.pi * self.model.r * np.sum(self.model.NS_Sigmaj, axis=0)
-        dM_NS = util.QuantitySpline(self.model.r, sig_NS)
-
-        cum_M_NS = [dM_NS.integral(r0, ri) for ri in self.model.r] << u.Msun
-
-        ax.plot(r_domain, cum_M_NS, label='Neutron Star')
-
-        ax.set_yscale("log")
-        ax.set_xscale("log")
-
-        ax.set_ylabel(rf'$M_{{enc}} ({cum_M_tot.unit})$')
-
-        ax.legend()
-
-        return fig
-
-    # TODO plot_remnant_fraction (see baumgardt cat)
-
-    @_support_units
-    def plot_all(self, fig=None, axes=None, show_obs='attempt'):
-
-        # TODO have a require_obs option, where if required we change to try
-        #   excepts and dont plot the ones that fail
-
-        # TODO a better method for being able to overplot multiple show_alls
-        fig, axes = plt.subplots(4, 2)
-        # if fig is None:
-        #     fig, axes = plt.subplots(4, 2)
-        #     axes = axes.flatten()
-        # else:
-        #     axes = fig.axes
-
-        fig.suptitle(str(self.obs))
-
-        kw = {'show_obs': show_obs, 'residuals': False, 'hyperparam': True}
-
-        # self.plot_pulsar(fig=fig, ax=axes[0], show_obs=show_obs)
-
-        self.plot_number_density(fig=fig, ax=axes[0, 0], **kw)
-        self.plot_LOS(fig=fig, ax=axes[1, 0], **kw)
-        self.plot_pm_tot(fig=fig, ax=axes[0, 1], **kw)
-        self.plot_pm_T(fig=fig, ax=axes[1, 1], **kw)
-        self.plot_pm_R(fig=fig, ax=axes[2, 1], **kw)
-        self.plot_pm_ratio(fig=fig, ax=axes[3, 1], **kw)
-
-        gs = axes[2, 0].get_gridspec()
-
-        for ax in axes[2:, 0]:
-            ax.remove()
-
-        # Is this what is messing up the spacing?
-        axbig = fig.add_subplot(gs[2:, 0])
-
-        self.plot_mass_func(fig=fig, ax=axbig, show_obs=show_obs,
-                            residuals=False, hyperparam=True)
-
-        for ax in axes.flatten():
-            ax.set_xlabel('')
-
-        # TODO maybe have some written info in one of the empty panels (ax6)
-        # fig.tight_layout()
-
-        return fig
-
-    @classmethod
-    def from_chain(cls, chain, observations, method='median'):
-        '''
-        create a Visualizer instance based on a chain, y taking the median
-        of the chain parameters
-        '''
-
-        reduc = cls._REDUC_METHODS[method]
-
-        # if 3d (Niters, Nwalkers, Nparams)
-        # if 2d (Nwalkers, Nparams)
-        # if 1d (Nparams)
-        chain = chain.reshape((-1, chain.shape[-1]))
-
-        theta = reduc(chain, axis=0)
-
-        return cls(Model(theta, observations), observations)
-
-    @classmethod
-    def from_theta(cls, theta, observations):
-        '''
-        create a Visualizer instance based on a theta, see `Model` for allowed
-        theta types
-        '''
-        return cls(Model(theta, observations), observations)
-
-    def __init__(self, model, observations=None):
-        self.model = model
-        self.obs = observations if observations else model.observations
-
-        # TODO somehow based on valid_likelihoods figure out dataset names
-        # self.data_fields =
-
-
-class CIModelVisualizer(_Visualizer):
-    '''
-    class for making, showing, saving all the plots related to a model
-    but this time also including confidence intervals
-    '''
-
-    def _support_units(method):
-        import functools
-
-        @functools.wraps(method)
-        def _unit_decorator(self, *args, **kwargs):
-
-            # convert based on median distance parameter
-            eqvs = [util.angular_width(self.d)[0],
-                    util.angular_speed(self.d)[0]]
-
-            with astroviz.quantity_support(), u.set_enabled_equivalencies(eqvs):
-                return method(self, *args, **kwargs)
-
-        return _unit_decorator
-
-    def _plot_model_CI(self, ax, percs, intervals=2, r_unit='pc', *,
-                       CI_kwargs=None, **kwargs):
-
-        CI_kwargs = dict() if CI_kwargs is None else CI_kwargs
-
-        if not (percs.shape[0] % 2):
-            mssg = 'Invalid `percs`, must have odd-numbered zeroth axis shape'
-            raise ValueError(mssg)
-
-        midpoint = percs.shape[0] // 2
-
-        if intervals > midpoint:
-            mssg = f'{intervals}σ is outside stored range of {midpoint}σ'
-            raise ValueError(mssg)
-
-        r_domain = self.r.to(r_unit)
-
-        median_ = percs[midpoint]
-
-        med_plot, = ax.plot(r_domain, median_, **kwargs)
-
-        CI_kwargs.setdefault('color', med_plot.get_color())
-
-        alpha = 0.8 / (intervals + 1)
-        for sigma in range(1, intervals + 1):
-
-            ax.fill_between(
-                r_domain, percs[midpoint + sigma], percs[midpoint - sigma],
-                alpha=(1 - alpha), **CI_kwargs
-            )
-
-            alpha += alpha
-
-        return ax
-
-    def get_err(self, dataset, key):
-        try:
-            return dataset[f'Δ{key}']
-        except KeyError:
-            try:
-                return (dataset[f'Δ{key},down'], dataset[f'Δ{key},up'])
-            except KeyError:
-                return None
-
-    # -----------------------------------------------------------------------
-    # Plotting functions
+    # Observables plotting
     # -----------------------------------------------------------------------
 
     @_support_units
@@ -1044,8 +223,8 @@ class CIModelVisualizer(_Visualizer):
             try:
                 veldisp = self.obs['velocity_dispersion']
 
-                xerr = self.get_err(veldisp, 'r')
-                yerr = self.get_err(veldisp, 'σ')
+                xerr = self._get_err(veldisp, 'r')
+                yerr = self._get_err(veldisp, 'σ')
 
                 ax.errorbar(veldisp['r'].to(u.pc), veldisp['σ'], fmt='k.',
                             xerr=xerr, yerr=yerr)
@@ -1071,8 +250,8 @@ class CIModelVisualizer(_Visualizer):
             try:
                 pm = self.obs['proper_motion']
 
-                xerr = self.get_err(pm, 'r').to(u.pc)
-                yerr = self.get_err(pm, 'PM_tot')
+                xerr = self._get_err(pm, 'r').to(u.pc)
+                yerr = self._get_err(pm, 'PM_tot')
 
                 ax.errorbar(pm['r'].to(x_unit), pm['PM_tot'], fmt='k.',
                             xerr=xerr, yerr=yerr)
@@ -1099,8 +278,8 @@ class CIModelVisualizer(_Visualizer):
 
                 pm = self.obs['proper_motion']
 
-                xerr = self.get_err(pm, 'r').to(u.pc)
-                yerr = self.get_err(pm, 'PM_ratio')
+                xerr = self._get_err(pm, 'r').to(u.pc)
+                yerr = self._get_err(pm, 'PM_ratio')
 
                 ax.errorbar(pm['r'].to(u.pc), pm['PM_ratio'], fmt='k.',
                             xerr=xerr, yerr=yerr)
@@ -1128,8 +307,8 @@ class CIModelVisualizer(_Visualizer):
 
                 pm = self.obs['proper_motion/high_mass']
 
-                xerr = self.get_err(pm, 'r')
-                yerr = self.get_err(pm, 'PM_T')
+                xerr = self._get_err(pm, 'r')
+                yerr = self._get_err(pm, 'PM_T')
 
                 ax.errorbar(pm['r'], pm["PM_T"], fmt='k.',
                             xerr=xerr, yerr=yerr)
@@ -1156,8 +335,8 @@ class CIModelVisualizer(_Visualizer):
 
                 pm = self.obs['proper_motion/high_mass']
 
-                xerr = self.get_err(pm, 'r')
-                yerr = self.get_err(pm, 'PM_R')
+                xerr = self._get_err(pm, 'r')
+                yerr = self._get_err(pm, 'PM_R')
 
                 ax.errorbar(pm['r'], pm["PM_R"], fmt='k.',
                             xerr=xerr, yerr=yerr)
@@ -1184,9 +363,9 @@ class CIModelVisualizer(_Visualizer):
 
                 numdens = self.obs['number_density']
 
-                xerr = self.get_err(numdens, 'r')
+                xerr = self._get_err(numdens, 'r')
 
-                ΔΣ = self.get_err(numdens, "Σ")
+                ΔΣ = self._get_err(numdens, "Σ")
                 yerr = np.sqrt(ΔΣ**2 + (self.s2 << ΔΣ.unit**2))
 
                 ax.errorbar(numdens['r'], numdens["Σ"], fmt='k.',
@@ -1295,30 +474,55 @@ class CIModelVisualizer(_Visualizer):
         return fig
 
     @_support_units
-    def plot_BH_mass(self, fig=None, ax=None, bins='auto', color='b'):
+    def plot_all(self, fig=None, axes=None, show_obs='attempt'):
 
-        fig, ax = self._setup_artist(fig, ax)
+        # TODO have a require_obs option, where if required we change to try
+        #   excepts and dont plot the ones that fail
 
-        color = mpl_clr.to_rgb(color)
-        facecolor = color + (0.33, )
+        # TODO a better method for being able to overplot multiple show_alls
+        fig, axes = plt.subplots(4, 2)
+        # if fig is None:
+        #     fig, axes = plt.subplots(4, 2)
+        #     axes = axes.flatten()
+        # else:
+        #     axes = fig.axes
 
-        ax.hist(self.BH_mass, histtype='stepfilled',
-                bins=bins, ec=color, fc=facecolor, lw=2)
+        fig.suptitle(str(self.obs))
+
+        kw = {'show_obs': show_obs, 'residuals': False, 'hyperparam': True}
+
+        # self.plot_pulsar(fig=fig, ax=axes[0], show_obs=show_obs)
+
+        self.plot_number_density(fig=fig, ax=axes[0, 0], **kw)
+        self.plot_LOS(fig=fig, ax=axes[1, 0], **kw)
+        self.plot_pm_tot(fig=fig, ax=axes[0, 1], **kw)
+        self.plot_pm_T(fig=fig, ax=axes[1, 1], **kw)
+        self.plot_pm_R(fig=fig, ax=axes[2, 1], **kw)
+        self.plot_pm_ratio(fig=fig, ax=axes[3, 1], **kw)
+
+        gs = axes[2, 0].get_gridspec()
+
+        for ax in axes[2:, 0]:
+            ax.remove()
+
+        # Is this what is messing up the spacing?
+        axbig = fig.add_subplot(gs[2:, 0])
+
+        self.plot_mass_func(fig=fig, ax=axbig, show_obs=show_obs,
+                            residuals=False, hyperparam=True)
+
+        for ax in axes.flatten():
+            ax.set_xlabel('')
+
+        # TODO maybe have some written info in one of the empty panels (ax6)
+        # fig.tight_layout()
 
         return fig
 
-    @_support_units
-    def plot_BH_num(self, fig=None, ax=None, bins='auto', color='b'):
-
-        fig, ax = self._setup_artist(fig, ax)
-
-        color = mpl_clr.to_rgb(color)
-        facecolor = color + (0.33, )
-
-        ax.hist(self.BH_num, histtype='stepfilled',
-                bins=bins, ec=color, fc=facecolor, lw=2)
-
-        return fig
+    # -----------------------------------------------------------------------
+    # Model plotting
+    # -----------------------------------------------------------------------
+    # TODO plot_remnant_fraction (see baumgardt cat)
 
     @_support_units
     def plot_density(self, fig=None, ax=None, *, kind='all'):
@@ -1432,38 +636,80 @@ class CIModelVisualizer(_Visualizer):
 
         return fig
 
+
+# --------------------------------------------------------------------------
+# Visualizers
+# --------------------------------------------------------------------------
+
+
+class ModelVisualizer(_ClusterVisualizer):
+    '''
+    class for making, showing, saving all the plots related to a single model
+    '''
+
+    @classmethod
+    def from_chain(cls, chain, observations, method='median'):
+        '''
+        create a Visualizer instance based on a chain, y taking the median
+        of the chain parameters
+        '''
+
+        reduc = cls._REDUC_METHODS[method]
+
+        # if 3d (Niters, Nwalkers, Nparams)
+        # if 2d (Nwalkers, Nparams)
+        # if 1d (Nparams)
+        chain = chain.reshape((-1, chain.shape[-1]))
+
+        theta = reduc(chain, axis=0)
+
+        return cls(Model(theta, observations), observations)
+
+    @classmethod
+    def from_theta(cls, theta, observations):
+        '''
+        create a Visualizer instance based on a theta, see `Model` for allowed
+        theta types
+        '''
+        return cls(Model(theta, observations), observations)
+
+    def __init__(self, model, observations=None):
+        self.model = model
+        self.obs = observations if observations else model.observations
+
+        # TODO somehow based on valid_likelihoods figure out dataset names
+        # self.data_fields =
+
+
+class CIModelVisualizer(_ClusterVisualizer):
+    '''
+    class for making, showing, saving all the plots related to a bunch of models
+    in the form of confidence intervals
+    '''
+
     @_support_units
-    def plot_all(self, fig=None, axes=None, show_obs='attempt'):
+    def plot_BH_mass(self, fig=None, ax=None, bins='auto', color='b'):
 
-        # TODO a better method for being able to overplot multiple show_alls
-        fig, axes = plt.subplots(4, 2)
-        # if fig is None:
-        #     axes = axes.flatten()
-        # else:
-        #     axes = fig.axes
+        fig, ax = self._setup_artist(fig, ax)
 
-        fig.suptitle(str(self.obs))
+        color = mpl_clr.to_rgb(color)
+        facecolor = color + (0.33, )
 
-        # self.plot_pulsar(fig=fig, ax=axes[0], show_obs=show_obs)
-        self.plot_number_density(fig=fig, ax=axes[0, 0], show_obs=show_obs)
-        self.plot_LOS(fig=fig, ax=axes[1, 0], show_obs=show_obs)
-        self.plot_pm_tot(fig=fig, ax=axes[0, 1], show_obs=show_obs)
-        self.plot_pm_T(fig=fig, ax=axes[1, 1], show_obs=show_obs)
-        self.plot_pm_R(fig=fig, ax=axes[2, 1], show_obs=show_obs)
-        self.plot_pm_ratio(fig=fig, ax=axes[3, 1], show_obs=show_obs)
+        ax.hist(self.BH_mass, histtype='stepfilled',
+                bins=bins, ec=color, fc=facecolor, lw=2)
 
-        gs = axes[2, 0].get_gridspec()
+        return fig
 
-        for ax in axes[2:, 0]:
-            ax.remove()
+    @_support_units
+    def plot_BH_num(self, fig=None, ax=None, bins='auto', color='b'):
 
-        # Is this what is messing up the spacing?
-        axbig = fig.add_subplot(gs[2:, 0])
+        fig, ax = self._setup_artist(fig, ax)
 
-        self.plot_mass_func(fig=fig, ax=axbig, show_obs=show_obs)
+        color = mpl_clr.to_rgb(color)
+        facecolor = color + (0.33, )
 
-        for ax in axes.flatten():
-            ax.set_xlabel('')
+        ax.hist(self.BH_num, histtype='stepfilled',
+                bins=bins, ec=color, fc=facecolor, lw=2)
 
         return fig
 
@@ -1888,3 +1134,11 @@ class CIModelVisualizer(_Visualizer):
                 setattr(viz, key, value)
 
         return viz
+
+
+class ObservationsVisualizer(_ClusterVisualizer):
+    '''
+    class for making, showing, saving all the plots related to observables data,
+    without any models at all
+    '''
+    pass

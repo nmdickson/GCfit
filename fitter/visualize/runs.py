@@ -1,4 +1,4 @@
-from .models import _Visualizer, CIModelVisualizer, ModelVisualizer
+from .models import CIModelVisualizer, ModelVisualizer
 
 import sys
 
@@ -10,14 +10,68 @@ import matplotlib.colors as mpl_clr
 __all__ = ['RunVisualizer']
 
 
-class RunVisualizer(_Visualizer):
+class RunVisualizer:
     '''All the plots based on a model run, like the chains and likelihoods
     and marginals corner plots and etc
 
     based on an output file I guess?
     '''
-    # TODO a way to find the converged iteration automatcially
+    # TODO a way to find the converged iteration automatcially (even possible?)
     # TODO a nice way to print the sources (accounting for excluded likelihoods)
+
+    _REDUC_METHODS = {'median': np.median, 'mean': np.mean}
+
+    def _setup_artist(self, fig, ax, *, use_name=True):
+        # TODO should maybe attempt to use gcf, gca first
+        if ax is None:
+            if fig is None:
+                fig, ax = plt.subplots()
+            else:
+                # TODO how to handle the shapes of subplots here probs read fig
+                ax = fig.add_subplot()
+        else:
+            if fig is None:
+                fig = ax.get_figure()
+
+        if hasattr(self, 'name') and use_name:
+            fig.suptitle(self.name)
+
+        return fig, ax
+
+    # TODO this shsould handle an axes arg as well
+    #   The whole point of these methods is so we can reuse the fig, but thats
+    #   not currenlty possible with the multi artist like it is for singles
+    def _setup_multi_artist(self, fig, shape, *, use_name=True, **subplot_kw):
+        '''setup a subplot with multiple axes, don't supply ax cause it doesnt
+        really make sense in this case, you would need to supply the same
+        amount of axes as shape and everything, just don't deal with it'''
+
+        if shape is None:
+
+            axarr = []
+            if fig is None:
+                fig = plt.figure()
+
+        else:
+            # TODO axarr should always be an arr, even if shape=1
+
+            if fig is None:
+                fig, axarr = plt.subplots(*shape, **subplot_kw)
+
+            elif not fig.axes:
+                fig, axarr = plt.subplots(*shape, num=fig.number, **subplot_kw)
+
+            else:
+                # TODO make sure this is using the correct order
+                axarr = np.array(fig.axes).reshape(shape)
+                # we shouldn't add axes to a fig that already has some
+                # maybe just warn or error if the shape doesn't match `shape`
+                pass
+
+        if hasattr(self, 'name') and use_name:
+            fig.suptitle(self.name)
+
+        return fig, axarr
 
     def __str__(self):
         return f'{self.file.filename} - Run Results'
@@ -35,6 +89,7 @@ class RunVisualizer(_Visualizer):
         if name is not None:
             self.name = name
 
+        # TODO could also try to get obs automatically from cluster name
         self.obs = observations
 
         self.has_indiv = 'blobs' in self.file[self._gname]
@@ -427,7 +482,3 @@ class RunVisualizer(_Visualizer):
                 # mssg += 'Specified prior bounds'
 
         out.write(mssg)
-
-
-# TODO a sort of "run details" method I can run on a glob pattern to print
-#   a summary, so I can see which run is which, maybe should go in ./bin
