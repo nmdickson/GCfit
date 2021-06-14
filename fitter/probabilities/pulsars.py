@@ -125,7 +125,10 @@ def cluster_component(model, R, mass_bin, *, eps=1e-3):
     # az_domain = np.arange(0.0, azmax.value + Δa, Δa) << azmax.unit
 
     # Define the acceleration domain, using 2*nr points
-    az_domain = np.linspace(0.0, azmax.value, 2 * nr) << azmax.unit
+
+
+    # TODO for dm lets try bumping up the points again
+    az_domain = np.linspace(0.0, azmax.value, 6 * nr) << azmax.unit
     Δa = np.diff(az_domain)[1]
 
 
@@ -154,13 +157,16 @@ def cluster_component(model, R, mass_bin, *, eps=1e-3):
     az_domain = np.concatenate((np.flip(-az_domain[1:]), az_domain))
 
     # Ensure Paz is normalized
+
+
+    # NOTE: this version requires more than 2*nr steps, do more testing
+
     norm = 0.0
     # get the midpoint of the Paz dist
     mid = len(Paz_dist) // 2
     print("len of az array: ", len(Paz_dist))
     print("mid point: ", mid)
     for ind in range(mid):
-        print(f"step: {ind}, norm: {norm}")
 
         # positive side
         P_a = Paz_dist[mid + ind]
@@ -201,8 +207,11 @@ def cluster_component(model, R, mass_bin, *, eps=1e-3):
 
 
         # Manual normalization
+        # TODO
         # Paz_dist /= norm
 
+
+    print(f"step: {ind}, norm: {norm}")
     if norm < 2.0:
         import matplotlib.pyplot as plt
         import scipy
@@ -213,7 +222,8 @@ def cluster_component(model, R, mass_bin, *, eps=1e-3):
 
     # Set the rest to zero
     Paz_dist[:mid - ind] = 0
-    Paz_dist[mid + ind:] = 0
+    # Off by one?
+    Paz_dist[mid + ind + 1:] = 0
 
 
     # Normalize the Paz dist, before this step the area should be ~2 because each
