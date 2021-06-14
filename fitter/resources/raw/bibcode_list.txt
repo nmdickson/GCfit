@@ -1,0 +1,28 @@
+Source                          bibcode
+Watkins et al. (2015)           2015ApJ...812..149W
+De Boer et al. (2019)           2019MNRAS.485.4906D
+Vasiliev & Baumgardt (2021)     2021arXiv210209568V
+Heyl et al. (2017)              2017ApJ...850..186H
+Heyl et al. (2012)              2012ApJ...761...51H
+Freire et al. (2017)            2017MNRAS.471..857F
+Ridolfi et al. (2016)           2016MNRAS.462.2918R
+Baumgardt & Hilker (2018)       2018MNRAS.478.1520B
+Dalgleish et al. (2020)         2020MNRAS.492.3859D
+Kamann et al. (2018)            2018MNRAS.473.5591K
+D'Amico et al. (2001)           2001ApJ...561L..89D
+D'Amico et al. (2001)           2001ApJ...548L.171D
+Ferraro et al. (2001)           2001ApJ...561L..93F
+Lynch et al. (2012)             2012ApJ...745..109L
+Possenti et al. (2003)          2003ApJ...599..475P
+McNamara et al. (2012)          2012ApJ...745..175M
+
+mass functions:
+Simioni                         2018MNRAS.476..271S
+Trauger                         1996PASP..108..682M
+Sarajedini                      2007AJ....133.1658S
+King                            1995ApJ...452L..33K
+
+Renzini                         2001ApJ...553..733Z
+richer                          2012AJ....143...11K
+richer2
+rhoads
