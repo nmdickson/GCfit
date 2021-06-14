@@ -3,7 +3,7 @@ import pathlib
 from importlib import resources
 
 
-__all__ = ['cluster_list', 'hdf_view', 'get_std_cluster_name']
+__all__ = ['cluster_list', 'hdf_view', 'get_std_cluster_name', 'get_bibtex']
 
 
 def cluster_list():
@@ -68,6 +68,7 @@ def hdf_view(cluster, attrs=False, spacing='normal', *, outfile="stdout"):
             outstr = f"{front}{type(obj).__name__}: {key}\n"
 
             if attrs:
+                # TODO on mass functions this shouldn't print the field coords
                 for k, v in obj.attrs.items():
                     outstr += f"{tabs}    |- {k}: {v}\n"
 
@@ -86,6 +87,7 @@ def hdf_view(cluster, attrs=False, spacing='normal', *, outfile="stdout"):
     # Open the file and run the crawler over all its items
     # ----------------------------------------------------------------------
 
+    # TODO use get_std_cluster_name here
     with resources.path('fitter', 'resources') as datadir:
         with h5py.File(f'{datadir}/{cluster}.hdf5', 'r') as file:
 
@@ -160,3 +162,26 @@ def get_std_cluster_name(name):
         warnings.warn(mssg)
 
     return name
+
+
+def doi2bibtex(doi):
+    '''Request the bibtex entry of this `doi` from crossref'''
+    import requests
+
+    headers = {'accept': 'application/x-bibtex'}
+    url = f'http://dx.doi.org/{doi}'
+
+    return requests.get(url=url, headers=headers)
+
+
+def bibcode2bibtex(bibcode):
+    '''Request the bibtex entry of this `bibcode` from the ADS
+
+    Requires the `ads` package and a NASA ADS API-key saved to a file called
+    `~/.ads/dev_key` or as an environment variable named `ADS_DEV_KEY`
+    '''
+    import ads
+
+    query = ads.ExportQuery(bibcode, format='bibtex')
+
+    return query.execute()
