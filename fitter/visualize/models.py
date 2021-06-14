@@ -18,6 +18,8 @@ __all__ = ['ModelVisualizer', 'CIModelVisualizer']
 # TODO I thinkk this is somewhat out of date (20)
 # TODO fix all spacings
 
+# TODO fix all the plots to utilize all data (sugroups) for that likelihood (10)
+
 
 class _Visualizer:
 
@@ -165,8 +167,8 @@ class ModelVisualizer(_Visualizer):
                 obs_pulsar = self.obs['pulsar']
 
                 ax.errorbar(obs_pulsar['r'],
-                            self.obs['pulsar/Pdot_meas'],
-                            yerr=self.obs['pulsar/ΔPdot_meas'],
+                            self.obs['pulsar/Pdot'],
+                            yerr=self.obs['pulsar/ΔPdot'],
                             fmt='k.')
 
             except KeyError as err:
@@ -206,8 +208,8 @@ class ModelVisualizer(_Visualizer):
 
         P = puls_obs['P'][pulsar_ind].to('s')
 
-        Pdot_meas = puls_obs['Pdot_meas'][pulsar_ind]
-        ΔPdot_meas = np.abs(puls_obs['ΔPdot_meas'][pulsar_ind])
+        Pdot_meas = puls_obs['Pdot'][pulsar_ind]
+        ΔPdot_meas = np.abs(puls_obs['ΔPdot'][pulsar_ind])
 
         PdotP_domain, PdotP_c_prob = pulsars.cluster_component(self.model,
                                                                R, mass_bin)
@@ -304,8 +306,8 @@ class ModelVisualizer(_Visualizer):
 
         P = puls_obs['Pb'][pulsar_ind].to('s')
 
-        Pdot_meas = puls_obs['Pbdot_meas'][pulsar_ind]
-        ΔPdot_meas = np.abs(puls_obs['ΔPbdot_meas'][pulsar_ind])
+        Pdot_meas = puls_obs['Pbdot'][pulsar_ind]
+        ΔPdot_meas = np.abs(puls_obs['ΔPbdot'][pulsar_ind])
 
         PdotP_domain, PdotP_c_prob = pulsars.cluster_component(self.model,
                                                                R, mass_bin)
