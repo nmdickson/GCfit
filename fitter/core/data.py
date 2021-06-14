@@ -36,7 +36,7 @@ DEFAULT_INITIALS = {
 # Cluster Observational Data
 # --------------------------------------------------------------------------
 # TODO maybe define a new excepton for when a req'd thing is not in an obs
-# TODO need to add sources to mass function data
+# TODO add proposal ids to mass function data, bibcodes don't really match
 
 
 class Variable(u.Quantity):

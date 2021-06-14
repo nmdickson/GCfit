@@ -18,6 +18,8 @@ __all__ = ['ModelVisualizer', 'CIModelVisualizer']
 # TODO I thinkk this is somewhat out of date (20)
 # TODO fix all spacings
 
+# TODO fix all the plots to utilize all data (sugroups) for that likelihood (10)
+
 
 class _Visualizer:
 
