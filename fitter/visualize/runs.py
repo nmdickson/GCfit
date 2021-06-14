@@ -16,6 +16,7 @@ class RunVisualizer(_Visualizer):
     based on an output file I guess?
     '''
     # TODO a way to find the converged iteration automatcially
+    # TODO a nice way to print the sources (accounting for excluded likelihoods)
 
     def __str__(self):
         return f'{self.file.filename} - Run Results'

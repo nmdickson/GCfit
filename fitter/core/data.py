@@ -37,7 +37,6 @@ DEFAULT_INITIALS = {
 # --------------------------------------------------------------------------
 # TODO maybe define a new excepton for when a req'd thing is not in an obs
 # TODO need to add sources to mass function data
-# TODO could use a nice way of generating and showing what sources are used
 
 
 class Variable(u.Quantity):
