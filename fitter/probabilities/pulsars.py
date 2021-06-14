@@ -7,6 +7,7 @@ from astropy.constants import c
 
 import pathlib
 from importlib import resources
+import logging
 
 
 __all__ = [
@@ -22,7 +23,7 @@ __all__ = [
 # --------------------------------------------------------------------------
 
 
-def cluster_component(model, R, mass_bin, *, eps=1e-4):
+def cluster_component(model, R, mass_bin, *, eps=1e-2):
     """
     Computes probability distribution for a range of line of sight
     accelerations at projected R : P(az|R)
@@ -116,11 +117,17 @@ def cluster_component(model, R, mass_bin, *, eps=1e-4):
     # Value of the maximum acceleration, at the chosen root
     azmax = az_spl(zmax)
 
+    # Old version here for future reference 
     # increment density by 2 order of magn. smaller than azmax
-    Δa = 10**(np.floor(np.log10(azmax.value)) - 2)
+    # Δa = 10**(np.floor(np.log10(azmax.value)) - 2)
 
     # define the acceleration space domain, based on amax and Δa
-    az_domain = np.arange(0., azmax.value, Δa) << azmax.unit
+    # az_domain = np.arange(0.0, azmax.value + Δa, Δa) << azmax.unit
+
+    # Define the acceleration domain, using 2*nr points
+    az_domain = np.linspace(0.0, azmax.value, 2 * nr) << azmax.unit
+    Δa = np.diff(az_domain)[1]
+
 
     # TODO look at the old new_Paz to get the comments for this stuff
 
@@ -142,38 +149,48 @@ def cluster_component(model, R, mass_bin, *, eps=1e-4):
 
     Paz_dist /= rhoz_spl.integral(0. << z.unit, zt).value
 
-    # Ensure Paz is normalized
 
-    norm = 0.
+    # Ensure Paz is normalized
+    norm = 0.0
     for ind, P_b in enumerate(Paz_dist[1:], 1):
         P_a = Paz_dist[ind - 1]
 
         # Integrate using trapezoid rule cumulatively
-        norm += 0.5 * Δa * (P_a + P_b)
+        norm += (0.5 * Δa * (P_a + P_b)).value
 
+        # NOTE: Norm target here needs to be 1.0 not 0.5 in order to fully sample
+        # the distribution, this means we need to divide by 2 somewhere along the way.
         # If converges, cut domain at this index
-        if abs(0.5 - norm) < eps:
+        if abs(1.0 - norm) < eps:
             break
 
         # If passes normalization, backup a step to cut domain close as possible
-        elif norm > 0.5:
+        elif norm > 1.0:
             ind -= 1
             break
 
     else:
-        # integral didn't reach 0.5 before end of distribution
-        # should not happen, means Δa needs to shrink to reach closer to asymp.
-        mssg = 'Paz distribution unable to reach normalization before azmax'
-        raise RuntimeError(mssg)
+        # This is the case where our probability distribution doesn't integrate
+        # to one, just don't cut anything off, log the normalization and
+        # manually normalize it.
+        logging.warning("Probability distribution failed to integrate to 1.0,"
+                        f" area: {norm:.6f}")
 
-    # Cut domain and distribution at index of normalization
-    az_domain = az_domain[:ind + 1]
-    Paz_dist = Paz_dist[:ind + 1]
 
-    # TODO not sure if should pad with some zeros. not needed but makes it clear
-    #       atleast 1 zero, at azmax? or maybe just ind+1
+        # Manual normalization
+        Paz_dist /= norm
+
+    # Set the rest to zero
+    Paz_dist[ind + 1:] = 0
+
     # Mirror the distributions
     Paz_dist = np.concatenate((np.flip(Paz_dist[1:]), Paz_dist))
+
+    # Normalize the Paz dist, before this step the area should be ~2 because each
+    # side of the dist needs to be cutoff at an area of 1.0.
+    Paz_dist /= 2
+
+
     az_domain = np.concatenate((np.flip(-az_domain[1:]), az_domain))
 
     # Change the acceleration domain to a Pdot / P domain
@@ -188,7 +205,7 @@ def galactic_component(lat, lon, D):
 
     from astropy.coordinates import SkyCoord
 
-    # Mikly Way Potential
+    # Milky Way Potential
     mw = pot.BovyMWPotential2014()
 
     # Pulsar position in galactocentric coordinates
@@ -200,7 +217,7 @@ def galactic_component(lat, lon, D):
     l_sun = np.zeros_like(lon)
     D_sun = np.zeros_like(D)
 
-    # TODO the transformations are kinda slow, and are prob uneccessary here
+    # TODO the transformations are kinda slow, and are prob unnecessary here
     sun = SkyCoord(b=b_sun, l=l_sun, distance=D_sun, frame='galactic')
     XYZ_sun = sun.galactocentric.cartesian.xyz
 

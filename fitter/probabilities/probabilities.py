@@ -141,8 +141,9 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
 
         P = pulsars['P'][i].to('s')
 
-        Pdot_meas = pulsars['Pdot_meas'][i]
-        ΔPdot_meas = np.abs(pulsars['ΔPdot_meas'][i])
+        # TODO the actual variable shouldn't be named "meas"; that parts obvious
+        Pdot_meas = pulsars['Pdot'][i]
+        ΔPdot_meas = np.abs(pulsars['ΔPdot'][i])
 
         # ------------------------------------------------------------------
         # Compute the cluster component distribution, from the model
@@ -331,8 +332,8 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
 
         Pb = pulsars['Pb'][i].to('s')
 
-        Pbdot_meas = pulsars['Pbdot_meas'][i]
-        ΔPbdot_meas = pulsars['ΔPbdot_meas'][i]
+        Pbdot_meas = pulsars['Pbdot'][i]
+        ΔPbdot_meas = pulsars['ΔPbdot'][i]
 
         # ------------------------------------------------------------------
         # Compute the cluster component distribution, from the model
@@ -553,6 +554,7 @@ def likelihood_pm_tot(model, pm, *,
     # Get model values
     model_tot = np.sqrt(0.5 * (model.v2Tj[mass_bin] + model.v2Rj[mass_bin]))
 
+    # TODO some datasets have Δr, should probably account for those as well
     # Convert model units
     model_r = model.r.to(pm['r'].unit)
     model_tot = model_tot.to(pm['PM_tot'].unit)

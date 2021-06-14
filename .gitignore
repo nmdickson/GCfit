@@ -4,6 +4,11 @@ __pycache__/
 *.egg-info/
 
 devnotes*
+*vscode*
+/build
+/dist
+/results
+*ipynb_checkpoints*
 
 # Core latex/pdflatex auxiliary files:
 *.aux
