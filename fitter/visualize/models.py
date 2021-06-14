@@ -104,6 +104,10 @@ class _ClusterVisualizer:
     # Plotting functionality
     # -----------------------------------------------------------------------
 
+    def _get_median(self, percs):
+        '''from an array of data percentiles, return the median array'''
+        return percs[percs.shape[0] // 2] if percs.ndim > 1 else percs
+
     def _get_err(self, dataset, key):
         '''gather the error variables corresponding to `key` from `dataset`'''
         try:
@@ -162,11 +166,12 @@ class _ClusterVisualizer:
     # Plot extras
     # -----------------------------------------------------------------------
 
-    def _add_residuals(self, ax, xmodel, ymodel, xdata, ydata,
-                       xerr=None, yerr=None):
+    def _add_residuals(self, ax, ymodel, xdata, ydata, xerr=None, yerr=None):
         from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-        yspline = util.QuantitySpline(xmodel, ymodel)
+        ymedian = self._get_median(ymodel)
+
+        yspline = util.QuantitySpline(self.r, ymedian)
 
         res = yspline(xdata) - ydata
 
@@ -176,7 +181,8 @@ class _ClusterVisualizer:
         res_ax.errorbar(xdata, res, fmt='k.', xerr=xerr, yerr=yerr)
 
         res_ax.grid()
-        res_ax.axhline(0., c='k')
+
+        self._plot(res_ax, ymodel - ymedian, color='k')
 
         res_ax.set_xscale(ax.get_xscale())
 
