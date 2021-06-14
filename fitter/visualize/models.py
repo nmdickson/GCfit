@@ -114,44 +114,35 @@ class _ClusterVisualizer:
             except KeyError:
                 return None
 
-    def _add_residuals(self, ax, xmodel, ymodel, xdata, ydata,
-                       xerr=None, yerr=None):
-        from mpl_toolkits.axes_grid1 import make_axes_locatable
-
-        yspline = util.QuantitySpline(xmodel, ymodel)
-
-        res = yspline(xdata) - ydata
-
-        divider = make_axes_locatable(ax)
-        res_ax = divider.append_axes('bottom', size="15%", pad=0, sharex=ax)
-
-        res_ax.errorbar(xdata, res, fmt='k.', xerr=xerr, yerr=yerr)
-
-        res_ax.grid()
-        res_ax.axhline(0., c='k')
-
-        res_ax.set_xscale(ax.get_xscale())
-
-    def _plot(self, ax, percs, intervals=2, r_unit='pc', *,
+    def _plot(self, ax, data, intervals=None, r_unit='pc', *,
               CI_kwargs=None, **kwargs):
 
         CI_kwargs = dict() if CI_kwargs is None else CI_kwargs
 
-        if not (percs.shape[0] % 2):
-            mssg = 'Invalid `percs`, must have odd-numbered zeroth axis shape'
+        if data is None or data.ndim == 0:
+            return
+
+        elif data.ndim == 1:
+            data.reshape((1, data.size))
+
+        if not (data.shape[0] % 2):
+            mssg = 'Invalid `data`, must have odd-numbered zeroth axis shape'
             raise ValueError(mssg)
 
-        midpoint = percs.shape[0] // 2
+        midpoint = data.shape[0] // 2
 
-        if intervals > midpoint:
+        if intervals is None:
+            intervals = midpoint
+
+        elif intervals > midpoint:
             mssg = f'{intervals}σ is outside stored range of {midpoint}σ'
             raise ValueError(mssg)
 
         r_domain = self.r.to(r_unit)
 
-        median_ = percs[midpoint]
+        median = data[midpoint]
 
-        med_plot, = ax.plot(r_domain, median_, **kwargs)
+        med_plot, = ax.plot(r_domain, median, **kwargs)
 
         CI_kwargs.setdefault('color', med_plot.get_color())
 
@@ -159,7 +150,7 @@ class _ClusterVisualizer:
         for sigma in range(1, intervals + 1):
 
             ax.fill_between(
-                r_domain, percs[midpoint + sigma], percs[midpoint - sigma],
+                r_domain, data[midpoint + sigma], data[midpoint - sigma],
                 alpha=(1 - alpha), **CI_kwargs
             )
 
