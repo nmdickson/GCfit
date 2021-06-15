@@ -118,8 +118,8 @@ class _ClusterVisualizer:
             except KeyError:
                 return None
 
-    def _plot(self, ax, data, intervals=None, r_unit='pc', *,
-              CI_kwargs=None, **kwargs):
+    def _plot_model(self, ax, data, intervals=None, r_unit='pc', *,
+                    CI_kwargs=None, **kwargs):
 
         CI_kwargs = dict() if CI_kwargs is None else CI_kwargs
 
@@ -162,6 +162,33 @@ class _ClusterVisualizer:
 
         return ax
 
+    def _plot_data(self, ax, ds_pattern, y_key, *,
+                   r_key='r', r_unit='pc', strict=False, **kwargs):
+
+        datasets = self.obs.filter_datasets(ds_pattern, True)
+
+        if strict and not datasets:
+            mssg = f"Dataset matching '{ds_pattern}' do not exist in {self.obs}"
+            # raise DataError
+            raise KeyError(mssg)
+
+        for key, dset in datasets:
+            try:
+                xdata = dset[r_key]
+                ydata = dset[y_key]
+
+                xerr = self._get_err(dset, r_key)
+                yerr = self._get_err(dset, y_key)
+
+            except KeyError as err:
+                if strict:
+                    raise err
+
+            ax.errorbar(xdata.to(r_unit), ydata, xerr=xerr, yerr=yerr,
+                        label=key, **kwargs)
+
+        return ax
+
     # -----------------------------------------------------------------------
     # Plot extras
     # -----------------------------------------------------------------------
@@ -182,7 +209,7 @@ class _ClusterVisualizer:
 
         res_ax.grid()
 
-        self._plot(res_ax, ymodel - ymedian, color='k')
+        self._plot_model(res_ax, ymodel - ymedian, color='k')
 
         res_ax.set_xscale(ax.get_xscale())
 
@@ -213,25 +240,18 @@ class _ClusterVisualizer:
 
         fig, ax = self._setup_artist(fig, ax)
 
-        ax.set_title('Line of Sight Velocity Dispersion')
+        ax.set_title('Line-of-Sight Velocity Dispersion')
 
         ax.set_xscale("log")
 
+        self._plot_model(ax, self.vpj)
+
         if show_obs:
-            try:
-                veldisp = self.obs['velocity_dispersion']
 
-                xerr = self._get_err(veldisp, 'r')
-                yerr = self._get_err(veldisp, 'σ')
+            pattern = '*velocity_dispersion*'
+            var = 'σ'
 
-                ax.errorbar(veldisp['r'].to(u.pc), veldisp['σ'], fmt='k.',
-                            xerr=xerr, yerr=yerr)
-
-            except KeyError as err:
-                if show_obs != 'attempt':
-                    raise err
-
-        self._plot_model_CI(ax, self.vpj)
+            self._plot_data(ax, pattern, var, strict=(show_obs == 'strict'))
 
         return fig
 
@@ -244,21 +264,14 @@ class _ClusterVisualizer:
 
         ax.set_xscale("log")
 
+        self._plot_model(ax, self.vtotj.to(u.mas / u.yr), r_unit=x_unit)
+
         if show_obs:
-            try:
-                pm = self.obs['proper_motion']
 
-                xerr = self._get_err(pm, 'r').to(u.pc)
-                yerr = self._get_err(pm, 'PM_tot')
+            pattern = '*proper_motion*'
+            var = 'PM_tot'
 
-                ax.errorbar(pm['r'].to(x_unit), pm['PM_tot'], fmt='k.',
-                            xerr=xerr, yerr=yerr)
-
-            except KeyError as err:
-                if show_obs != 'attempt':
-                    raise err
-
-        self._plot_model_CI(ax, self.vtotj.to(u.mas / u.yr), r_unit=x_unit)
+            self._plot_data(ax, pattern, var, strict=(show_obs == 'strict'))
 
         return fig
 
@@ -271,28 +284,19 @@ class _ClusterVisualizer:
 
         ax.set_xscale("log")
 
+        self._plot_model(ax, self.vTj / self.vRj)
+
         if show_obs:
-            try:
 
-                pm = self.obs['proper_motion']
+            pattern = '*proper_motion*'
+            var = 'PM_ratio'
 
-                xerr = self._get_err(pm, 'r').to(u.pc)
-                yerr = self._get_err(pm, 'PM_ratio')
-
-                ax.errorbar(pm['r'].to(u.pc), pm['PM_ratio'], fmt='k.',
-                            xerr=xerr, yerr=yerr)
-
-            except KeyError as err:
-                if show_obs != 'attempt':
-                    raise err
-
-        self._plot_model_CI(ax, self.vTj / self.vRj)
+            self._plot_data(ax, pattern, var, strict=(show_obs == 'strict'))
 
         return fig
 
     @_support_units
     def plot_pm_T(self, fig=None, ax=None, show_obs=True):
-        # TODO capture all mass bins which have data (high_mass, low_mass, etc)
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -300,22 +304,14 @@ class _ClusterVisualizer:
 
         ax.set_xscale("log")
 
+        self._plot_model(ax, self.vTj.to(u.mas / u.yr))
+
         if show_obs:
-            try:
 
-                pm = self.obs['proper_motion/high_mass']
+            pattern = '*proper_motion*'
+            var = 'PM_T'
 
-                xerr = self._get_err(pm, 'r')
-                yerr = self._get_err(pm, 'PM_T')
-
-                ax.errorbar(pm['r'], pm["PM_T"], fmt='k.',
-                            xerr=xerr, yerr=yerr)
-
-            except KeyError as err:
-                if show_obs != 'attempt':
-                    raise err
-
-        self._plot_model_CI(ax, self.vTj.to(u.mas / u.yr))
+            self._plot_data(ax, pattern, var, strict=(show_obs == 'strict'))
 
         return fig
 
@@ -328,22 +324,14 @@ class _ClusterVisualizer:
 
         ax.set_xscale("log")
 
+        self._plot_model(ax, self.vRj.to(u.mas / u.yr))
+
         if show_obs:
-            try:
 
-                pm = self.obs['proper_motion/high_mass']
+            pattern = '*proper_motion*'
+            var = 'PM_R'
 
-                xerr = self._get_err(pm, 'r')
-                yerr = self._get_err(pm, 'PM_R')
-
-                ax.errorbar(pm['r'], pm["PM_R"], fmt='k.',
-                            xerr=xerr, yerr=yerr)
-
-            except KeyError as err:
-                if show_obs != 'attempt':
-                    raise err
-
-        self._plot_model_CI(ax, self.vRj.to(u.mas / u.yr))
+            self._plot_data(ax, pattern, var, strict=(show_obs == 'strict'))
 
         return fig
 
@@ -356,24 +344,17 @@ class _ClusterVisualizer:
 
         ax.loglog()
 
+        self._plot_model(ax, self.numdens)
+
         if show_obs:
-            try:
 
-                numdens = self.obs['number_density']
+            pattern = '*number_density*'
+            var = 'Σ'
 
-                xerr = self._get_err(numdens, 'r')
+            # TODO how to add nuisance params?
+            # yerr = np.sqrt(ΔΣ**2 + (self.s2 << ΔΣ.unit**2))
 
-                ΔΣ = self._get_err(numdens, "Σ")
-                yerr = np.sqrt(ΔΣ**2 + (self.s2 << ΔΣ.unit**2))
-
-                ax.errorbar(numdens['r'], numdens["Σ"], fmt='k.',
-                            xerr=xerr, yerr=yerr)
-
-            except KeyError as err:
-                if show_obs != 'attempt':
-                    raise err
-
-        self._plot_model_CI(ax, self.numdens)
+            self._plot_data(ax, pattern, var, strict=(show_obs == 'strict'))
 
         return fig
 
