@@ -127,7 +127,7 @@ class _ClusterVisualizer:
             return
 
         elif data.ndim == 1:
-            data.reshape((1, data.size))
+            data = data.reshape((1, data.size))
 
         if not (data.shape[0] % 2):
             mssg = 'Invalid `data`, must have odd-numbered zeroth axis shape'
@@ -172,7 +172,7 @@ class _ClusterVisualizer:
             # raise DataError
             raise KeyError(mssg)
 
-        for key, dset in datasets:
+        for key, dset in datasets.items():
             try:
                 xdata = dset[r_key]
                 ydata = dset[y_key]
@@ -187,6 +187,10 @@ class _ClusterVisualizer:
             if err_transform is not None:
                 yerr = err_transform(yerr)
 
+            kwargs.setdefault('linestyle', 'None')
+            kwargs.setdefault('marker', '.')
+
+            # TODO the label would look nicer as a citep style source
             ax.errorbar(xdata.to(r_unit), ydata, xerr=xerr, yerr=yerr,
                         label=key, **kwargs)
 
@@ -247,7 +251,7 @@ class _ClusterVisualizer:
 
         ax.set_xscale("log")
 
-        self._plot_model(ax, self.vpj)
+        self._plot_model(ax, self.LOS)
 
         if show_obs:
 
@@ -255,6 +259,8 @@ class _ClusterVisualizer:
             var = 'σ'
 
             self._plot_data(ax, pattern, var, strict=(show_obs == 'strict'))
+
+        ax.legend()
 
         return fig
 
@@ -267,7 +273,7 @@ class _ClusterVisualizer:
 
         ax.set_xscale("log")
 
-        self._plot_model(ax, self.vtotj.to(u.mas / u.yr), r_unit=x_unit)
+        self._plot_model(ax, self.pm_tot.to(u.mas / u.yr), r_unit=x_unit)
 
         if show_obs:
 
@@ -275,6 +281,8 @@ class _ClusterVisualizer:
             var = 'PM_tot'
 
             self._plot_data(ax, pattern, var, strict=(show_obs == 'strict'))
+
+        ax.legend()
 
         return fig
 
@@ -287,7 +295,7 @@ class _ClusterVisualizer:
 
         ax.set_xscale("log")
 
-        self._plot_model(ax, self.vTj / self.vRj)
+        self._plot_model(ax, self.pm_ratio)
 
         if show_obs:
 
@@ -295,6 +303,8 @@ class _ClusterVisualizer:
             var = 'PM_ratio'
 
             self._plot_data(ax, pattern, var, strict=(show_obs == 'strict'))
+
+        ax.legend()
 
         return fig
 
@@ -307,7 +317,7 @@ class _ClusterVisualizer:
 
         ax.set_xscale("log")
 
-        self._plot_model(ax, self.vTj.to(u.mas / u.yr))
+        self._plot_model(ax, self.pm_T.to(u.mas / u.yr))
 
         if show_obs:
 
@@ -315,6 +325,8 @@ class _ClusterVisualizer:
             var = 'PM_T'
 
             self._plot_data(ax, pattern, var, strict=(show_obs == 'strict'))
+
+        ax.legend()
 
         return fig
 
@@ -327,7 +339,7 @@ class _ClusterVisualizer:
 
         ax.set_xscale("log")
 
-        self._plot_model(ax, self.vRj.to(u.mas / u.yr))
+        self._plot_model(ax, self.pm_R.to(u.mas / u.yr))
 
         if show_obs:
 
@@ -335,6 +347,8 @@ class _ClusterVisualizer:
             var = 'PM_R'
 
             self._plot_data(ax, pattern, var, strict=(show_obs == 'strict'))
+
+        ax.legend()
 
         return fig
 
@@ -359,6 +373,8 @@ class _ClusterVisualizer:
 
             self._plot_data(ax, pattern, var, strict=(show_obs == 'strict'),
                             err_transform=quad_nuisance)
+
+        ax.legend()
 
         return fig
 
@@ -674,10 +690,7 @@ class _ClusterVisualizer:
     @_support_units
     def plot_all(self, fig=None, axes=None, show_obs='attempt'):
 
-        # TODO have a require_obs option, where if required we change to try
-        #   excepts and dont plot the ones that fail
-
-        # TODO a better method for being able to overplot multiple show_alls
+        # TODO a better method for being able to overplot multiple show_alls?
         fig, axes = plt.subplots(4, 2)
         # if fig is None:
         #     fig, axes = plt.subplots(4, 2)
@@ -688,8 +701,6 @@ class _ClusterVisualizer:
         fig.suptitle(str(self.obs))
 
         kw = {'show_obs': show_obs, 'residuals': False, 'hyperparam': True}
-
-        # self.plot_pulsar(fig=fig, ax=axes[0], show_obs=show_obs)
 
         self.plot_number_density(fig=fig, ax=axes[0, 0], **kw)
         self.plot_LOS(fig=fig, ax=axes[1, 0], **kw)
@@ -875,8 +886,36 @@ class ModelVisualizer(_ClusterVisualizer):
         self.model = model
         self.obs = observations if observations else model.observations
 
-        # TODO somehow based on valid_likelihoods figure out dataset names
-        # self.data_fields =
+        self.F = model.F
+        self.s2 = model.s2
+        self.d = model.d
+
+        # TODO not all datasets correspond to this mass bin (15)
+        mass_bin = model.nms - 1
+
+        self.r = model.r
+
+        self.LOS = np.sqrt(self.model.v2pj[mass_bin])
+        self.pm_T = np.sqrt(model.v2Tj[mass_bin])
+        self.pm_R = np.sqrt(model.v2Rj[mass_bin])
+        self.pm_tot = np.sqrt(0.5 * (self.pm_T**2 + self.pm_R**2))
+        self.pm_ratio = self.pm_T / self.pm_R
+        self.numdens = self._init_numdens(model, observations)
+
+    @_ClusterVisualizer._support_units
+    def _init_numdens(self, model, observations):
+
+        obs_nd = observations['number_density']  # <- not very general
+        obs_r = obs_nd['r'].to(model.r.unit)
+
+        model_nd = model.Sigmaj[model.nms - 1] / model.mj[model.nms - 1]
+
+        nd_interp = util.QuantitySpline(model.r, model_nd)
+
+        K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_nd['Σ']**2)
+             / np.nansum(nd_interp(obs_r)**2 / obs_nd['Σ']**2))
+
+        return K * model_nd
 
 
 class CIModelVisualizer(_ClusterVisualizer):
@@ -885,7 +924,7 @@ class CIModelVisualizer(_ClusterVisualizer):
     in the form of confidence intervals
     '''
 
-    @_support_units
+    @_ClusterVisualizer._support_units
     def plot_BH_mass(self, fig=None, ax=None, bins='auto', color='b'):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -898,7 +937,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         return fig
 
-    @_support_units
+    @_ClusterVisualizer._support_units
     def plot_BH_num(self, fig=None, ax=None, bins='auto', color='b'):
 
         fig, ax = self._setup_artist(fig, ax)
