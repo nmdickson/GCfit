@@ -274,6 +274,7 @@ class Observations:
                 mssg = f"Dataset '{key}' does not exist in {self}"
                 raise KeyError(mssg) from err
 
+    # TODO a filter method for finding all datasets matching a pattern
     @property
     def datasets(self):
         return self._dict_datasets
@@ -310,6 +311,17 @@ class Observations:
         root_group.visititems(_walker)
 
         return groups
+
+    def filter_datasets(self, pattern, valid_only=True):
+        # TODO maybe `datasets` and this should only return ds list not dict?
+        #   if thats the case, make `datasets._name` public
+
+        if valid_only:
+            datasets = {key for (key, *_) in self.valid_likelihoods}
+        else:
+            datasets = self.datasets.keys
+
+        return {key: self[key] for key in fnmatch.filter(datasets, pattern)}
 
     def get_sources(self, fmt='bibtex'):
         '''return a dict of all used sources
