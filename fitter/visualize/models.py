@@ -186,9 +186,10 @@ class _ClusterVisualizer:
 
         res_ax.set_xscale(ax.get_xscale())
 
-    def _add_hyperparam(self, ax, xmodel, ymodel, xdata, ydata, yerr):
+    def _add_hyperparam(self, ax, ymodel, xdata, ydata, yerr):
+        # TODO this is still a bit of a mess
 
-        yspline = util.QuantitySpline(xmodel, ymodel)
+        yspline = util.QuantitySpline(self.r, ymodel)
 
         if hasattr(ax, 'aeff_text'):
             aeff_str = ax.aeff_text.get_text()
