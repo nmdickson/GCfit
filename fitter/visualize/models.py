@@ -162,8 +162,8 @@ class _ClusterVisualizer:
 
         return ax
 
-    def _plot_data(self, ax, ds_pattern, y_key, *,
-                   r_key='r', r_unit='pc', strict=False, **kwargs):
+    def _plot_data(self, ax, ds_pattern, y_key, *, r_key='r', r_unit='pc',
+                   err_transform=None, strict=False, **kwargs):
 
         datasets = self.obs.filter_datasets(ds_pattern, True)
 
@@ -183,6 +183,9 @@ class _ClusterVisualizer:
             except KeyError as err:
                 if strict:
                     raise err
+
+            if err_transform is not None:
+                yerr = err_transform(yerr)
 
             ax.errorbar(xdata.to(r_unit), ydata, xerr=xerr, yerr=yerr,
                         label=key, **kwargs)
@@ -338,6 +341,9 @@ class _ClusterVisualizer:
     @_support_units
     def plot_number_density(self, fig=None, ax=None, show_obs=True):
 
+        def quad_nuisance(err):
+            return np.sqrt(err**2 + (self.s2 << err.unit**2))
+
         fig, ax = self._setup_artist(fig, ax)
 
         ax.set_title('Number Density')
@@ -351,10 +357,8 @@ class _ClusterVisualizer:
             pattern = '*number_density*'
             var = 'Σ'
 
-            # TODO how to add nuisance params?
-            # yerr = np.sqrt(ΔΣ**2 + (self.s2 << ΔΣ.unit**2))
-
-            self._plot_data(ax, pattern, var, strict=(show_obs == 'strict'))
+            self._plot_data(ax, pattern, var, strict=(show_obs == 'strict'),
+                            err_transform=quad_nuisance)
 
         return fig
 
