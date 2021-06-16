@@ -208,7 +208,6 @@ def cluster_component(model, R, mass_bin, DM=None, *, eps=1e-3):
         # also need the signs to pick which side of the cluster the pulsar is on
         az_signs = np.sign(az_domain)
 
-        z1 = np.maximum(z1_spl(np.abs(az_domain)), z[0])
 
         # unpack DM data
         DM, sigma_DM = DM
@@ -221,8 +220,14 @@ def cluster_component(model, R, mass_bin, DM=None, *, eps=1e-3):
         # use this for now
         z_domain = np.linspace(-zt, zt, len(az_domain))
 
+        # set up the spline for the DM based Paz
         DM_gaussian = gaussian(x=z_domain.value, mu=DM_los, sigma=DM_los_err)
-        DM_los_spl = sp.interpolate.UnivariateSpline(x=az_domain, y=DM_gaussian, s=0, k=1)
+        DM_los_spl = sp.interpolate.UnivariateSpline(x=z_domain.value, y=DM_gaussian, s=0, k=1)
+
+        # i think we still only want positive values for the other splines
+        az_domain = np.abs(az_domain)
+
+        z1 = np.maximum(z1_spl(az_domain), z[0])
 
         Paz_dist = (DM_los_spl(z1 * -1 * az_signs) / abs(az_der(z1))).value * u.dimensionless_unscaled
 
