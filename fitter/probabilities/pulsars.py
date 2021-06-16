@@ -220,7 +220,7 @@ def cluster_component(model, R, mass_bin, DM=None, *, eps=1e-3):
         # clusters so for now I'll put this in and when this is working properly
         # we can see if we have any problems.
 
-        if abs(DM_los) > model.rh:
+        if abs(DM_los) > model.rh.to("pc").value:
             logging.ERROR("Pulsar LOS position outside of rh.")
 
 
@@ -299,7 +299,7 @@ def cluster_component(model, R, mass_bin, DM=None, *, eps=1e-3):
 
         # Manual normalization
         # TODO turn back on
-        # Paz_dist /= norm
+        Paz_dist /= norm
 
 
     print(f"step: {ind}, norm: {norm}")
@@ -318,8 +318,9 @@ def cluster_component(model, R, mass_bin, DM=None, *, eps=1e-3):
 
     # Normalize the Paz dist, before this step the area should be ~2 because each
     # side of the dist needs to be cutoff at an area of 1.0.
-    # Paz_dist /= 2
-    # TODO turn this back on
+    if DM is None:
+        Paz_dist /= 2
+    # TODO only needed for non-DM method?
 
 
 
