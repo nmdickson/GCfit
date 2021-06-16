@@ -216,6 +216,13 @@ def cluster_component(model, R, mass_bin, DM=None, *, eps=1e-3):
         # get los pos, err
         DM_los, DM_los_err = los_dm(DM, sigma_DM)
 
+        # TODO: Not 100% sure that all pulsars are within the rh for all
+        # clusters so for now I'll put this in and when this is working properly
+        # we can see if we have any problems.
+
+        if abs(DM_los) > model.rh:
+            logging.ERROR("Pulsar LOS position outside of rh.")
+
 
         # use this for now (pulsars will always be within the half-light radius I think)
         z_domain = np.linspace(-model.rh, model.rh, len(az_domain)).value
