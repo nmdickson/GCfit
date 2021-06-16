@@ -217,12 +217,12 @@ def cluster_component(model, R, mass_bin, DM=None, *, eps=1e-3):
         DM_los, DM_los_err = los_dm(DM, sigma_DM)
 
 
-        # use this for now
-        z_domain = np.linspace(-zt, zt, len(az_domain))
+        # use this for now (pulsars will always be within the half-light radius I think)
+        z_domain = np.linspace(-model.rh, model.rh, len(az_domain)).value
 
         # set up the spline for the DM based Paz
-        DM_gaussian = gaussian(x=z_domain.value, mu=DM_los, sigma=DM_los_err)
-        DM_los_spl = sp.interpolate.UnivariateSpline(x=z_domain.value, y=DM_gaussian, s=0, k=1)
+        DM_gaussian = gaussian(x=z_domain, mu=DM_los, sigma=DM_los_err)
+        DM_los_spl = sp.interpolate.UnivariateSpline(x=z_domain, y=DM_gaussian, s=0, k=3, ext=1)
 
         # i think we still only want positive values for the other splines
         az_domain = np.abs(az_domain)
@@ -244,12 +244,7 @@ def cluster_component(model, R, mass_bin, DM=None, *, eps=1e-3):
                                         / abs(az_der(z2[within_bounds]))).value
 
 
-
-
-
     # Ensure Paz is normalized
-
-
     # NOTE: this version requires more than 2*nr steps, do more testing
 
     norm = 0.0
@@ -262,7 +257,6 @@ def cluster_component(model, R, mass_bin, DM=None, *, eps=1e-3):
         # positive side
         P_a = Paz_dist[mid + ind]
         P_b = Paz_dist[mid + ind + 1]
-
 
         # negative side
         P_c = Paz_dist[mid - ind]
@@ -297,7 +291,7 @@ def cluster_component(model, R, mass_bin, DM=None, *, eps=1e-3):
 
 
         # Manual normalization
-        # TODO
+        # TODO turn back on
         # Paz_dist /= norm
 
 
@@ -323,7 +317,8 @@ def cluster_component(model, R, mass_bin, DM=None, *, eps=1e-3):
 
 
     # Change the acceleration domain to a Pdot / P domain
-    PdotP_domain = az_domain / c
+    # put the signs back in
+    PdotP_domain = az_domain * az_signs / c
 
     return PdotP_domain, Paz_dist
 
