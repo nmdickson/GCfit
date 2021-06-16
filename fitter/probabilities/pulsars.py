@@ -1,4 +1,4 @@
-from ..util import QuantitySpline
+from ..util import QuantitySpline, gaussian
 
 import scipy.stats
 import scipy as sp
@@ -39,12 +39,6 @@ sigma_DMc = 0.02
 # =======================================================================================================#
 
 
-# Simple gaussian implementation
-def gaussian(x, sigma, mu):
-    norm = 1 / (sigma * np.sqrt(2 * np.pi))
-    exponent = np.exp(-0.5 * (((x - mu) / sigma) ** 2))
-    return norm * exponent
-
 
 # gaussian error propagation for division
 def div_error(a, a_err, b, b_err):
@@ -68,7 +62,7 @@ def los_dm(dm, dm_err):
 
 
 
-def cluster_component(model, R, mass_bin, DM, *, eps=1e-3):
+def cluster_component(model, R, mass_bin, DM=None, *, eps=1e-3):
     """
     Computes probability distribution for a range of line of sight
     accelerations at projected R : P(az|R)
@@ -80,7 +74,6 @@ def cluster_component(model, R, mass_bin, DM, *, eps=1e-3):
     R = R.to(model.rt.unit)
 
 
-    use_DM = True
 
 
 
@@ -185,7 +178,9 @@ def cluster_component(model, R, mass_bin, DM, *, eps=1e-3):
     # TODO look at the old new_Paz to get the comments for this stuff
 
     z1 = np.maximum(z1_spl(az_domain), z[0])
-    if use_DM == False:
+
+    # TODO fix all the DM stuff and then clean it up
+    if DM is None:
         Paz_dist = (rhoz_spl(z1) / abs(az_der(z1))).value * u.dimensionless_unscaled
 
         outside_azt = az_domain > azt
@@ -206,16 +201,30 @@ def cluster_component(model, R, mass_bin, DM, *, eps=1e-3):
         Paz_dist = np.concatenate((np.flip(Paz_dist[1:]), Paz_dist))
         az_domain = np.concatenate((np.flip(-az_domain[1:]), az_domain))
     else:
-        DM, sigma_DM = DM
-        z1 = np.concatenate((np.flip(-z1[1:]), z1))
 
-        DM_los, DM_los_err = los_dm(DM, sigma_DM)
-        # This case use the DM
+        az_domain = np.linspace(0.0, azmax.value, 6 * nr) << azmax.unit
+        # need to look at full cluster now that it's no longer symmetric
         az_domain = np.concatenate((np.flip(-az_domain[1:]), az_domain))
-        DM_gaussian = gaussian(x=az_domain.to("m/s2").value, mu=DM_los, sigma=DM_los_err)
+        # also need the signs to pick which side of the cluster the pulsar is on
+        az_signs = np.sign(az_domain)
+
+        z1 = np.maximum(z1_spl(np.abs(az_domain)), z[0])
+
+        # unpack DM data
+        DM, sigma_DM = DM
+
+
+        # get los pos, err
+        DM_los, DM_los_err = los_dm(DM, sigma_DM)
+
+
+        # use this for now
+        z_domain = np.linspace(-zt, zt, len(az_domain))
+
+        DM_gaussian = gaussian(x=z_domain.value, mu=DM_los, sigma=DM_los_err)
         DM_los_spl = sp.interpolate.UnivariateSpline(x=az_domain, y=DM_gaussian, s=0, k=1)
 
-        Paz_dist = (DM_los_spl(z1) / abs(az_der(z1))).value * u.dimensionless_unscaled
+        Paz_dist = (DM_los_spl(z1 * -1 * az_signs) / abs(az_der(z1))).value * u.dimensionless_unscaled
 
         outside_azt = az_domain > azt
 
@@ -224,9 +233,9 @@ def cluster_component(model, R, mass_bin, DM, *, eps=1e-3):
 
             z2 = z2_spl(az_domain)
 
-            within_bounds = outside_azt & ((z2 < zt) | (z2 > -zt))
-            # TODO put the bounds check back in
-            Paz_dist[within_bounds] += (DM_los_spl(z2[within_bounds])
+            within_bounds = outside_azt & (z2 < zt)
+
+            Paz_dist[within_bounds] += (DM_los_spl(z2[within_bounds] * -1 * (az_signs)[within_bounds])
                                         / abs(az_der(z2[within_bounds]))).value
 
 
