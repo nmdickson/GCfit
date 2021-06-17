@@ -171,8 +171,12 @@ def cluster_component(model, R, mass_bin, DM=None, *, eps=1e-3):
     # Define the acceleration domain, using 2*nr points
 
 
-    # TODO for dm lets try bumping up the points again
-    az_domain = np.linspace(0.0, azmax.value, 8 * nr) << azmax.unit
+    # TODO for DM lets try bumping up the points again
+    if DM == None:
+        az_domain = np.linspace(0.0, azmax.value, 8 * nr) << azmax.unit
+    else:
+        az_domain = np.linspace(0.0, azmax.value, 20 * nr) << azmax.unit
+
     Δa = np.diff(az_domain)[1]
 
 
@@ -203,7 +207,6 @@ def cluster_component(model, R, mass_bin, DM=None, *, eps=1e-3):
         az_domain = np.concatenate((np.flip(-az_domain[1:]), az_domain))
     else:
 
-        az_domain = np.linspace(0.0, azmax.value, 6 * nr) << azmax.unit
         # need to look at full cluster now that it's no longer symmetric
         az_domain = np.concatenate((np.flip(-az_domain[1:]), az_domain))
         # also need the signs to pick which side of the cluster the pulsar is on
@@ -259,7 +262,7 @@ def cluster_component(model, R, mass_bin, DM=None, *, eps=1e-3):
         target_norm = 2.0
     else:
         target_norm = 1.0
-        eps = 1e-4
+        eps = 1e-5
     norm = 0.0
     # get the midpoint of the Paz dist
     mid = len(Paz_dist) // 2
@@ -317,7 +320,7 @@ def cluster_component(model, R, mass_bin, DM=None, *, eps=1e-3):
     # Off by one?
     Paz_dist[mid + ind + 1:] = 0
 
-    area = sp.integrate.simpson(x=az_domain, y=Paz_dist)
+    area = sp.integrate.simpson(x=np.abs(az_domain), y=np.abs(Paz_dist))
     print(f"step: {ind}, norm: {area}")
 
 
@@ -330,8 +333,11 @@ def cluster_component(model, R, mass_bin, DM=None, *, eps=1e-3):
 
 
     # Change the acceleration domain to a Pdot / P domain
+    PdotP_domain = az_domain / c
+
     # put the signs back in
-    PdotP_domain = az_domain * az_signs / c
+    if DM is not None:
+        PdotP_domain *= az_signs
 
     return PdotP_domain, Paz_dist
 
