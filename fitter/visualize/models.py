@@ -172,6 +172,10 @@ class _ClusterVisualizer:
             # raise DataError
             raise KeyError(mssg)
 
+        # TODO need to handle colours better
+        defaultcolour = 'k' if len(datasets) == 1 else None
+
+        # TODO if has tracer mass, need to also plot that models bin somehow
         for key, dset in datasets.items():
             try:
                 xdata = dset[r_key]
@@ -183,12 +187,15 @@ class _ClusterVisualizer:
             except KeyError as err:
                 if strict:
                     raise err
+                else:
+                    continue
 
             if err_transform is not None:
                 yerr = err_transform(yerr)
 
             kwargs.setdefault('linestyle', 'None')
             kwargs.setdefault('marker', '.')
+            kwargs.setdefault('color', defaultcolour)
 
             # TODO the label would look nicer as a citep style source
             ax.errorbar(xdata.to(r_unit), ydata, xerr=xerr, yerr=yerr,
@@ -429,10 +436,10 @@ class _ClusterVisualizer:
 
                 midpoint = self.mass_func.shape[0] // 2
 
-                m_domain = self.median_mj[:self.mass_func.shape[-1]]
-                median_ = self.mass_func[midpoint, rbin] * 10**scale
+                m_domain = self.model.mj[:self.mass_func.shape[-1]]
+                median = self.mass_func[midpoint, rbin] * 10**scale
 
-                med_plot, = ax.plot(m_domain, median_, '--', c=clr,
+                med_plot, = ax.plot(m_domain, median, '--', c=clr,
                                     label=f"R={r_in:.1f}-{r_out:.1f}")
 
                 alpha = 0.8 / (midpoint + 1)
@@ -700,7 +707,8 @@ class _ClusterVisualizer:
 
         fig.suptitle(str(self.obs))
 
-        kw = {'show_obs': show_obs, 'residuals': False, 'hyperparam': True}
+        # kw = {'show_obs': show_obs, 'residuals': False, 'hyperparam': True}
+        kw = {}
 
         self.plot_number_density(fig=fig, ax=axes[0, 0], **kw)
         self.plot_LOS(fig=fig, ax=axes[1, 0], **kw)
@@ -717,8 +725,8 @@ class _ClusterVisualizer:
         # Is this what is messing up the spacing?
         axbig = fig.add_subplot(gs[2:, 0])
 
-        self.plot_mass_func(fig=fig, ax=axbig, show_obs=show_obs,
-                            residuals=False, hyperparam=True)
+        self.plot_mass_func(fig=fig, ax=axbig, show_obs=show_obs,)
+                            # residuals=False, hyperparam=True)
 
         for ax in axes.flatten():
             ax.set_xlabel('')
@@ -901,6 +909,7 @@ class ModelVisualizer(_ClusterVisualizer):
         self.pm_tot = np.sqrt(0.5 * (self.pm_T**2 + self.pm_R**2))
         self.pm_ratio = self.pm_T / self.pm_R
         self.numdens = self._init_numdens(model, observations)
+        self.mass_func = self._init_massfunc(model, observations)
 
     @_ClusterVisualizer._support_units
     def _init_numdens(self, model, observations):
@@ -916,6 +925,56 @@ class ModelVisualizer(_ClusterVisualizer):
              / np.nansum(nd_interp(obs_r)**2 / obs_nd['Σ']**2))
 
         return K * model_nd
+
+    @_ClusterVisualizer._support_units
+    def _init_massfunc(self, model, observations):
+
+        # TODO don't treat any PI different than we would any subgroup
+        #   might need to add an offset param to plotdata, or redo this logic
+
+        PI_list = fnmatch.filter([k[0] for k in observations.valid_likelihoods],
+                                 '*mass_function*')
+
+        PI_list = sorted(PI_list, key=lambda k: observations[k]['r1'].min())
+
+        N_rbins = sum([np.unique(observations[k]['r1']).size for k in PI_list])
+        N_mbins = model.nms
+        # mf_full = np.empty((N, N_rbins, N_mbins))
+        mass_func = np.empty((1, N_rbins, N_mbins))
+
+        densityj = [util.QuantitySpline(model.r, model.Sigmaj[j])
+                    for j in range(model.nms)]
+
+        rbin_ind = -1
+
+        for key in PI_list:
+            mf = observations[key]
+
+            cen = (observations.mdata['RA'], observations.mdata['DEC'])
+            unit = mf.mdata['field_unit']
+            coords = []
+            for ch in string.ascii_letters:
+                try:
+                    coords.append(mf['fields'].mdata[f'{ch}'])
+                except KeyError:
+                    break
+
+            field = mass.Field(coords, cen=cen, unit=unit)
+
+            rbins = np.c_[mf['r1'], mf['r2']]
+
+            for r_in, r_out in np.unique(rbins, axis=0):
+                rbin_ind += 1
+
+                field_slice = field.slice_radially(r_in, r_out)
+                sample_radii = field_slice.MC_sample(300).to(u.pc)
+
+                for j in range(model.nms):
+                    Nj = field_slice.MC_integrate(densityj[j], sample_radii)
+                    widthj = (model.mj[j] * model.mes_widths[j])
+                    mass_func[0, rbin_ind, j] = (Nj / widthj).value
+
+        return mass_func
 
 
 class CIModelVisualizer(_ClusterVisualizer):
