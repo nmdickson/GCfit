@@ -27,15 +27,20 @@ __all__ = [
 # Helpers for DM stuff, relocate to utils or wherever
 
 # Values for 47 Tuc
+
+# This stuff is in the HDF file now, not sure what the best way to pass it in is
+# don't really want to have like 6 args for the DM stuff, TODO: ask Nolan how
+# he would want this done
+
 # Density of gas within cluster
-ng = 0.23
+ng = 0.23 * u.Unit("1/cm3")
 # Uncertainty on gas density
-sigma_ng = 0.05
+sigma_ng = 0.05 * u.Unit("1/cm3")
 
 # Average DM between us and center of cluster
-DMc = 24.38
+DMc = 24.38 * u.Unit("pc/cm3")
 # Uncertainty on average DM
-sigma_DMc = 0.02
+sigma_DMc = 0.02 * u.Unit("pc/cm3")
 # =======================================================================================================#
 
 
@@ -51,15 +56,11 @@ def los_dm(dm, dm_err):
     los = (dm - DMc) / ng
     err = div_error(
         a=(dm - DMc),
-        a_err=(float(dm_err) + float(sigma_DMc)),
-        b=(ng),
+        a_err=(dm_err + sigma_DMc),
+        b=ng,
         b_err=sigma_ng,
     )
     return los, err
-
-
-
-
 
 
 def cluster_component(model, R, mass_bin, DM=None, *, eps=1e-3):
@@ -171,7 +172,7 @@ def cluster_component(model, R, mass_bin, DM=None, *, eps=1e-3):
 
 
     # TODO for dm lets try bumping up the points again
-    az_domain = np.linspace(0.0, azmax.value, 6 * nr) << azmax.unit
+    az_domain = np.linspace(0.0, azmax.value, 8 * nr) << azmax.unit
     Δa = np.diff(az_domain)[1]
 
 
@@ -220,12 +221,12 @@ def cluster_component(model, R, mass_bin, DM=None, *, eps=1e-3):
         # clusters so for now I'll put this in and when this is working properly
         # we can see if we have any problems.
 
-        if abs(DM_los) > model.rh.to("pc").value:
+        if DM_los.to("pc") > model.rh.to("pc"):
             logging.ERROR("Pulsar LOS position outside of rh.")
 
 
         # use this for now (pulsars will always be within the half-light radius I think)
-        z_domain = np.linspace(-model.rh, model.rh, len(az_domain)).value
+        z_domain = np.linspace(-model.rh, model.rh, len(az_domain))
 
         # set up the spline for the DM based Paz
         DM_gaussian = gaussian(x=z_domain, mu=DM_los, sigma=DM_los_err)
@@ -254,6 +255,11 @@ def cluster_component(model, R, mass_bin, DM=None, *, eps=1e-3):
     # Ensure Paz is normalized
     # NOTE: this version requires more than 2*nr steps, do more testing
 
+    if DM is None:
+        target_norm = 2.0
+    else:
+        target_norm = 1.0
+        eps = 1e-4
     norm = 0.0
     # get the midpoint of the Paz dist
     mid = len(Paz_dist) // 2
@@ -276,11 +282,11 @@ def cluster_component(model, R, mass_bin, DM=None, *, eps=1e-3):
         # NOTE: Norm target here needs to be 2.0 in order to fully sample
         # the distribution, this means we need to divide by 2 somewhere along the way.
         # If converges, cut domain at this index
-        if abs(2.0 - norm) <= eps:
+        if abs(target_norm - norm) <= eps:
             break
 
         # If passes normalization, backup a step to cut domain close as possible
-        elif norm > 2.0:
+        elif norm > target_norm:
             ind -= 1
             break
 
@@ -288,32 +294,31 @@ def cluster_component(model, R, mass_bin, DM=None, *, eps=1e-3):
         # This is the case where our probability distribution doesn't integrate
         # to one, just don't cut anything off, log the normalization and
         # manually normalize it.
-        import matplotlib.pyplot as plt
-        area = sp.integrate.simpson(x=az_domain, y=Paz_dist)
-        plt.plot(az_domain, Paz_dist, label=area)
-        plt.legend()
-        plt.show()
+        # import matplotlib.pyplot as plt
+        # area = sp.integrate.simpson(x=az_domain, y=Paz_dist)
+        # plt.plot(az_domain, Paz_dist, label=area)
+        # plt.legend()
+        # plt.show()
         logging.warning("Probability distribution failed to integrate to 1.0,"
                         f" area: {norm:.6f}")
 
 
         # Manual normalization
-        # TODO turn back on
+        # TODO when we have the rest of the DM data, see how often this
+        # is happening, adjust the a-space?
         Paz_dist /= norm
 
 
-    print(f"step: {ind}, norm: {norm}")
-    if norm < 2.0:
-        import matplotlib.pyplot as plt
-        area = sp.integrate.simpson(x=az_domain, y=Paz_dist)
-        plt.plot(az_domain, Paz_dist, label=area)
-        plt.legend()
-        plt.show()
 
+
+        # TODO fix this for DM stuff
     # Set the rest to zero
     Paz_dist[:mid - ind] = 0
     # Off by one?
     Paz_dist[mid + ind + 1:] = 0
+
+    area = sp.integrate.simpson(x=az_domain, y=Paz_dist)
+    print(f"step: {ind}, norm: {area}")
 
 
     # Normalize the Paz dist, before this step the area should be ~2 because each

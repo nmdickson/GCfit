@@ -141,16 +141,8 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
 
         P = pulsars['P'][i].to('s')
 
-        # TODO this is only here until the dm data gets added to the hdf files
-
-        pulsars['DM'] = [24.361]
-        pulsars['simga_dm'] = [0.007]
-
-
-
-
-        DM = pulsars['DM'][0]
-        sigma_DM = pulsars['sigma_DM'][0]
+        DM = pulsars['DM'][i]
+        ΔDM = pulsars['ΔDM'][i]
 
 
         # TODO the actual variable shouldn't be named "meas"; that parts obvious
@@ -161,7 +153,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         # Compute the cluster component distribution, from the model
         # ------------------------------------------------------------------
 
-        PdotP_domain, PdotP_c_prob = cluster_component(model, R, (DM, sigma_DM), mass_bin)
+        PdotP_domain, PdotP_c_prob = cluster_component(model, R, (DM, ΔDM), mass_bin)
         Pdot_domain = (P * PdotP_domain).decompose()
 
         # linear to avoid effects around asymptote
