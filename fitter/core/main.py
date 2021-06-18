@@ -21,7 +21,7 @@ _here = pathlib.Path()
 
 
 def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
-        mpi=False, initials=None, param_priors=None,
+        mpi=False, initials=None, param_priors=None, moves=None,
         fixed_params=None, excluded_likelihoods=None, hyperparams=True,
         cont_run=False, savedir=_here, backup=False, verbose=False):
     '''Main MCMC fitting pipeline
@@ -276,6 +276,7 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
             args=(observations, fixed_initials, likelihoods, prior_likelihood),
             kwargs={'hyperparams': hyperparams},
             pool=pool,
+            moves=moves,
             backend=backend,
             blobs_dtype=blobs_dtype
         )
