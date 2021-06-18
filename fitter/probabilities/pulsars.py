@@ -127,12 +127,13 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
         # Set up 2 splines for the inverse z(a_z) for z < zmax and z > zmax
         z1 = np.linspace(z[0], zmax, nr)
 
-        # What we want is a continuation of the acceleration space past the zmax point
-        # so that we come to the z2 point for which we can calculate a separate probability.
-        # The z2 point needs to be calculated separately because the calculation depends on
-        # the density, which is diffrent at each z point.
-        # Unclear why original implementation doesn't always work, seems perfectly fine.
-        # The reason for the reverse is that it needs to be strictly increasing for the spline
+        # What we want is a continuation of the acceleration space past the zmax
+        # point so that we come to the z2 point for which we can calculate a
+        # separate probability. The z2 point needs to be calculated separately
+        # because the calculation depends on the density, which is diffrent at
+        # each z point. Unclear why original implementation doesn't always work,
+        # seems perfectly fine. The reason for the reverse is that it needs to
+        # be strictly increasing for the spline
 
         z2 = np.linspace(zmax, z[-1], nr)[::-1]
 
@@ -178,7 +179,8 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
 
     # TODO fix all the DM stuff and then clean it up
     if DM is None:
-        Paz_dist = (rhoz_spl(z1) / abs(az_der(z1))).value * u.dimensionless_unscaled
+        Paz_dist = (rhoz_spl(z1) /
+                    abs(az_der(z1))).value * u.dimensionless_unscaled
 
         outside_azt = az_domain > azt
 
@@ -205,12 +207,14 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
         # unpack DM data
         DM, sigma_DM = DM
 
-        # TODO: reword this so it isn't as weird
+        # make sure we get the cluster DM mdata too
         if DM_mdata is None:
-            raise ValueError("Did not receive cluster DM data with pulsar DM data")
+            raise ValueError(
+                "Cluster DM data is required to use DM based likelihood."
+            )
 
 
-        # get los pos, err
+        # get los pos, err using cluster DM data
         DM_los, DM_los_err = los_dm(DM, sigma_DM, DM_mdata)
 
         # TODO: Not 100% sure that all pulsars are within the rh for all
@@ -220,20 +224,24 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
         if DM_los.to("pc") > model.rh.to("pc"):
             logging.ERROR("Pulsar LOS position outside of rh.")
 
-
-        # use this for now (pulsars will always be within the half-light radius I think)
+        # TODO: check that this is ok
+        # use this for now (pulsars will always be within the half-light
+        # radius I think)
         z_domain = np.linspace(-model.rh, model.rh, len(az_domain))
 
         # set up the spline for the DM based Paz
         DM_gaussian = gaussian(x=z_domain, mu=DM_los, sigma=DM_los_err)
-        DM_los_spl = sp.interpolate.UnivariateSpline(x=z_domain, y=DM_gaussian, s=0, k=3, ext=1)
+        DM_los_spl = sp.interpolate.UnivariateSpline(
+            x=z_domain, y=DM_gaussian, s=0, k=3, ext=1
+        )
 
         # i think we still only want positive values for the other splines
         az_domain = np.abs(az_domain)
 
         z1 = np.maximum(z1_spl(az_domain), z[0])
 
-        Paz_dist = (DM_los_spl(z1 * -1 * az_signs) / abs(az_der(z1))).value * u.dimensionless_unscaled
+        Paz_dist = (DM_los_spl(z1 * -1 * az_signs) /
+                    abs(az_der(z1))).value * u.dimensionless_unscaled
 
         outside_azt = az_domain > azt
 
@@ -244,7 +252,8 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
 
             within_bounds = outside_azt & (z2 < zt)
 
-            Paz_dist[within_bounds] += (DM_los_spl(z2[within_bounds] * -1 * (az_signs)[within_bounds])
+            Paz_dist[within_bounds] += (DM_los_spl(z2[within_bounds] *
+                                        -1 * (az_signs)[within_bounds])
                                         / abs(az_der(z2[within_bounds]))).value
 
 
@@ -262,23 +271,24 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
             # Integrate using trapezoid rule cumulatively
             norm += (0.5 * Δa * (P_a + P_b)).value
 
-            # NOTE: Norm target here needs to be 1.0 not 0.5 in order to fully sample
-            # the distribution, this means we need to divide by 2 somewhere along the way.
-            # If converges, cut domain at this index
+            # NOTE: Norm target here needs to be 1.0 not 0.5 in order to fully
+            # sample the distribution, this means we need to divide by 2
+            # somewhere along the way. If converges, cut domain at this index
             if abs(1.0 - norm) < eps:
                 break
 
-            # If passes normalization, backup a step to cut domain close as possible
+            # If passes normalization, backup a step to cut domain as close
+            # as possible
             elif norm > 1.0:
                 ind -= 1
                 break
 
         else:
-            # This is the case where our probability distribution doesn't integrate
-            # to one, just don't cut anything off, log the normalization and
-            # manually normalize it.
-            logging.warning("Probability distribution failed to integrate to 1.0,"
-                            f" area: {norm:.6f}")
+            # This is the case where our probability distribution doesn't
+            # integrate to one, just don't cut anything off, log the
+            # normalization and manually normalize it.
+            logging.warning("Probability distribution failed to integrate "
+                            f"to 1.0, area: {norm:.6f}")
 
             # Manual normalization
             Paz_dist /= norm
@@ -305,27 +315,28 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
             norm += (0.5 * Δa * (P_c + P_d)).value
 
             # NOTE: Norm target here needs to be 2.0 in order to fully sample
-            # the distribution, this means we need to divide by 2 somewhere along the way.
-            # If converges, cut domain at this index
+            # the distribution, this means we need to divide by 2 somewhere
+            # along the way. If converges, cut domain at this index
             if abs(target_norm - norm) <= eps:
                 break
 
-            # If passes normalization, backup a step to cut domain close as possible
+            # If passes normalization, backup a step to cut domain as close
+            # as possible
             elif norm > target_norm:
                 ind -= 1
                 break
 
         else:
-            # This is the case where our probability distribution doesn't integrate
-            # to one, just don't cut anything off, log the normalization and
-            # manually normalize it.
+            # This is the case where our probability distribution doesn't
+            # integrate to one, just don't cut anything off, log the
+            # normalization and manually normalize it.
             # import matplotlib.pyplot as plt
             # area = sp.integrate.simpson(x=az_domain, y=Paz_dist)
             # plt.plot(az_domain, Paz_dist, label=area)
             # plt.legend()
             # plt.show()
-            logging.warning("Probability distribution failed to integrate to 1.0,"
-                            f" area: {norm:.6f}")
+            logging.warning("Probability distribution failed to integrate "
+                            f"to 1.0, area: {norm:.6f}")
 
 
             # Manual normalization
@@ -352,7 +363,9 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
 
 
     if DM is not None:
-        Paz_spl = UnivariateSpline(x=az_signs * az_domain, y=Paz_dist, k=3, s=0, ext=1)
+        Paz_spl = UnivariateSpline(
+            x=az_signs * az_domain, y=Paz_dist, k=3, s=0, ext=1
+        )
     else:
         Paz_spl = UnivariateSpline(x=az_domain, y=Paz_dist, k=3, s=0, ext=1)
     area = Paz_spl.integral(-np.inf, np.inf)
@@ -361,8 +374,9 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
     # print(f"step: {ind}/{len(az_domain)//2}, norm: {area}")
 
 
-    # Normalize the Paz dist, before this step the area should be ~2 because each
-    # side of the dist needs to be cutoff at an area of 1.0. (Only for density method)
+    # Normalize the Paz dist, before this step the area should be ~2 because
+    # each side of the dist needs to be cutoff at an area of 1.0.
+    # (Only for density method)
     if DM is None:
         Paz_dist /= 2
 
