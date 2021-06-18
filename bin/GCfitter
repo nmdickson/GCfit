@@ -103,8 +103,7 @@ if __name__ == '__main__':
 
     del args.debug
 
-    weight = 1. / len(args.moves)
-    args.moves = [(move_choices[mv](), weight) for mv in args.moves]
+    args.moves = [move_choices[mv]() for mv in args.moves]
 
     # ----------------------------------------------------------------------
     # Setup logging
