@@ -25,21 +25,7 @@ __all__ = [
 # --------------------------------------------------------------------------
 
 
-# Helpers for DM stuff, relocate to utils or wherever
-
-
-# TODO: use the values the hdf
-# Density of gas within cluster
-ng = 0.23 * u.Unit("1/cm3")
-# Uncertainty on gas density
-sigma_ng = 0.05 * u.Unit("1/cm3")
-
-# Average DM between us and center of cluster
-DMc = 24.38 * u.Unit("pc/cm3")
-# Uncertainty on average DM
-sigma_DMc = 0.02 * u.Unit("pc/cm3")
-# =======================================================================================================#
-
+# Helpers for DM stuff, TODO relocate to utils or wherever
 
 
 # gaussian error propagation for division
@@ -49,18 +35,25 @@ def div_error(a, a_err, b, b_err):
 
 
 # Get the LOS position and uncertainty based on the DM
-def los_dm(dm, dm_err):
+def los_dm(dm, dm_err, DM_mdata):
+
+    # TODO I guess these don't have units attached already
+    ng = DM_mdata["ng"] * u.Unit("1/cm3")
+    delta_ng = DM_mdata["Δng"] * u.Unit("1/cm3")
+    DMc = DM_mdata["DMc"] * u.Unit("pc/cm3")
+    delta_DMc = DM_mdata["ΔDMc"] * u.Unit('pc/cm3')
+
     los = (dm - DMc) / ng
     err = div_error(
         a=(dm - DMc),
-        a_err=(dm_err + sigma_DMc),
+        a_err=(dm_err + delta_DMc),
         b=ng,
-        b_err=sigma_ng,
+        b_err=delta_ng,
     )
     return los, err
 
 
-def cluster_component(model, R, mass_bin, DM=None, *, eps=1e-3):
+def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
     """
     Computes probability distribution for a range of line of sight
     accelerations at projected R : P(az|R)
@@ -212,9 +205,13 @@ def cluster_component(model, R, mass_bin, DM=None, *, eps=1e-3):
         # unpack DM data
         DM, sigma_DM = DM
 
+        # TODO: reword this so it isn't as weird
+        if DM_mdata is None:
+            raise ValueError("Did not receive cluster DM data with pulsar DM data")
+
 
         # get los pos, err
-        DM_los, DM_los_err = los_dm(DM, sigma_DM)
+        DM_los, DM_los_err = los_dm(DM, sigma_DM, DM_mdata)
 
         # TODO: Not 100% sure that all pulsars are within the rh for all
         # clusters so for now I'll put this in and when this is working properly
