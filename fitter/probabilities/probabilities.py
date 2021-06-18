@@ -156,7 +156,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         # ------------------------------------------------------------------
 
         PdotP_domain, PdotP_c_prob = cluster_component(
-            model, R, (DM, ΔDM), mass_bin, DM_mdata=DM_mdata,)
+            model, R, DM=(DM, ΔDM), mass_bin=mass_bin, DM_mdata=DM_mdata,)
         Pdot_domain = (P * PdotP_domain).decompose()
 
         # linear to avoid effects around asymptote
@@ -352,7 +352,7 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
         # ------------------------------------------------------------------
 
         PdotP_domain, PdotP_c_prob = cluster_component(
-            model, R, mass_bin, DM=(DM, ΔDM), DM_mdata=DM_mdata,
+            model, R, mass_bin=mass_bin, DM=(DM, ΔDM), DM_mdata=DM_mdata,
         )
         Pdot_domain = (Pb * PdotP_domain).decompose()
 
