@@ -70,6 +70,10 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         Dictionary of prior bounds/args for each parameter.
         See `probabilities.priors` for formatting of args and defaults.
 
+    moves : list of emcee.moves.Move, optional
+        List of MCMC proposal algorithms, or "moves", as defined within `emcee`.
+        This list is simply passed to `emcee.EnsembleSampler`.
+
     fixed_params : list of str, optional
         List of parameters to fix to the initial value, and not allow to be
         varied through the sampler.
