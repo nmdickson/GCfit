@@ -310,14 +310,13 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
                     shutil.copyfile(f"{savedir}/{cluster}_sampler.hdf",
                                     f"{savedir}/.backup_{cluster}_sampler.hdf")
 
-        # Attempt to get autocorrelation time
-        tau = sampler.get_autocorr_time(quiet=True)
+        try:
+            # Attempt to get autocorrelation time
+            tau = sampler.get_autocorr_time()
+        except emcee.autocorr.AutocorrError:
+            tau = np.nan
 
-        logging.info(f'Autocorrelation times: {tau}')
-
-        if ((τ := tau.max()) * 50) > sampler.iteration:
-            logging.warning('Chain not long enough for reliable autocorrelation'
-                            f', should run for atleast {50 * τ=:g} iterations.')
+    logging.info(f'Autocorrelation time: {tau}')
 
     logging.info("Finished iteration")
 
@@ -333,7 +332,6 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
         meta_grp.attrs['runtime'] = time.time() - t0
         meta_grp.attrs['autocorr'] = tau
-        meta_grp.attrs['reliable_autocorr'] = np.any((tau * 50) > Niters)
 
         # Store run statistics
 

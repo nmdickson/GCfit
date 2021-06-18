@@ -262,15 +262,15 @@ class TestResources(unittest.TestCase):
 
                         if 'P' in dataset:
 
-                            self.assertIn('Pdot', dataset)
-                            self._check_for_error('Pdot', dataset)
-                            self._check_for_units('Pdot', dataset)
+                            self.assertIn('Pdot_meas', dataset)
+                            self._check_for_error('Pdot_meas', dataset)
+                            self._check_for_units('Pdot_meas', dataset)
 
                         elif 'Pb' in dataset:
 
-                            self.assertIn('Pbdot', dataset)
-                            self._check_for_error('Pbdot', dataset)
-                            self._check_for_units('Pbdot', dataset)
+                            self.assertIn('Pbdot_meas', dataset)
+                            self._check_for_error('Pbdot_meas', dataset)
+                            self._check_for_units('Pbdot_meas', dataset)
 
                         else:
                             assert False, f"None of ('P', 'Pb') in {dataset}"
@@ -341,7 +341,7 @@ class TestResources(unittest.TestCase):
                         self._check_for_units('m2', dataset)
 
                         self.assertIn('fields', dataset)
-                        self.assertIn('field_unit', dataset.mdata)
+                        self.assertIn('field_unit', dataset['fields'].mdata)
 
                         for PI in np.unique(dataset['fields']).astype(str):
                             self._check_for_field(PI, dataset['fields'])

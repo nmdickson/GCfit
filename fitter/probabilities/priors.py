@@ -232,7 +232,7 @@ DEFAULT_PRIORS = {
     'a2': UniformPrior('a2', [(0, 6), ('>=', 'a1')]),
     'a3': UniformPrior('a3', [(1.6, 6), ('>=', 'a2')]),
     'BHret': UniformPrior('BHret', [(0, 100)]),
-    'd': UniformPrior('d', [(2, 8)])
+    'd': GaussianPrior('d', mu=DEFAULT_INITIALS['d'], sigma=0.05),
 }
 
 _PRIORS_MAP = {
