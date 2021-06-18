@@ -1,3 +1,4 @@
+from scipy.interpolate.fitpack2 import UnivariateSpline
 from ..util import QuantitySpline, gaussian
 
 import scipy.stats
@@ -26,12 +27,8 @@ __all__ = [
 
 # Helpers for DM stuff, relocate to utils or wherever
 
-# Values for 47 Tuc
 
-# This stuff is in the HDF file now, not sure what the best way to pass it in is
-# don't really want to have like 6 args for the DM stuff, TODO: ask Nolan how
-# he would want this done
-
+# TODO: use the values the hdf
 # Density of gas within cluster
 ng = 0.23 * u.Unit("1/cm3")
 # Uncertainty on gas density
@@ -172,10 +169,12 @@ def cluster_component(model, R, mass_bin, DM=None, *, eps=1e-3):
 
 
     # TODO for DM lets try bumping up the points again
+    # TODO: here ive extended it past az max because it looks like for pulsar X
+    # the error spline gets cut off too early and messes everything up
     if DM == None:
-        az_domain = np.linspace(0.0, azmax.value, 8 * nr) << azmax.unit
+        az_domain = np.linspace(0.0, azmax.value * 1, 2 * nr) << azmax.unit
     else:
-        az_domain = np.linspace(0.0, azmax.value, 20 * nr) << azmax.unit
+        az_domain = np.linspace(0.0, azmax.value * 1.5, 50 * nr) << azmax.unit
 
     Δa = np.diff(az_domain)[1]
 
@@ -202,9 +201,6 @@ def cluster_component(model, R, mass_bin, DM=None, *, eps=1e-3):
 
         Paz_dist /= rhoz_spl.integral(0. << z.unit, zt).value
 
-        # Mirror the distributions
-        Paz_dist = np.concatenate((np.flip(Paz_dist[1:]), Paz_dist))
-        az_domain = np.concatenate((np.flip(-az_domain[1:]), az_domain))
     else:
 
         # need to look at full cluster now that it's no longer symmetric
@@ -259,76 +255,119 @@ def cluster_component(model, R, mass_bin, DM=None, *, eps=1e-3):
     # NOTE: this version requires more than 2*nr steps, do more testing
 
     if DM is None:
+        # for density based Paz, distributions are symmetric
         target_norm = 2.0
+
+        norm = 0.0
+        for ind, P_b in enumerate(Paz_dist[1:], 1):
+            P_a = Paz_dist[ind - 1]
+
+            # Integrate using trapezoid rule cumulatively
+            norm += (0.5 * Δa * (P_a + P_b)).value
+
+            # NOTE: Norm target here needs to be 1.0 not 0.5 in order to fully sample
+            # the distribution, this means we need to divide by 2 somewhere along the way.
+            # If converges, cut domain at this index
+            if abs(1.0 - norm) < eps:
+                break
+
+            # If passes normalization, backup a step to cut domain close as possible
+            elif norm > 1.0:
+                ind -= 1
+                break
+
+        else:
+            # This is the case where our probability distribution doesn't integrate
+            # to one, just don't cut anything off, log the normalization and
+            # manually normalize it.
+            logging.warning("Probability distribution failed to integrate to 1.0,"
+                            f" area: {norm:.6f}")
+
+            # Manual normalization
+            Paz_dist /= norm
+
+    # For DM we need to hand the asymmetric Pz distributions
     else:
         target_norm = 1.0
         eps = 1e-5
-    norm = 0.0
-    # get the midpoint of the Paz dist
-    mid = len(Paz_dist) // 2
-    print("len of az array: ", len(Paz_dist))
-    print("mid point: ", mid)
-    for ind in range(mid):
+        norm = 0.0
+        # get the midpoint of the Paz dist
+        mid = len(Paz_dist) // 2
+        for ind in range(mid):
 
-        # positive side
-        P_a = Paz_dist[mid + ind]
-        P_b = Paz_dist[mid + ind + 1]
+            # positive side
+            P_a = Paz_dist[mid + ind]
+            P_b = Paz_dist[mid + ind + 1]
 
-        # negative side
-        P_c = Paz_dist[mid - ind]
-        P_d = Paz_dist[mid - ind - 1]
+            # negative side
+            P_c = Paz_dist[mid - ind]
+            P_d = Paz_dist[mid - ind - 1]
 
-        # Integrate using trapezoid rule cumulatively
-        norm += (0.5 * Δa * (P_a + P_b)).value
-        norm += (0.5 * Δa * (P_c + P_d)).value
+            # Integrate using trapezoid rule cumulatively
+            norm += (0.5 * Δa * (P_a + P_b)).value
+            norm += (0.5 * Δa * (P_c + P_d)).value
 
-        # NOTE: Norm target here needs to be 2.0 in order to fully sample
-        # the distribution, this means we need to divide by 2 somewhere along the way.
-        # If converges, cut domain at this index
-        if abs(target_norm - norm) <= eps:
-            break
+            # NOTE: Norm target here needs to be 2.0 in order to fully sample
+            # the distribution, this means we need to divide by 2 somewhere along the way.
+            # If converges, cut domain at this index
+            if abs(target_norm - norm) <= eps:
+                break
 
-        # If passes normalization, backup a step to cut domain close as possible
-        elif norm > target_norm:
-            ind -= 1
-            break
+            # If passes normalization, backup a step to cut domain close as possible
+            elif norm > target_norm:
+                ind -= 1
+                break
+
+        else:
+            # This is the case where our probability distribution doesn't integrate
+            # to one, just don't cut anything off, log the normalization and
+            # manually normalize it.
+            # import matplotlib.pyplot as plt
+            # area = sp.integrate.simpson(x=az_domain, y=Paz_dist)
+            # plt.plot(az_domain, Paz_dist, label=area)
+            # plt.legend()
+            # plt.show()
+            logging.warning("Probability distribution failed to integrate to 1.0,"
+                            f" area: {norm:.6f}")
+
+
+            # Manual normalization
+            # TODO when we have the rest of the DM data, see how often this
+            # is happening, adjust the a-space?
+            Paz_dist /= norm
+
+
+    if DM is not None:
+        # Set the rest to zero
+        Paz_dist[:mid - ind] = 0
+        # Off by one?
+        Paz_dist[mid + ind + 1:] = 0
 
     else:
-        # This is the case where our probability distribution doesn't integrate
-        # to one, just don't cut anything off, log the normalization and
-        # manually normalize it.
-        # import matplotlib.pyplot as plt
-        # area = sp.integrate.simpson(x=az_domain, y=Paz_dist)
-        # plt.plot(az_domain, Paz_dist, label=area)
-        # plt.legend()
-        # plt.show()
-        logging.warning("Probability distribution failed to integrate to 1.0,"
-                        f" area: {norm:.6f}")
+        # Set the rest to zero
+        Paz_dist[ind + 1:] = 0
 
-
-        # Manual normalization
-        # TODO when we have the rest of the DM data, see how often this
-        # is happening, adjust the a-space?
-        Paz_dist /= norm
+        # Mirror the distributions
+        Paz_dist = np.concatenate((np.flip(Paz_dist[1:]), Paz_dist))
+        az_domain = np.concatenate((np.flip(-az_domain[1:]), az_domain))
 
 
 
 
-        # TODO fix this for DM stuff
-    # Set the rest to zero
-    Paz_dist[:mid - ind] = 0
-    # Off by one?
-    Paz_dist[mid + ind + 1:] = 0
-
-    area = sp.integrate.simpson(x=np.abs(az_domain), y=np.abs(Paz_dist))
-    print(f"step: {ind}, norm: {area}")
+    if DM is not None:
+        Paz_spl = UnivariateSpline(x=az_signs * az_domain, y=Paz_dist, k=3, s=0, ext=1)
+    else:
+        Paz_spl = UnivariateSpline(x=az_domain, y=Paz_dist, k=3, s=0, ext=1)
+    area = Paz_spl.integral(-np.inf, np.inf)
+    if DM is None:
+        area /= 2
+    # print(f"step: {ind}/{len(az_domain)//2}, norm: {area}")
 
 
     # Normalize the Paz dist, before this step the area should be ~2 because each
-    # side of the dist needs to be cutoff at an area of 1.0.
+    # side of the dist needs to be cutoff at an area of 1.0. (Only for density method)
     if DM is None:
         Paz_dist /= 2
-    # TODO only needed for non-DM method?
 
 
 
