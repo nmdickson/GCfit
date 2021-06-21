@@ -56,7 +56,7 @@ def _angular_units(func):
 
 @_angular_units
 def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
-                           mass_bin=None, hyperparams=False):
+                           mass_bin=None, use_DM=False, hyperparams=False):
     '''Compute the log likelihood of pulsar spin period derivatives
 
     Computes the log likelihood component of a cluster's pulsar's spin
@@ -88,6 +88,9 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
     mass_bin : int, optional
         Index of `model.mj` mass bin to use in all calculations.
         If None (default), attempts to read 'm' from `pulsars.mdata`, else -1
+
+    use_DM : bool, optional
+        Whether to use dispersion measure data in pulsar likelihoods 
 
     hyperparams : bool, optional
         Not implemented
@@ -141,10 +144,13 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
 
         P = pulsars['P'][i].to('s')
 
-        DM = pulsars['DM'][i]
-        ΔDM = pulsars['ΔDM'][i]
+        if use_DM:
+            # TODO: here we should check if the data exists and give a nice
+            # error msg instead of some sort of key not found exception
+            DM = pulsars['DM'][i]
+            ΔDM = pulsars['ΔDM'][i]
 
-        DM_mdata = pulsars.mdata
+            DM_mdata = pulsars.mdata
 
 
         # TODO the actual variable shouldn't be named "meas"; that parts obvious
@@ -155,8 +161,15 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         # Compute the cluster component distribution, from the model
         # ------------------------------------------------------------------
 
-        PdotP_domain, PdotP_c_prob = cluster_component(
-            model, R, DM=(DM, ΔDM), mass_bin=mass_bin, DM_mdata=DM_mdata,)
+        if use_DM:
+            PdotP_domain, PdotP_c_prob = cluster_component(
+                model, R, DM=(DM, ΔDM), mass_bin=mass_bin, DM_mdata=DM_mdata
+            )
+        else:
+            PdotP_domain, PdotP_c_prob = cluster_component(
+                model, R, DM=None, mass_bin=mass_bin, DM_mdata=None
+            )
+
         Pdot_domain = (P * PdotP_domain).decompose()
 
         # linear to avoid effects around asymptote
@@ -269,7 +282,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
 
 @_angular_units
 def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
-                              mass_bin=None, hyperparams=False):
+                              mass_bin=None, use_DM=False, hyperparams=False):
     '''Compute the log likelihood of binary pulsar orbital period derivatives
 
     Computes the log likelihood component of a cluster's binary pulsar's orbital
@@ -295,6 +308,9 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
     mass_bin : int, optional
         Index of `model.mj` mass bin to use in all calculations.
         If None (default), attempts to read 'm' from `pulsars.mdata`, else -1
+
+    use_DM : bool, optional
+        Whether to use dispersion measure data in pulsar likelihoods 
 
     hyperparams : bool, optional
         Not implemented
@@ -342,18 +358,27 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
         Pbdot_meas = pulsars['Pbdot'][i]
         ΔPbdot_meas = pulsars['ΔPbdot'][i]
 
-        DM = pulsars['DM'][i]
-        ΔDM = pulsars['ΔDM'][i]
+        if use_DM:
+            # TODO: here we should check if the data exists and give a nice
+            # error msg instead of some sort of key not found exception
+            DM = pulsars['DM'][i]
+            ΔDM = pulsars['ΔDM'][i]
 
-        DM_mdata = pulsars.mdata
+            DM_mdata = pulsars.mdata
 
         # ------------------------------------------------------------------
         # Compute the cluster component distribution, from the model
         # ------------------------------------------------------------------
 
-        PdotP_domain, PdotP_c_prob = cluster_component(
-            model, R, mass_bin=mass_bin, DM=(DM, ΔDM), DM_mdata=DM_mdata,
-        )
+        if use_DM:
+            PdotP_domain, PdotP_c_prob = cluster_component(
+                model, R, DM=(DM, ΔDM), mass_bin=mass_bin, DM_mdata=DM_mdata
+            )
+        else:
+            PdotP_domain, PdotP_c_prob = cluster_component(
+                model, R, DM=None, mass_bin=mass_bin, DM_mdata=None
+            )
+
         Pdot_domain = (Pb * PdotP_domain).decompose()
 
         # linear to avoid effects around asymptote
