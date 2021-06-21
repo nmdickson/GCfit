@@ -55,8 +55,8 @@ def _angular_units(func):
 
 
 @_angular_units
-def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
-                           mass_bin=None, use_DM=False, hyperparams=False):
+def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
+                           use_DM=False, *, mass_bin=None, hyperparams=False):
     '''Compute the log likelihood of pulsar spin period derivatives
 
     Computes the log likelihood component of a cluster's pulsar's spin
@@ -85,12 +85,12 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
     coords : 2-tuple of float
         Cluster Galactic (Latitude, Longitude), in degrees
 
+    use_DM : bool, optional
+        Whether to use dispersion measure data in pulsar likelihoods
+
     mass_bin : int, optional
         Index of `model.mj` mass bin to use in all calculations.
         If None (default), attempts to read 'm' from `pulsars.mdata`, else -1
-
-    use_DM : bool, optional
-        Whether to use dispersion measure data in pulsar likelihoods 
 
     hyperparams : bool, optional
         Not implemented
@@ -152,8 +152,6 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
 
             DM_mdata = pulsars.mdata
 
-
-        # TODO the actual variable shouldn't be named "meas"; that parts obvious
         Pdot_meas = pulsars['Pdot'][i]
         ΔPdot_meas = np.abs(pulsars['ΔPdot'][i])
 
@@ -281,8 +279,8 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
 
 
 @_angular_units
-def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
-                              mass_bin=None, use_DM=False, hyperparams=False):
+def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
+                              *, mass_bin=None, hyperparams=False):
     '''Compute the log likelihood of binary pulsar orbital period derivatives
 
     Computes the log likelihood component of a cluster's binary pulsar's orbital
@@ -305,12 +303,12 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
     coords : 2-tuple of float
         Cluster Galactic (Latitude, Longitude), in degrees
 
+    use_DM : bool, optional
+        Whether to use dispersion measure data in pulsar likelihoods
+
     mass_bin : int, optional
         Index of `model.mj` mass bin to use in all calculations.
         If None (default), attempts to read 'm' from `pulsars.mdata`, else -1
-
-    use_DM : bool, optional
-        Whether to use dispersion measure data in pulsar likelihoods 
 
     hyperparams : bool, optional
         Not implemented

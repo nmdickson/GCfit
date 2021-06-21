@@ -395,7 +395,11 @@ class Observations:
 
             if fnmatch.fnmatch(key, '*pulsar*'):
 
-                metadata = self.mdata['μ'], (self.mdata['b'], self.mdata['l'])
+                metadata = (
+                    self.mdata['μ'],
+                    (self.mdata['b'], self.mdata['l']),
+                    'DM' in self['key']
+                )
 
                 if 'Pdot' in self[key]:
 
