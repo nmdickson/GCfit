@@ -311,6 +311,30 @@ class Observations:
 
         return groups
 
+    def filter_likelihoods(self, patterns, exclude=False, keys_only=False):
+        '''filter the valid likelihoods based on list of patterns, matching
+        either the dataset name or likelihood function name.
+        if exclude is true, returns everything but those matching the patterns,
+        else vice versa
+        if keys_only, only returns a list of dataset keys, no function data
+        patterns must be a list (todo)
+        '''
+        matches, no_matches = [], []
+        for component in self.valid_likelihoods:
+            key, func, *_ = component
+            func_name = func.__name__
+
+            if keys_only:
+                component = key
+
+            if any(fnmatch.fnmatch(key, p) or fnmatch.fnmatch(func_name, p)
+                   for p in patterns):
+                matches.append(component)
+            else:
+                no_matches.append(component)
+
+        return matches if not exclude else no_matches
+
     def get_sources(self, fmt='bibtex'):
         '''return a dict of all used sources
 
@@ -398,7 +422,7 @@ class Observations:
                 metadata = (
                     self.mdata['μ'],
                     (self.mdata['b'], self.mdata['l']),
-                    'DM' in self['key']
+                    'DM' in self[key]
                 )
 
                 if 'Pdot' in self[key]:

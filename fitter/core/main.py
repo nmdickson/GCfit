@@ -11,7 +11,6 @@ import time
 import shutil
 import logging
 import pathlib
-from fnmatch import fnmatch
 
 
 __all__ = ['fit']
@@ -139,15 +138,7 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
     logging.debug(f"Observation datasets: {observations}")
 
-    likelihoods = []
-    for component in observations.valid_likelihoods:
-        key, func, *_ = component
-        func_name = func.__name__
-
-        if not any(fnmatch(key, pattern) or fnmatch(func_name, pattern)
-                   for pattern in excluded_likelihoods):
-
-            likelihoods.append(component)
+    likelihoods = observations.filter_likelihoods(excluded_likelihoods, True)
 
     blobs_dtype = [(f'{key}/{func.__qualname__}', float)
                    for (key, func, *_) in likelihoods]
