@@ -1007,7 +1007,7 @@ def log_likelihood(theta, observations, L_components, hyperparams):
 
 
 def posterior(theta, observations, fixed_initials=None, L_components=None,
-              prior_likelihood=None, *, hyperparams=True):
+              prior_likelihood=None, *, hyperparams=True, use_DM=False):
     '''
     Combines the likelihood with the prior
 
