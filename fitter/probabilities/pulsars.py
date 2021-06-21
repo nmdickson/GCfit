@@ -203,9 +203,11 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
         # also need the signs to pick which side of the cluster the pulsar is on
         az_signs = np.sign(az_domain)
 
-
-        # unpack DM data
-        DM, sigma_DM = DM
+        # make sure we get the DM data
+        if DM is None:
+            raise ValueError(
+                "Pulsar DM data required to use DM based likelihood."
+            )
 
         # make sure we get the cluster DM mdata too
         if DM_mdata is None:
@@ -213,6 +215,8 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
                 "Cluster DM data is required to use DM based likelihood."
             )
 
+        # unpack DM data
+        DM, sigma_DM = DM
 
         # get los pos, err using cluster DM data
         DM_los, DM_los_err = los_dm(DM, sigma_DM, DM_mdata)
@@ -224,22 +228,20 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
         if DM_los.to("pc") > model.rh.to("pc"):
             logging.ERROR("Pulsar LOS position outside of rh.")
 
-        # TODO: check that this is ok
-        # use this for now (pulsars will always be within the half-light
-        # radius I think)
         z_domain = np.linspace(-model.rh, model.rh, len(az_domain))
 
-        # set up the spline for the DM based Paz
+        # set up the LOS spline for the DM based Paz
         DM_gaussian = gaussian(x=z_domain, mu=DM_los, sigma=DM_los_err)
         DM_los_spl = sp.interpolate.UnivariateSpline(
             x=z_domain, y=DM_gaussian, s=0, k=3, ext=1
         )
 
-        # i think we still only want positive values for the other splines
+        # I think we still only want positive values for the other splines
         az_domain = np.abs(az_domain)
 
         z1 = np.maximum(z1_spl(az_domain), z[0])
 
+        # Here we add the signs back in only for the DM splines
         Paz_dist = (DM_los_spl(z1 * -1 * az_signs) /
                     abs(az_der(z1))).value * u.dimensionless_unscaled
 
@@ -252,6 +254,7 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
 
             within_bounds = outside_azt & (z2 < zt)
 
+            # Here we add the signs back in only for the DM splines
             Paz_dist[within_bounds] += (DM_los_spl(z2[within_bounds] *
                                         -1 * (az_signs)[within_bounds])
                                         / abs(az_der(z2[within_bounds]))).value
@@ -314,9 +317,8 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
             norm += (0.5 * Δa * (P_a + P_b)).value
             norm += (0.5 * Δa * (P_c + P_d)).value
 
-            # NOTE: Norm target here needs to be 2.0 in order to fully sample
-            # the distribution, this means we need to divide by 2 somewhere
-            # along the way. If converges, cut domain at this index
+            # NOTE for the DM Paz dist, the entire distribution integrates to 
+            # 1.0 unlike the density based Paz
             if abs(target_norm - norm) <= eps:
                 break
 
@@ -340,18 +342,11 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
 
 
             # Manual normalization
-            # TODO when we have the rest of the DM data, see how often this
-            # is happening, adjust the a-space?
+            # TODO see how often this is happening with DM, adjust the a-space?
             Paz_dist /= norm
 
 
-    if DM is not None:
-        # Set the rest to zero
-        Paz_dist[:mid - ind] = 0
-        # Off by one?
-        Paz_dist[mid + ind + 1:] = 0
-
-    else:
+    if DM is None:
         # Set the rest to zero
         Paz_dist[ind + 1:] = 0
 
@@ -359,18 +354,25 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
         Paz_dist = np.concatenate((np.flip(Paz_dist[1:]), Paz_dist))
         az_domain = np.concatenate((np.flip(-az_domain[1:]), az_domain))
 
-
-
-
-    if DM is not None:
-        Paz_spl = UnivariateSpline(
-            x=az_signs * az_domain, y=Paz_dist, k=3, s=0, ext=1
-        )
     else:
-        Paz_spl = UnivariateSpline(x=az_domain, y=Paz_dist, k=3, s=0, ext=1)
-    area = Paz_spl.integral(-np.inf, np.inf)
-    if DM is None:
-        area /= 2
+        # Set the rest to zero
+        Paz_dist[:mid - ind] = 0
+        # Off by one?
+        Paz_dist[mid + ind + 1:] = 0
+
+
+
+
+    # if DM is None:
+    #     Paz_spl = UnivariateSpline(x=az_domain, y=Paz_dist, k=3, s=0, ext=1)
+    # else:
+    #     # add the signs back in to the domain
+    #     Paz_spl = UnivariateSpline(
+    #         x=az_signs * az_domain, y=Paz_dist, k=3, s=0, ext=1
+    #     )
+    # area = Paz_spl.integral(-np.inf, np.inf)
+    # if DM is None:
+    #     area /= 2
     # print(f"step: {ind}/{len(az_domain)//2}, norm: {area}")
 
 
@@ -385,7 +387,7 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
     # Change the acceleration domain to a Pdot / P domain
     PdotP_domain = az_domain / c
 
-    # put the signs back in
+    # put the signs back in for the DM method
     if DM is not None:
         PdotP_domain *= az_signs
 
