@@ -53,7 +53,7 @@ if __name__ == '__main__':
                         action='store_false',
                         help="Don't use Bayesian hyperparams")
 
-    parser.add_argument('--use-DM', dest='use_DM', action='store_false',
+    parser.add_argument('--use-DM', dest='use_DM', action='store_true',
                         help="Use dispersion measures in pulsar likelihoods")
 
     args = parser.parse_args()
