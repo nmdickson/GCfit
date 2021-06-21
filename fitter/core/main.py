@@ -22,7 +22,7 @@ _here = pathlib.Path()
 def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         mpi=False, initials=None, param_priors=None,
         fixed_params=None, excluded_likelihoods=None, hyperparams=True,
-        use_DM=False, cont_run=False, savedir=_here, backup=False,
+        strict=None, cont_run=False, savedir=_here, backup=False,
         verbose=False):
     '''Main MCMC fitting pipeline
 
@@ -83,9 +83,11 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         Whether to include bayesian hyperparameters (see Hobson et al., 2002)
         in all likelihood functions.
 
-    use_DM : bool, optional
-        Whether to use dispersion measure data in pulsar likelihoods 
-        (requires additional data).
+    strict : list of (float, str), optional
+        A strictness parameter to be applied to each likelihood specified, as
+        the `strict` kwarg. As implementation is specific to each likelihood,
+        see individual functions for more information. Default is None, applied
+        to all likelihoods.
 
     cont_run : bool, optional
         Not Implemented
@@ -127,6 +129,10 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     savedir = pathlib.Path(savedir)
     if not savedir.is_dir():
         raise ValueError(f"Cannot access '{savedir}': No such directory")
+
+    if strict is not None and not isinstance(strict[0], float):
+        invtype = type(strict[0])
+        raise TypeError(f"First `strict` argument must be float, not {invtype}")
 
     # ----------------------------------------------------------------------
     # Load obeservational data, determine which likelihoods are valid/desired
@@ -270,7 +276,7 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
             ndim=init_pos.shape[-1],
             log_prob_fn=posterior,
             args=(observations, fixed_initials, likelihoods, prior_likelihood),
-            kwargs={'hyperparams': hyperparams, 'use_DM': use_DM},
+            kwargs={'hyperparams': hyperparams, 'strict': strict},
             pool=pool,
             backend=backend,
             blobs_dtype=blobs_dtype

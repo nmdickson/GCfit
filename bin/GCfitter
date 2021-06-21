@@ -53,8 +53,10 @@ if __name__ == '__main__':
                         action='store_false',
                         help="Don't use Bayesian hyperparams")
 
-    parser.add_argument('--use-DM', dest='use_DM', action='store_true',
-                        help="Use dispersion measures in pulsar likelihoods")
+    parser.add_argument('--strict', nargs='+',
+                        metavar=('[STRICT]', 'LIKELIHOOD'),
+                        help="A (numeric) strictness factor to be applied "
+                             "to each specified likelihood component")
 
     args = parser.parse_args()
 
@@ -91,6 +93,16 @@ if __name__ == '__main__':
         args.verbose = True
 
     del args.debug
+
+    # TODO could also be a way here for setting `err_on_fail` in the priors
+    if args.strict is not None:
+        try:
+            args.strict[0] = float(args._strict)
+        except (ValueError, TypeError):
+            args.strict = [1.] + args.strict
+
+        if len(args.strict) == 1:
+            args.strict.append('*')
 
     # ----------------------------------------------------------------------
     # Setup logging

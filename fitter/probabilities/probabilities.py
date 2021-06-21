@@ -980,7 +980,7 @@ def likelihood_mass_func(model, mf, field, *,
 # --------------------------------------------------------------------------
 
 
-def log_likelihood(theta, observations, L_components, hyperparams):
+def log_likelihood(theta, observations, L_components, hyperparams, strict):
     '''
     Main likelihood function, generates the model(theta) passes it to the
     individual likelihood functions and collects their results.
@@ -992,17 +992,22 @@ def log_likelihood(theta, observations, L_components, hyperparams):
         logging.debug(f"Model did not converge with {theta=}")
         return -np.inf, -np.inf * np.ones(len(L_components))
 
+    strict_keys = observations.filter_likelihoods(strict[1:], keys_only=True)
+
     # Calculate each log likelihood
-    probs = np.array([
-        likelihood(model, observations[key], *args, hyperparams=hyperparams)
-        for (key, likelihood, *args) in L_components
-    ])
+    probs = np.empty(len(L_components))
+    for ind, (key, likelihood, *args) in enumerate(L_components):
+
+        kwargs = {'hyperparams': hyperparams,
+                  'strict': strict[0] if key in strict_keys else None}
+
+        probs[ind] = likelihood(model, observations[key], *args, **kwargs)
 
     return sum(probs), probs
 
 
 def posterior(theta, observations, fixed_initials=None, L_components=None,
-              prior_likelihood=None, *, hyperparams=True):
+              prior_likelihood=None, *, hyperparams=True, strict=None):
     '''
     Combines the likelihood with the prior
 
@@ -1023,6 +1028,9 @@ def posterior(theta, observations, fixed_initials=None, L_components=None,
     if prior_likelihood is None:
         prior_likelihood = Priors(dict())
 
+    if strict is None:
+        strict = []
+
     # get a list of variable params, sorted for the unpacking of theta
     variable_params = DEFAULT_INITIALS.keys() - fixed_initials.keys()
     params = sorted(variable_params, key=list(DEFAULT_INITIALS).index)
@@ -1036,7 +1044,7 @@ def posterior(theta, observations, fixed_initials=None, L_components=None,
         return -np.inf, *(-np.inf * np.ones(len(L_components)))
 
     log_L, individuals = log_likelihood(theta, observations,
-                                        L_components, hyperparams)
+                                        L_components, hyperparams, strict)
 
     probability = log_L + log_Pθ
 
