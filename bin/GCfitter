@@ -7,8 +7,17 @@ import logging
 import pathlib
 import argparse
 
+import emcee.moves
+
 
 default_dir = f"{pathlib.Path.home()}/.GCfit"
+
+move_choices = {
+    'stretchmove': emcee.moves.StretchMove, 'walkmove': emcee.moves.WalkMove,
+    'demove': emcee.moves.DEMove, 'desnookermove': emcee.moves.DESnookerMove,
+    'mhmove': emcee.moves.MHMove, 'redbluemove': emcee.moves.RedBlueMove,
+    'gaussianmove': emcee.moves.GaussianMove, 'kdemove': emcee.moves.KDEMove,
+}
 
 
 if __name__ == '__main__':
@@ -53,8 +62,14 @@ if __name__ == '__main__':
                         action='store_false',
                         help="Don't use Bayesian hyperparams")
 
+
     parser.add_argument('--use-DM', dest='use_DM', action='store_true',
                         help="Use dispersion measures in pulsar likelihoods")
+
+    parser.add_argument('--moves', type=str.lower, nargs='*',
+                        default=['stretchmove'], choices=move_choices.keys(),
+                        help="Alternative MCMC move proposal algorithm to use. "
+                             "Multiple moves will be given equal random weight")
 
     args = parser.parse_args()
 
@@ -91,6 +106,8 @@ if __name__ == '__main__':
         args.verbose = True
 
     del args.debug
+
+    args.moves = [move_choices[mv]() for mv in args.moves]
 
     # ----------------------------------------------------------------------
     # Setup logging

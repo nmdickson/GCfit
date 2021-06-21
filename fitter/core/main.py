@@ -21,7 +21,7 @@ _here = pathlib.Path()
 
 
 def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
-        mpi=False, initials=None, param_priors=None,
+        mpi=False, initials=None, param_priors=None, moves=None,
         fixed_params=None, excluded_likelihoods=None, hyperparams=True,
         use_DM=False, cont_run=False, savedir=_here, backup=False,
         verbose=False):
@@ -70,6 +70,10 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     param_priors : dict, optional
         Dictionary of prior bounds/args for each parameter.
         See `probabilities.priors` for formatting of args and defaults.
+
+    moves : list of emcee.moves.Move, optional
+        List of MCMC proposal algorithms, or "moves", as defined within `emcee`.
+        This list is simply passed to `emcee.EnsembleSampler`.
 
     fixed_params : list of str, optional
         List of parameters to fix to the initial value, and not allow to be
@@ -281,6 +285,7 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
             args=(observations, fixed_initials, likelihoods, prior_likelihood),
             kwargs={'hyperparams': hyperparams, 'use_DM': use_DM},
             pool=pool,
+            moves=moves,
             backend=backend,
             blobs_dtype=blobs_dtype
         )
