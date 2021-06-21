@@ -162,13 +162,11 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
     # Define the acceleration domain, using 2*nr points
 
 
-    # TODO for DM lets try bumping up the points again
-    # TODO: here ive extended it past az max because it looks like for pulsar X
-    # the error spline gets cut off too early and messes everything up
-    if DM == None:
-        az_domain = np.linspace(0.0, azmax.value * 1, 2 * nr) << azmax.unit
+    # TODO: find a good spacing for the DM method
+    if DM is None:
+        az_domain = np.linspace(0.0, azmax.value, 2 * nr) << azmax.unit
     else:
-        az_domain = np.linspace(0.0, azmax.value * 1.5, 50 * nr) << azmax.unit
+        az_domain = np.linspace(0.0, azmax.value, 50 * nr) << azmax.unit
 
     Δa = np.diff(az_domain)[1]
 

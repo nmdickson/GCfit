@@ -170,12 +170,12 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
             DM_mdata = pulsars.mdata
 
             PdotP_domain, PdotP_c_prob = cluster_component(
-                model, R, DM=(DM, ΔDM), mass_bin=mass_bin, DM_mdata=DM_mdata
+                model, R, DM=(DM, ΔDM), DM_mdata=DM_mdata, mass_bin=mass_bin
             )
 
         else:
             PdotP_domain, PdotP_c_prob = cluster_component(
-                model, R, DM=None, mass_bin=mass_bin, DM_mdata=None
+                model, R, DM=None, DM_mdata=None, mass_bin=mass_bin
             )
 
         Pdot_domain = (P * PdotP_domain).decompose()
@@ -186,14 +186,31 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
         )
 
         # ------------------------------------------------------------------
+        # Set up the equally-spaced linear convolution domain
+        # ------------------------------------------------------------------
+
+        # TODO both 5000 and 1e-18 need to be computed dynamically
+        #   5000 to be enough steps to sample the gaussian and int peaks
+        #   1e-18 to be far enough for the int distribution to go to zero
+        #   Both balanced so as to use way too much memory unnecessarily
+        #   Must be symmetric, to avoid bound effects
+
+        # mirrored/starting at zero so very small gaussians become the δ-func
+        lin_domain = np.linspace(0., 1e-18, 5_000 // 2)
+        lin_domain = np.concatenate((np.flip(-lin_domain[1:]), lin_domain))
+
+        # ------------------------------------------------------------------
         # Compute gaussian measurement error distribution
         # ------------------------------------------------------------------
 
         # TODO if width << Pint width, maybe don't bother with first conv.
 
-        err = util.gaussian(x=Pdot_domain, sigma=ΔPdot_meas, mu=0)
+        # NOTE: this now uses the lin_domain instead of the PdotP domain
+        # in order to accommodate pulsar X who's error spline was being cut
+        # too soon, giving zero probability to valid regions
+        err = util.gaussian(x=lin_domain, sigma=ΔPdot_meas, mu=0)
 
-        err_spl = interp.UnivariateSpline(Pdot_domain, err, k=1, s=0, ext=1)
+        err_spl = interp.UnivariateSpline(lin_domain, err, k=1, s=0, ext=1)
 
         # ------------------------------------------------------------------
         # Create a slice of the P-Pdot space, along this pulsars P
@@ -224,19 +241,6 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
             10**Pdot_int_domain, Pdot_int_prob, k=1, s=0, ext=1
         )
 
-        # ------------------------------------------------------------------
-        # Set up the equally-spaced linear convolution domain
-        # ------------------------------------------------------------------
-
-        # TODO both 5000 and 1e-18 need to be computed dynamically
-        #   5000 to be enough steps to sample the gaussian and int peaks
-        #   1e-18 to be far enough for the int distribution to go to zero
-        #   Both balanced so as to use way too much memory unnecessarily
-        #   Must be symmetric, to avoid bound effects
-
-        # mirrored/starting at zero so very small gaussians become the δ-func
-        lin_domain = np.linspace(0., 1e-18, 5_000 // 2)
-        lin_domain = np.concatenate((np.flip(-lin_domain[1:]), lin_domain))
 
         # ------------------------------------------------------------------
         # Convolve the different distributions
@@ -387,11 +391,11 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
             DM_mdata = pulsars.mdata
 
             PdotP_domain, PdotP_c_prob = cluster_component(
-                model, R, DM=(DM, ΔDM), mass_bin=mass_bin, DM_mdata=DM_mdata
+                model, R, DM=(DM, ΔDM), DM_mdata=DM_mdata, mass_bin=mass_bin
             )
         else:
             PdotP_domain, PdotP_c_prob = cluster_component(
-                model, R, DM=None, mass_bin=mass_bin, DM_mdata=None
+                model, R, DM=None, DM_mdata=None, mass_bin=mass_bin
             )
 
         Pdot_domain = (Pb * PdotP_domain).decompose()
@@ -413,7 +417,6 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
         # Compute gaussian measurement error distribution
         # ------------------------------------------------------------------
 
-        # TODO may want to also do the err in spin pulsars like this
         err = util.gaussian(x=lin_domain, sigma=ΔPbdot_meas, mu=0)
 
         # err_spl = interp.UnivariateSpline(Pdot_domain, err, k=1, s=0, ext=1)
