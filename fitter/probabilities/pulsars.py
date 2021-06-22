@@ -244,12 +244,12 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
         # get los pos, err using cluster DM data
         DM_los, DM_los_err = los_dm(DM, sigma_DM, DM_mdata)
 
-        # TODO: Not 100% sure that all pulsars are within the rh for all
-        # clusters so for now I'll put this in and when this is working properly
-        # we can see if we have any problems.
-
+        # Pulsars should alway be within the half-light radius, if not the
+        # spline will just return probability of zero anyway so we should be
+        # fine. We should log here anyway so that we can make sure this isn't
+        # happening.
         if DM_los.to("pc") > model.rh.to("pc"):
-            logging.ERROR("Pulsar LOS position outside of rh.")
+            logging.warning("Pulsar LOS position outside of rh.")
 
         z_domain = np.linspace(-model.rh, model.rh, len(az_domain))
 
