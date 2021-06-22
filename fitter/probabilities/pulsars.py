@@ -27,13 +27,14 @@ def los_dm(dm, dm_err, DM_mdata):
 
     Parameters
     ----------
-    dm : Quantity
-        Dispersion measure of pulsar in pc/cm^3.
-    dm_err : Quantity
-        Error associated with DM measurement.
+    dm : float
+        Dispersion measure of pulsar. Must be in pc/cm^3.
+    dm_err : float
+        Error associated with DM measurement. Must be in pc/cm^3.
     DM_mdata : dict
-        Cluster specific DM data, includes mean cluster DM as well as
-        cluster gas density and uncertainty.
+        Cluster-specific DM data, includes mean cluster-DM as well as
+        cluster gas-density and uncertainty. Cluster-DM must be in pc/cm^3
+        and gas density in cm^-3.
 
     Returns
     -------
@@ -46,7 +47,7 @@ def los_dm(dm, dm_err, DM_mdata):
     Assumes a uniform gas density within the cluster.
 
     """
-    # TODO I guess these don't have units attached already
+    # TODO Attach units to attributes.
     ng = DM_mdata["ng"] * u.Unit("1/cm3")
     delta_ng = DM_mdata["Δng"] * u.Unit("1/cm3")
     DMc = DM_mdata["DMc"] * u.Unit("pc/cm3")
