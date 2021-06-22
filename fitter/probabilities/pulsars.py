@@ -1,4 +1,4 @@
-from ..util import QuantitySpline, gaussian
+from ..util import QuantitySpline, gaussian, div_error
 
 import scipy.stats
 import scipy as sp
@@ -18,25 +18,9 @@ __all__ = [
     'field_Pdot_KDE',
 ]
 
-
 # --------------------------------------------------------------------------
-# Pulsar acceleration (Pdot / P) components
+# LOS position of pulsars from DM
 # --------------------------------------------------------------------------
-
-
-# Helpers for DM stuff, TODO relocate to utils or wherever
-
-
-# gaussian error propagation for division
-def div_error(a, a_err, b, b_err):
-    """
-    Compute Gaussian error propagation for a÷b.
-    """
-    f = a / b
-    return abs(f) * np.sqrt((a_err / a) ** 2 + (b_err / b) ** 2)
-
-
-# Get the LOS position and uncertainty based on the DM
 def los_dm(dm, dm_err, DM_mdata):
     """
     Compute line-of-sight position and uncertainty based on pulsar DM data.
@@ -77,6 +61,9 @@ def los_dm(dm, dm_err, DM_mdata):
     )
     return los, err
 
+# --------------------------------------------------------------------------
+# Pulsar acceleration (Pdot / P) components
+# --------------------------------------------------------------------------
 
 def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
     """

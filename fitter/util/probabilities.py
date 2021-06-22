@@ -2,7 +2,7 @@ import numpy as np
 
 
 __all__ = ['gaussian', 'RV_transform', 'gaussian_likelihood',
-           'hyperparam_likelihood', 'hyperparam_effective']
+           'hyperparam_likelihood', 'hyperparam_effective', 'div_error']
 
 
 # --------------------------------------------------------------------------
@@ -68,3 +68,14 @@ def hyperparam_effective(X_data, X_model, err):
     chi2 = np.sum((X_data - X_model)**2 / err**2)
 
     return n_k / chi2
+
+
+# --------------------------------------------------------------------------
+# Gaussian error propagation.
+# --------------------------------------------------------------------------
+def div_error(a, a_err, b, b_err):
+    """
+    Compute Gaussian error propagation for a÷b.
+    """
+    f = a / b
+    return abs(f) * np.sqrt((a_err / a) ** 2 + (b_err / b) ** 2)
