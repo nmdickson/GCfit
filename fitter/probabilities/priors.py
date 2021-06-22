@@ -1,14 +1,14 @@
-from ..util import gaussian
 from ..core.data import DEFAULT_INITIALS
 
 import numpy as np
+from scipy import stats
 
 import logging
 import operator
 
 
 __all__ = ["Priors", "DEFAULT_PRIORS", "UniformPrior", "GaussianPrior",
-           "BoundedGaussianPrior", "CromwellUniformPrior"]
+           "BoundedGaussianPrior", "CromwellUniformPrior", "ArbitraryPrior"]
 
 
 _OPER_MAP = {
@@ -58,11 +58,12 @@ class Priors:
 
         return L
 
-    def __init__(self, priors, *, err_on_fail=False):
+    def __init__(self, priors, transform, *, err_on_fail=False):
         '''
         priors: dict where key is a parameter, and eavh value is either a
         `*Prior` object, or ["name of class", *args for that class]
 
+        transform : bool, use if doing nested sampling, switches to ppf
         err_on_fail : bool, if the likelihood is <= 0 will raise an error
         '''
         # TODO may be the spot to set up an initial check rather than a call
@@ -75,10 +76,13 @@ class Priors:
         # Fill in unspecified parameters with default priors bounds
         self.priors = {**DEFAULT_PRIORS, **priors}
 
+        kw = {'transform': transform}
+
         # Fill the dict with actual priors objects
         for param in self.priors:
 
             if isinstance(self.priors[param], _PriorBase):
+                # TODO need to add the correct transform to these
                 continue
 
             else:
@@ -87,7 +91,7 @@ class Priors:
 
                 prior_key = prior_key.lower().replace('prior', '').strip()
 
-                self.priors[param] = _PRIORS_MAP[prior_key](param, *args)
+                self.priors[param] = _PRIORS_MAP[prior_key](param, *args, **kw)
 
 
 class _PriorBase:
@@ -109,11 +113,76 @@ class _PriorBase:
         except AttributeError:
             return f"Invalid {self.__class__.__name__}"
 
+    def _init_val(self, val):
+        '''try to convert val to a float,
+        else assume its a param and add to dependants'''
+        try:
+            # val is a specific number
+            val = float(val)
+
+        except ValueError:
+            # val is a name of a param
+
+            if val not in DEFAULT_INITIALS:
+                raise ValueError(f'Invalid dependant parameter {val}')
+
+            self.dependants.append(val)
+
+        return val
+
 
 class UniformPrior(_PriorBase):
-    '''
-    -inf if <= 0, else 0
-    '''
+
+    def __call__(self, param_val, *args, **kwargs):
+
+        # get values for any dependant params
+        lowers, uppers = zip(*self.bounds)
+
+        lowers = map(lambda p: kwargs.get(p, p), lowers)
+        uppers = map(lambda p: kwargs.get(p, p), uppers)
+
+        # Check bounds are valid
+        if not (valid := np.less_equal.outer(lowers, uppers)).all():
+            # TODO get a good error message here
+            self._inv_mssg = f'these bounds arent valid: {valid}'
+            # self._inv_mssg = (f'{self.param}={param_val}, '
+            #                   f'not {oper.__name__} {bnd}')
+            return -np.inf
+
+        # compute overall bounds, and loc/scale
+        l_bnd, r_bnd = lowers.min(), uppers.max()
+        loc, scale = l_bnd, r_bnd - l_bnd
+
+        # evaluate the dist
+        return np.log(self._caller(param_val, loc=loc, scale=scale))
+
+    def __init__(self, param, edges, *, transform=False):
+        '''
+        param is the name, just for mssgs
+        edges is a list of bounds
+            eahc is either (lower bound, upper bound)
+            bounds can be either a number or a param
+        '''
+
+        self._caller = stats.uniform.pdf if not transform else stats.uniform.ppf
+
+        self.param = param
+
+        self.bounds = []
+        self.dependants = []
+
+        for bounds in edges:
+
+            if len(bounds) != 2:
+                raise ValueError(f"Invalid edge: {bounds}")
+
+            self.bounds.append((self._init_val(bnd) for bnd in bounds))
+
+
+# TODO needs a much better name
+class ArbitraryPrior(_PriorBase):
+    '''Consists of a number of operation: value pairs which are evalutated.
+    operation can be anything. '''
 
     def __call__(self, param_val, *args, **kwargs):
 
@@ -133,14 +202,17 @@ class UniformPrior(_PriorBase):
 
         return L
 
-    def __init__(self, param, edges):
+    def __init__(self, param, edges, *, transform=False):
         '''
         param is the name, just for mssgs
         edges is a list of bounds
-            eahc is either (lower bound, upper bound)
             or (operation, param name)
             or (operation, bound)
         '''
+
+        if transform:
+            mssg = "ArbitraryPrior does not support `transform` or ppfs"
+            raise NotImplementedError(mssg)
 
         self.param = param
 
@@ -152,66 +224,34 @@ class UniformPrior(_PriorBase):
             if len(bounds) != 2:
                 raise ValueError(f"Invalid edge: {bounds}")
 
-            # first element is operation
-            if isinstance(bounds[0], str):
-                oper_str, bnd = bounds
+            oper_str, bnd = bounds
 
-                try:
-                    # bound is a specific element
-                    bnd = float(bnd)
+            bnd = self._init_val(bnd)
 
-                except ValueError:
-                    # bound is a name of a param
-
-                    if bnd not in DEFAULT_INITIALS:
-                        raise ValueError(f'Invalid dependant parameter {bnd}')
-
-                    self.dependants.append(bnd)
-
-                self._eval.append((_OPER_MAP[oper_str], bnd))
-
-            # (lower bound, upper bound)
-            else:
-                lower_bnd, upper_bnd = bounds
-
-                if lower_bnd is not None:
-                    self._eval.append((_OPER_MAP['>='], lower_bnd))
-
-                if upper_bnd is not None:
-                    self._eval.append((_OPER_MAP['<='], upper_bnd))
-
+            self._eval.append((_OPER_MAP[oper_str], bnd))
 
 class GaussianPrior(_PriorBase):
 
     def __call__(self, param_val, *args, **kw):
+        # TODO ah, what about this log, that probably shouldnt be there?
+        return np.log(self._caller(param_val))
 
-        try:
-            L = np.log(gaussian(param_val, mu=self.mu, sigma=self.sigma))
-
-        except TypeError:
-            L = np.log(gaussian(param_val, mu=kw[self.mu], sigma=self.sigma))
-
-        return L
-
-    def __init__(self, param, mu, sigma):
+    def __init__(self, param, mu, sigma, *, transform=False):
         '''
-        μ is a number (or I guess you could do another param but just cause
-        you can do something, doesn't mean you should)
+        μ is a number
         σ is a number
         '''
         self.param = param
 
         self.mu, self.sigma = mu, sigma
 
-        if isinstance(self.mu, str):
+        self.dist = stats.norm(loc=self.mu, scale=self.sigma)
 
-            if self.mu not in DEFAULT_INITIALS:
-                raise ValueError(f'Invalid dependant parameter {self.mu}')
-
-            self.dependants = [self.mu]
+        self._caller = self.dist.pdf if not transform else self.dist.ppf
 
 
 class BoundedGaussianPrior(_PriorBase):
+    # Could maybe use truncnorm?
     pass
 
 
