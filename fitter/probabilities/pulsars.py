@@ -1,4 +1,3 @@
-from scipy.interpolate.fitpack2 import UnivariateSpline
 from ..util import QuantitySpline, gaussian
 
 import scipy.stats
@@ -315,7 +314,7 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
             norm += (0.5 * Δa * (P_a + P_b)).value
             norm += (0.5 * Δa * (P_c + P_d)).value
 
-            # NOTE for the DM Paz dist, the entire distribution integrates to 
+            # NOTE for the DM Paz dist, the entire distribution integrates to
             # 1.0 unlike the density based Paz
             if abs(target_norm - norm) <= eps:
                 break
