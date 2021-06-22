@@ -29,13 +29,39 @@ __all__ = [
 
 # gaussian error propagation for division
 def div_error(a, a_err, b, b_err):
+    """
+    Compute Gaussian error propagation for a÷b.
+    """
     f = a / b
     return abs(f) * np.sqrt((a_err / a) ** 2 + (b_err / b) ** 2)
 
 
 # Get the LOS position and uncertainty based on the DM
 def los_dm(dm, dm_err, DM_mdata):
+    """
+    Compute line-of-sight position and uncertainty based on pulsar DM data.
 
+    Parameters
+    ----------
+    dm : Quantity
+        Dispersion measure of pulsar in pc/cm^3.
+    dm_err : Quantity
+        Error associated with DM measurement.
+    DM_mdata : dict
+        Cluster specific DM data, includes mean cluster DM as well as
+        cluster gas density and uncertainty.
+
+    Returns
+    -------
+    position : tuple
+        A tuple of floats corresponding to the mean LOS position and
+        its uncertainty.
+
+    Notes
+    -----
+    Assumes a uniform gas density within the cluster.
+
+    """
     # TODO I guess these don't have units attached already
     ng = DM_mdata["ng"] * u.Unit("1/cm3")
     delta_ng = DM_mdata["Δng"] * u.Unit("1/cm3")
