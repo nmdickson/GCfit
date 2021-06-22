@@ -22,8 +22,8 @@ _OPER_MAP = {
 
 
 class Priors:
-    """Container class representing the prior *logged* likelihoods,
-    to be called on θ and *added* to the log likelihood"""
+    """Container class representing the prior (logged) likelihoods,
+    to be called on θ and (added) to the log likelihood"""
 
     def __call__(self, theta):
         '''return the total prior likelihood given by theta'''
@@ -42,8 +42,8 @@ class Priors:
             else:
                 P = prior(theta[param])
 
-            # if invalid (i.e. -inf, outside of bounds) record it's reason
-            if not np.isfinite(P):
+            # if invalid (ie 0, outside of bounds / real bad) record it's reason
+            if P <= 0.:
                 inv.append(prior.inv_mssg)
 
             L += P
@@ -56,9 +56,12 @@ class Priors:
             else:
                 logging.debug(mssg)
 
+        if self._log:
+            L = np.log(L)
+
         return L
 
-    def __init__(self, priors, transform, *, err_on_fail=False):
+    def __init__(self, priors, transform, *, logged=True, err_on_fail=False):
         '''
         priors: dict where key is a parameter, and eavh value is either a
         `*Prior` object, or ["name of class", *args for that class]
@@ -66,8 +69,8 @@ class Priors:
         transform : bool, use if doing nested sampling, switches to ppf
         err_on_fail : bool, if the likelihood is <= 0 will raise an error
         '''
-        # TODO may be the spot to set up an initial check rather than a call
 
+        self._log = logged
         self._strict = err_on_fail
 
         if extraneous_params := (priors.keys() - DEFAULT_PRIORS.keys()):
@@ -76,7 +79,11 @@ class Priors:
         # Fill in unspecified parameters with default priors bounds
         self.priors = {**DEFAULT_PRIORS, **priors}
 
+        # TODO might want to change how we define a "transform" priors
+        #   cause it's not a prior anymore, its a prior_transform
         kw = {'transform': transform}
+        if transform:
+            self._log = False
 
         # Fill the dict with actual priors objects
         for param in self.priors:
@@ -95,8 +102,6 @@ class Priors:
 
 
 class _PriorBase:
-    '''remember *logged*
-    '''
 
     dependants = None
 
@@ -147,14 +152,14 @@ class UniformPrior(_PriorBase):
             self._inv_mssg = f'these bounds arent valid: {valid}'
             # self._inv_mssg = (f'{self.param}={param_val}, '
             #                   f'not {oper.__name__} {bnd}')
-            return -np.inf
+            return 0.
 
         # compute overall bounds, and loc/scale
         l_bnd, r_bnd = lowers.min(), uppers.max()
         loc, scale = l_bnd, r_bnd - l_bnd
 
         # evaluate the dist
-        return np.log(self._caller(param_val, loc=loc, scale=scale))
+        return self._caller(param_val, loc=loc, scale=scale)
 
     def __init__(self, param, edges, *, transform=False):
         '''
@@ -186,8 +191,6 @@ class ArbitraryPrior(_PriorBase):
 
     def __call__(self, param_val, *args, **kwargs):
 
-        L = 0.
-
         for oper, bnd in self._eval:
 
             try:
@@ -198,9 +201,10 @@ class ArbitraryPrior(_PriorBase):
             if not check:
                 self._inv_mssg = (f'{self.param}={param_val}, '
                                   f'not {oper.__name__} {bnd}')
-                return -np.inf
+                return 0.
 
-        return L
+        # TODO what value to return on success?
+        return 1.
 
     def __init__(self, param, edges, *, transform=False):
         '''
@@ -233,8 +237,7 @@ class ArbitraryPrior(_PriorBase):
 class GaussianPrior(_PriorBase):
 
     def __call__(self, param_val, *args, **kw):
-        # TODO ah, what about this log, that probably shouldnt be there?
-        return np.log(self._caller(param_val))
+        return self._caller(param_val)
 
     def __init__(self, param, mu, sigma, *, transform=False):
         '''

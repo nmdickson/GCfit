@@ -299,6 +299,8 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         # Set initial state to None if resuming run (`cont_run`)
         for _ in sampler.sample(init_pos, iterations=Niters):
 
+            # TODO it would be nice if iteration num was added to log preamble
+
             # --------------------------------------------------------------
             # Store some iteration metadata
             # --------------------------------------------------------------
