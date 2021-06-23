@@ -3,7 +3,8 @@ from scipy.signal import find_peaks
 from scipy.integrate import trapezoid
 
 __all__ = ['gaussian', 'RV_transform', 'gaussian_likelihood',
-           'hyperparam_likelihood', 'hyperparam_effective', 'div_error']
+           'hyperparam_likelihood', 'hyperparam_effective', 'div_error',
+           'trim_peaks']
 
 
 # --------------------------------------------------------------------------
@@ -87,19 +88,21 @@ def div_error(a, a_err, b, b_err):
 # --------------------------------------------------------------------------
 
 def trim_peaks(az_domain, Paz):
-
+    Paz = Paz.copy()
+    steps = 0
     # loop until peaks are dealt with
     while True:
-
+        steps += 1
         # get the peaks
         peaks, _ = find_peaks(Paz, height=0, threshold=1e5, width=1)
 
         # break either if the normalization starts to suffer or if we eliminate all peaks
-        if (trapezoid(x=az_domain, y=Paz.value) <= 0.98) | all(peaks == False):
+        if (trapezoid(x=az_domain.value, y=Paz.value) <= 0.98) or all(peaks == False):
             break
 
         # set the peaks to 0
         Paz[peaks] = 0
 
     # return trimmed Paz
+    print("peak timming rounds: ", steps)
     return Paz

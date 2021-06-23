@@ -1,4 +1,5 @@
-from ..util import QuantitySpline, gaussian, div_error
+from ..util import QuantitySpline, gaussian, div_error, trim_peaks
+from scipy.interpolate import UnivariateSpline
 
 import scipy.stats
 import scipy as sp
@@ -307,7 +308,7 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
             # Manual normalization
             Paz_dist /= norm
 
-    # For DM we need to hand the asymmetric Pz distributions
+    # For DM we need to handle the asymmetric Pz distributions
     else:
         target_norm = 1.0
         eps = 1e-5
@@ -343,17 +344,10 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
             # This is the case where our probability distribution doesn't
             # integrate to one, just don't cut anything off, log the
             # normalization and manually normalize it.
-            # import matplotlib.pyplot as plt
-            # area = sp.integrate.simpson(x=az_domain, y=Paz_dist)
-            # plt.plot(az_domain, Paz_dist, label=area)
-            # plt.legend()
-            # plt.show()
             logging.warning("Probability distribution failed to integrate "
                             f"to 1.0, area: {norm:.6f}")
 
-
             # Manual normalization
-            # TODO see how often this is happening with DM, adjust the a-space?
             Paz_dist /= norm
 
 
@@ -374,17 +368,17 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
 
 
 
-    # if DM is None:
-    #     Paz_spl = UnivariateSpline(x=az_domain, y=Paz_dist, k=3, s=0, ext=1)
-    # else:
-    #     # add the signs back in to the domain
-    #     Paz_spl = UnivariateSpline(
-    #         x=az_signs * az_domain, y=Paz_dist, k=3, s=0, ext=1
-    #     )
-    # area = Paz_spl.integral(-np.inf, np.inf)
-    # if DM is None:
-    #     area /= 2
-    # print(f"step: {ind}/{len(az_domain)//2}, norm: {area}")
+    if DM is None:
+        Paz_spl = UnivariateSpline(x=az_domain, y=Paz_dist, k=3, s=0, ext=1)
+    else:
+        # add the signs back in to the domain
+        Paz_spl = UnivariateSpline(
+            x=az_signs * az_domain, y=Paz_dist, k=3, s=0, ext=1
+        )
+    area = Paz_spl.integral(-np.inf, np.inf)
+    if DM is None:
+        area /= 2
+    print(f"step: {ind}/{len(az_domain)//2}, norm: {area:.6f}")
 
 
     # Normalize the Paz dist, before this step the area should be ~2 because
@@ -401,6 +395,10 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
     # put the signs back in for the DM method
     if DM is not None:
         PdotP_domain *= az_signs
+
+
+    # Trim the peaks from numerical instability
+    Paz_dist = trim_peaks(az_domain=az_domain, Paz=Paz_dist)
 
     return PdotP_domain, Paz_dist
 
