@@ -1,5 +1,6 @@
 import numpy as np
-
+from scipy.signal import find_peaks
+from scipy.integrate import trapezoid
 
 __all__ = ['gaussian', 'RV_transform', 'gaussian_likelihood',
            'hyperparam_likelihood', 'hyperparam_effective', 'div_error']
@@ -71,7 +72,7 @@ def hyperparam_effective(X_data, X_model, err):
 
 
 # --------------------------------------------------------------------------
-# Gaussian error propagation.
+# Gaussian error propagation
 # --------------------------------------------------------------------------
 def div_error(a, a_err, b, b_err):
     """
@@ -79,3 +80,26 @@ def div_error(a, a_err, b, b_err):
     """
     f = a / b
     return abs(f) * np.sqrt((a_err / a) ** 2 + (b_err / b) ** 2)
+
+
+# --------------------------------------------------------------------------
+# Distribution helpers
+# --------------------------------------------------------------------------
+
+def trim_peaks(az_domain, Paz):
+
+    # loop until peaks are dealt with
+    while True:
+
+        # get the peaks
+        peaks, _ = find_peaks(Paz, height=0, threshold=1e5, width=1)
+
+        # break either if the normalization starts to suffer or if we eliminate all peaks
+        if (trapezoid(x=az_domain, y=Paz.value) <= 0.98) | all(peaks == False):
+            break
+
+        # set the peaks to 0
+        Paz[peaks] = 0
+
+    # return trimmed Paz
+    return Paz
