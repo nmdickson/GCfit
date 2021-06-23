@@ -398,7 +398,7 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
 
 
     # Trim the peaks from numerical instability
-    Paz_dist = trim_peaks(az_domain=az_domain, Paz=Paz_dist)
+    Paz_dist = trim_peaks(PdotP_domain * c, Paz_dist)
 
     return PdotP_domain, Paz_dist
 
