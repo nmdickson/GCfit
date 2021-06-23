@@ -176,7 +176,8 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
     # Define the acceleration domain, using 2*nr points
 
 
-    # TODO: find a good spacing for the DM method
+    # for the DM method, just loading up on points and then trimming the dist
+    # seems to be the easiest way to do things
     if DM is None:
         az_domain = np.linspace(0.0, azmax.value, 2 * nr) << azmax.unit
     else:
@@ -213,6 +214,7 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
         # need to look at full cluster now that it's no longer symmetric
         az_domain = np.concatenate((np.flip(-az_domain[1:]), az_domain))
         # also need the signs to pick which side of the cluster the pulsar is on
+        # negative az means a positive z postition, opposite for positive
         az_signs = np.sign(az_domain)
 
         # make sure we get the DM data
@@ -253,7 +255,8 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
 
         z1 = np.maximum(z1_spl(az_domain), z[0])
 
-        # Here we add the signs back in only for the DM splines
+        # Here we add the signs back in only for the DM splines, this allows
+        # us to select the correct side of the cluster for each az point
         Paz_dist = (DM_los_spl(z1 * -1 * az_signs) /
                     abs(az_der(z1))).value * u.dimensionless_unscaled
 
@@ -272,8 +275,7 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
                                         / abs(az_der(z2[within_bounds]))).value
 
 
-    # Ensure Paz is normalized
-    # NOTE: this version requires more than 2*nr steps, do more testing
+    # Ensure Paz is normalized (slightly different for density vs DM methods)
 
     if DM is None:
         # for density based Paz, distributions are symmetric
@@ -367,7 +369,7 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
 
 
 
-
+    # TODO: Debug Stuff
     if DM is None:
         Paz_spl = UnivariateSpline(x=az_domain, y=Paz_dist, k=3, s=0, ext=1)
     else:
