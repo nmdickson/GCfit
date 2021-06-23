@@ -96,8 +96,10 @@ def trim_peaks(az_domain, Paz):
         # get the peaks
         peaks, _ = find_peaks(Paz, height=0, threshold=1e5, width=1)
 
-        # break either if the normalization starts to suffer or if we eliminate all peaks
-        if (trapezoid(x=az_domain.value, y=Paz.value) <= 0.98) or all(peaks == False):
+        # break either if the normalization starts to suffer or if we
+        # eliminate all detected peaks
+        if ((trapezoid(x=az_domain.value, y=Paz.value) <= 0.98)
+                or all(peaks == False)):
             break
 
         # set the peaks to 0
