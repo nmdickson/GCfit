@@ -98,13 +98,17 @@ def trim_peaks(az_domain, Paz):
 
         # break either if the normalization starts to suffer or if we
         # eliminate all detected peaks
-        if ((trapezoid(x=az_domain.value, y=Paz.value) <= 0.98)
-                or all(peaks == False)):
+        area = trapezoid(x=az_domain.value, y=Paz.value)
+        if (area <= 0.98 or all(peaks == False)):
             break
 
         # set the peaks to 0
         Paz[peaks] = 0
 
+    # re-normalize:
+    Paz /= area
+
     # return trimmed Paz
+    # TODO: debug
     print("peak timming rounds: ", steps)
     return Paz
