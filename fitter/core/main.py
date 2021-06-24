@@ -12,12 +12,73 @@ import shutil
 import logging
 import pathlib
 from fnmatch import fnmatch
+from collections import abc
 
 
 __all__ = ['fit']
 
 
 _here = pathlib.Path()
+_str_types = (str, bytes)
+
+
+class Output:
+    '''
+    '''
+    pass
+
+
+class MCMCOutput(emcee.backends.HDFBackend, Output):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def add_metadata(self, key, value, value_postfix=''):
+
+        with self.open('a') as hdf:
+
+            meta_grp = hdf.require_group(name='metadata')
+
+            if isinstance(value, abc.Mapping):
+
+                dset = meta_grp.require_dataset(key, data=h5py.Empty("f"))
+
+                for k, v in value.items():
+                    dset.attrs[f'{k}{value_postfix}'] = v
+
+            elif isinstance(value, abc.Collection) \
+                    and not isinstance(value, _str_types):
+
+                dset = meta_grp.require_dataset(key, data=h5py.Empty("f"))
+
+                for i, v in enumerate(value):
+                    dset.attrs[f'{i}{value_postfix}'] = v
+
+            else:
+
+                meta_grp.attrs[f'{key}{value_postfix}'] = value
+
+    def add_dataset(self, key, data, group='statistics', append=False):
+        '''currently only works for adding a full array once'''
+
+        data = np.asanyarray(data)
+
+        if data.dtype.kind == 'U':
+            data = data.astype('S')
+
+        with self.open('a') as hdf:
+
+            grp = hdf.require_group(name=group)
+
+            # if append:
+            #     # TODO what if array >1d
+            #     N = data.size + grp[key].size
+            #     grp[key].resize(N, axis=0)
+
+            grp[key] = data
+
+
+# class NestedSamplingOutput(Output)
 
 
 def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
@@ -192,7 +253,8 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     # Setup and check param_priors
     # ----------------------------------------------------------------------
 
-    spec_priors = param_priors
+    spec_priors_type = {k: v[0] for k, v in param_priors.items()}
+    spec_priors_args = {k: v[1:] for k, v in param_priors.items()}
 
     prior_likelihood = priors.Priors(param_priors)
 
@@ -209,7 +271,8 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
     logging.debug(f"Using hdf backend at {backend_fn}")
 
-    backend = emcee.backends.HDFBackend(backend_fn)
+    # backend = emcee.backends.HDFBackend(backend_fn)
+    backend = Output(backend_fn)
 
     accept_rate = np.empty((Niters, Nwalkers))
     iter_rate = np.empty(Niters)
@@ -233,39 +296,20 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         # Write run metadata to output (backend) file
         # ----------------------------------------------------------------------
 
-        with h5py.File(backend_fn, 'a') as backend_hdf:
+        backend.add_metadata('cluster', cluster)
 
-            meta_grp = backend_hdf.require_group(name='metadata')
+        backend.add_metadata('mpi', mpi)
+        backend.add_metadata('Ncpu', Ncpu)
 
-            meta_grp.attrs['cluster'] = cluster
+        backend.add_metadata('fixed_params', fixed_initials)
+        backend.add_metadata('excluded_likelihoods', excluded_likelihoods)
 
-            # parallelization setup
-            meta_grp.attrs['mpi'] = mpi
-            meta_grp.attrs['Ncpu'] = Ncpu
+        if spec_initials is not None:
+            backend.add_metadata('specified_initials', spec_initials)
 
-            # Fixed parameters
-            fix_dset = meta_grp.create_dataset("fixed_params", dtype="f")
-            for k, v in fixed_initials.items():
-                fix_dset.attrs[k] = v
-
-            # Excluded likelihoods
-            ex_dset = meta_grp.create_dataset("excluded_likelihoods", dtype='f')
-            for i, L in enumerate(excluded_likelihoods):
-                ex_dset.attrs[str(i)] = L
-
-            # Specified initial values
-            init_dset = meta_grp.create_dataset("specified_initials", dtype="f")
-            if spec_initials is not None:
-                for k, v in spec_initials.items():
-                    init_dset.attrs[k] = v
-
-            # Specified priors
-            bnd_dset = meta_grp.create_dataset("specified_priors", dtype="f")
-            if spec_priors:
-                for k, v in spec_priors.items():
-                    # TODO I don't even think theres a good way to do this
-                    bnd_dset.attrs[f'{k}_type'] = np.array(v[0]).astype('|S10')
-                    bnd_dset.attrs[f'{k}_args'] = np.array(v[1:]).astype('|S10')
+        if spec_priors_type:
+            backend.add_metadata('specified_priors', spec_priors_type, '_type')
+            backend.add_metadata('specified_priors', spec_priors_args, '_args')
 
         # ------------------------------------------------------------------
         # Initialize the MCMC sampler
@@ -332,22 +376,13 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     # Write extra metadata and statistics to output (backend) file
     # ----------------------------------------------------------------------
 
-    with h5py.File(backend_fn, 'r+') as backend_hdf:
+    backend.add_metadata('runtime', time.time() - t0)
 
-        # Store run metadata
+    backend.add_metadata('autocorr', tau)
+    backend.add_metadata('reliable_autocorr', np.any((tau * 50) > Niters))
 
-        meta_grp = backend_hdf.require_group(name='metadata')
-
-        meta_grp.attrs['runtime'] = time.time() - t0
-        meta_grp.attrs['autocorr'] = tau
-        meta_grp.attrs['reliable_autocorr'] = np.any((tau * 50) > Niters)
-
-        # Store run statistics
-
-        stat_grp = backend_hdf.require_group(name='statistics')
-
-        stat_grp.create_dataset(name='iteration_rate', data=iter_rate)
-        stat_grp.create_dataset(name='acceptance_rate', data=accept_rate)
+    backend.add_dataset('iteration_rate', iter_rate)
+    backend.add_dataset('acceptance_rate', accept_rate)
 
     logging.debug(f"Final state: {sampler}")
 
