@@ -161,7 +161,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
         # Compute the cluster component distribution, from the model
         # ------------------------------------------------------------------
 
-        # TODO this shouldnt beso convoluted, rearrange some data to make easier
+        # TODO this shouldn't be so convoluted, rearrange some data to make easier
         if use_DM and pulsars['DM'].mdata['confidence'][i] > strict:
 
             DM = pulsars['DM'][i]

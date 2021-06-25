@@ -169,13 +169,11 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
     # Old version here for future reference
     # increment density by 2 order of magn. smaller than azmax
     # Δa = 10**(np.floor(np.log10(azmax.value)) - 2)
-
     # define the acceleration space domain, based on amax and Δa
     # az_domain = np.arange(0.0, azmax.value + Δa, Δa) << azmax.unit
 
-    # Define the acceleration domain, using 2*nr points
 
-
+    # Define the acceleration domain, using 2*nr points (for density method)
     # for the DM method, just loading up on points and then trimming the dist
     # seems to be the easiest way to do things
     if DM is None:
@@ -190,7 +188,6 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
 
     z1 = np.maximum(z1_spl(az_domain), z[0])
 
-    # TODO fix all the DM stuff and then clean it up
     if DM is None:
         Paz_dist = (rhoz_spl(z1) /
                     abs(az_der(z1))).value * u.dimensionless_unscaled
@@ -238,7 +235,7 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
         # Pulsars should alway be within the half-light radius, if not the
         # spline will just return probability of zero anyway so we should be
         # fine. We should log here anyway so that we can make sure this isn't
-        # happening.
+        # happening often.
         if DM_los.to("pc") > model.rh.to("pc"):
             logging.warning("Pulsar LOS position outside of rh.")
 
@@ -288,7 +285,7 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
             # Integrate using trapezoid rule cumulatively
             norm += (0.5 * Δa * (P_a + P_b)).value
 
-            # NOTE: Norm target here needs to be 1.0 not 0.5 in order to fully
+            # NOTE: Norm target here needs to be 1 not 0.5 in order to fully
             # sample the distribution, this means we need to divide by 2
             # somewhere along the way. If converges, cut domain at this index
             if abs(1.0 - norm) < eps:
@@ -367,7 +364,21 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
         # Off by one?
         Paz_dist[mid + ind + 1:] = 0
 
+    # Normalize the Paz dist, before this step the area should be ~2 because
+    # each side of the dist needs to be cutoff at an area of 1.0.
+    # (Only for density method)
+    if DM is None:
+        Paz_dist /= 2
 
+    # Change the acceleration domain to a Pdot / P domain
+    PdotP_domain = az_domain / c
+
+    # put the signs back in for the DM method
+    if DM is not None:
+        PdotP_domain *= az_signs
+
+    # Trim the peaks from numerical instability
+    Paz_dist = trim_peaks(PdotP_domain * c, Paz_dist)
 
     # TODO: Debug Stuff
     if DM is None:
@@ -378,29 +389,7 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
             x=az_signs * az_domain, y=Paz_dist, k=3, s=0, ext=1
         )
     area = Paz_spl.integral(-np.inf, np.inf)
-    if DM is None:
-        area /= 2
     print(f"step: {ind}/{len(az_domain)//2}, norm: {area:.6f}")
-
-
-    # Normalize the Paz dist, before this step the area should be ~2 because
-    # each side of the dist needs to be cutoff at an area of 1.0.
-    # (Only for density method)
-    if DM is None:
-        Paz_dist /= 2
-
-
-
-    # Change the acceleration domain to a Pdot / P domain
-    PdotP_domain = az_domain / c
-
-    # put the signs back in for the DM method
-    if DM is not None:
-        PdotP_domain *= az_signs
-
-
-    # Trim the peaks from numerical instability
-    Paz_dist = trim_peaks(PdotP_domain * c, Paz_dist)
 
     return PdotP_domain, Paz_dist
 
