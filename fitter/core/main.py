@@ -5,6 +5,7 @@ import h5py
 import emcee
 import schwimmbad
 import numpy as np
+import dynesty.dynamicsampler as dysamp
 
 import sys
 import time
@@ -15,7 +16,7 @@ from fnmatch import fnmatch
 from collections import abc
 
 
-__all__ = ['fit']
+__all__ = ['MCMC_fit', 'nested_fit']
 
 
 _here = pathlib.Path()
@@ -23,8 +24,6 @@ _str_types = (str, bytes)
 
 
 class Output:
-    '''
-    '''
     pass
 
 
@@ -78,10 +77,11 @@ class MCMCOutput(emcee.backends.HDFBackend, Output):
             grp[key] = data
 
 
-# class NestedSamplingOutput(Output)
+class NestedSamplingOutput(Output):
+    pass
 
 
-def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
+def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         mpi=False, initials=None, param_priors=None, moves=None,
         fixed_params=None, excluded_likelihoods=None, hyperparams=True,
         cont_run=False, savedir=_here, backup=False, verbose=False):
@@ -272,7 +272,7 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     logging.debug(f"Using hdf backend at {backend_fn}")
 
     # backend = emcee.backends.HDFBackend(backend_fn)
-    backend = Output(backend_fn)
+    backend = MCMCOutput(backend_fn)
 
     accept_rate = np.empty((Niters, Nwalkers))
     iter_rate = np.empty(Niters)
@@ -380,6 +380,227 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
     backend.add_metadata('autocorr', tau)
     backend.add_metadata('reliable_autocorr', np.any((tau * 50) > Niters))
+
+    backend.add_dataset('iteration_rate', iter_rate)
+    backend.add_dataset('acceptance_rate', accept_rate)
+
+    logging.debug(f"Final state: {sampler}")
+
+    # ----------------------------------------------------------------------
+    # Print some verbose results to stdout
+    # ----------------------------------------------------------------------
+
+    if verbose:
+        from .. import visualize as viz
+        viz.RunVisualizer(backend_fn, observations).print_summary()
+
+    logging.info("FINISHED")
+
+
+def nested_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
+               mpi=False, initials=None, param_priors=None, moves=None,
+               fixed_params=None, excluded_likelihoods=None, hyperparams=True,
+               cont_run=False, savedir=_here, backup=False, verbose=False):
+    '''nsted sampling fitter
+    '''
+
+    logging.info("BEGIN NESTED SAMPLING")
+
+    # ----------------------------------------------------------------------
+    # Check arguments
+    # ----------------------------------------------------------------------
+
+    if fixed_params is None:
+        fixed_params = []
+
+    if excluded_likelihoods is None:
+        excluded_likelihoods = []
+
+    if param_priors is None:
+        param_priors = {}
+
+    if cont_run:
+        raise NotImplementedError
+
+    savedir = pathlib.Path(savedir)
+    if not savedir.is_dir():
+        raise ValueError(f"Cannot access '{savedir}': No such directory")
+
+    # ----------------------------------------------------------------------
+    # Load obeservational data, determine which likelihoods are valid/desired
+    # ----------------------------------------------------------------------
+
+    logging.info(f"Loading {cluster} data")
+
+    observations = Observations(cluster)
+
+    logging.debug(f"Observation datasets: {observations}")
+
+    likelihoods = []
+    for component in observations.valid_likelihoods:
+        key, func, *_ = component
+        func_name = func.__name__
+
+        if not any(fnmatch(key, pattern) or fnmatch(func_name, pattern)
+                   for pattern in excluded_likelihoods):
+
+            likelihoods.append(component)
+
+    logging.debug(f"Likelihood components: {likelihoods}")
+
+    # ----------------------------------------------------------------------
+    # Initialize the walker positions
+    # ----------------------------------------------------------------------
+
+    # *_params -> list of keys, *_initials -> dictionary
+
+    spec_initials = initials
+
+    # get supplied initials, or read them from the data files if not given
+    if initials is None:
+        initials = observations.initials
+    else:
+        # fill manually supplied dict with defaults (change to unions in 3.9)
+        initials = {**observations.initials, **initials}
+
+    logging.debug(f"Inital initals: {initials}")
+
+    if extraneous_params := (set(fixed_params) - initials.keys()):
+        raise ValueError(f"Invalid fixed parameters: {extraneous_params}")
+
+    variable_params = (initials.keys() - set(fixed_params))
+    if not variable_params:
+        raise ValueError(f"No non-fixed parameters left, fix less parameters")
+
+    # variable params sorting matters for setup of theta, but fixed does not
+    fixed_initials = {key: initials[key] for key in fixed_params}
+    variable_initials = {key: initials[key] for key in
+                         sorted(variable_params, key=list(initials).index)}
+
+    logging.debug(f"Fixed initals: {fixed_initials}")
+    logging.debug(f"Variable initals: {variable_initials}")
+
+    # ----------------------------------------------------------------------
+    # Setup and check param_priors
+    # ----------------------------------------------------------------------
+
+    spec_priors_type = {k: v[0] for k, v in param_priors.items()}
+    spec_priors_args = {k: v[1:] for k, v in param_priors.items()}
+
+    prior_likelihood = priors.Priors(param_priors, transform=True)
+
+    # ----------------------------------------------------------------------
+    # Setup MCMC backend
+    # ----------------------------------------------------------------------
+
+    backend_fn = f"{savedir}/{cluster}_sampler.hdf"
+
+    logging.debug(f"Using hdf backend at {backend_fn}")
+
+    backend = NestedSamplingOutput(backend_fn)
+
+    accept_rate = np.empty((Niters, Nwalkers))
+    iter_rate = np.empty(Niters)
+
+    # ----------------------------------------------------------------------
+    # Setup multi-processing pool
+    # ----------------------------------------------------------------------
+
+    logging.info("Beginning pool")
+
+    with schwimmbad.choose_pool(mpi=mpi, processes=Ncpu) as pool:
+
+        logging.debug(f"Pool class: {pool}, with {mpi=}, {Ncpu=}")
+
+        if mpi and not pool.is_master():
+            logging.debug("This process is not master")
+            pool.wait()
+            sys.exit(0)
+
+        # ----------------------------------------------------------------------
+        # Write run metadata to output (backend) file
+        # ----------------------------------------------------------------------
+
+        backend.add_metadata('cluster', cluster)
+
+        backend.add_metadata('mpi', mpi)
+        backend.add_metadata('Ncpu', Ncpu)
+
+        backend.add_metadata('fixed_params', fixed_initials)
+        backend.add_metadata('excluded_likelihoods', excluded_likelihoods)
+
+        if spec_initials is not None:
+            backend.add_metadata('specified_initials', spec_initials)
+
+        if spec_priors_type:
+            backend.add_metadata('specified_priors', spec_priors_type, '_type')
+            backend.add_metadata('specified_priors', spec_priors_args, '_args')
+
+        # ------------------------------------------------------------------
+        # Initialize the MCMC sampler
+        # ------------------------------------------------------------------
+
+        logging.info("Initializing sampler")
+
+        sampler = dysamp.DynamicNestedSampler(
+            ndim=len(variable_initials),
+            loglikelihood=posterior,  # or should it be log_likelihood????
+            prior_transform=prior_likelihood,
+            logl_args=(observations, fixed_initials, likelihoods, 'ignore'),
+            logl_kwargs={'hyperparams': hyperparams},
+            pool=pool,
+        )
+
+        logging.debug(f"Sampler class: {sampler}")
+
+        # ------------------------------------------------------------------
+        # Run the sampler
+        # ------------------------------------------------------------------
+
+        logging.info(f"Iterating sampler ({Niters} iterations)")
+
+        t0 = t = time.time()
+
+        stop_kw = {'pfrac': 0.1}
+
+        # runs an initial set of set samples, as if using `NestedSampler`
+        for results in sampler.sample_initial():
+            pass
+
+        # run the dynamic sampler in batches, until the stop condition is met
+        while not dysamp.stopping_function(sampler.results, stop_kw):
+
+            logl_bounds = dysamp.weight_function(sampler.results, stop_kw)
+
+            for _ in sampler.sample_batch(logl_bounds=logl_bounds):
+                pass
+
+            # add new samples to previous results
+            sampler.combine_runs()
+
+            # --------------------------------------------------------------
+            # Store some iteration metadata
+            # --------------------------------------------------------------
+
+            t_i = time.time()
+            iter_rate[sampler.iteration - 1] = t_i - t
+            t = t_i
+
+            accept_rate[sampler.iteration - 1, :] = sampler.acceptance_fraction
+
+            if sampler.iteration % 100 == 0:
+                logging.debug(f"{sampler.iteration=}")
+                if backup:
+                    shutil.copyfile(f"{savedir}/{cluster}_sampler.hdf",
+                                    f"{savedir}/.backup_{cluster}_sampler.hdf")
+
+    logging.info("Finished sampling")
+
+    # ----------------------------------------------------------------------
+    # Write extra metadata and statistics to output (backend) file
+    # ----------------------------------------------------------------------
+
+    backend.add_metadata('runtime', time.time() - t0)
 
     backend.add_dataset('iteration_rate', iter_rate)
     backend.add_dataset('acceptance_rate', accept_rate)
