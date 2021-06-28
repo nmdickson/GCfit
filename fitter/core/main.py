@@ -23,8 +23,8 @@ _here = pathlib.Path()
 def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         mpi=False, initials=None, param_priors=None, moves=None,
         fixed_params=None, excluded_likelihoods=None, hyperparams=True,
-        cont_run=False, savedir=_here, backup=False, verbose=False,
-        progress=False):
+        cont_run=False, savedir=_here, backup=False,
+        verbose=False, progress=False):
     '''Main MCMC fitting pipeline
 
     Execute the full MCMC cluster fitting algorithm.
