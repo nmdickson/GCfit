@@ -43,7 +43,7 @@ class Priors:
                 P = prior(theta[param])
 
             # if invalid (ie 0, outside of bounds / real bad) record it's reason
-            if P <= 0.:
+            if P <= 0. or np.isnan(P):
                 inv.append(prior.inv_mssg)
 
             L += P
@@ -263,19 +263,19 @@ class CromwellUniformPrior(_PriorBase):
 
 
 DEFAULT_PRIORS = {
-    'W0': UniformPrior('W0', [(3, 20)]),
-    'M': UniformPrior('M', [(0.01, 10)]),
-    'rh': UniformPrior('rh', [(0.5, 15)]),
-    'ra': UniformPrior('ra', [(0, 5)]),
-    'g': UniformPrior('g', [(0, 2.3)]),
-    'delta': UniformPrior('delta', [(0.3, 0.5)]),
-    's2': UniformPrior('s2', [(0, 15)]),
-    'F': UniformPrior('F', [(1, 3)]),
-    'a1': UniformPrior('a1', [(0, 6)]),
-    'a2': UniformPrior('a2', [(0, 6), ('>=', 'a1')]),
-    'a3': UniformPrior('a3', [(1.6, 6), ('>=', 'a2')]),
-    'BHret': UniformPrior('BHret', [(0, 100)]),
-    'd': UniformPrior('d', [(2, 8)])
+    'W0': ('uniform', [(3, 20)]),
+    'M': ('uniform', [(0.01, 10)]),
+    'rh': ('uniform', [(0.5, 15)]),
+    'ra': ('uniform', [(0, 5)]),
+    'g': ('uniform', [(0, 2.3)]),
+    'delta': ('uniform', [(0.3, 0.5)]),
+    's2': ('uniform', [(0, 15)]),
+    'F': ('uniform', [(1, 3)]),
+    'a1': ('uniform', [(0, 6)]),
+    'a2': ('uniform', [(0, 6), (0, 'a1')]),
+    'a3': ('uniform', [(1.6, 6), (0, 'a2')]),
+    'BHret': ('uniform', [(0, 100)]),
+    'd': ('uniform', [(2, 8)])
 }
 
 _PRIORS_MAP = {
