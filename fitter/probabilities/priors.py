@@ -89,8 +89,11 @@ class Priors:
         for param in self.priors:
 
             if isinstance(self.priors[param], _PriorBase):
-                # TODO need to add the correct transform to these
-                continue
+
+                if self.priors[param]._transform is not transform:
+                    mssg = (f"Prior {self.priors[param]} already "
+                            f"initialized without {transform=}")
+                    raise RuntimeError(mssg)
 
             else:
                 # TODO Not happy with how nested the uniform args have to be
@@ -169,6 +172,8 @@ class UniformPrior(_PriorBase):
             bounds can be either a number or a param
         '''
 
+        self._transform = transform
+
         self._caller = stats.uniform.pdf if not transform else stats.uniform.ppf
 
         self.param = param
@@ -214,6 +219,8 @@ class ArbitraryPrior(_PriorBase):
             or (operation, bound)
         '''
 
+        self._transform = transform
+
         if transform:
             mssg = "ArbitraryPrior does not support `transform` or ppfs"
             raise NotImplementedError(mssg)
@@ -244,6 +251,8 @@ class GaussianPrior(_PriorBase):
         μ is a number
         σ is a number
         '''
+
+        self._transform = transform
         self.param = param
 
         self.mu, self.sigma = mu, sigma
