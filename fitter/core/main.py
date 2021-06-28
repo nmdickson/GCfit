@@ -231,9 +231,9 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
             pool.wait()
             sys.exit(0)
 
-        # ----------------------------------------------------------------------
+        # ------------------------------------------------------------------
         # Write run metadata to output (backend) file
-        # ----------------------------------------------------------------------
+        # ------------------------------------------------------------------
 
         with h5py.File(backend_fn, 'a') as backend_hdf:
 
@@ -244,6 +244,9 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
             # parallelization setup
             meta_grp.attrs['mpi'] = mpi
             meta_grp.attrs['Ncpu'] = Ncpu
+
+            # MCMC moves
+            meta_grp.attrs['moves'] = [mv.__class__.__name__ for mv in moves]
 
             # Fixed parameters
             fix_dset = meta_grp.create_dataset("fixed_params", dtype="f")
