@@ -67,6 +67,9 @@ if __name__ == '__main__':
                         help="Alternative MCMC move proposal algorithm to use. "
                              "Multiple moves will be given equal random weight")
 
+    parser.add_argument('--progress', action='store_true',
+                        help="Display emcee's progress bar")
+
     args = parser.parse_args()
 
     # ----------------------------------------------------------------------
