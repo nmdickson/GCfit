@@ -23,7 +23,7 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         mpi=False, initials=None, param_priors=None, moves=None,
         fixed_params=None, excluded_likelihoods=None, hyperparams=True,
         strict=None, cont_run=False, savedir=_here, backup=False,
-        verbose=False):
+        verbose=False, progress=False):
     '''Main MCMC fitting pipeline
 
     Execute the full MCMC cluster fitting algorithm.
@@ -105,6 +105,9 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
     verbose : bool, optional
         Increase verbosity (currently only affects output of run final summary)
+
+    progress : bool, optional
+        Whether to displace emcee's progress bar.
 
     See Also
     --------
@@ -302,7 +305,7 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
         # TODO implement cont_run
         # Set initial state to None if resuming run (`cont_run`)
-        for _ in sampler.sample(init_pos, iterations=Niters, progress=True):
+        for _ in sampler.sample(init_pos, iterations=Niters, progress=progress):
 
             # --------------------------------------------------------------
             # Store some iteration metadata
