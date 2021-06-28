@@ -522,9 +522,6 @@ def nested_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
     backend = NestedSamplingOutput(backend_fn)
 
-    accept_rate = np.empty((Niters, Nwalkers))
-    iter_rate = np.empty(Niters)
-
     # ----------------------------------------------------------------------
     # Setup multi-processing pool
     # ----------------------------------------------------------------------
@@ -580,15 +577,17 @@ def nested_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         # Run the sampler
         # ------------------------------------------------------------------
 
-        logging.info(f"Iterating sampler ({Niters} iterations)")
+        logging.info("Initializing sampler run")
 
-        t0 = t = time.time()
+        t0 = time.time()
 
-        stop_kw = {'pfrac': 0.1}
+        stop_kw = {'pfrac': 1.0}
 
         # runs an initial set of set samples, as if using `NestedSampler`
         for results in sampler.sample_initial():
             pass
+
+        logging.info("Beginning dynamic batch sampling")
 
         # run the dynamic sampler in batches, until the stop condition is met
         while not dysamp.stopping_function(sampler.results, stop_kw):
@@ -598,26 +597,12 @@ def nested_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
             for _ in sampler.sample_batch(logl_bounds=logl_bounds):
                 pass
 
+            logging.info("Combining batch with existing results")
+
             # add new samples to previous results, save in backend
             sampler.combine_runs()
 
             backend.add_results(sampler.results)
-
-            # --------------------------------------------------------------
-            # Store some iteration metadata
-            # --------------------------------------------------------------
-
-            t_i = time.time()
-            iter_rate[sampler.iteration - 1] = t_i - t
-            t = t_i
-
-            accept_rate[sampler.iteration - 1, :] = sampler.acceptance_fraction
-
-            if sampler.iteration % 100 == 0:
-                logging.debug(f"{sampler.iteration=}")
-                if backup:
-                    shutil.copyfile(f"{savedir}/{cluster}_sampler.hdf",
-                                    f"{savedir}/.backup_{cluster}_sampler.hdf")
 
     logging.info("Finished sampling")
 
@@ -626,9 +611,6 @@ def nested_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     # ----------------------------------------------------------------------
 
     backend.add_metadata('runtime', time.time() - t0)
-
-    backend.create_dataset('iteration_rate', iter_rate)
-    backend.create_dataset('acceptance_rate', accept_rate)
 
     logging.debug(f"Final state: {sampler}")
 
