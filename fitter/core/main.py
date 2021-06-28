@@ -420,10 +420,10 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     logging.info("FINISHED")
 
 
-def nested_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
-               mpi=False, initials=None, param_priors=None, moves=None,
+def nested_fit(cluster, *,
+               Ncpu=2, mpi=False, initials=None, param_priors=None,
                fixed_params=None, excluded_likelihoods=None, hyperparams=True,
-               cont_run=False, savedir=_here, backup=False, verbose=False):
+               savedir=_here, verbose=False):
     '''nsted sampling fitter
     '''
 
@@ -441,9 +441,6 @@ def nested_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
     if param_priors is None:
         param_priors = {}
-
-    if cont_run:
-        raise NotImplementedError
 
     savedir = pathlib.Path(savedir)
     if not savedir.is_dir():
