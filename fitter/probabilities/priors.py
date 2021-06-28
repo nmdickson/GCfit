@@ -146,8 +146,8 @@ class UniformPrior(_PriorBase):
         # get values for any dependant params
         lowers, uppers = zip(*self.bounds)
 
-        lowers = map(lambda p: kwargs.get(p, p), lowers)
-        uppers = map(lambda p: kwargs.get(p, p), uppers)
+        lowers = [kwargs.get(p, p) for p in lowers]
+        uppers = [kwargs.get(p, p) for p in uppers]
 
         # Check bounds are valid
         if not (valid := np.less_equal.outer(lowers, uppers)).all():
@@ -158,7 +158,7 @@ class UniformPrior(_PriorBase):
             return 0.
 
         # compute overall bounds, and loc/scale
-        l_bnd, r_bnd = lowers.min(), uppers.max()
+        l_bnd, r_bnd = min(lowers), max(uppers)
         loc, scale = l_bnd, r_bnd - l_bnd
 
         # evaluate the dist
@@ -186,7 +186,7 @@ class UniformPrior(_PriorBase):
             if len(bounds) != 2:
                 raise ValueError(f"Invalid edge: {bounds}")
 
-            self.bounds.append((self._init_val(bnd) for bnd in bounds))
+            self.bounds.append(tuple(self._init_val(bnd) for bnd in bounds))
 
 
 # TODO needs a much better name
