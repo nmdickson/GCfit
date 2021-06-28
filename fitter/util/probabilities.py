@@ -109,6 +109,4 @@ def trim_peaks(az_domain, Paz):
     Paz /= area
 
     # return trimmed Paz
-    # TODO: debug
-    print("peak timming rounds: ", steps)
     return Paz

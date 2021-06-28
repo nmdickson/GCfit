@@ -78,10 +78,6 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
 
     R = R.to(model.rt.unit)
 
-
-
-
-
     if R >= model.rt:
         raise ValueError(f"Pulsar position outside cluster bound ({model.rt})")
 
@@ -359,9 +355,8 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
         az_domain = np.concatenate((np.flip(-az_domain[1:]), az_domain))
 
     else:
-        # Set the rest to zero
+        # Set the rest (both sides) to zero
         Paz_dist[:mid - ind] = 0
-        # Off by one?
         Paz_dist[mid + ind + 1:] = 0
 
     # Normalize the Paz dist, before this step the area should be ~2 because
@@ -377,19 +372,19 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
     if DM is not None:
         PdotP_domain *= az_signs
 
-    # Trim the peaks from numerical instability
+    # Trim the peaks from numerical instability around azmax
     Paz_dist = trim_peaks(PdotP_domain * c, Paz_dist)
 
-    # TODO: Debug Stuff
-    if DM is None:
-        Paz_spl = UnivariateSpline(x=az_domain, y=Paz_dist, k=3, s=0, ext=1)
-    else:
-        # add the signs back in to the domain
-        Paz_spl = UnivariateSpline(
-            x=az_signs * az_domain, y=Paz_dist, k=3, s=0, ext=1
-        )
-    area = Paz_spl.integral(-np.inf, np.inf)
-    print(f"step: {ind}/{len(az_domain)//2}, norm: {area:.6f}")
+    # # Debug Stuff
+    # if DM is None:
+    #     Paz_spl = UnivariateSpline(x=az_domain, y=Paz_dist, k=3, s=0, ext=1)
+    # else:
+    #     # add the signs back in to the domain
+    #     Paz_spl = UnivariateSpline(
+    #         x=az_signs * az_domain, y=Paz_dist, k=3, s=0, ext=1
+    #     )
+    # area = Paz_spl.integral(-np.inf, np.inf)
+    # print(f"step: {ind}/{len(az_domain)//2}, norm: {area:.6f}")
 
     return PdotP_domain, Paz_dist
 
