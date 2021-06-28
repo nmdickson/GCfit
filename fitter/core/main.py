@@ -24,7 +24,24 @@ _str_types = (str, bytes)
 
 
 class Output:
-    pass
+    # TODO careful this doesnt conflict with h5py's `create_dataset`
+    def create_dataset(self, key, data, file=None, group='statistics'):
+        '''currently only works for adding a full array once'''
+
+        data = np.asanyarray(data)
+
+        if data.dtype.kind == 'U':
+            data = data.astype('S')
+
+        hdf = file or self.open('a')
+
+        grp = hdf.require_group(name=group)
+
+        grp[key] = data
+
+        # is this really the best way to allow for passing open files?
+        if file:
+            hdf.close()
 
 
 class MCMCOutput(emcee.backends.HDFBackend, Output):
@@ -32,6 +49,7 @@ class MCMCOutput(emcee.backends.HDFBackend, Output):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+    # TODO make this match create_dataset, (put in Output?)
     def add_metadata(self, key, value, value_postfix=''):
 
         with self.open('a') as hdf:
@@ -57,34 +75,37 @@ class MCMCOutput(emcee.backends.HDFBackend, Output):
 
                 meta_grp.attrs[f'{key}{value_postfix}'] = value
 
-    def add_dataset(self, key, data, group='statistics', append=False):
-        '''currently only works for adding a full array once'''
-
-        data = np.asanyarray(data)
-
-        if data.dtype.kind == 'U':
-            data = data.astype('S')
-
-        with self.open('a') as hdf:
-
-            grp = hdf.require_group(name=group)
-
-            # if append:
-            #     # TODO what if array >1d
-            #     N = data.size + grp[key].size
-            #     grp[key].resize(N, axis=0)
-
-            grp[key] = data
-
 
 class NestedSamplingOutput(Output):
-    pass
+
+    def __init__(self, filename, group='nested', overwrite=False):
+        self.filename = filename
+        self.group = group
+
+        mode = 'w' if overwrite else 'a'
+
+        with self.open(mode):
+            self.file.create_group(self.group)
+
+    def open(self, mode="r"):
+        return h5py.File(self.filename, mode)
+
+    def add_results(self, results, overwrite=True):
+        '''add a `dynesty.Results` dict to the file.
+        if not overwrite, will fail if data already exists
+        currently doesnt support appending/adding data/results so make sure
+        to `combine_runs` your sampler first
+        '''
+
+        for key, data in results.items():
+            with self.open('a'):
+                self.create_dataset(key, data, group=self.group)
 
 
 def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
-        mpi=False, initials=None, param_priors=None, moves=None,
-        fixed_params=None, excluded_likelihoods=None, hyperparams=True,
-        cont_run=False, savedir=_here, backup=False, verbose=False):
+             mpi=False, initials=None, param_priors=None, moves=None,
+             fixed_params=None, excluded_likelihoods=None, hyperparams=True,
+             cont_run=False, savedir=_here, backup=False, verbose=False):
     '''Main MCMC fitting pipeline
 
     Execute the full MCMC cluster fitting algorithm.
@@ -381,8 +402,8 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     backend.add_metadata('autocorr', tau)
     backend.add_metadata('reliable_autocorr', np.any((tau * 50) > Niters))
 
-    backend.add_dataset('iteration_rate', iter_rate)
-    backend.add_dataset('acceptance_rate', accept_rate)
+    backend.create_dataset('iteration_rate', iter_rate)
+    backend.create_dataset('acceptance_rate', accept_rate)
 
     logging.debug(f"Final state: {sampler}")
 
@@ -575,8 +596,10 @@ def nested_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
             for _ in sampler.sample_batch(logl_bounds=logl_bounds):
                 pass
 
-            # add new samples to previous results
+            # add new samples to previous results, save in backend
             sampler.combine_runs()
+
+            backend.add_results(sampler.results)
 
             # --------------------------------------------------------------
             # Store some iteration metadata
@@ -602,8 +625,8 @@ def nested_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
     backend.add_metadata('runtime', time.time() - t0)
 
-    backend.add_dataset('iteration_rate', iter_rate)
-    backend.add_dataset('acceptance_rate', accept_rate)
+    backend.create_dataset('iteration_rate', iter_rate)
+    backend.create_dataset('acceptance_rate', accept_rate)
 
     logging.debug(f"Final state: {sampler}")
 
