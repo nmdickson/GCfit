@@ -111,7 +111,7 @@ if __name__ == '__main__':
     # TODO could also be a way here for setting `err_on_fail` in the priors
     if args.strict is not None:
         try:
-            args.strict[0] = float(args._strict)
+            args.strict[0] = float(args.strict[0])
         except (ValueError, TypeError):
             args.strict = [1.] + args.strict
 
