@@ -39,7 +39,35 @@ class Output:
 
         grp[key] = data
 
-        # is this really the best way to allow for passing open files?
+        # TODO is this really the best way to allow for passing open files?
+        if file:
+            hdf.close()
+
+    def add_metadata(self, key, value, file=None, value_postfix=''):
+
+        hdf = file or self.open('a')
+
+        meta_grp = hdf.require_group(name='metadata')
+
+        if isinstance(value, abc.Mapping):
+
+            dset = meta_grp.require_dataset(key, data=h5py.Empty("f"))
+
+            for k, v in value.items():
+                dset.attrs[f'{k}{value_postfix}'] = v
+
+        elif isinstance(value, abc.Collection) \
+                and not isinstance(value, _str_types):
+
+            dset = meta_grp.require_dataset(key, data=h5py.Empty("f"))
+
+            for i, v in enumerate(value):
+                dset.attrs[f'{i}{value_postfix}'] = v
+
+        else:
+
+            meta_grp.attrs[f'{key}{value_postfix}'] = value
+
         if file:
             hdf.close()
 
@@ -48,32 +76,6 @@ class MCMCOutput(emcee.backends.HDFBackend, Output):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
-    # TODO make this match create_dataset, (put in Output?)
-    def add_metadata(self, key, value, value_postfix=''):
-
-        with self.open('a') as hdf:
-
-            meta_grp = hdf.require_group(name='metadata')
-
-            if isinstance(value, abc.Mapping):
-
-                dset = meta_grp.require_dataset(key, data=h5py.Empty("f"))
-
-                for k, v in value.items():
-                    dset.attrs[f'{k}{value_postfix}'] = v
-
-            elif isinstance(value, abc.Collection) \
-                    and not isinstance(value, _str_types):
-
-                dset = meta_grp.require_dataset(key, data=h5py.Empty("f"))
-
-                for i, v in enumerate(value):
-                    dset.attrs[f'{i}{value_postfix}'] = v
-
-            else:
-
-                meta_grp.attrs[f'{key}{value_postfix}'] = value
 
 
 class NestedSamplingOutput(Output):
