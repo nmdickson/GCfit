@@ -135,9 +135,6 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    print(f'{args=}')
-    exit()
-
     # ----------------------------------------------------------------------
     # Do any args preprocessing necessary for calling fitter
     # ----------------------------------------------------------------------
