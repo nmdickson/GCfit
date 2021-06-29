@@ -50,6 +50,7 @@ class Priors:
 
         # If any priors were invalid, combine the mssgs and output that
         if inv:
+            # TODO needs improvement, currently does't mention why each failed
             mssg = f"L(Θ) failed on priors: {'; '.join(inv)}"
             if self._strict:
                 raise ValueError(mssg)
@@ -107,6 +108,7 @@ class Priors:
 class _PriorBase:
 
     dependants = None
+    params = None
 
     def __repr__(self):
         return f'repr {self.__class__.__name__} prior'
@@ -119,7 +121,7 @@ class _PriorBase:
         try:
             return self._inv_mssg
         except AttributeError:
-            return f"Invalid {self.__class__.__name__}"
+            return f"Invalid {self.__class__.__name__} on {self.param}"
 
     def _init_val(self, val):
         '''try to convert val to a float,
@@ -161,7 +163,7 @@ class UniformPrior(_PriorBase):
             nlt = u"\u226E"
 
             self._inv_mssg = (
-                f"Invalid UniformPrior, given bounds aren't valid: "
+                f"Invalid UniformPrior on {self.param}, improper bounds: "
                 + ",".join(f"{li} {nlt} {ui}" for li, ui in inv_pairs)
             )
 
@@ -214,8 +216,8 @@ class ArbitraryPrior(_PriorBase):
                 check = oper(param_val, kwargs[bnd])
 
             if not check:
-                self._inv_mssg = (f'{self.param}={param_val}, '
-                                  f'not {oper.__name__} {bnd}')
+                self._inv_mssg = (f'Invalid ArbitraryPrior on {self.param}: '
+                                  f'{param_val} not {oper.__name__} {bnd}')
                 return 0.
 
         # TODO what value to return on success?
@@ -251,6 +253,7 @@ class ArbitraryPrior(_PriorBase):
             bnd = self._init_val(bnd)
 
             self._eval.append((_OPER_MAP[oper_str], bnd))
+
 
 class GaussianPrior(_PriorBase):
 
