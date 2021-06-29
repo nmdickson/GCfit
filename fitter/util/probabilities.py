@@ -88,6 +88,10 @@ def div_error(a, a_err, b, b_err):
 # --------------------------------------------------------------------------
 
 def trim_peaks(az_domain, Paz):
+    """
+    Iteratively remove peaks from a distrbution, either until no peaks are left 
+    or the normalization drops too much.
+    """
     Paz = Paz.copy()
     steps = 0
     # loop until peaks are dealt with
