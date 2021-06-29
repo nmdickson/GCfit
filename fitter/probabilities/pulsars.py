@@ -1,5 +1,4 @@
 from ..util import QuantitySpline, gaussian, div_error, trim_peaks
-from scipy.interpolate import UnivariateSpline
 
 import scipy.stats
 import scipy as sp
@@ -369,17 +368,6 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
 
     # Trim the peaks from numerical instability around azmax
     Paz_dist = trim_peaks(PdotP_domain * c, Paz_dist)
-
-    # # Debug Stuff
-    # if DM is None:
-    #     Paz_spl = UnivariateSpline(x=az_domain, y=Paz_dist, k=3, s=0, ext=1)
-    # else:
-    #     # add the signs back in to the domain
-    #     Paz_spl = UnivariateSpline(
-    #         x=az_signs * az_domain, y=Paz_dist, k=3, s=0, ext=1
-    #     )
-    # area = Paz_spl.integral(-np.inf, np.inf)
-    # print(f"step: {ind}/{len(az_domain)//2}, norm: {area:.6f}")
 
     return PdotP_domain, Paz_dist
 
