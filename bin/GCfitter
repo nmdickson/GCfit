@@ -22,9 +22,63 @@ move_choices = {
 
 if __name__ == '__main__':
 
+    # ----------------------------------------------------------------------
+    # Command line argument parsing
+    # ----------------------------------------------------------------------
+
     parser = argparse.ArgumentParser(description='fit some GCs')
 
     parser.add_argument('cluster', help='Common name of the cluster to model')
+
+    # ----------------------------------------------------------------------
+    # Subparsers for each sampler
+    # ----------------------------------------------------------------------
+
+    subparsers = parser.add_subparsers(title="Sampler",
+                                       dest="sampler", required=True,
+                                       help="Which Sampler algorithm to use in "
+                                            "fitting the cluster")
+
+    # ----------------------------------------------------------------------
+    # MCMC sampling with emcee
+    # ----------------------------------------------------------------------
+
+    parser_MCMC = subparsers.add_parser('MCMC')
+
+    parser_MCMC.add_argument('-N', '--Niters', default=2000, type=int,
+                             help='Number of sampling iterations')
+    parser_MCMC.add_argument('--Nwalkers', default=150, type=int,
+                             help='Number of walkers for MCMC sampler')
+
+    parser_MCMC.add_argument('--continue', dest='cont_run', action='store_true',
+                             help='Continue from previous saved run')
+    parser_MCMC.add_argument('--backup', action='store_true',
+                             help='Create continuous backups during run')
+
+    parser_MCMC.add_argument('--moves', type=str.lower, nargs='*',
+                             default=['stretchmove'],
+                             choices=move_choices.keys(),
+                             help="Alternative MCMC move proposal algorithm to "
+                                  "use. Multiple moves will be given equal "
+                                  "random weight")
+
+    parser_MCMC.set_defaults(fit_func=fitter.MCMC_fit)
+
+    # ----------------------------------------------------------------------
+    # Nested Sampling with dynesty
+    # ----------------------------------------------------------------------
+
+    parser_nest = subparsers.add_parser('nested')
+
+    parser_nest.add_argument('--pfrac', default=0.8, type=float,
+                             help='Posterior weighting fraction f_p')
+
+    parser_nest.set_defaults(fit_func=fitter.nested_fit)
+
+    # ----------------------------------------------------------------------
+    # Common arguments to all samplers
+    # ----------------------------------------------------------------------
+    # TODO these don't show up in help once a sampler is supplied (ugh argparse)
 
     parser.add_argument('--savedir', default=default_dir,
                         help='location of saved sampling runs')
@@ -32,16 +86,6 @@ if __name__ == '__main__':
                         help='alternative JSON file with different intials')
     parser.add_argument('-p', '--priors', dest='param_priors',
                         help='alternative JSON file with different priors')
-
-    parser.add_argument('-N', '--Niters', default=2000, type=int,
-                        help='Number of sampling iterations')
-    parser.add_argument('--Nwalkers', default=150, type=int,
-                        help='Number of walkers for MCMC sampler')
-
-    parser.add_argument('--continue', dest='cont_run', action='store_true',
-                        help='Continue from previous saved run')
-    parser.add_argument('--backup', action='store_true',
-                        help='Create continuous backups during run')
 
     parser.add_argument('--verbose', action='store_true')
     parser.add_argument('--debug', action='store_true')
@@ -62,12 +106,10 @@ if __name__ == '__main__':
                         action='store_false',
                         help="Don't use Bayesian hyperparams")
 
-    parser.add_argument('--moves', type=str.lower, nargs='*',
-                        default=['stretchmove'], choices=move_choices.keys(),
-                        help="Alternative MCMC move proposal algorithm to use. "
-                             "Multiple moves will be given equal random weight")
-
     args = parser.parse_args()
+
+    print(f'{args=}')
+    exit()
 
     # ----------------------------------------------------------------------
     # Do any args preprocessing necessary for calling fitter
@@ -129,4 +171,4 @@ if __name__ == '__main__':
 
     print('args:', vars(args))
 
-    fitter.fit(**vars(args))
+    args.fit_func(**vars(args))
