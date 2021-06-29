@@ -19,6 +19,20 @@ move_choices = {
     'gaussianmove': emcee.moves.GaussianMove, 'kdemove': emcee.moves.KDEMove,
 }
 
+bound_choices = {'none', 'single', 'multi', 'balls', 'cubes'}
+sample_choices = {'auto', 'unif', 'rwalk', 'rstagger',
+                  'slice', 'rslice', 'hslice'}
+
+
+def pos_int(arg):
+    '''ensure arg is a positive integer, for use as `type` in ArgumentParser'''
+
+    if not arg.isdigit():
+        mssg = f"invalid positive int value: '{arg}'"
+        raise argparse.ArgumentTypeError(mssg)
+
+    return int(arg)
+
 
 if __name__ == '__main__':
 
@@ -45,9 +59,9 @@ if __name__ == '__main__':
 
     parser_MCMC = subparsers.add_parser('MCMC')
 
-    parser_MCMC.add_argument('-N', '--Niters', default=2000, type=int,
+    parser_MCMC.add_argument('-N', '--Niters', default=2000, type=pos_int,
                              help='Number of sampling iterations')
-    parser_MCMC.add_argument('--Nwalkers', default=150, type=int,
+    parser_MCMC.add_argument('--Nwalkers', default=150, type=pos_int,
                              help='Number of walkers for MCMC sampler')
 
     parser_MCMC.add_argument('--continue', dest='cont_run', action='store_true',
@@ -72,6 +86,19 @@ if __name__ == '__main__':
 
     parser_nest.add_argument('--pfrac', default=0.8, type=float,
                              help='Posterior weighting fraction f_p')
+    parser_nest.add_argument('--maxiter', default=None, type=pos_int,
+                             help='Maximum number of iterations allowed. May '
+                                  'end sampling before the stopping conditions '
+                                  'are met')
+    parser_nest.add_argument('--N-per-batch', default=500, type=pos_int,
+                             help='Number of live points to add each batch')
+    parser_nest.add_argument('--bound-type', default='multi',
+                             choices=bound_choices,
+                             help='Method used to bound sampling on the prior')
+    parser_nest.add_argument('--sample-type', default='auto',
+                             choices=sample_choices,
+                             help='Method used to sample uniformly within the '
+                                  'likelihood, based on the provided bounds')
 
     parser_nest.set_defaults(fit_func=fitter.nested_fit)
 
@@ -91,7 +118,7 @@ if __name__ == '__main__':
     parser.add_argument('--debug', action='store_true')
 
     parallel_group = parser.add_mutually_exclusive_group()
-    parallel_group.add_argument("--Ncpu", default=2, type=int,
+    parallel_group.add_argument("--Ncpu", default=2, type=pos_int,
                                 help="Number of `multiprocessing` processes")
     parallel_group.add_argument("--mpi", action="store_true",
                                 help="Run with MPI rather than multiprocessing")
