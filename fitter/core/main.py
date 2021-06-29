@@ -5,6 +5,7 @@ import h5py
 import emcee
 import schwimmbad
 import numpy as np
+import dynesty
 import dynesty.dynamicsampler as dysamp
 
 import sys
@@ -54,7 +55,7 @@ class Output:
 
         if isinstance(value, abc.Mapping):
 
-            dset = meta_grp.require_dataset(key, data=h5py.Empty("f"))
+            dset = meta_grp.require_dataset(key, dtype="f", shape=None)
 
             for k, v in value.items():
                 dset.attrs[f'{k}{value_postfix}'] = v
@@ -62,7 +63,7 @@ class Output:
         elif isinstance(value, abc.Collection) \
                 and not isinstance(value, _str_types):
 
-            dset = meta_grp.require_dataset(key, data=h5py.Empty("f"))
+            dset = meta_grp.require_dataset(key, dtype="f", shape=None)
 
             for i, v in enumerate(value):
                 dset.attrs[f'{i}{value_postfix}'] = v
@@ -89,8 +90,8 @@ class NestedSamplingOutput(Output):
 
         mode = 'w' if overwrite else 'a'
 
-        with self.open(mode):
-            self.file.create_group(self.group)
+        with self.open(mode) as hdf:
+            hdf.create_group(self.group)
 
     def open(self, mode="r"):
         return h5py.File(self.filename, mode)
@@ -423,7 +424,7 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     logging.info("FINISHED")
 
 
-def nested_fit(cluster, *, bound_type='multi', sampler_type='auto',
+def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
                maxiter=None, Nlive_per_batch=500, pfrac=0.8,
                Ncpu=2, mpi=False, initials=None, param_priors=None,
                fixed_params=None, excluded_likelihoods=None, hyperparams=True,
@@ -565,7 +566,7 @@ def nested_fit(cluster, *, bound_type='multi', sampler_type='auto',
 
         logging.info("Initializing sampler")
 
-        sampler = dysamp.DynamicNestedSampler(
+        sampler = dynesty.DynamicNestedSampler(
             ndim=len(variable_initials),
             loglikelihood=posterior,  # or should it be log_likelihood????
             prior_transform=prior_likelihood,
@@ -573,7 +574,7 @@ def nested_fit(cluster, *, bound_type='multi', sampler_type='auto',
             logl_kwargs={'hyperparams': hyperparams},
             pool=pool,
             bound=bound_type,
-            method=sampler_type
+            method=sample_type
         )
 
         logging.debug(f"Sampler class: {sampler}")
@@ -587,10 +588,11 @@ def nested_fit(cluster, *, bound_type='multi', sampler_type='auto',
         t0 = time.time()
 
         stop_kw = {'pfrac': pfrac}
+        initsample_kw = {'maxiter': maxiter, 'nlive': Nlive_per_batch}
         sample_kw = {'maxiter': maxiter, 'nlive_new': Nlive_per_batch}
 
         # runs an initial set of set samples, as if using `NestedSampler`
-        for results in sampler.sample_initial(**sample_kw):
+        for results in sampler.sample_initial(**initsample_kw):
             pass
 
         logging.info("Beginning dynamic batch sampling")
