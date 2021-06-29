@@ -207,7 +207,9 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
 
         # NOTE: this now uses the lin_domain instead of the PdotP domain
         # in order to accommodate pulsar X who's error spline was being cut
-        # too soon, giving zero probability to valid regions
+        # too soon, giving zero probability to valid regions.
+        # if lin_domain gets dynamically computed in the future, make sure it's
+        # large enough to accommodate pulsar X.
         err = util.gaussian(x=lin_domain, sigma=ΔPdot_meas, mu=0)
 
         err_spl = interp.UnivariateSpline(lin_domain, err, k=1, s=0, ext=1)
