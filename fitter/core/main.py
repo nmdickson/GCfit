@@ -420,7 +420,8 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     logging.info("FINISHED")
 
 
-def nested_fit(cluster, *,
+def nested_fit(cluster, *, bound_type='multi', sampler_type='auto',
+               maxiter=None, Nlive_per_batch=500, pfrac=0.8,
                Ncpu=2, mpi=False, initials=None, param_priors=None,
                fixed_params=None, excluded_likelihoods=None, hyperparams=True,
                savedir=_here, verbose=False):
@@ -527,6 +528,8 @@ def nested_fit(cluster, *,
 
     with schwimmbad.choose_pool(mpi=mpi, processes=Ncpu) as pool:
 
+        map_ = pool.map
+
         logging.debug(f"Pool class: {pool}, with {mpi=}, {Ncpu=}")
 
         if mpi and not pool.is_master():
@@ -566,6 +569,8 @@ def nested_fit(cluster, *,
             logl_args=(observations, fixed_initials, likelihoods, 'ignore'),
             logl_kwargs={'hyperparams': hyperparams},
             pool=pool,
+            bound=bound_type,
+            method=sampler_type
         )
 
         logging.debug(f"Sampler class: {sampler}")
@@ -578,20 +583,21 @@ def nested_fit(cluster, *,
 
         t0 = time.time()
 
-        stop_kw = {'pfrac': 1.0}
+        stop_kw = {'pfrac': pfrac}
+        sample_kw = {'maxiter': maxiter, 'nlive_new': Nlive_per_batch}
 
         # runs an initial set of set samples, as if using `NestedSampler`
-        for results in sampler.sample_initial():
+        for results in sampler.sample_initial(**sample_kw):
             pass
 
         logging.info("Beginning dynamic batch sampling")
 
         # run the dynamic sampler in batches, until the stop condition is met
-        while not dysamp.stopping_function(sampler.results, stop_kw):
+        while not dysamp.stopping_function(sampler.results, stop_kw, M=map_):
 
             logl_bounds = dysamp.weight_function(sampler.results, stop_kw)
 
-            for _ in sampler.sample_batch(logl_bounds=logl_bounds):
+            for _ in sampler.sample_batch(logl_bounds=logl_bounds, **sample_kw):
                 pass
 
             logging.info("Combining batch with existing results")
