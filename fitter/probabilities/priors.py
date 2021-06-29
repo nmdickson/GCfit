@@ -146,19 +146,31 @@ class UniformPrior(_PriorBase):
         # get values for any dependant params
         lowers, uppers = zip(*self.bounds)
 
-        lowers = [kwargs.get(p, p) for p in lowers]
-        uppers = [kwargs.get(p, p) for p in uppers]
+        # TODO the error if the needed param is not in kwargs is *not* nice
+        lowers = np.array([kwargs.get(p, p) for p in lowers])
+        uppers = np.array([kwargs.get(p, p) for p in uppers])
 
-        # Check bounds are valid
+        # Check if the bounds themselves are valid (all overlapping correctly)
         if not (valid := np.less_equal.outer(lowers, uppers)).all():
-            # TODO get a good error message here
-            self._inv_mssg = f'these bounds arent valid: {valid}'
-            # self._inv_mssg = (f'{self.param}={param_val}, '
-            #                   f'not {oper.__name__} {bnd}')
+
+            inv_lowers = lowers[np.where(~valid)[0]]
+            inv_uppers = uppers[np.where(~valid)[1]]
+
+            inv_pairs = np.c_[inv_lowers, inv_uppers]
+
+            nlt = u"\u226E"
+
+            self._inv_mssg = (
+                f"Given bounds aren't valid: "
+                + ",".join(f"{li} {nlt} {ui}" for li, ui in inv_pairs)
+            )
+
+            print(self._inv_mssg)
+
             return 0.
 
         # compute overall bounds, and loc/scale
-        l_bnd, r_bnd = min(lowers), max(uppers)
+        l_bnd, r_bnd = lowers.min(), uppers.max()
         loc, scale = l_bnd, r_bnd - l_bnd
 
         # evaluate the dist
