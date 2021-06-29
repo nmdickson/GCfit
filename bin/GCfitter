@@ -40,6 +40,10 @@ if __name__ == '__main__':
     # Command line argument parsing
     # ----------------------------------------------------------------------
 
+    # TODO using subparsers totally messes up the shared arguments
+    #   once the sampler is provided, they can't be used and don't show in help
+    #   may need to go back to something like I did for TECB, parse manually
+
     parser = argparse.ArgumentParser(description='fit some GCs')
 
     parser.add_argument('cluster', help='Common name of the cluster to model')
@@ -91,6 +95,7 @@ if __name__ == '__main__':
                                   'end sampling before the stopping conditions '
                                   'are met')
     parser_nest.add_argument('--N-per-batch', default=500, type=pos_int,
+                             dest='Nlive_per_batch',
                              help='Number of live points to add each batch')
     parser_nest.add_argument('--bound-type', default='multi',
                              choices=bound_choices,
@@ -105,7 +110,6 @@ if __name__ == '__main__':
     # ----------------------------------------------------------------------
     # Common arguments to all samplers
     # ----------------------------------------------------------------------
-    # TODO these don't show up in help once a sampler is supplied (ugh argparse)
 
     parser.add_argument('--savedir', default=default_dir,
                         help='location of saved sampling runs')
@@ -139,8 +143,13 @@ if __name__ == '__main__':
     # Do any args preprocessing necessary for calling fitter
     # ----------------------------------------------------------------------
 
-    if args.cont_run:
-        raise NotImplementedError
+    # TODO this is temporary, need to redo/replace subparsers logic better
+    if args.sampler == 'MCMC':
+
+        if args.cont_run:
+            raise NotImplementedError
+
+        args.moves = [move_choices[mv]() for mv in args.moves]
 
     if args.initials:
 
@@ -169,8 +178,6 @@ if __name__ == '__main__':
 
     del args.debug
 
-    args.moves = [move_choices[mv]() for mv in args.moves]
-
     # ----------------------------------------------------------------------
     # Setup logging
     # ----------------------------------------------------------------------
@@ -193,6 +200,11 @@ if __name__ == '__main__':
     # Call fitter
     # ----------------------------------------------------------------------
 
+    del args.sampler
+
+    fit_func = args.fit_func
+    del args.fit_func
+
     print('args:', vars(args))
 
-    args.fit_func(**vars(args))
+    fit_func(**vars(args))
