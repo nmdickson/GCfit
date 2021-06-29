@@ -109,10 +109,10 @@ class _PriorBase:
     dependants = None
 
     def __repr__(self):
-        return 'repr prior'
+        return f'repr {self.__class__.__name__} prior'
 
     def __str__(self):
-        return 'str prior'
+        return f'str {self.__class__.__name__} prior'
 
     @property
     def inv_mssg(self):
@@ -161,11 +161,9 @@ class UniformPrior(_PriorBase):
             nlt = u"\u226E"
 
             self._inv_mssg = (
-                f"Given bounds aren't valid: "
+                f"Invalid UniformPrior, given bounds aren't valid: "
                 + ",".join(f"{li} {nlt} {ui}" for li, ui in inv_pairs)
             )
-
-            print(self._inv_mssg)
 
             return 0.
 
@@ -196,7 +194,7 @@ class UniformPrior(_PriorBase):
         for bounds in edges:
 
             if len(bounds) != 2:
-                raise ValueError(f"Invalid edge: {bounds}")
+                raise ValueError(f"Invalid bounds {bounds}, must be [low, up]")
 
             self.bounds.append(tuple(self._init_val(bnd) for bnd in bounds))
 
@@ -245,7 +243,8 @@ class ArbitraryPrior(_PriorBase):
         for bounds in edges:
 
             if len(bounds) != 2:
-                raise ValueError(f"Invalid edge: {bounds}")
+                mssg = f"Invalid bounds {bounds}, must be [oper, val]"
+                raise ValueError(mssg)
 
             oper_str, bnd = bounds
 
