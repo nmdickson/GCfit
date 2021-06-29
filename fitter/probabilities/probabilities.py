@@ -139,6 +139,14 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
 
         R = pulsars['r'][i].to(u.pc)
 
+        if R >= model.rt:
+
+            mssg = (f"Pulsar {pulsars['id'][i]} is outside cluster truncation "
+                    f"radius {model.rt}")
+            logging.debug(mssg)
+
+            return np.NINF
+
         P = pulsars['P'][i].to('s')
 
         # TODO the actual variable shouldn't be named "meas"; that parts obvious
@@ -329,6 +337,14 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
         # ------------------------------------------------------------------
 
         R = pulsars['r'][i].to(u.pc)
+
+        if R >= model.rt:
+
+            mssg = (f"Pulsar {pulsars['id'][i]} is outside cluster truncation "
+                    f"radius {model.rt}")
+            logging.debug(mssg)
+
+            return np.NINF
 
         Pb = pulsars['Pb'][i].to('s')
 
