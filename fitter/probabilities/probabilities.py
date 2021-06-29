@@ -162,7 +162,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
         # ------------------------------------------------------------------
 
         # TODO this shouldn't be so convoluted, rearrange some data to make easier
-        if use_DM and pulsars['DM'].mdata['confidence'][i] > strict:
+        if use_DM and pulsars['DM'].mdata['confidence'][i] >= strict:
 
             DM = pulsars['DM'][i]
             ΔDM = pulsars['ΔDM'][i]
@@ -383,7 +383,7 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
         # Compute the cluster component distribution, from the model
         # ------------------------------------------------------------------
 
-        if use_DM and pulsars['DM'].mdata['confidence'][i] > strict:
+        if use_DM and pulsars['DM'].mdata['confidence'][i] >= strict:
 
             DM = pulsars['DM'][i]
             ΔDM = pulsars['ΔDM'][i]
