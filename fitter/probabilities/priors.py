@@ -143,6 +143,10 @@ class _PriorBase:
 
 class UniformPrior(_PriorBase):
 
+    def __repr__(self):
+        return (f'{self.__class__.__name__}'
+                f'("{self.param}", {self.bounds}, transform={self._transform})')
+
     def __call__(self, param_val, *args, **kwargs):
 
         # get values for any dependant params
@@ -201,10 +205,13 @@ class UniformPrior(_PriorBase):
             self.bounds.append(tuple(self._init_val(bnd) for bnd in bounds))
 
 
-# TODO needs a much better name
+# TODO needs a much better name (and implementation tbh)
 class ArbitraryPrior(_PriorBase):
     '''Consists of a number of operation: value pairs which are evalutated.
     operation can be anything. '''
+
+    def __repr__(self):
+        return (f'{self.__class__.__name__}("{self.param}", {self._eval})')
 
     def __call__(self, param_val, *args, **kwargs):
 
@@ -256,6 +263,11 @@ class ArbitraryPrior(_PriorBase):
 
 
 class GaussianPrior(_PriorBase):
+
+    def __repr__(self):
+        return (f'{self.__class__.__name__}'
+                f'("{self.param}", {self.mu}, {self.sigma}, '
+                f'transform={self._transform})')
 
     def __call__(self, param_val, *args, **kw):
         return self._caller(param_val)
