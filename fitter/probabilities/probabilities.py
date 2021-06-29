@@ -981,7 +981,7 @@ def log_likelihood(theta, observations, L_components, hyperparams):
 
 
 def posterior(theta, observations, fixed_initials=None, L_components=None,
-              prior_likelihood=None, *, hyperparams=True):
+              prior_likelihood=None, *, hyperparams=True, return_indiv=True):
     '''
     Combines the likelihood with the prior
 
@@ -1013,7 +1013,10 @@ def posterior(theta, observations, fixed_initials=None, L_components=None,
     # prior likelihoods
     if prior_likelihood != 'ignore':
         if not np.isfinite(log_Pθ := prior_likelihood(theta)):
-            return -np.inf, *(-np.inf * np.ones(len(L_components)))
+            if return_indiv:
+                return -np.inf, *(-np.inf * np.ones(len(L_components)))
+            else:
+                return -np.inf
     else:
         log_Pθ = 0
 
@@ -1022,4 +1025,7 @@ def posterior(theta, observations, fixed_initials=None, L_components=None,
 
     probability = log_L + log_Pθ
 
-    return probability, *individuals
+    if return_indiv:
+        return probability, *individuals
+    else:
+        return probability
