@@ -68,7 +68,8 @@ class Priors:
 
         return L
 
-    def __init__(self, priors, transform, *, logged=True, err_on_fail=False):
+    def __init__(self, priors, transform=False, *,
+                 logged=True, err_on_fail=False):
         '''
         priors: dict where key is a parameter, and eavh value is either a
         `*Prior` object, or ["name of class", *args for that class]
