@@ -25,12 +25,12 @@ class Priors:
     """Container class representing the prior (logged) likelihoods,
     to be called on θ and (added) to the log likelihood"""
 
-    def __call__(self, theta):
+    def __call__(self, theta, *, return_indiv=False):
         '''return the total prior likelihood given by theta'''
         if not isinstance(theta, dict):
             theta = dict(zip(DEFAULT_INITIALS, theta))
 
-        L = 0.
+        L = {p: 0. for p in theta}
         inv = []
 
         for param, prior in self.priors.items():
@@ -46,7 +46,7 @@ class Priors:
             if P <= 0. or np.isnan(P):
                 inv.append(prior.inv_mssg)
 
-            L += P
+            L[param] += P
 
         # If any priors were invalid, combine the mssgs and output that
         if inv:
@@ -56,6 +56,12 @@ class Priors:
                 raise ValueError(mssg)
             else:
                 logging.debug(mssg)
+
+        # Convert to an array
+        L = np.fromiter(L.values(), dtype=np.float64)
+
+        if not return_indiv:
+            L = np.prod(L)
 
         if self._log:
             L = np.log(L)
@@ -307,8 +313,12 @@ DEFAULT_PRIORS = {
     's2': ('uniform', [(0, 15)]),
     'F': ('uniform', [(1, 3)]),
     'a1': ('uniform', [(0, 6)]),
+    # TODO be careful to make sure these kinds of priors work for the ppfs:
+    #   need tp check against the transformed "a1" not the [0,1] kind
     'a2': ('uniform', [(0, 6), (0, 'a1')]),
-    'a3': ('uniform', [(1.6, 6), (0, 'a2')]),
+    # 'a3': ('uniform', [(1.6, 6), (0, 'a2')]),
+    'a3': ('uniform', [(0, 6), (0, 'a2')]),
+    # TODO might want to drastically decrease this upper bound for nest-samp.
     'BHret': ('uniform', [(0, 100)]),
     'd': ('uniform', [(2, 8)])
 }

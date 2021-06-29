@@ -570,6 +570,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
             ndim=len(variable_initials),
             loglikelihood=posterior,  # or should it be log_likelihood????
             prior_transform=prior_likelihood,
+            ptform_kwargs={'return_indiv': True},
             logl_args=(observations, fixed_initials, likelihoods, 'ignore'),
             logl_kwargs={'hyperparams': hyperparams},
             pool=pool,
