@@ -210,11 +210,6 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
         # negative az means a positive z postition, opposite for positive
         az_signs = np.sign(az_domain)
 
-        # make sure we get the DM data
-        if DM is None:
-            raise ValueError(
-                "Pulsar DM data required to use DM based likelihood."
-            )
 
         # make sure we get the cluster DM mdata too
         if DM_mdata is None:
