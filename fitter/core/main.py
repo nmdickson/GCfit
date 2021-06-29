@@ -26,7 +26,7 @@ _str_types = (str, bytes)
 class Output:
     # TODO careful this doesnt conflict with h5py's `create_dataset`
     def create_dataset(self, key, data, file=None, group='statistics'):
-        '''currently only works for adding a full array once'''
+        '''currently only works for adding a full array once, will overwrite'''
 
         data = np.asanyarray(data)
 
@@ -36,6 +36,9 @@ class Output:
         hdf = file or self.open('a')
 
         grp = hdf.require_group(name=group)
+
+        if key in grp:
+            del grp[key]
 
         grp[key] = data
 
