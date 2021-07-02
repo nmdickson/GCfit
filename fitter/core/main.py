@@ -512,7 +512,8 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
     spec_priors_type = {k: v[0] for k, v in param_priors.items()}
     spec_priors_args = {k: v[1:] for k, v in param_priors.items()}
 
-    prior_likelihood = priors.Priors(param_priors, transform=True)
+    prior_kwargs = {'transform': True, 'fixed_initials': fixed_initials}
+    prior_likelihood = priors.Priors(param_priors, **prior_kwargs)
 
     # ----------------------------------------------------------------------
     # Setup MCMC backend
@@ -561,14 +562,14 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
             backend.add_metadata('specified_priors', spec_priors_args, '_args')
 
         # ------------------------------------------------------------------
-        # Initialize the MCMC sampler
+        # Initialize the Nested sampler
         # ------------------------------------------------------------------
 
         logging.info("Initializing sampler")
 
         sampler = dynesty.DynamicNestedSampler(
             ndim=len(variable_initials),
-            loglikelihood=posterior,  # or should it be log_likelihood????
+            loglikelihood=posterior,  # cause we need the defaults/checks it has
             prior_transform=prior_likelihood,
             ptform_kwargs={'return_indiv': True},
             logl_args=(observations, fixed_initials, likelihoods, 'ignore'),

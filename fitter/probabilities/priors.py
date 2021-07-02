@@ -27,8 +27,9 @@ class Priors:
 
     def __call__(self, theta, *, return_indiv=False):
         '''return the total prior likelihood given by theta'''
+
         if not isinstance(theta, dict):
-            theta = dict(zip(DEFAULT_INITIALS, theta))
+            theta = dict(zip(self.var_params, theta), **self.fixed_initials)
 
         L = {p: 0. for p in theta}
         inv = []
@@ -68,7 +69,7 @@ class Priors:
 
         return L
 
-    def __init__(self, priors, transform=False, *,
+    def __init__(self, priors, transform=False, fixed_initials=None, *,
                  logged=True, err_on_fail=False):
         '''
         priors: dict where key is a parameter, and eavh value is either a
@@ -83,6 +84,15 @@ class Priors:
 
         if extraneous_params := (priors.keys() - DEFAULT_PRIORS.keys()):
             raise ValueError(f"Invalid parameters: {extraneous_params}")
+
+        if fixed_initials is None:
+            fixed_initials = {}
+
+        self.fixed_initials = fixed_initials
+
+        # get list of variable params, sorted for the later unpacking of theta
+        var_params = DEFAULT_PRIORS.keys() - fixed_initials.keys()
+        self.var_params = sorted(var_params, key=list(DEFAULT_PRIORS).index)
 
         # Fill in unspecified parameters with default priors bounds
         self.priors = {**DEFAULT_PRIORS, **priors}
