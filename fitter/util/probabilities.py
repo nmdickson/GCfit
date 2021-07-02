@@ -1,8 +1,64 @@
 import numpy as np
+from ..core.data import DEFAULT_INITIALS
 
 
 __all__ = ['gaussian', 'RV_transform', 'gaussian_likelihood',
-           'hyperparam_likelihood', 'hyperparam_effective']
+           'hyperparam_likelihood', 'hyperparam_effective',
+           'compile_theta']
+
+
+def compile_theta(func, fixed_initials=None):
+    '''decorator for handling fixed parameters.
+    Given theta, an array or dict, adds the fixed values and 
+    '''
+    import functools
+    import inspect
+
+    sig = inspect.signature(func)
+
+    if fixed_initials is None:
+        fixed_initials = {}
+
+    @functools.wraps(func)
+    def fixed_theta_decorator(*args, **kwargs):
+        # TODO everything here with args/kwargs is iffy, might not always work
+
+        # Combine the args and kwargs together, to ensure we can grab theta
+        all_args = dict(zip(sig.parameters, args), **kwargs)
+
+        try:
+
+            theta = all_args['theta']
+
+            # Unpack all theta values into dict, accounting for missing (fixed) keys
+            if isinstance(theta, dict):
+                theta = {**theta, **fixed_initials}
+
+            else:
+                param_sorter = list(DEFAULT_INITIALS).index
+
+                variable_params = DEFAULT_INITIALS.keys() - fixed_initials.keys()
+                params = sorted(variable_params, key=param_sorter)
+
+                variable_theta = dict(zip(params, theta))
+
+                theta = {**variable_theta, **fixed_initials}
+
+                # Sort and finish with theta as an array
+                theta = [theta[k] for k in sorted(theta, key=param_sorter)]
+
+            # change the args theta to this theta (must be a better way...)
+            if 'theta' in kwargs:
+                kwargs['theta'] = theta
+            else:
+                args[list(sig.parameters).index('theta')] = theta
+
+        except KeyError:
+            pass
+
+        return func(*args, **kwargs)
+
+    return fixed_theta_decorator
 
 
 # --------------------------------------------------------------------------
