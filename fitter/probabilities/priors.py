@@ -191,7 +191,7 @@ class UniformPrior(_PriorBase):
             return 0.
 
         # compute overall bounds, and loc/scale
-        l_bnd, r_bnd = lowers.min(), uppers.max()
+        l_bnd, r_bnd = lowers.max(), uppers.min()
         loc, scale = l_bnd, r_bnd - l_bnd
 
         # evaluate the dist
@@ -326,9 +326,9 @@ DEFAULT_PRIORS = {
     'a1': ('uniform', [(0, 6)]),
     # TODO be careful to make sure these kinds of priors work for the ppfs:
     #   need tp check against the transformed "a1" not the [0,1] kind
-    'a2': ('uniform', [(0, 6), (0, 'a1')]),
+    'a2': ('uniform', [(0, 6), ('a1', np.inf)]),
     # 'a3': ('uniform', [(1.6, 6), (0, 'a2')]),
-    'a3': ('uniform', [(0, 6), (0, 'a2')]),
+    'a3': ('uniform', [(0, 6), ('a2', np.inf)]),
     # TODO might want to drastically decrease this upper bound for nest-samp.
     'BHret': ('uniform', [(0, 100)]),
     'd': ('uniform', [(2, 8)])
