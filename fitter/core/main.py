@@ -25,8 +25,8 @@ _str_types = (str, bytes)
 
 
 class Output:
-    # TODO careful this doesnt conflict with h5py's `create_dataset`
-    def create_dataset(self, key, data, file=None, group='statistics'):
+    # TODO careful this doesnt conflict with h5py's `create_dataset` (or emcee)
+    def create_dataset(self, key, data, group='statistics', *, file=None):
         '''currently only works for adding a full array once, will overwrite'''
 
         data = np.asanyarray(data)
@@ -44,10 +44,10 @@ class Output:
         grp[key] = data
 
         # TODO is this really the best way to allow for passing open files?
-        if file:
+        if not file:
             hdf.close()
 
-    def add_metadata(self, key, value, file=None, value_postfix=''):
+    def add_metadata(self, key, value, value_postfix='', *, file=None):
 
         hdf = file or self.open('a')
 
@@ -72,7 +72,7 @@ class Output:
 
             meta_grp.attrs[f'{key}{value_postfix}'] = value
 
-        if file:
+        if not file:
             hdf.close()
 
 
@@ -103,9 +103,9 @@ class NestedSamplingOutput(Output):
         to `combine_runs` your sampler first
         '''
 
-        for key, data in results.items():
-            with self.open('a'):
-                self.create_dataset(key, data, group=self.group)
+        with self.open('a') as hdf:
+            for key, data in results.items():
+                self.create_dataset(key, data, group=self.group, file=hdf)
 
 
 def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
