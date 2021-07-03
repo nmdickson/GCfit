@@ -128,6 +128,37 @@ class Priors:
 
 class PriorTransforms(Priors):
 
+    def _compile_dependants(self, prior, U, theta=None):
+        '''Needed because the prior transforms need the passed U to be
+        transformed to a theta before it can be used as a dependant, and this
+        needs to be a recursive process
+        '''
+        # TODO potentially repeating alot of prior calls by not saving to theta?
+
+        if not prior.dependants:
+            return {}
+
+        deps = {}
+
+        for dep_param in prior.dependants:
+
+            # already computed, re-use the theta value
+            if dep_param in theta:
+                deps[dep_param] = theta[dep_param]
+
+            # not a fixed param, not computed yet, compute and use it's theta
+            elif dep_param in U:
+                dep_prior = self.priors[dep_param]
+                dep_deps = self._compile_dependants(dep_prior, U, theta)
+                deps[dep_param] = dep_prior(U[dep_param], **dep_deps)
+
+            # assume it's fixed, use its fixed value
+            else:
+                # TODO might get hard to understand keyerror here if not fixed?
+                deps[dep_param] = self.fixed_initials[dep_param]
+
+        return deps
+
     def __call__(self, U):
         '''U is like theta, but Unif~[0,1] instead of the real values
         calls the necessary prior tranforms to go from U to theta
@@ -142,31 +173,9 @@ class PriorTransforms(Priors):
 
         for param, prior in self.priors.items():
 
-            if prior.dependants:
-                deps = {}
+            deps = self._compile_dependants(prior, U, theta)
 
-                for dep_param in prior.dependants:
-
-                    if dep_param in U:
-                        # not a fixed param, find and use it's theta value
-
-                        if dep_param in theta:
-                            # already computed, re-use the theta value
-                            deps[dep_param] = theta[dep_param]
-                        else:
-                            # hasn't been computed yet, call it's prior
-                            # TODO TEMPORARY SOLN, WILL FAIL FOR MOST DEP PRIORS
-                            # NEED TO COMPUTE THE DEPS RECURSIVELY
-                            deps[dep_param] = self.priors[dep_param](U[dep_param], **{d: theta[d] for d in dep_param.dependants})
-
-                    else:
-                        # use its fixed value
-                        deps[dep_param] = self.fixed_initials[dep_param]
-
-                theta[param] = prior(U[param], **deps)
-
-            else:
-                theta[param] = prior(U[param])
+            theta[param] = prior(U[param], **deps)
 
             # if invalid (ie 0, outside of bounds / real bad) record it's reason
             if theta[param] <= 0. or np.isnan(theta[param]):
