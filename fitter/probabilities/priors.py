@@ -69,7 +69,7 @@ class Priors:
 
         return L
 
-    def __init__(self, priors, transform=False, fixed_initials=None, *,
+    def __init__(self, priors, fixed_initials=None, *,
                  logged=True, err_on_fail=False):
         '''
         priors: dict where key is a parameter, and eavh value is either a
@@ -85,6 +85,12 @@ class Priors:
         if extraneous_params := (priors.keys() - DEFAULT_PRIORS.keys()):
             raise ValueError(f"Invalid parameters: {extraneous_params}")
 
+        # ------------------------------------------------------------------
+        # Prep for any fixed parameters
+        # ------------------------------------------------------------------
+
+        # In normal prior likelihoods, the fixed values will also be evaled
+
         if fixed_initials is None:
             fixed_initials = {}
 
@@ -94,23 +100,21 @@ class Priors:
         var_params = DEFAULT_PRIORS.keys() - fixed_initials.keys()
         self.var_params = sorted(var_params, key=list(DEFAULT_PRIORS).index)
 
-        # Fill in unspecified parameters with default priors bounds
-        self.priors = {**DEFAULT_PRIORS, **priors}
+        # ------------------------------------------------------------------
+        # Initialize all Prior objects
+        # ------------------------------------------------------------------
 
-        # TODO might want to change how we define a "transform" priors
-        #   cause it's not a prior anymore, its a prior_transform
-        kw = {'transform': transform}
-        if transform:
-            self._log = False
+        # Fill in unspecified parameters with default priors
+        self.priors = {**DEFAULT_PRIORS, **priors}
 
         # Fill the dict with actual priors objects
         for param in self.priors:
 
             if isinstance(self.priors[param], _PriorBase):
 
-                if self.priors[param]._transform is not transform:
-                    mssg = (f"Prior {self.priors[param]} already "
-                            f"initialized without {transform=}")
+                if self.priors[param]._transform is True:
+                    mssg = (f"Prior {self.priors[param]} was already "
+                            f"initialized with transform=True")
                     raise RuntimeError(mssg)
 
             else:
@@ -118,6 +122,118 @@ class Priors:
                 prior_key, *args = self.priors[param]
 
                 prior_key = prior_key.lower().replace('prior', '').strip()
+
+                self.priors[param] = _PRIORS_MAP[prior_key](param, *args)
+
+
+class PriorTransforms(Priors):
+
+    def __call__(self, U):
+        '''U is like theta, but Unif~[0,1] instead of the real values
+        calls the necessary prior tranforms to go from U to theta
+        then returns theta
+        '''
+
+        if not isinstance(U, dict):
+            U = dict(zip(self.var_params, U))
+
+        theta = {}
+        inv = []
+
+        for param, prior in self.priors.items():
+
+            if prior.dependants:
+                deps = {}
+
+                for dep_param in prior.dependants:
+
+                    if dep_param in U:
+                        # not a fixed param, find and use it's theta value
+
+                        if dep_param in theta:
+                            # already computed, re-use the theta value
+                            deps[dep_param] = theta[dep_param]
+                        else:
+                            # hasn't been computed yet, call it's prior
+                            # TODO TEMPORARY SOLN, WILL FAIL FOR MOST DEP PRIORS
+                            # NEED TO COMPUTE THE DEPS RECURSIVELY
+                            deps[dep_param] = self.priors[dep_param](U[dep_param], **{d: theta[d] for d in dep_param.dependants})
+
+                    else:
+                        # use its fixed value
+                        deps[dep_param] = self.fixed_initials[dep_param]
+
+                theta[param] = prior(U[param], **deps)
+
+            else:
+                theta[param] = prior(U[param])
+
+            # if invalid (ie 0, outside of bounds / real bad) record it's reason
+            if theta[param] <= 0. or np.isnan(theta[param]):
+                inv.append(prior.inv_mssg)
+
+        # If any priors were invalid, combine the mssgs and output that
+        if inv:
+            # TODO needs improvement, currently does't mention why each failed
+            mssg = f"L(Θ) failed on priors: {'; '.join(inv)}"
+            if self._strict:
+                raise ValueError(mssg)
+            else:
+                logging.debug(mssg)
+
+        # Convert to an array
+        theta = np.fromiter(theta.values(), dtype=np.float64)
+
+        return theta
+
+    def __init__(self, priors, fixed_initials=None, *, err_on_fail=False):
+
+        self._strict = err_on_fail
+
+        if extraneous_params := (priors.keys() - DEFAULT_PRIORS.keys()):
+            raise ValueError(f"Invalid parameters: {extraneous_params}")
+
+        # ------------------------------------------------------------------
+        # Prep for any fixed parameters
+        # ------------------------------------------------------------------
+
+        # In prior transforms, fixed values will be basically ignored
+
+        if fixed_initials is None:
+            fixed_initials = {}
+
+        self.fixed_initials = fixed_initials
+
+        # get list of variable params, sorted for the later unpacking of U
+        var_params = DEFAULT_PRIORS.keys() - fixed_initials.keys()
+        self.var_params = sorted(var_params, key=list(DEFAULT_PRIORS).index)
+
+        # ------------------------------------------------------------------
+        # Initialize all Prior objects
+        # ------------------------------------------------------------------
+
+        # Fill in unspecified parameters with default priors
+        self.priors = {**DEFAULT_PRIORS, **priors}
+
+        for key in self.fixed_initials:
+            del self.priors[key]
+
+        # Fill the dict with actual priors objects
+        for param in self.priors:
+
+            if isinstance(self.priors[param], _PriorBase):
+
+                if self.priors[param]._transform is False:
+                    mssg = (f"Prior {self.priors[param]} was already "
+                            f"initialized with transform=False")
+                    raise RuntimeError(mssg)
+
+            else:
+                prior_key, *args = self.priors[param]
+
+                prior_key = prior_key.lower().replace('prior', '').strip()
+
+                kw = {'transform': True}
 
                 self.priors[param] = _PRIORS_MAP[prior_key](param, *args, **kw)
 
@@ -188,6 +304,7 @@ class UniformPrior(_PriorBase):
                 + ",".join(f"{li} {nlt} {ui}" for li, ui in inv_pairs)
             )
 
+            # TODO return 0 or nan when transform?
             return 0.
 
         # compute overall bounds, and loc/scale
@@ -324,11 +441,8 @@ DEFAULT_PRIORS = {
     's2': ('uniform', [(0, 15)]),
     'F': ('uniform', [(1, 3)]),
     'a1': ('uniform', [(0, 6)]),
-    # TODO be careful to make sure these kinds of priors work for the ppfs:
-    #   need tp check against the transformed "a1" not the [0,1] kind
     'a2': ('uniform', [(0, 6), ('a1', np.inf)]),
-    # 'a3': ('uniform', [(1.6, 6), (0, 'a2')]),
-    'a3': ('uniform', [(0, 6), ('a2', np.inf)]),
+    'a3': ('uniform', [(1.6, 3), ('a2', np.inf)]),
     # TODO might want to drastically decrease this upper bound for nest-samp.
     'BHret': ('uniform', [(0, 100)]),
     'd': ('uniform', [(2, 8)])

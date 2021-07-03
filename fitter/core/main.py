@@ -506,17 +506,17 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
     logging.debug(f"Variable initals: {variable_initials}")
 
     # ----------------------------------------------------------------------
-    # Setup and check param_priors
+    # Setup param_priors transforms
     # ----------------------------------------------------------------------
 
     spec_priors_type = {k: v[0] for k, v in param_priors.items()}
     spec_priors_args = {k: v[1:] for k, v in param_priors.items()}
 
-    prior_kwargs = {'transform': True, 'fixed_initials': fixed_initials}
-    prior_likelihood = priors.Priors(param_priors, **prior_kwargs)
+    prior_kwargs = {'fixed_initials': fixed_initials, 'err_on_fail': False}
+    prior_transform = priors.PriorTransforms(param_priors, **prior_kwargs)
 
     # ----------------------------------------------------------------------
-    # Setup MCMC backend
+    # Setup Nested Sampling backend
     # ----------------------------------------------------------------------
 
     backend_fn = f"{savedir}/{cluster}_sampler.hdf"
@@ -570,8 +570,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         sampler = dynesty.DynamicNestedSampler(
             ndim=len(variable_initials),
             loglikelihood=posterior,  # cause we need the defaults/checks it has
-            prior_transform=prior_likelihood,
-            ptform_kwargs={'return_indiv': True},
+            prior_transform=prior_transform,
             logl_args=(observations, fixed_initials, likelihoods, 'ignore'),
             logl_kwargs={'hyperparams': hyperparams, 'return_indiv': False},
             pool=pool,
