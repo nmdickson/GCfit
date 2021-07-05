@@ -88,13 +88,14 @@ class NestedSamplingOutput(Output):
         self.filename = filename
         self.group = group
 
-        mode = 'w' if overwrite else 'a'
-
-        with self.open(mode) as hdf:
+    def open(self, mode="r"):
+        hdf = h5py.File(self.filename, mode)
+        
+        if self.group not in hdf:
             hdf.create_group(self.group)
 
-    def open(self, mode="r"):
-        return h5py.File(self.filename, mode)
+        return hdf
+
 
     def add_results(self, results, overwrite=True):
         '''add a `dynesty.Results` dict to the file.
@@ -545,6 +546,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         # ----------------------------------------------------------------------
         # Write run metadata to output (backend) file
         # ----------------------------------------------------------------------
+        THIS MIGHT BE BREAKING MPI?
 
         backend.add_metadata('cluster', cluster)
 
@@ -611,6 +613,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
             # add new samples to previous results, save in backend
             sampler.combine_runs()
 
+            OR MPI MIGHT BE BREAKING HERE... THIS IS MORE LIKELY ID SAY, MAYBE JUST TAKE OUTSIDE POOL? IDK WHY ITS BREAKING TBH, POOL ONLY APPLIES TO THE FUNCTION CALLS...
             backend.add_results(sampler.results)
 
     logging.info("Finished sampling")
