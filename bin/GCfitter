@@ -49,6 +49,38 @@ if __name__ == '__main__':
     parser.add_argument('cluster', help='Common name of the cluster to model')
 
     # ----------------------------------------------------------------------
+    # Common arguments to all samplers
+    # ----------------------------------------------------------------------
+
+    parent_parser = argparse.ArgumentParser(add_help=False)
+
+    parent_parser.add_argument('--savedir', default=default_dir,
+                        help='location of saved sampling runs')
+    parent_parser.add_argument('-i', '--initials',
+                        help='alternative JSON file with different intials')
+    parent_parser.add_argument('-p', '--priors', dest='param_priors',
+                        help='alternative JSON file with different priors')
+
+    parent_parser.add_argument('--verbose', action='store_true')
+    parent_parser.add_argument('--debug', action='store_true')
+
+    parallel_group = parent_parser.add_mutually_exclusive_group()
+    parallel_group.add_argument("--Ncpu", default=2, type=pos_int,
+                                help="Number of `multiprocessing` processes")
+    parallel_group.add_argument("--mpi", action="store_true",
+                                help="Run with MPI rather than multiprocessing")
+
+    parent_parser.add_argument('--fix', dest='fixed_params', nargs='*',
+                        help='Parameters to fix, not estimate from the MCMC')
+
+    parent_parser.add_argument('--exclude', dest='excluded_likelihoods', nargs='*',
+                        help='Likelihood components to exclude from posteriors')
+
+    parent_parser.add_argument('--no-hyperparams', dest='hyperparams',
+                        action='store_false',
+                        help="Don't use Bayesian hyperparams")
+
+    # ----------------------------------------------------------------------
     # Subparsers for each sampler
     # ----------------------------------------------------------------------
 
@@ -61,7 +93,7 @@ if __name__ == '__main__':
     # MCMC sampling with emcee
     # ----------------------------------------------------------------------
 
-    parser_MCMC = subparsers.add_parser('MCMC')
+    parser_MCMC = subparsers.add_parser('MCMC', parents=[parent_parser])
 
     parser_MCMC.add_argument('-N', '--Niters', default=2000, type=pos_int,
                              help='Number of sampling iterations')
@@ -86,7 +118,7 @@ if __name__ == '__main__':
     # Nested Sampling with dynesty
     # ----------------------------------------------------------------------
 
-    parser_nest = subparsers.add_parser('nested')
+    parser_nest = subparsers.add_parser('nested', parents=[parent_parser])
 
     parser_nest.add_argument('--pfrac', default=0.8, type=float,
                              help='Posterior weighting fraction f_p')
@@ -106,36 +138,6 @@ if __name__ == '__main__':
                                   'likelihood, based on the provided bounds')
 
     parser_nest.set_defaults(fit_func=fitter.nested_fit)
-
-    # ----------------------------------------------------------------------
-    # Common arguments to all samplers
-    # ----------------------------------------------------------------------
-
-    parser.add_argument('--savedir', default=default_dir,
-                        help='location of saved sampling runs')
-    parser.add_argument('-i', '--initials',
-                        help='alternative JSON file with different intials')
-    parser.add_argument('-p', '--priors', dest='param_priors',
-                        help='alternative JSON file with different priors')
-
-    parser.add_argument('--verbose', action='store_true')
-    parser.add_argument('--debug', action='store_true')
-
-    parallel_group = parser.add_mutually_exclusive_group()
-    parallel_group.add_argument("--Ncpu", default=2, type=pos_int,
-                                help="Number of `multiprocessing` processes")
-    parallel_group.add_argument("--mpi", action="store_true",
-                                help="Run with MPI rather than multiprocessing")
-
-    parser.add_argument('--fix', dest='fixed_params', nargs='*',
-                        help='Parameters to fix, not estimate from the MCMC')
-
-    parser.add_argument('--exclude', dest='excluded_likelihoods', nargs='*',
-                        help='Likelihood components to exclude from posteriors')
-
-    parser.add_argument('--no-hyperparams', dest='hyperparams',
-                        action='store_false',
-                        help="Don't use Bayesian hyperparams")
 
     args = parser.parse_args()
 
@@ -204,7 +206,5 @@ if __name__ == '__main__':
 
     fit_func = args.fit_func
     del args.fit_func
-
-    print('args:', vars(args))
 
     fit_func(**vars(args))
