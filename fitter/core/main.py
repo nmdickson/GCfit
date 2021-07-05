@@ -91,7 +91,6 @@ class NestedSamplingOutput(Output):
     def open(self, mode="r"):
         return h5py.File(self.filename, mode)
 
-
     def add_results(self, results, overwrite=True):
         '''add a `dynesty.Results` dict to the file.
         if not overwrite, will fail if data already exists
@@ -421,11 +420,96 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
 
 def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
-               maxiter=None, Nlive_per_batch=500, pfrac=0.8,
+               maxiter=None, Nlive_per_batch=500, pfrac=1.0,
                Ncpu=2, mpi=False, initials=None, param_priors=None,
                fixed_params=None, excluded_likelihoods=None, hyperparams=True,
                savedir=_here, verbose=False):
-    '''nsted sampling fitter
+    '''Main nested sampling fitting pipeline
+
+    Execute the full nested sampling cluster fitting algorithm.
+
+    Based on the given clusters `Observations`, determines the relevant
+    likelihoods used to construct an dynamic nested sampler (`dynesty`).
+
+    All sampler results are stored using an HDF file backend, within
+    the `savedir` directory under the filename "{cluster}_sampler.hdf". Also
+    stored within this file is various statistics and metadata surrounding the
+    fitter run.
+
+    The nested sampler is sampled in batches, with each batch adding
+    `Nlive_per_batch` live points, until reaching a stop condition
+    defined by the fractional posterior weighting desired (`pfrac`), or until
+    the maximum number of iterations is reached (`maxiter`).
+    The sampling is parallelized over `Ncpu` or using `mpi`, with calls to
+    `fitter.posterior` defined based on a uniform sampling of the
+    `PriorTransforms`.
+
+    parameters
+    ----------
+    cluster : str
+        Cluster common name, as used to load `fitter.Observations`
+
+    bound_type : {'none', 'single', 'multi', 'balls', 'cubes'}, optional
+        Method used to approximately bound the prior using the current
+        set of live points. Conditions the sampling methods used to propose
+        new live points.
+
+    sample_type : {'unif', 'rwalk', 'rstagger',
+                   'slice', 'rslice', 'hslice'}, optional
+        Method used to sample uniformly within the likelihood constraint.
+
+    maxiter : int, optional
+        Maximum number of iterations. Default is no limit.
+
+    Nlive_per_batch : int, optional
+        The number of live points used when adding additional samples
+        in the batch. Default is 500
+
+    pfrac : float, optional
+        Fractional weight of the posterior (versus evidence) for stop function.
+        Between 0.0 and 1.0, defaults to 1.0
+
+    Ncpu : int, optional
+        Number of CPU's to parallelize the sampling computation over. Is
+        ignored if `mpi` is True.
+
+    mpi : bool, optional
+        Parallelize sampling computation using mpi rather than multiprocessing.
+        Parallelization is handled by `schwimmbad`.
+
+    initials : dict, optional
+        Dictionary of initial parameter values. There is no concept
+        of "initial positions" in nested sampling, and this argument is only
+        used in the case of fixed parameters.
+
+    param_priors : dict, optional
+        Dictionary of prior bounds/args for each parameter.
+        See `probabilities.priors` for formatting of args and defaults.
+
+    fixed_params : list of str, optional
+        List of parameters to fix to the initial value, and not allow to be
+        varied through the sampler.
+
+    excluded_likelihoods : list of str, optional
+        List of component likelihoods to exclude from the posterior probability
+        function. Each likelihood can be specified using either the name of
+        the function (as given by __name__) or the name of the relevant dataset.
+
+    hyperparams : bool, optional
+        Whether to include bayesian hyperparameters (see Hobson et al., 2002)
+        in all likelihood functions.
+
+    savedir : path-like, optional
+        The directory within which the HDF output file is stored, defaults to
+        the current working directory.
+
+    verbose : bool, optional
+        Increase verbosity (currently only affects output of run final summary)
+
+    See Also
+    --------
+    dynesty : Nested sampler implementation
+    schwimmbad : Interface to parallel processing pools
     '''
 
     logging.info("BEGIN NESTED SAMPLING")
