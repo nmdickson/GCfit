@@ -451,7 +451,7 @@ DEFAULT_PRIORS = {
     'F': ('uniform', [(1, 3)]),
     'a1': ('uniform', [(0, 6)]),
     'a2': ('uniform', [(0, 6), ('a1', np.inf)]),
-    'a3': ('uniform', [(1.6, 3), ('a2', np.inf)]),
+    'a3': ('uniform', [(1.6, 6), ('a2', np.inf)]),
     # TODO might want to drastically decrease this upper bound for nest-samp.
     'BHret': ('uniform', [(0, 100)]),
     'd': ('uniform', [(2, 8)])
