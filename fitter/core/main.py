@@ -586,7 +586,9 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
         stop_kw = {'pfrac': pfrac}
         initsample_kw = {'maxiter': maxiter, 'nlive': Nlive_per_batch}
-        sample_kw = {'maxiter': maxiter, 'nlive_new': Nlive_per_batch}
+        # TODO it would be nice to save bounds, but for now they cant be in hdf
+        sample_kw = {'maxiter': maxiter, 'nlive_new': Nlive_per_batch,
+                     'save_bounds': False}
 
         # runs an initial set of set samples, as if using `NestedSampler`
         for results in sampler.sample_initial(**initsample_kw):
