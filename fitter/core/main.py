@@ -89,12 +89,7 @@ class NestedSamplingOutput(Output):
         self.group = group
 
     def open(self, mode="r"):
-        hdf = h5py.File(self.filename, mode)
-        
-        if self.group not in hdf:
-            hdf.create_group(self.group)
-
-        return hdf
+        return h5py.File(self.filename, mode)
 
 
     def add_results(self, results, overwrite=True):
