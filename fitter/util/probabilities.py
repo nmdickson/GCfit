@@ -1,6 +1,4 @@
 import numpy as np
-from scipy.signal import find_peaks
-from scipy.integrate import trapezoid
 
 __all__ = ['gaussian', 'RV_transform', 'gaussian_likelihood',
            'hyperparam_likelihood', 'hyperparam_effective', 'div_error',
@@ -95,6 +93,9 @@ def trim_peaks(az_domain, Paz):
     Iteratively remove peaks from a distrbution, either until no peaks are left
     or the normalization drops too much.
     """
+    from scipy.signal import find_peaks
+    from scipy.integrate import trapezoid
+
     Paz = Paz.copy()
 
     while (area := trapezoid(x=az_domain.value, y=Paz.value)) >= 0.98:
