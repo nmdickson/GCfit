@@ -678,6 +678,8 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         for results in sampler.sample_initial(**initsample_kw):
             pass
 
+        backend.add_results(sampler.results)
+
         logging.info("Beginning dynamic batch sampling")
 
         # run the dynamic sampler in batches, until the stop condition is met
