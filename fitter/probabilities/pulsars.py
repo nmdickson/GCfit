@@ -245,7 +245,7 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
 
         # Here we add the signs back in only for the DM splines, this allows
         # us to select the correct side of the cluster for each az point
-        Paz_dist = (DM_los_spl(z1 * -1 * az_signs) / abs(az_der(z1))).value
+        Paz_dist = (DM_los_spl(-az_signs * z1) / abs(az_der(z1))).value
         Paz_dist <<= u.dimensionless_unscaled
 
         outside_azt = az_domain > azt
@@ -258,8 +258,8 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
             within_bounds = outside_azt & (z2 < zt)
 
             # Here we add the signs back in only for the DM splines
-            Paz_dist[within_bounds] += (DM_los_spl(z2[within_bounds] *
-                                        - 1 * (az_signs)[within_bounds])
+            z2_signed = -az_signs * z2
+            Paz_dist[within_bounds] += (DM_los_spl(z2_signed[within_bounds])
                                         / abs(az_der(z2[within_bounds]))).value
 
     # Ensure Paz is normalized (slightly different for density vs DM methods)
