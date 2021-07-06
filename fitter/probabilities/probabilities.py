@@ -243,7 +243,6 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
             10**Pdot_int_domain, Pdot_int_prob, k=1, s=0, ext=1
         )
 
-
         # ------------------------------------------------------------------
         # Convolve the different distributions
         # ------------------------------------------------------------------

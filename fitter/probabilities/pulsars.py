@@ -18,9 +18,12 @@ __all__ = [
     'field_Pdot_KDE',
 ]
 
+
 # --------------------------------------------------------------------------
 # LOS position of pulsars from DM
 # --------------------------------------------------------------------------
+
+
 def los_dm(dm, dm_err, DM_mdata):
     """
     Compute line-of-sight position and uncertainty based on pulsar DM data.
@@ -47,11 +50,12 @@ def los_dm(dm, dm_err, DM_mdata):
     Assumes a uniform gas density within the cluster.
 
     """
-    # TODO Attach units to attributes.
-    ng = DM_mdata["ng"] * u.Unit("1/cm3")
-    delta_ng = DM_mdata["Δng"] * u.Unit("1/cm3")
-    DMc = DM_mdata["DMc"] * u.Unit("pc/cm3")
-    delta_DMc = DM_mdata["ΔDMc"] * u.Unit('pc/cm3')
+
+    ng = DM_mdata["ng"] << u.Unit("1/cm3")
+    delta_ng = DM_mdata["Δng"] << u.Unit("1/cm3")
+
+    DMc = DM_mdata["DMc"] << u.Unit("pc/cm3")
+    delta_DMc = DM_mdata["ΔDMc"] << u.Unit('pc/cm3')
 
     los = (dm - DMc) / ng
     err = div_error(
@@ -65,6 +69,7 @@ def los_dm(dm, dm_err, DM_mdata):
 # --------------------------------------------------------------------------
 # Pulsar acceleration (Pdot / P) components
 # --------------------------------------------------------------------------
+
 
 def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
     """
@@ -167,7 +172,6 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
     # define the acceleration space domain, based on amax and Δa
     # az_domain = np.arange(0.0, azmax.value + Δa, Δa) << azmax.unit
 
-
     # Define the acceleration domain, using 2*nr points (for density method)
     # for the DM method, just loading up on points and then trimming the dist
     # seems to be the easiest way to do things
@@ -178,14 +182,13 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
 
     Δa = np.diff(az_domain)[1]
 
-
     # TODO look at the old new_Paz to get the comments for this stuff
 
     z1 = np.maximum(z1_spl(az_domain), z[0])
 
     if DM is None:
-        Paz_dist = (rhoz_spl(z1) /
-                    abs(az_der(z1))).value * u.dimensionless_unscaled
+        Paz_dist = (rhoz_spl(z1) / abs(az_der(z1))).value
+        Paz_dist <<= u.dimensionless_unscaled
 
         outside_azt = az_domain > azt
 
@@ -206,15 +209,13 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
         # need to look at full cluster now that it's no longer symmetric
         az_domain = np.concatenate((np.flip(-az_domain[1:]), az_domain))
         # also need the signs to pick which side of the cluster the pulsar is on
-        # negative az means a positive z postition, opposite for positive
+        # negative az means a positive z position, opposite for positive
         az_signs = np.sign(az_domain)
-
 
         # make sure we get the cluster DM mdata too
         if DM_mdata is None:
-            raise ValueError(
-                "Cluster DM data is required to use DM based likelihood."
-            )
+            mssg = "Cluster DM data is required to use DM based likelihood."
+            raise ValueError(mssg)
 
         # unpack DM data
         DM, sigma_DM = DM
@@ -244,8 +245,8 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
 
         # Here we add the signs back in only for the DM splines, this allows
         # us to select the correct side of the cluster for each az point
-        Paz_dist = (DM_los_spl(z1 * -1 * az_signs) /
-                    abs(az_der(z1))).value * u.dimensionless_unscaled
+        Paz_dist = (DM_los_spl(z1 * -1 * az_signs) / abs(az_der(z1))).value
+        Paz_dist <<= u.dimensionless_unscaled
 
         outside_azt = az_domain > azt
 
@@ -258,9 +259,8 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
 
             # Here we add the signs back in only for the DM splines
             Paz_dist[within_bounds] += (DM_los_spl(z2[within_bounds] *
-                                        -1 * (az_signs)[within_bounds])
+                                        - 1 * (az_signs)[within_bounds])
                                         / abs(az_der(z2[within_bounds]))).value
-
 
     # Ensure Paz is normalized (slightly different for density vs DM methods)
 
@@ -338,7 +338,6 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
 
             # Manual normalization
             Paz_dist /= norm
-
 
     if DM is None:
         # Set the rest to zero

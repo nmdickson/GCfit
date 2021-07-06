@@ -75,6 +75,8 @@ def hyperparam_effective(X_data, X_model, err):
 # --------------------------------------------------------------------------
 # Gaussian error propagation
 # --------------------------------------------------------------------------
+
+
 def div_error(a, a_err, b, b_err):
     """
     Compute Gaussian error propagation for a÷b.
@@ -86,6 +88,7 @@ def div_error(a, a_err, b, b_err):
 # --------------------------------------------------------------------------
 # Distribution helpers
 # --------------------------------------------------------------------------
+
 
 def trim_peaks(az_domain, Paz):
     """
