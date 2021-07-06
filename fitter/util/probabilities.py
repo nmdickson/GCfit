@@ -96,20 +96,16 @@ def trim_peaks(az_domain, Paz):
     or the normalization drops too much.
     """
     Paz = Paz.copy()
-    steps = 0
-    # loop until peaks are dealt with
-    while True:
-        steps += 1
-        # get the peaks
+
+    while (area := trapezoid(x=az_domain.value, y=Paz.value)) >= 0.98:
+
         peaks, _ = find_peaks(Paz, height=0, threshold=1e5, width=1)
 
-        # break either if the normalization starts to suffer or if we
-        # eliminate all detected peaks
-        area = trapezoid(x=az_domain.value, y=Paz.value)
-        if (area <= 0.98 or all(peaks == False)):
+        # break if all peaks have been eliminated
+        if peaks.size == 0:
             break
 
-        # set the peaks to 0
+        # set the peaks to 0 probability
         Paz[peaks] = 0
 
     # re-normalize:
