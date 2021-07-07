@@ -25,8 +25,8 @@ _str_types = (str, bytes)
 
 
 class Output:
-    # TODO careful this doesnt conflict with h5py's `create_dataset` (or emcee)
-    def create_dataset(self, key, data, group='statistics', *, file=None):
+
+    def store_dataset(self, key, data, group='statistics', *, file=None):
         '''currently only works for adding a full array once, will overwrite'''
 
         data = np.asanyarray(data)
@@ -47,7 +47,7 @@ class Output:
         if not file:
             hdf.close()
 
-    def add_metadata(self, key, value, value_postfix='', *, file=None):
+    def store_metadata(self, key, value, value_postfix='', *, file=None):
 
         hdf = file or self.open('a')
 
@@ -91,7 +91,8 @@ class NestedSamplingOutput(Output):
     def open(self, mode="r"):
         return h5py.File(self.filename, mode)
 
-    def add_results(self, results, overwrite=True):
+    # TODO be nicer if could figure out how append results rather than overwrite
+    def store_results(self, results, overwrite=True):
         '''add a `dynesty.Results` dict to the file.
         if not overwrite, will fail if data already exists
         currently doesnt support appending/adding data/results so make sure
@@ -100,7 +101,52 @@ class NestedSamplingOutput(Output):
 
         with self.open('a') as hdf:
             for key, data in results.items():
-                self.create_dataset(key, data, group=self.group, file=hdf)
+                if key == 'bound':
+                    self._store_bounds(data, group=self.group, file=hdf)
+                else:
+                    self.store_dataset(key, data, group=self.group, file=hdf)
+
+    def _store_bounds(self, bounds, key='bound', group=None, *, file=None):
+        '''store_dataset alternative for the 'bounds' key which is returned in
+        ther form of bound objects, which can't be stored directly
+
+        bounds is a list of bound objects
+        '''
+
+        hdf = file or self.open('a')
+
+        grp = hdf.require_group(name=(group or self.group))
+
+        if key in grp:
+            del grp[key]
+
+        grp = grp.require_group(name=key)
+
+        for ind, bnd in enumerate(bounds):
+
+            bnd_grp = grp.create_group(name=str(ind))
+
+            if isinstance(bnd, dynesty.bounding.MultiEllipsoid):
+                bnd_grp.attrs['type'] = 'MultiEllipsoid'
+                bnd_grp.create_dataset('centres', data=bnd.ctrs)
+                bnd_grp.create_dataset('covariances', data=bnd.covs)
+
+            elif isinstance(bnd, dynesty.bounding.UnitCube):
+                bnd_grp.attrs['type'] = 'UnitCube'
+                bnd_grp.attrs['ndim'] = bnd.n
+
+            elif isinstance(bnd, dynesty.bounding.RadFriends):
+                bnd_grp.attrs['type'] = 'RadFriends'
+                bnd_grp.attrs['ndim'] = bnd.n
+                bnd_grp.create_dataset('covariances', data=bnd.cov)
+
+            elif isinstance(bnd, dynesty.bounding.SupFriends):
+                bnd_grp.attrs['type'] = 'SupFriends'
+                bnd_grp.attrs['ndim'] = bnd.n
+                bnd_grp.create_dataset('covariances', data=bnd.cov)
+
+        if not file:
+            hdf.close()
 
 
 def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
@@ -275,8 +321,8 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     # Setup and check param_priors
     # ----------------------------------------------------------------------
 
-    spec_priors_type = {k: v[0] for k, v in param_priors.items()}
-    spec_priors_args = {k: v[1:] for k, v in param_priors.items()}
+    spec_prior_type = {k: v[0] for k, v in param_priors.items()}
+    spec_prior_args = {k: v[1:] for k, v in param_priors.items()}
 
     prior_likelihood = priors.Priors(param_priors)
 
@@ -318,20 +364,20 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         # Write run metadata to output (backend) file
         # ----------------------------------------------------------------------
 
-        backend.add_metadata('cluster', cluster)
+        backend.store_metadata('cluster', cluster)
 
-        backend.add_metadata('mpi', mpi)
-        backend.add_metadata('Ncpu', Ncpu)
+        backend.store_metadata('mpi', mpi)
+        backend.store_metadata('Ncpu', Ncpu)
 
-        backend.add_metadata('fixed_params', fixed_initials)
-        backend.add_metadata('excluded_likelihoods', excluded_likelihoods)
+        backend.store_metadata('fixed_params', fixed_initials)
+        backend.store_metadata('excluded_likelihoods', excluded_likelihoods)
 
         if spec_initials is not None:
-            backend.add_metadata('specified_initials', spec_initials)
+            backend.store_metadata('specified_initials', spec_initials)
 
-        if spec_priors_type:
-            backend.add_metadata('specified_priors', spec_priors_type, '_type')
-            backend.add_metadata('specified_priors', spec_priors_args, '_args')
+        if spec_prior_type:
+            backend.store_metadata('specified_priors', spec_prior_type, '_type')
+            backend.store_metadata('specified_priors', spec_prior_args, '_args')
 
         # ------------------------------------------------------------------
         # Initialize the MCMC sampler
@@ -398,13 +444,13 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     # Write extra metadata and statistics to output (backend) file
     # ----------------------------------------------------------------------
 
-    backend.add_metadata('runtime', time.time() - t0)
+    backend.store_metadata('runtime', time.time() - t0)
 
-    backend.add_metadata('autocorr', tau)
-    backend.add_metadata('reliable_autocorr', np.any((tau * 50) > Niters))
+    backend.store_metadata('autocorr', tau)
+    backend.store_metadata('reliable_autocorr', np.any((tau * 50) > Niters))
 
-    backend.create_dataset('iteration_rate', iter_rate)
-    backend.create_dataset('acceptance_rate', accept_rate)
+    backend.store_dataset('iteration_rate', iter_rate)
+    backend.store_dataset('acceptance_rate', accept_rate)
 
     logging.debug(f"Final state: {sampler}")
 
@@ -589,8 +635,8 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
     # Setup param_priors transforms
     # ----------------------------------------------------------------------
 
-    spec_priors_type = {k: v[0] for k, v in param_priors.items()}
-    spec_priors_args = {k: v[1:] for k, v in param_priors.items()}
+    spec_prior_type = {k: v[0] for k, v in param_priors.items()}
+    spec_prior_args = {k: v[1:] for k, v in param_priors.items()}
 
     prior_kwargs = {'fixed_initials': fixed_initials, 'err_on_fail': False}
     prior_transform = priors.PriorTransforms(param_priors, **prior_kwargs)
@@ -626,20 +672,20 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         # Write run metadata to output (backend) file
         # ----------------------------------------------------------------------
 
-        backend.add_metadata('cluster', cluster)
+        backend.store_metadata('cluster', cluster)
 
-        backend.add_metadata('mpi', mpi)
-        backend.add_metadata('Ncpu', Ncpu)
+        backend.store_metadata('mpi', mpi)
+        backend.store_metadata('Ncpu', Ncpu)
 
-        backend.add_metadata('fixed_params', fixed_initials)
-        backend.add_metadata('excluded_likelihoods', excluded_likelihoods)
+        backend.store_metadata('fixed_params', fixed_initials)
+        backend.store_metadata('excluded_likelihoods', excluded_likelihoods)
 
         if spec_initials is not None:
-            backend.add_metadata('specified_initials', spec_initials)
+            backend.store_metadata('specified_initials', spec_initials)
 
-        if spec_priors_type:
-            backend.add_metadata('specified_priors', spec_priors_type, '_type')
-            backend.add_metadata('specified_priors', spec_priors_args, '_args')
+        if spec_prior_type:
+            backend.store_metadata('specified_priors', spec_prior_type, '_type')
+            backend.store_metadata('specified_priors', spec_prior_args, '_args')
 
         # ------------------------------------------------------------------
         # Initialize the Nested sampler
@@ -670,9 +716,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
         stop_kw = {'pfrac': pfrac}
         initsample_kw = {'maxiter': maxiter, 'nlive': Nlive_per_batch}
-        # TODO it would be nice to save bounds, but for now they cant be in hdf
-        sample_kw = {'maxiter': maxiter, 'nlive_new': Nlive_per_batch,
-                     'save_bounds': False}
+        sample_kw = {'maxiter': maxiter, 'nlive_new': Nlive_per_batch}
 
         # runs an initial set of set samples, as if using `NestedSampler`
         for results in sampler.sample_initial(**initsample_kw):
@@ -703,7 +747,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
     # Write extra metadata and statistics to output (backend) file
     # ----------------------------------------------------------------------
 
-    backend.add_metadata('runtime', time.time() - t0)
+    backend.store_metadata('runtime', time.time() - t0)
 
     logging.debug(f"Final state: {sampler}")
 
