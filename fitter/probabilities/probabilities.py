@@ -212,8 +212,6 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
         # large enough to accommodate pulsar X.
         err = util.gaussian(x=lin_domain, sigma=ΔPdot_meas, mu=0)
 
-        err_spl = interp.UnivariateSpline(lin_domain, err, k=1, s=0, ext=1)
-
         # ------------------------------------------------------------------
         # Create a slice of the P-Pdot space, along this pulsars P
         # ------------------------------------------------------------------
@@ -247,7 +245,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
         # Convolve the different distributions
         # ------------------------------------------------------------------
 
-        conv1 = np.convolve(err_spl(lin_domain), Pdot_c_spl(lin_domain), 'same')
+        conv1 = np.convolve(err, Pdot_c_spl(lin_domain), 'same')
 
         conv2 = np.convolve(conv1, Pdot_int_spl(lin_domain), 'same')
 
