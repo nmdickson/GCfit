@@ -11,7 +11,6 @@ import time
 import shutil
 import logging
 import pathlib
-from fnmatch import fnmatch
 
 
 __all__ = ['fit']
@@ -23,7 +22,7 @@ _here = pathlib.Path()
 def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         mpi=False, initials=None, param_priors=None, moves=None,
         fixed_params=None, excluded_likelihoods=None, hyperparams=True,
-        cont_run=False, savedir=_here, backup=False,
+        strict=None, cont_run=False, savedir=_here, backup=False,
         verbose=False, progress=False):
     '''Main MCMC fitting pipeline
 
@@ -88,6 +87,12 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         Whether to include bayesian hyperparameters (see Hobson et al., 2002)
         in all likelihood functions.
 
+    strict : list of (float, str), optional
+        A strictness parameter to be applied to each likelihood specified, as
+        the `strict` kwarg. As implementation is specific to each likelihood,
+        see individual functions for more information. Default is None, applied
+        to all likelihoods.
+
     cont_run : bool, optional
         Not Implemented
 
@@ -132,6 +137,10 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     if not savedir.is_dir():
         raise ValueError(f"Cannot access '{savedir}': No such directory")
 
+    if strict is not None and not isinstance(strict[0], float):
+        invtype = type(strict[0])
+        raise TypeError(f"First `strict` argument must be float, not {invtype}")
+
     # ----------------------------------------------------------------------
     # Load obeservational data, determine which likelihoods are valid/desired
     # ----------------------------------------------------------------------
@@ -142,15 +151,7 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
     logging.debug(f"Observation datasets: {observations}")
 
-    likelihoods = []
-    for component in observations.valid_likelihoods:
-        key, func, *_ = component
-        func_name = func.__name__
-
-        if not any(fnmatch(key, pattern) or fnmatch(func_name, pattern)
-                   for pattern in excluded_likelihoods):
-
-            likelihoods.append(component)
+    likelihoods = observations.filter_likelihoods(excluded_likelihoods, True)
 
     blobs_dtype = [(f'{key}/{func.__qualname__}', float)
                    for (key, func, *_) in likelihoods]
@@ -285,7 +286,7 @@ def fit(cluster, Niters, Nwalkers, Ncpu=2, *,
             ndim=init_pos.shape[-1],
             log_prob_fn=posterior,
             args=(observations, fixed_initials, likelihoods, prior_likelihood),
-            kwargs={'hyperparams': hyperparams},
+            kwargs={'hyperparams': hyperparams, 'strict': strict},
             pool=pool,
             moves=moves,
             backend=backend,

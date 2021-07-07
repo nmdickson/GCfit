@@ -55,8 +55,9 @@ def _angular_units(func):
 
 
 @_angular_units
-def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
-                           mass_bin=None, hyperparams=False):
+def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
+                           use_DM=False, *,
+                           mass_bin=None, hyperparams=False, strict=None):
     '''Compute the log likelihood of pulsar spin period derivatives
 
     Computes the log likelihood component of a cluster's pulsar's spin
@@ -85,12 +86,21 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
     coords : 2-tuple of float
         Cluster Galactic (Latitude, Longitude), in degrees
 
+    use_DM : bool, optional
+        Whether to use dispersion measure data in pulsar likelihoods
+
     mass_bin : int, optional
         Index of `model.mj` mass bin to use in all calculations.
         If None (default), attempts to read 'm' from `pulsars.mdata`, else -1
 
     hyperparams : bool, optional
         Not implemented
+
+    strict : float, optional
+        Numeric "strictness" factor. If `use_DM` is True, an attempt will be
+        made to compare this factor against the 'confidence' metadata field
+        of the 'DM' variable. Any pulsars with confidence below this factor will
+        not use the DM method, but revert to the default method.
 
     Returns
     -------
@@ -103,6 +113,9 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
     fitter.probabilities.pulsars : Module containing all pulsar prob. components
 
     '''
+
+    if strict is None:
+        strict = -np.inf
 
     # ----------------------------------------------------------------------
     # Get the pulsar P-Pdot_int kde
@@ -141,7 +154,6 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
 
         P = pulsars['P'][i].to('s')
 
-        # TODO the actual variable shouldn't be named "meas"; that parts obvious
         Pdot_meas = pulsars['Pdot'][i]
         ΔPdot_meas = np.abs(pulsars['ΔPdot'][i])
 
@@ -149,7 +161,23 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         # Compute the cluster component distribution, from the model
         # ------------------------------------------------------------------
 
-        PdotP_domain, PdotP_c_prob = cluster_component(model, R, mass_bin)
+        # TODO this shouldn't be so convoluted, rearrange some data to make easier
+        if use_DM and pulsars['DM'].mdata['confidence'][i] >= strict:
+
+            DM = pulsars['DM'][i]
+            ΔDM = pulsars['ΔDM'][i]
+
+            DM_mdata = pulsars.mdata
+
+            PdotP_domain, PdotP_c_prob = cluster_component(
+                model, R, DM=DM, ΔDM=ΔDM, DM_mdata=DM_mdata, mass_bin=mass_bin
+            )
+
+        else:
+            PdotP_domain, PdotP_c_prob = cluster_component(
+                model, R, DM=None, DM_mdata=None, mass_bin=mass_bin
+            )
+
         Pdot_domain = (P * PdotP_domain).decompose()
 
         # linear to avoid effects around asymptote
@@ -158,14 +186,31 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         )
 
         # ------------------------------------------------------------------
+        # Set up the equally-spaced linear convolution domain
+        # ------------------------------------------------------------------
+
+        # TODO both 5000 and 1e-18 need to be computed dynamically
+        #   5000 to be enough steps to sample the gaussian and int peaks
+        #   1e-18 to be far enough for the int distribution to go to zero
+        #   Both balanced so as to use way too much memory unnecessarily
+        #   Must be symmetric, to avoid bound effects
+
+        # mirrored/starting at zero so very small gaussians become the δ-func
+        lin_domain = np.linspace(0., 1e-18, 5_000 // 2)
+        lin_domain = np.concatenate((np.flip(-lin_domain[1:]), lin_domain))
+
+        # ------------------------------------------------------------------
         # Compute gaussian measurement error distribution
         # ------------------------------------------------------------------
 
         # TODO if width << Pint width, maybe don't bother with first conv.
 
-        err = util.gaussian(x=Pdot_domain, sigma=ΔPdot_meas, mu=0)
-
-        err_spl = interp.UnivariateSpline(Pdot_domain, err, k=1, s=0, ext=1)
+        # NOTE: this now uses the lin_domain instead of the PdotP domain
+        # in order to accommodate pulsar X who's error spline was being cut
+        # too soon, giving zero probability to valid regions.
+        # if lin_domain gets dynamically computed in the future, make sure it's
+        # large enough to accommodate pulsar X.
+        err = util.gaussian(x=lin_domain, sigma=ΔPdot_meas, mu=0)
 
         # ------------------------------------------------------------------
         # Create a slice of the P-Pdot space, along this pulsars P
@@ -197,24 +242,10 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
         )
 
         # ------------------------------------------------------------------
-        # Set up the equally-spaced linear convolution domain
-        # ------------------------------------------------------------------
-
-        # TODO both 5000 and 1e-18 need to be computed dynamically
-        #   5000 to be enough steps to sample the gaussian and int peaks
-        #   1e-18 to be far enough for the int distribution to go to zero
-        #   Both balanced so as to use way too much memory uneccessarily
-        #   Must be symmetric, to avoid bound effects
-
-        # mirrored/starting at zero so very small gaussians become the δ-func
-        lin_domain = np.linspace(0., 1e-18, 5_000 // 2)
-        lin_domain = np.concatenate((np.flip(-lin_domain[1:]), lin_domain))
-
-        # ------------------------------------------------------------------
         # Convolve the different distributions
         # ------------------------------------------------------------------
 
-        conv1 = np.convolve(err_spl(lin_domain), Pdot_c_spl(lin_domain), 'same')
+        conv1 = np.convolve(err, Pdot_c_spl(lin_domain), 'same')
 
         conv2 = np.convolve(conv1, Pdot_int_spl(lin_domain), 'same')
 
@@ -261,8 +292,8 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords, *,
 
 
 @_angular_units
-def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
-                              mass_bin=None, hyperparams=False):
+def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
+                              *, mass_bin=None, hyperparams=False, strict=None):
     '''Compute the log likelihood of binary pulsar orbital period derivatives
 
     Computes the log likelihood component of a cluster's binary pulsar's orbital
@@ -285,12 +316,21 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
     coords : 2-tuple of float
         Cluster Galactic (Latitude, Longitude), in degrees
 
+    use_DM : bool, optional
+        Whether to use dispersion measure data in pulsar likelihoods
+
     mass_bin : int, optional
         Index of `model.mj` mass bin to use in all calculations.
         If None (default), attempts to read 'm' from `pulsars.mdata`, else -1
 
     hyperparams : bool, optional
         Not implemented
+
+    strict : float, optional
+        Numeric "strictness" factor. If `use_DM` is True, an attempt will be
+        made to compare this factor against the 'confidence' metadata field
+        of the 'DM' variable. Any pulsars with confidence below this factor will
+        not use the DM method, but revert to the default method.
 
     Returns
     -------
@@ -303,6 +343,9 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
     fitter.probabilities.pulsars : Module containing all pulsar prob. components
 
     '''
+
+    if strict is None:
+        strict = -np.inf
 
     # ----------------------------------------------------------------------
     # Get pulsar mass bins
@@ -339,7 +382,21 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
         # Compute the cluster component distribution, from the model
         # ------------------------------------------------------------------
 
-        PdotP_domain, PdotP_c_prob = cluster_component(model, R, mass_bin)
+        if use_DM and pulsars['DM'].mdata['confidence'][i] >= strict:
+
+            DM = pulsars['DM'][i]
+            ΔDM = pulsars['ΔDM'][i]
+
+            DM_mdata = pulsars.mdata
+
+            PdotP_domain, PdotP_c_prob = cluster_component(
+                model, R, DM=DM, ΔDM=ΔDM, DM_mdata=DM_mdata, mass_bin=mass_bin
+            )
+        else:
+            PdotP_domain, PdotP_c_prob = cluster_component(
+                model, R, DM=None, DM_mdata=None, mass_bin=mass_bin
+            )
+
         Pdot_domain = (Pb * PdotP_domain).decompose()
 
         # linear to avoid effects around asymptote
@@ -359,7 +416,6 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
         # Compute gaussian measurement error distribution
         # ------------------------------------------------------------------
 
-        # TODO may want to also do the err in spin pulsars like this
         err = util.gaussian(x=lin_domain, sigma=ΔPbdot_meas, mu=0)
 
         # err_spl = interp.UnivariateSpline(Pdot_domain, err, k=1, s=0, ext=1)
@@ -410,7 +466,7 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, *,
 
 @_angular_units
 def likelihood_number_density(model, ndensity, *,
-                              mass_bin=None, hyperparams=True):
+                              mass_bin=None, hyperparams=True, strict=None):
     r'''Compute the log likelihood of the cluster number density profile
 
     Computes the log likelihood component of a cluster's number density profile,
@@ -435,6 +491,9 @@ def likelihood_number_density(model, ndensity, *,
 
     hyperparams : bool, optional
         Whether to include bayesian hyperparameters
+
+    strict : float, optional
+        Not implemented
 
     Returns
     -------
@@ -503,7 +562,7 @@ def likelihood_number_density(model, ndensity, *,
 
 @_angular_units
 def likelihood_pm_tot(model, pm, *,
-                      mass_bin=None, hyperparams=True):
+                      mass_bin=None, hyperparams=True, strict=None):
     r'''Compute the log likelihood of the cluster total proper motion dispersion
 
     Computes the log likelihood component of a cluster's proper motion
@@ -526,6 +585,9 @@ def likelihood_pm_tot(model, pm, *,
 
     hyperparams : bool, optional
         Whether to include bayesian hyperparameters
+
+    strict : float, optional
+        Not implemented
 
     Returns
     -------
@@ -570,7 +632,7 @@ def likelihood_pm_tot(model, pm, *,
 
 @_angular_units
 def likelihood_pm_ratio(model, pm, *,
-                        mass_bin=None, hyperparams=True):
+                        mass_bin=None, hyperparams=True, strict=None):
     r'''Compute the log likelihood of the cluster proper motion dispersion ratio
 
     Computes the log likelihood component of a cluster's proper motion
@@ -593,6 +655,9 @@ def likelihood_pm_ratio(model, pm, *,
 
     hyperparams : bool, optional
         Whether to include bayesian hyperparameters
+
+    strict : float, optional
+        Not implemented
 
     Returns
     -------
@@ -636,7 +701,7 @@ def likelihood_pm_ratio(model, pm, *,
 
 @_angular_units
 def likelihood_pm_T(model, pm, *,
-                    mass_bin=None, hyperparams=True):
+                    mass_bin=None, hyperparams=True, strict=None):
     '''Compute the log likelihood of the cluster tangential proper motion
 
     Computes the log likelihood component of a cluster's proper motion
@@ -659,6 +724,9 @@ def likelihood_pm_T(model, pm, *,
 
     hyperparams : bool, optional
         Whether to include bayesian hyperparameters
+
+    strict : float, optional
+        Not implemented
 
     Returns
     -------
@@ -696,7 +764,7 @@ def likelihood_pm_T(model, pm, *,
 
 @_angular_units
 def likelihood_pm_R(model, pm, *,
-                    mass_bin=None, hyperparams=True):
+                    mass_bin=None, hyperparams=True, strict=None):
     '''Compute the log likelihood of the cluster radial proper motion
 
     Computes the log likelihood component of a cluster's proper motion
@@ -719,6 +787,9 @@ def likelihood_pm_R(model, pm, *,
 
     hyperparams : bool, optional
         Whether to include bayesian hyperparameters
+
+    strict : float, optional
+        Not implemented
 
     Returns
     -------
@@ -756,7 +827,7 @@ def likelihood_pm_R(model, pm, *,
 
 @_angular_units
 def likelihood_LOS(model, vlos, *,
-                   mass_bin=None, hyperparams=True):
+                   mass_bin=None, hyperparams=True, strict=None):
     '''Compute the log likelihood of the cluster LOS velocity dispersion
 
     Computes the log likelihood component of a cluster's velocity
@@ -779,6 +850,9 @@ def likelihood_LOS(model, vlos, *,
 
     hyperparams : bool, optional
         Whether to include bayesian hyperparameters
+
+    strict : float, optional
+        Not implemented
 
     Returns
     -------
@@ -816,7 +890,7 @@ def likelihood_LOS(model, vlos, *,
 
 @_angular_units
 def likelihood_mass_func(model, mf, field, *,
-                         hyperparams=True):
+                         hyperparams=True, strict=None):
     r'''Compute the log likelihood of the cluster's PDMF
 
     Computes the log likelihood component of a cluster's present day mass
@@ -844,6 +918,9 @@ def likelihood_mass_func(model, mf, field, *,
 
     hyperparams : bool, optional
         Whether to include bayesian hyperparameters
+
+    strict : float, optional
+        Not implemented
 
     Returns
     -------
@@ -943,7 +1020,7 @@ def likelihood_mass_func(model, mf, field, *,
 # --------------------------------------------------------------------------
 
 
-def log_likelihood(theta, observations, L_components, hyperparams):
+def log_likelihood(theta, observations, L_components, hyperparams, strict):
     '''
     Main likelihood function, generates the model(theta) passes it to the
     individual likelihood functions and collects their results.
@@ -955,17 +1032,22 @@ def log_likelihood(theta, observations, L_components, hyperparams):
         logging.debug(f"Model did not converge with {theta=}")
         return -np.inf, -np.inf * np.ones(len(L_components))
 
+    strict_keys = observations.filter_likelihoods(strict[1:], keys_only=True)
+
     # Calculate each log likelihood
-    probs = np.array([
-        likelihood(model, observations[key], *args, hyperparams=hyperparams)
-        for (key, likelihood, *args) in L_components
-    ])
+    probs = np.empty(len(L_components))
+    for ind, (key, likelihood, *args) in enumerate(L_components):
+
+        kwargs = {'hyperparams': hyperparams,
+                  'strict': strict[0] if key in strict_keys else None}
+
+        probs[ind] = likelihood(model, observations[key], *args, **kwargs)
 
     return sum(probs), probs
 
 
 def posterior(theta, observations, fixed_initials=None, L_components=None,
-              prior_likelihood=None, *, hyperparams=True):
+              prior_likelihood=None, *, hyperparams=True, strict=None):
     '''
     Combines the likelihood with the prior
 
@@ -986,6 +1068,9 @@ def posterior(theta, observations, fixed_initials=None, L_components=None,
     if prior_likelihood is None:
         prior_likelihood = Priors(dict())
 
+    if strict is None:
+        strict = []
+
     # get a list of variable params, sorted for the unpacking of theta
     variable_params = DEFAULT_INITIALS.keys() - fixed_initials.keys()
     params = sorted(variable_params, key=list(DEFAULT_INITIALS).index)
@@ -999,7 +1084,7 @@ def posterior(theta, observations, fixed_initials=None, L_components=None,
         return -np.inf, *(-np.inf * np.ones(len(L_components)))
 
     log_L, individuals = log_likelihood(theta, observations,
-                                        L_components, hyperparams)
+                                        L_components, hyperparams, strict)
 
     probability = log_L + log_Pθ
 
