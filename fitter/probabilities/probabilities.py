@@ -1002,6 +1002,15 @@ def posterior(theta, observations, fixed_initials=None, L_components=None,
     if prior_likelihood is None:
         prior_likelihood = Priors(dict())
 
+    # Check if any values of theta are not finite, probably caused by invalid
+    # prior transforms, and indicating we should return -inf
+    if not np.all(np.isfinite(theta)):
+
+        if return_indiv:
+            return -np.inf, *(-np.inf * np.ones(len(L_components)))
+        else:
+            return -np.inf
+
     # get a list of variable params, sorted for the unpacking of theta
     variable_params = DEFAULT_INITIALS.keys() - fixed_initials.keys()
     params = sorted(variable_params, key=list(DEFAULT_INITIALS).index)
@@ -1012,11 +1021,14 @@ def posterior(theta, observations, fixed_initials=None, L_components=None,
 
     # prior likelihoods
     if prior_likelihood != 'ignore':
+
         if not np.isfinite(log_Pθ := prior_likelihood(theta)):
+
             if return_indiv:
                 return -np.inf, *(-np.inf * np.ones(len(L_components)))
             else:
                 return -np.inf
+
     else:
         log_Pθ = 0
 

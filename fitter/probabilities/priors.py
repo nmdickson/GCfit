@@ -177,8 +177,8 @@ class PriorTransforms(Priors):
 
             theta[param] = prior(U[param], **deps)
 
-            # if invalid (ie 0, outside of bounds / real bad) record it's reason
-            if theta[param] <= 0. or np.isnan(theta[param]):
+            # if invalid, record it's reason
+            if np.isnan(theta[param]):
                 inv.append(prior.inv_mssg)
 
         # If any priors were invalid, combine the mssgs and output that
@@ -265,6 +265,10 @@ class _PriorBase:
         except AttributeError:
             return f"Invalid {self.__class__.__name__} on {self.param}"
 
+    @property
+    def inv_value(self):
+        return np.nan if self._transform else 0.
+
     def _init_val(self, val):
         '''try to convert val to a float,
         else assume its a param and add to dependants'''
@@ -313,8 +317,7 @@ class UniformPrior(_PriorBase):
                 + ",".join(f"{li} {nlt} {ui}" for li, ui in inv_pairs)
             )
 
-            # TODO return 0 or nan when transform?
-            return 0.
+            return self.inv_value
 
         # compute overall bounds, and loc/scale
         l_bnd, r_bnd = lowers.max(), uppers.min()
