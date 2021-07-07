@@ -170,7 +170,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
             DM_mdata = pulsars.mdata
 
             PdotP_domain, PdotP_c_prob = cluster_component(
-                model, R, DM=(DM, ΔDM), DM_mdata=DM_mdata, mass_bin=mass_bin
+                model, R, DM=DM, ΔDM=ΔDM, DM_mdata=DM_mdata, mass_bin=mass_bin
             )
 
         else:
@@ -392,7 +392,7 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
             DM_mdata = pulsars.mdata
 
             PdotP_domain, PdotP_c_prob = cluster_component(
-                model, R, DM=(DM, ΔDM), DM_mdata=DM_mdata, mass_bin=mass_bin
+                model, R, DM=DM, ΔDM=ΔDM, DM_mdata=DM_mdata, mass_bin=mass_bin
             )
         else:
             PdotP_domain, PdotP_c_prob = cluster_component(

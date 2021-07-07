@@ -71,7 +71,7 @@ def los_dm(dm, dm_err, DM_mdata):
 # --------------------------------------------------------------------------
 
 
-def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
+def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, eps=1e-3):
     """
     Computes probability distribution for a range of line of sight
     accelerations at projected R : P(az|R)
@@ -217,11 +217,9 @@ def cluster_component(model, R, mass_bin, DM=None, DM_mdata=None, *, eps=1e-3):
             mssg = "Cluster DM data is required to use DM based likelihood."
             raise ValueError(mssg)
 
-        # unpack DM data
-        DM, sigma_DM = DM
 
         # get los pos, err using cluster DM data
-        DM_los, DM_los_err = los_dm(DM, sigma_DM, DM_mdata)
+        DM_los, DM_los_err = los_dm(DM, ΔDM, DM_mdata)
 
         # Pulsars should alway be within the half-light radius, if not the
         # spline will just return probability of zero anyway so we should be
