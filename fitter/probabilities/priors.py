@@ -295,10 +295,14 @@ class UniformPrior(_PriorBase):
 
     def __call__(self, param_val, *args, **kwargs):
 
+        # check that all dependants were supplied
+        if (missing_deps := set(self.dependants) - kwargs.keys()):
+            mssg = f"Missing required dependant params: {missing_deps}"
+            raise TypeError(mssg)
+
         # get values for any dependant params
         lowers, uppers = zip(*self.bounds)
 
-        # TODO the error if the needed param is not in kwargs is *not* nice
         lowers = np.array([kwargs.get(p, p) for p in lowers])
         uppers = np.array([kwargs.get(p, p) for p in uppers])
 
