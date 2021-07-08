@@ -47,7 +47,7 @@ class Output:
         if not file:
             hdf.close()
 
-    def store_metadata(self, key, value, value_postfix='', *, file=None):
+    def store_metadata(self, key, value, type_postfix='', *, file=None):
 
         hdf = file or self.open('a')
 
@@ -58,7 +58,13 @@ class Output:
             dset = meta_grp.require_dataset(key, dtype="f", shape=None)
 
             for k, v in value.items():
-                dset.attrs[f'{k}{value_postfix}'] = v
+
+                v = np.asanyarray(v)
+
+                if v.dtype.kind == 'U':
+                    v = v.astype('S')
+
+                dset.attrs[f'{k}{type_postfix}'] = v
 
         elif isinstance(value, abc.Collection) \
                 and not isinstance(value, _str_types):
@@ -66,11 +72,17 @@ class Output:
             dset = meta_grp.require_dataset(key, dtype="f", shape=None)
 
             for i, v in enumerate(value):
-                dset.attrs[f'{i}{value_postfix}'] = v
+
+                v = np.asanyarray(v)
+
+                if v.dtype.kind == 'U':
+                    v = v.astype('S')
+
+                dset.attrs[f'{i}{type_postfix}'] = v
 
         else:
 
-            meta_grp.attrs[f'{key}{value_postfix}'] = value
+            meta_grp.attrs[f'{key}{type_postfix}'] = value
 
         if not file:
             hdf.close()
