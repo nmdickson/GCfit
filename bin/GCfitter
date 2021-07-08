@@ -118,6 +118,7 @@ if __name__ == '__main__':
     # ----------------------------------------------------------------------
     # Nested Sampling with dynesty
     # ----------------------------------------------------------------------
+    # TODO make the "current_batch" storage optional
 
     parser_nest = subparsers.add_parser('nested', parents=[shared_parser])
 
@@ -221,5 +222,7 @@ if __name__ == '__main__':
 
     fit_func = args.fit_func
     del args.fit_func
+
+    logging.debug(f"{args=}")
 
     fit_func(**vars(args))
