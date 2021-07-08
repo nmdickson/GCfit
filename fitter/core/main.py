@@ -83,6 +83,7 @@ class MCMCOutput(emcee.backends.HDFBackend, Output):
 
 
 class NestedSamplingOutput(Output):
+    # TODO this logic should be straightened out, groups existance standardized
 
     def __init__(self, filename, group='nested', overwrite=False):
         self.filename = filename
@@ -90,21 +91,6 @@ class NestedSamplingOutput(Output):
 
     def open(self, mode="r"):
         return h5py.File(self.filename, mode)
-
-    # TODO be nicer if could figure out how append results rather than overwrite
-    def store_results(self, results, overwrite=True):
-        '''add a `dynesty.Results` dict to the file.
-        if not overwrite, will fail if data already exists
-        currently doesnt support appending/adding data/results so make sure
-        to `combine_runs` your sampler first
-        '''
-
-        with self.open('a') as hdf:
-            for key, data in results.items():
-                if key == 'bound':
-                    self._store_bounds(data, group=self.group, file=hdf)
-                else:
-                    self.store_dataset(key, data, group=self.group, file=hdf)
 
     def _store_bounds(self, bounds, key='bound', group=None, *, file=None):
         '''store_dataset alternative for the 'bounds' key which is returned in
@@ -115,12 +101,12 @@ class NestedSamplingOutput(Output):
 
         hdf = file or self.open('a')
 
-        grp = hdf.require_group(name=(group or self.group))
+        base_grp = hdf.require_group(name=(group or self.group))
 
-        if key in grp:
-            del grp[key]
+        if key in base_grp:
+            del base_grp[key]
 
-        grp = grp.require_group(name=key)
+        grp = base_grp.require_group(name=key)
 
         for ind, bnd in enumerate(bounds):
 
@@ -147,6 +133,102 @@ class NestedSamplingOutput(Output):
 
         if not file:
             hdf.close()
+
+    # TODO be nicer if could figure out how append results rather than overwrite
+    def store_results(self, results, overwrite=True):
+        '''add a `dynesty.Results` dict to the file.
+        if not overwrite, will fail if data already exists
+        currently doesnt support appending/adding data/results so make sure
+        to `combine_runs` your sampler first
+        '''
+
+        with self.open('a') as hdf:
+            for key, data in results.items():
+                if key == 'bound':
+                    self._store_bounds(data, group=self.group, file=hdf)
+                else:
+                    self.store_dataset(key, data, group=self.group, file=hdf)
+
+    # ----------------------------------------------------------------------
+    # Tracking of current batch sampling
+    # ----------------------------------------------------------------------
+
+    _current_batch_keys = ('worst', 'ustar', 'vstar', 'loglstar', 'ncall',
+                           'worst_orig', 'bound_orig', 'bound_iter', 'eff')
+
+    def reset_current_batch(self):
+        '''empty out the current batch group, to start tracking a new batch'''
+
+        with self.open('a') as hdf:
+
+            base_grp = hdf.require_group(name=self.group)
+
+            if 'current_batch' in base_grp:
+                del base_grp['current_batch']
+
+            grp = base_grp.create_group(name='current_batch')
+
+            # Two-dimensional datasets
+            for key in {'vstar', 'ustar'}:
+                grp.create_dataset(key, shape=(0, self.ndim),
+                                   maxshape=(None, self.ndim))
+
+            # One-dimensional datasets
+            for key in set(self._current_batch_keys) - {'ustar', 'vstar'}:
+                grp.create_dataset(key, shape=(0,), maxshape=(None,))
+
+    def _grow_current_batch(self, n_grow=1):
+        '''called in the background to dynamically resize the relevant datasets
+        '''
+        with self.open('r+') as hdf:
+            base_grp = hdf.require_group(name=self.group)
+
+            grp = base_grp['current_batch']
+
+            for key in self._current_batch_keys:
+                grp[key].resize(grp['vstar'].shape[0] + n_grow, axis=0)
+
+    def update_current_batch(self, results, reset=False):
+        '''Append to the "current batch" the results of each sampling iteration
+
+        worst : int
+            Index of the live point with the worst likelihood. This is our
+            new dead point sample. **Negative values indicate the index
+            of a new live point generated when initializing a new batch.**
+        ustar : `~numpy.ndarray` with shape (npdim,)
+            Position of the sample.
+        vstar : `~numpy.ndarray` with shape (ndim,)
+            Transformed position of the sample.
+        loglstar : float
+            Ln(likelihood) of the sample.
+        nc : int
+            Number of likelihood calls performed before the new
+            live point was accepted.
+        worst_it : int
+            Iteration when the live (now dead) point was originally proposed.
+        boundidx : int
+            Index of the bound the dead point was originally drawn from.
+        bounditer : int
+            Index of the bound being used at the current iteration.
+        eff : float
+            The cumulative sampling efficiency (in percent).
+
+        '''
+
+        if reset:
+            self.reset_current_batch()
+
+        results = dict(zip(self._current_batch_keys, results))
+
+        n_grow = results['vstar'].shape[0]
+        self._grow_current_batch(n_grow)
+
+        with self.open('a') as hdf:
+            base_grp = hdf.require_group(name=self.group)
+            grp = base_grp['current_batch']
+
+            for key, val in results.items():
+                grp[key][-n_grow:] = val
 
 
 def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
@@ -693,8 +775,12 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
         logging.info("Initializing sampler")
 
+        ndim = len(variable_initials)
+
+        backend.ndim = ndim
+
         sampler = dynesty.DynamicNestedSampler(
-            ndim=len(variable_initials),
+            ndim=ndim,
             loglikelihood=posterior,  # cause we need the defaults/checks it has
             prior_transform=prior_transform,
             logl_args=(observations, fixed_initials, likelihoods, 'ignore'),
@@ -718,28 +804,40 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         initsample_kw = {'maxiter': maxiter, 'nlive': Nlive_per_batch}
         sample_kw = {'maxiter': maxiter, 'nlive_new': Nlive_per_batch}
 
+        backend.reset_current_batch()
+
         # runs an initial set of set samples, as if using `NestedSampler`
         for results in sampler.sample_initial(**initsample_kw):
-            pass
 
-        backend.add_results(sampler.results)
+            # get rid of extra args from initial sampling
+            (worst, ustar, vstar, loglstar, _, _, _, _, _,
+             ncall, worst_orig, bound_orig, bound_iter, eff, _) = results
+
+            results = (worst, ustar, vstar, loglstar,
+                       ncall, worst_orig, bound_orig, bound_iter, eff)
+
+            backend.update_current_batch(results)
+
+        backend.store_results(sampler.results)
 
         logging.info("Beginning dynamic batch sampling")
 
         # run the dynamic sampler in batches, until the stop condition is met
         while not dysamp.stopping_function(sampler.results, stop_kw, M=map_):
 
-            logl_bounds = dysamp.weight_function(sampler.results, stop_kw)
+            backend.reset_current_batch()
 
-            for _ in sampler.sample_batch(logl_bounds=logl_bounds, **sample_kw):
-                pass
+            wts = dysamp.weight_function(sampler.results, stop_kw)
+
+            for results in sampler.sample_batch(logl_bounds=wts, **sample_kw):
+                backend.update_current_batch(results)
 
             logging.info("Combining batch with existing results")
 
             # add new samples to previous results, save in backend
             sampler.combine_runs()
 
-            backend.add_results(sampler.results)
+            backend.store_results(sampler.results)
 
     logging.info("Finished sampling")
 
