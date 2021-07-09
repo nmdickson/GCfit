@@ -94,11 +94,11 @@ def trim_peaks(az_domain, Paz):
     or the normalization drops too much.
     """
     from scipy.signal import find_peaks
-    from scipy.integrate import trapezoid
+    from scipy.integrate import trapz
 
     Paz = Paz.copy()
 
-    while (area := trapezoid(x=az_domain.value, y=Paz.value)) >= 0.98:
+    while (area := trapz(x=az_domain.value, y=Paz.value)) >= 0.98:
 
         peaks, _ = find_peaks(Paz, height=0, threshold=1e5, width=1)
 
