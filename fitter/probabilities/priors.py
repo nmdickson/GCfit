@@ -449,7 +449,7 @@ class CromwellUniformPrior(_PriorBase):
 
 DEFAULT_PRIORS = {
     'W0': ('uniform', [(3, 20)]),
-    'M': ('uniform', [(0.01, 10)]),
+    'M': ('uniform', [(0.01, 5)]),
     'rh': ('uniform', [(0.5, 15)]),
     'ra': ('uniform', [(0, 5)]),
     'g': ('uniform', [(0, 2.3)]),
