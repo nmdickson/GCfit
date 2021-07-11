@@ -560,7 +560,7 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
 
 def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
-               maxiter=None, Nlive_per_batch=500, pfrac=1.0,
+               maxiter=None, Nlive_per_batch=500, pfrac=1.0, dlogz=0.05,
                Ncpu=2, mpi=False, initials=None, param_priors=None,
                fixed_params=None, excluded_likelihoods=None, hyperparams=True,
                savedir=_here, verbose=False):
@@ -813,7 +813,8 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         t0 = time.time()
 
         stop_kw = {'pfrac': pfrac}
-        initsample_kw = {'maxiter': maxiter, 'nlive': Nlive_per_batch}
+        initsample_kw = {'maxiter': maxiter, 'nlive': Nlive_per_batch,
+                         'dlogz': dlogz}
         sample_kw = {'maxiter': maxiter, 'nlive_new': Nlive_per_batch}
 
         backend.reset_current_batch()
@@ -822,6 +823,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         for results in sampler.sample_initial(**initsample_kw):
 
             # get rid of extra args from initial sampling
+            # TODO maybe we shouldn't drop these?
             (worst, ustar, vstar, loglstar, _, _, _, _, _,
              ncall, worst_orig, bound_orig, bound_iter, eff, _) = results
 
