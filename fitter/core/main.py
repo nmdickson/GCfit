@@ -560,7 +560,7 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
 
 def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
-               maxiter=None, Nlive_per_batch=500, pfrac=1.0, dlogz=0.05,
+               initial_kwargs=None, batch_kwargs=None, pfrac=1.0,
                Ncpu=2, mpi=False, initials=None, param_priors=None,
                fixed_params=None, excluded_likelihoods=None, hyperparams=True,
                savedir=_here, verbose=False):
@@ -598,16 +598,17 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
                    'slice', 'rslice', 'hslice'}, optional
         Method used to sample uniformly within the likelihood constraint.
 
-    maxiter : int, optional
-        Maximum number of iterations. Default is no limit.
+    initial_kwargs : dict, optional
+        kwargs to be passed to the `dynesty.DynamicNestedSampler.sample_initial`
+        initial baseline sampling function. See `dynesty` for more.
 
-    Nlive_per_batch : int, optional
-        The number of live points used when adding additional samples
-        in the batch. Default is 500
+    batch_kwargs : dict, optional
+        kwargs to be passed to the `dynesty.DynamicNestedSampler.sample_batch`
+        batch sampling function. See `dynesty` for more.
 
     pfrac : float, optional
         Fractional weight of the posterior (versus evidence) for stop function.
-        Between 0.0 and 1.0, defaults to 1.0
+        Between 0.0 and 1.0, defaults to 1.0 (i.e. 100% posterior).
 
     Ncpu : int, optional
         Number of CPU's to parallelize the sampling computation over. Is
@@ -666,6 +667,12 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
     if param_priors is None:
         param_priors = {}
+
+    if initial_kwargs is None:
+        initial_kwargs = {}
+
+    if batch_kwargs is None:
+        batch_kwargs = {}
 
     savedir = pathlib.Path(savedir)
     if not savedir.is_dir():
@@ -813,14 +820,11 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         t0 = time.time()
 
         stop_kw = {'pfrac': pfrac}
-        initsample_kw = {'maxiter': maxiter, 'nlive': Nlive_per_batch,
-                         'dlogz': dlogz}
-        sample_kw = {'maxiter': maxiter, 'nlive_new': Nlive_per_batch}
 
         backend.reset_current_batch()
 
         # runs an initial set of set samples, as if using `NestedSampler`
-        for results in sampler.sample_initial(**initsample_kw):
+        for results in sampler.sample_initial(**initial_kwargs):
 
             # get rid of extra args from initial sampling
             # TODO maybe we shouldn't drop these?
@@ -841,9 +845,9 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
             backend.reset_current_batch()
 
-            wts = dysamp.weight_function(sampler.results, stop_kw)
+            wt = dysamp.weight_function(sampler.results, stop_kw)
 
-            for results in sampler.sample_batch(logl_bounds=wts, **sample_kw):
+            for results in sampler.sample_batch(logl_bounds=wt, **batch_kwargs):
                 backend.update_current_batch(results)
 
             logging.info("Combining batch with existing results")
