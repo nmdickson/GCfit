@@ -534,6 +534,7 @@ class Observations:
 # --------------------------------------------------------------------------
 
 # TODO The units are *quite* incomplete in Model (10)
+# TODO would be cool to get this to work with limepy's `sampling`
 
 class Model(lp.limepy):
 
