@@ -162,46 +162,79 @@ class _ClusterVisualizer:
 
         return ax
 
-    def _plot_data(self, ax, ds_pattern, y_key, *, r_key='r', r_unit='pc',
-                   err_transform=None, strict=False, **kwargs):
+    def _plot_data(self, ax, dataset, y_key, *, r_key='r', r_unit='pc',
+                   err_transform=None, **kwargs):
+
+        # TODO need to handle colours better
+        defaultcolour = None
+
+        xdata = dataset[r_key]
+        ydata = dataset[y_key]
+
+        xerr = self._get_err(dataset, r_key)
+        yerr = self._get_err(dataset, y_key)
+
+        if err_transform is not None:
+            yerr = err_transform(yerr)
+
+        kwargs.setdefault('linestyle', 'None')
+        kwargs.setdefault('marker', '.')
+        kwargs.setdefault('color', defaultcolour)
+
+        label = str(dataset)
+        if 'm' in dataset.mdata:
+            label += f' (m={dataset.mdata["m"]})'
+
+        # TODO the label would look nicer as a citep style source
+        ax.errorbar(xdata.to(r_unit), ydata, xerr=xerr, yerr=yerr,
+                    label=label, **kwargs)
+
+        return ax
+
+    def _plot(self, ax, ds_pattern, y_key, model_data, *, strict=False,
+              data_kwargs=None, model_kwargs=None):
+        '''figure out what needs to be plotted and call model/data plotters
+        '''
+        ds_pattern = ds_pattern or ''
+
+        data_kwargs = data_kwargs or {}
+        model_kwargs = model_kwargs or {}
 
         datasets = self.obs.filter_datasets(ds_pattern, True)
 
-        if strict and not datasets:
+        if data_kwargs.get('strict', False) and ds_pattern and not datasets:
             mssg = f"Dataset matching '{ds_pattern}' do not exist in {self.obs}"
             # raise DataError
             raise KeyError(mssg)
 
-        # TODO need to handle colours better
-        defaultcolour = 'k' if len(datasets) == 1 else None
+        masses = []
 
-        # TODO if has tracer mass, need to also plot that models bin somehow
         for key, dset in datasets.items():
-            try:
-                xdata = dset[r_key]
-                ydata = dset[y_key]
 
-                xerr = self._get_err(dset, r_key)
-                yerr = self._get_err(dset, y_key)
+            # get mass bin of this dataset, for later model plotting
+            if 'm' in dset.mdata:
+                m = dset.mdata['m'] * u.Msun
+                mass_bin = np.where(self.model.mj == m)[0][0]
+            else:
+                mass_bin = self.model.nms - 1
+
+            # plot the data
+            try:
+                self._plot_data(ax, dset, y_key, **data_kwargs)
 
             except KeyError as err:
                 if strict:
                     raise err
                 else:
+                    # warnings.warn(err.args[0])
                     continue
 
-            if err_transform is not None:
-                yerr = err_transform(yerr)
+            masses.append(mass_bin)
 
-            kwargs.setdefault('linestyle', 'None')
-            kwargs.setdefault('marker', '.')
-            kwargs.setdefault('color', defaultcolour)
+        if model_data is not None:
 
-            # TODO the label would look nicer as a citep style source
-            ax.errorbar(xdata.to(r_unit), ydata, xerr=xerr, yerr=yerr,
-                        label=key, **kwargs)
-
-        return ax
+            for mbin in (masses or [self.model.nms - 1]):
+                self._plot_model(ax, model_data[mbin], **model_kwargs)
 
     # -----------------------------------------------------------------------
     # Plot extras
@@ -258,14 +291,15 @@ class _ClusterVisualizer:
 
         ax.set_xscale("log")
 
-        self._plot_model(ax, self.LOS)
-
         if show_obs:
+            pattern, var = '*velocity_dispersion*', 'σ'
+            strict = show_obs == 'strict'
 
-            pattern = '*velocity_dispersion*'
-            var = 'σ'
+        else:
+            pattern = var = None
+            strict = False
 
-            self._plot_data(ax, pattern, var, strict=(show_obs == 'strict'))
+        self._plot(ax, pattern, var, self.LOS, strict=strict)
 
         ax.legend()
 
@@ -280,14 +314,17 @@ class _ClusterVisualizer:
 
         ax.set_xscale("log")
 
-        self._plot_model(ax, self.pm_tot.to(u.mas / u.yr), r_unit=x_unit)
-
         if show_obs:
+            pattern, var = '*proper_motion*', 'PM_tot'
+            strict = show_obs == 'strict'
 
-            pattern = '*proper_motion*'
-            var = 'PM_tot'
+        else:
+            pattern = var = None
+            strict = False
 
-            self._plot_data(ax, pattern, var, strict=(show_obs == 'strict'))
+        pm_tot = self.pm_tot.to('mas/yr')
+
+        self._plot(ax, pattern, var, pm_tot, strict=strict)
 
         ax.legend()
 
@@ -302,14 +339,15 @@ class _ClusterVisualizer:
 
         ax.set_xscale("log")
 
-        self._plot_model(ax, self.pm_ratio)
-
         if show_obs:
+            pattern, var = '*proper_motion*', 'PM_ratio'
+            strict = show_obs == 'strict'
 
-            pattern = '*proper_motion*'
-            var = 'PM_ratio'
+        else:
+            pattern = var = None
+            strict = False
 
-            self._plot_data(ax, pattern, var, strict=(show_obs == 'strict'))
+        self._plot(ax, pattern, var, self.pm_ratio, strict=strict)
 
         ax.legend()
 
@@ -324,14 +362,17 @@ class _ClusterVisualizer:
 
         ax.set_xscale("log")
 
-        self._plot_model(ax, self.pm_T.to(u.mas / u.yr))
-
         if show_obs:
+            pattern, var = '*proper_motion*', 'PM_T'
+            strict = show_obs == 'strict'
 
-            pattern = '*proper_motion*'
-            var = 'PM_T'
+        else:
+            pattern = var = None
+            strict = False
 
-            self._plot_data(ax, pattern, var, strict=(show_obs == 'strict'))
+        pm_T = self.pm_T.to('mas/yr')
+
+        self._plot(ax, pattern, var, pm_T, strict=strict)
 
         ax.legend()
 
@@ -346,15 +387,17 @@ class _ClusterVisualizer:
 
         ax.set_xscale("log")
 
-        self._plot_model(ax, self.pm_R.to(u.mas / u.yr))
-
         if show_obs:
+            pattern, var = '*proper_motion*', 'PM_R'
+            strict = show_obs == 'strict'
 
-            pattern = '*proper_motion*'
-            var = 'PM_R'
+        else:
+            pattern = var = None
+            strict = False
 
-            self._plot_data(ax, pattern, var, strict=(show_obs == 'strict'))
+        pm_R = self.pm_R.to('mas/yr')
 
+        self._plot(ax, pattern, var, pm_R, strict=strict)
         ax.legend()
 
         return fig
@@ -374,12 +417,16 @@ class _ClusterVisualizer:
         self._plot_model(ax, self.numdens)
 
         if show_obs:
+            pattern, var = '*number_density*', 'Σ'
+            strict = show_obs == 'strict'
+            kwargs = {'err_transform': quad_nuisance}
 
-            pattern = '*number_density*'
-            var = 'Σ'
+        else:
+            pattern = var = kwargs = None
+            strict = False
 
-            self._plot_data(ax, pattern, var, strict=(show_obs == 'strict'),
-                            err_transform=quad_nuisance)
+        self._plot(ax, pattern, var, self.numdens, strict=strict,
+                   data_kwargs=kwargs)
 
         ax.legend()
 
@@ -898,14 +945,11 @@ class ModelVisualizer(_ClusterVisualizer):
         self.s2 = model.s2
         self.d = model.d
 
-        # TODO not all datasets correspond to this mass bin (15)
-        mass_bin = model.nms - 1
-
         self.r = model.r
 
-        self.LOS = np.sqrt(self.model.v2pj[mass_bin])
-        self.pm_T = np.sqrt(model.v2Tj[mass_bin])
-        self.pm_R = np.sqrt(model.v2Rj[mass_bin])
+        self.LOS = np.sqrt(self.model.v2pj)
+        self.pm_T = np.sqrt(model.v2Tj)
+        self.pm_R = np.sqrt(model.v2Rj)
         self.pm_tot = np.sqrt(0.5 * (self.pm_T**2 + self.pm_R**2))
         self.pm_ratio = self.pm_T / self.pm_R
         self.numdens = self._init_numdens(model, observations)
