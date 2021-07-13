@@ -229,10 +229,12 @@ class _ClusterVisualizer:
                     # warnings.warn(err.args[0])
                     continue
 
-            masses.append(mass_bin)
+            if mass_bin not in masses:
+                masses.append(mass_bin)
 
         if model_data is not None:
 
+            # TODO make sure the colors between data and model match, if masses
             for mbin in (masses or [self.model.nms - 1]):
                 self._plot_model(ax, model_data[mbin], **model_kwargs)
 
