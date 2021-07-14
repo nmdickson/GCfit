@@ -168,8 +168,14 @@ class NestedSamplingOutput(Output):
     _current_batch_keys = ('worst', 'ustar', 'vstar', 'loglstar', 'ncall',
                            'worst_orig', 'bound_orig', 'bound_iter', 'eff')
 
-    def reset_current_batch(self):
+    _base_batch_keys = ('worst', 'ustar', 'vstar', 'loglstar', 'logvol',
+                        'logwt', 'logz', 'logzvar', 'h', 'ncall', 'worst_orig',
+                        'bound_orig', 'bound_iter', 'eff', 'delta_logz')
+
+    def reset_current_batch(self, baseline=False):
         '''empty out the current batch group, to start tracking a new batch'''
+
+        keys = self._base_batch_keys if baseline else self._current_batch_keys
 
         with self.open('a') as hdf:
 
@@ -180,27 +186,32 @@ class NestedSamplingOutput(Output):
 
             grp = base_grp.create_group(name='current_batch')
 
+            grp.attrs['baseline'] = baseline
+
             # Two-dimensional datasets
-            for key in {'vstar', 'ustar'}:
-                grp.create_dataset(key, shape=(0, self.ndim),
+            for k in {'vstar', 'ustar'}:
+                grp.create_dataset(k, shape=(0, self.ndim),
                                    maxshape=(None, self.ndim))
 
             # One-dimensional datasets
-            for key in set(self._current_batch_keys) - {'ustar', 'vstar'}:
-                grp.create_dataset(key, shape=(0,), maxshape=(None,))
+            for k in set(keys) - {'ustar', 'vstar'}:
+                grp.create_dataset(k, shape=(0,), maxshape=(None,))
 
-    def _grow_current_batch(self, n_grow=1):
+    def _grow_current_batch(self, n_grow=1, baseline=False):
         '''called in the background to dynamically resize the relevant datasets
         '''
+
+        keys = self._base_batch_keys if baseline else self._current_batch_keys
+
         with self.open('r+') as hdf:
             base_grp = hdf.require_group(name=self.group)
 
             grp = base_grp['current_batch']
 
-            for key in self._current_batch_keys:
-                grp[key].resize(grp['vstar'].shape[0] + n_grow, axis=0)
+            for k in keys:
+                grp[k].resize(grp['vstar'].shape[0] + n_grow, axis=0)
 
-    def update_current_batch(self, results, reset=False):
+    def update_current_batch(self, results, reset=False, baseline=False):
         '''Append to the "current batch" the results of each sampling iteration
 
         worst : int
@@ -228,12 +239,14 @@ class NestedSamplingOutput(Output):
         '''
 
         if reset:
-            self.reset_current_batch()
+            self.reset_current_batch(baseline=baseline)
 
-        results = dict(zip(self._current_batch_keys, results))
+        keys = self._base_batch_keys if baseline else self._current_batch_keys
+
+        results = dict(zip(keys, results))
 
         n_grow = results['vstar'].shape[0]
-        self._grow_current_batch(n_grow)
+        self._grow_current_batch(n_grow, baseline=baseline)
 
         with self.open('a') as hdf:
             base_grp = hdf.require_group(name=self.group)
@@ -821,20 +834,11 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
         stop_kw = {'pfrac': pfrac}
 
-        backend.reset_current_batch()
+        backend.reset_current_batch(baseline=True)
 
         # runs an initial set of set samples, as if using `NestedSampler`
         for results in sampler.sample_initial(**initial_kwargs):
-
-            # get rid of extra args from initial sampling
-            # TODO maybe we shouldn't drop these?
-            (worst, ustar, vstar, loglstar, _, _, _, _, _,
-             ncall, worst_orig, bound_orig, bound_iter, eff, _) = results
-
-            results = (worst, ustar, vstar, loglstar,
-                       ncall, worst_orig, bound_orig, bound_iter, eff)
-
-            backend.update_current_batch(results)
+            backend.update_current_batch(results, baseline=True)
 
         backend.store_results(sampler.results)
 
