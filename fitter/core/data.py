@@ -236,7 +236,7 @@ class Dataset:
 
 
 class Observations:
-    '''Collection of Datasets, read from a corresponding hdf5 file (READONLY)'''
+    '''Collection of Datasets, read from a corresponding hdf file (READONLY)'''
     # TODO interesting errors occur when trying to iterate over Observ
 
     _valid_likelihoods = None
@@ -372,7 +372,7 @@ class Observations:
         self.initials = DEFAULT_INITIALS.copy()
 
         with resources.path('fitter', 'resources') as datadir:
-            with h5py.File(f'{datadir}/{self.cluster}.hdf5', 'r') as file:
+            with h5py.File(f'{datadir}/{self.cluster}.hdf', 'r') as file:
 
                 logging.info(f"Observations read from {file.filename}")
 
