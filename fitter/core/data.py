@@ -152,6 +152,14 @@ class Dataset:
     def __str__(self):
         return f'{self._name} Dataset'
 
+    def __citation__(self):
+        try:
+            bibcodes = self.mdata['source'].split(';')
+            return util.bibcode2cite(bibcodes)
+
+        except KeyError:
+            return None
+
     def __contains__(self, key):
         return key in self._dict_variables
 
@@ -181,6 +189,9 @@ class Dataset:
     @property
     def variables(self):
         return self._dict_variables
+
+    def cite(self):
+        return self.__citation__()
 
     def build_err(self, varname, model_r, model_val, strict=True):
         '''

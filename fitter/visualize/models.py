@@ -15,10 +15,7 @@ import astropy.visualization as astroviz
 
 __all__ = ['ModelVisualizer', 'CIModelVisualizer', 'ObservationsVisualizer']
 
-# TODO I thinkk this is somewhat out of date (20)
 # TODO fix all spacings
-
-# TODO fix all the plots to utilize all data (sugroups) for that likelihood (10)
 
 
 class _ClusterVisualizer:
@@ -181,11 +178,10 @@ class _ClusterVisualizer:
         kwargs.setdefault('marker', '.')
         kwargs.setdefault('color', defaultcolour)
 
-        label = str(dataset)
+        label = dataset.cite()
         if 'm' in dataset.mdata:
-            label += f' (m={dataset.mdata["m"]})'
+            label += fr' ($m={dataset.mdata["m"]}$)'
 
-        # TODO the label would look nicer as a citep style source
         ax.errorbar(xdata.to(r_unit), ydata, xerr=xerr, yerr=yerr,
                     label=label, **kwargs)
 
