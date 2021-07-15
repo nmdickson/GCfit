@@ -230,9 +230,22 @@ class _ClusterVisualizer:
 
         if model_data is not None:
 
+            if len(model_data.shape) != 3:
+                raise ValueError("invalid model data shape")
+
+            N_mbin = model_data.shape[0]
+
+            if not masses:
+                if N_mbin > 1:
+                    masses = [self.model.nms - 1]
+                else:
+                    masses = [0]
+
             # TODO make sure the colors between data and model match, if masses
-            for mbin in (masses or [self.model.nms - 1]):
-                self._plot_model(ax, model_data[mbin], **model_kwargs)
+            # TODO the dimensions are muddled here, what are they, is always 3d?
+            #   Going to assume for now its always [mbin, intervals, model.r]
+            for mbin in masses:
+                self._plot_model(ax, model_data[mbin, :, :], **model_kwargs)
 
     # -----------------------------------------------------------------------
     # Plot extras
@@ -898,6 +911,23 @@ class _ClusterVisualizer:
 
         return fig
 
+    def plot_remnant_fraction(self, fig=None, ax=None, *, x_unit='pc'):
+        '''Fraction of mass in remnants vs MS stars, like in baumgardt'''
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        ax.set_title("Remnant Fraction")
+
+        ax.set_xscale("log")
+
+        self._plot(ax, None, None, self.mass_frac_MS, model_kwargs={"label": "Main-sequence stars"})
+        self._plot(ax, None, None, self.mass_frac_rem, model_kwargs={"label": "Remnants"})
+
+        ax.set_ylim(0.0, 1.0)
+
+        ax.legend()
+
+        return fig
 
 # --------------------------------------------------------------------------
 # Visualizers
@@ -952,6 +982,8 @@ class ModelVisualizer(_ClusterVisualizer):
         self.pm_ratio = self.pm_T / self.pm_R
         self.numdens = self._init_numdens(model, observations)
         self.mass_func = self._init_massfunc(model, observations)
+
+        self.mass_frac_MS, self.mass_frac_rem = self._init_mass_frac(model, observations)
 
     @_ClusterVisualizer._support_units
     def _init_numdens(self, model, observations):
@@ -1017,6 +1049,31 @@ class ModelVisualizer(_ClusterVisualizer):
                     mass_func[0, rbin_ind, j] = (Nj / widthj).value
 
         return mass_func
+
+    @_ClusterVisualizer._support_units
+    def _init_mass_frac(self, model, observations):
+
+        Sigma_MS = np.sum(model.Sigmaj[model._star_bins], axis=0)
+        Sigma_rem = np.sum(model.Sigmaj[model._remnant_bins], axis=0)
+        Sigma_tot = np.sum(model.Sigmaj[:], axis=0)
+
+        int_MS = util.QuantitySpline(self.r, 2 * np.pi * self.r * Sigma_MS)
+        int_rem = util.QuantitySpline(self.r, 2 * np.pi * self.r * Sigma_rem)
+        int_tot = util.QuantitySpline(self.r, 2 * np.pi * self.r * Sigma_tot)
+
+        mass_MS = np.empty((1, 1, self.r.size))
+        mass_rem = np.empty((1, 1, self.r.size))
+        mass_tot = np.empty((1, 1, self.r.size))
+
+        # TODO the rbins at the end always mess up fractional stuff, drop to 0
+        mass_MS[0, 0, 0] = mass_rem[0, 0, 0] = mass_tot[0, 0, 0] = np.nan
+
+        for i in range(1, self.r.size - 2):
+            mass_MS[0, 0, i] = int_MS.integral(self.r[i], self.r[i + 1]).value
+            mass_rem[0, 0, i] = int_rem.integral(self.r[i], self.r[i + 1]).value
+            mass_tot[0, 0, i] = int_tot.integral(self.r[i], self.r[i + 1]).value
+
+        return mass_MS / mass_tot, mass_rem / mass_tot
 
 
 class CIModelVisualizer(_ClusterVisualizer):
