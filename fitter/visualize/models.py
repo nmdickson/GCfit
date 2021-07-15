@@ -920,8 +920,12 @@ class _ClusterVisualizer:
 
         ax.set_xscale("log")
 
-        self._plot(ax, None, None, self.mass_frac_MS, model_kwargs={"label": "Main-sequence stars"})
-        self._plot(ax, None, None, self.mass_frac_rem, model_kwargs={"label": "Remnants"})
+        self._plot(ax, None, None, self.mass_frac_MS,
+                   model_kwargs={"label": "Main-sequence stars"})
+        self._plot(ax, None, None, self.mass_frac_rem,
+                   model_kwargs={"label": "Remnants"})
+
+        ax.set_ylabel(r"Mass fraction $M_{MS}/M_{tot}$, $M_{remn.}/M_{tot}$")
 
         ax.set_ylim(0.0, 1.0)
 
