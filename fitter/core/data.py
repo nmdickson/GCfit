@@ -611,6 +611,7 @@ class Model(lp.limepy):
         self.mj <<= M_units
         self.Mj <<= M_units
         self.mc <<= M_units
+        self.mes_widths <<= M_units
 
         self.r <<= R_units
         self.rh <<= R_units
@@ -679,6 +680,7 @@ class Model(lp.limepy):
         # TODO still don't entriely understand when this is to be used
         # mj is middle of mass bins, mes are edges, widths are sizes of bins
         # self.mbin_widths = np.diff(self._mf.mes[-1]) ??
+        # TODO is this supposed to habe units? I think so
         self.mes_widths = np.diff(self._mf.mes[-1])
 
         # append tracer mass bins (must be appended to end to not affect nms)

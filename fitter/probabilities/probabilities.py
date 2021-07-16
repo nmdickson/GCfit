@@ -976,9 +976,9 @@ def likelihood_mass_func(model, mf, field, *,
     # shell from the field
     # ------------------------------------------------------------------
 
-    N_data = np.empty(N.shape)
-    N_model = np.empty(N.shape)
-    err = np.empty(N.shape)
+    N_data = np.empty_like(N)
+    N_model = np.empty_like(N)
+    err = np.empty_like(N)
 
     for r_in, r_out in np.unique(rbins, axis=0):
         r_mask = (mf['r1'] == r_in) & (mf['r2'] == r_out)
@@ -991,8 +991,9 @@ def likelihood_mass_func(model, mf, field, *,
 
         sample_radii = field_slice.MC_sample(M).to(u.pc)
 
-        binned_N_model = np.empty(model.nms)
+        binned_N_model = np.empty(model.nms) << N_data.unit
         for j in range(model.nms):
+            # TODO units surrounding this are a little uncertain?
             Nj = field_slice.MC_integrate(densityj[j], sample=sample_radii)
             widthj = (model.mj[j] * model.mes_widths[j])
             binned_N_model[j] = Nj / widthj
