@@ -40,10 +40,7 @@ def _angular_units(func):
 
         model = kwargs.get('model') or args[0]
 
-        eqvs = [util.angular_width(model.d)[0],
-                util.angular_speed(model.d)[0]]
-
-        with u.set_enabled_equivalencies(eqvs):
+        with u.set_enabled_equivalencies(util.angular_width(model.d)):
             return func(*args, **kwargs)
 
     return angular_units_decorator
@@ -538,15 +535,14 @@ def likelihood_number_density(model, ndensity, *,
     valid = (ndensity['Σ'].value > 0.1)
 
     obs_r = ndensity['r'][valid]
-    obs_Σ = ndensity['Σ'][valid].value
-    obs_err = ndensity['ΔΣ'][valid].value
+    obs_Σ = ndensity['Σ'][valid]
+    obs_err = ndensity['ΔΣ'][valid]
 
     # Now nuisance parameter
-    yerr = np.sqrt(obs_err**2 + model.s2)
+    yerr = np.sqrt(obs_err**2 + (model.s2 * obs_err.unit**2))
 
-    # TODO the model Sigma is in pc^-2, and is not being converted to match obs?
     model_r = model.r.to(obs_r.unit)
-    model_Σ = (model.Sigmaj[mass_bin] / model.mj[mass_bin]).value
+    model_Σ = model.Sigmaj[mass_bin] / model.mj[mass_bin]
 
     # Interpolated the model data at the measurement locations
     interpolated = np.interp(obs_r, model_r, model_Σ)
@@ -979,9 +975,9 @@ def likelihood_mass_func(model, mf, field, *,
     # shell from the field
     # ------------------------------------------------------------------
 
-    N_data = np.empty(N.shape)
-    N_model = np.empty(N.shape)
-    err = np.empty(N.shape)
+    N_data = np.empty_like(N)
+    N_model = np.empty_like(N)
+    err = np.empty_like(N)
 
     for r_in, r_out in np.unique(rbins, axis=0):
         r_mask = (mf['r1'] == r_in) & (mf['r2'] == r_out)
@@ -994,11 +990,12 @@ def likelihood_mass_func(model, mf, field, *,
 
         sample_radii = field_slice.MC_sample(M).to(u.pc)
 
-        binned_N_model = np.empty(model.nms)
+        binned_N_model = np.empty(model.nms) << N_data.unit
         for j in range(model.nms):
+            # TODO units surrounding this are a little uncertain?
             Nj = field_slice.MC_integrate(densityj[j], sample=sample_radii)
             widthj = (model.mj[j] * model.mes_widths[j])
-            binned_N_model[j] = (Nj / widthj).value
+            binned_N_model[j] = Nj / widthj
 
         N_spline = util.QuantitySpline(model.mj[:model.nms],
                                        binned_N_model,
@@ -1008,9 +1005,9 @@ def likelihood_mass_func(model, mf, field, *,
         # Add the error and compute the log likelihood
         # --------------------------------------------------------------
 
-        N_data[r_mask] = N[r_mask].value
+        N_data[r_mask] = N[r_mask]
         N_model[r_mask] = N_spline(mbin_mean[r_mask])
-        err[r_mask] = model.F * ΔN[r_mask].value
+        err[r_mask] = model.F * ΔN[r_mask]
 
     return likelihood(N_data, N_model, err)
 
