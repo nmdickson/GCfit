@@ -24,6 +24,31 @@ def angular_width(D):
     return [(u.pc, u.rad, pc2rad, rad2pc)]
 
 
+def angular_area(D):
+    '''AstroPy units conversion equivalency for angular to linear areas.
+    See: https://docs.astropy.org/en/stable/units/equivalencies.html
+
+    Given X rad/pc, with X given by your distance conversion,
+    then 1 rad^2 = 1 rad x 1 rad / (X rad/pc)^2 = (1/X^2) pc^2
+    '''
+
+    D = D.to(u.pc)
+
+    def pc2rad(r):
+        return 2 * np.arctan(r / (2 * D.value))
+
+    def pcsq2radsq(r):
+        return (1. / pc2rad(1)**2) * r
+
+    def rad2pc(θ):
+        return np.tan(θ / 2) * (2 * D.value)
+
+    def radsq2radsq(θ):
+        return (1. / rad2pc(1)**2) * θ
+
+    return [(u.pc**2, u.rad**2, pcsq2radsq, radsq2radsq)]
+
+
 def angular_speed(D):
     '''AstroPy units conversion equivalency for angular to tangential speeds.
     See: https://docs.astropy.org/en/stable/units/equivalencies.html
