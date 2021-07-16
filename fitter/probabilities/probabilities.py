@@ -535,15 +535,14 @@ def likelihood_number_density(model, ndensity, *,
     valid = (ndensity['Σ'].value > 0.1)
 
     obs_r = ndensity['r'][valid]
-    obs_Σ = ndensity['Σ'][valid].value
-    obs_err = ndensity['ΔΣ'][valid].value
+    obs_Σ = ndensity['Σ'][valid]
+    obs_err = ndensity['ΔΣ'][valid]
 
     # Now nuisance parameter
-    yerr = np.sqrt(obs_err**2 + model.s2)
+    yerr = np.sqrt(obs_err**2 + (model.s2 * obs_err.unit**2))
 
-    # TODO the model Sigma is in pc^-2, and is not being converted to match obs?
     model_r = model.r.to(obs_r.unit)
-    model_Σ = (model.Sigmaj[mass_bin] / model.mj[mass_bin]).value
+    model_Σ = model.Sigmaj[mass_bin] / model.mj[mass_bin]
 
     # Interpolated the model data at the measurement locations
     interpolated = np.interp(obs_r, model_r, model_Σ)
