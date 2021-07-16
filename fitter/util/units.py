@@ -5,7 +5,7 @@ import numpy as np
 import astropy.units as u
 
 
-__all__ = ['angular_width', 'angular_speed', 'QuantitySpline']
+__all__ = ['angular_width', 'angular_area', 'angular_speed', 'QuantitySpline']
 
 
 def angular_width(D):
@@ -38,13 +38,13 @@ def angular_area(D):
         return 2 * np.arctan(r / (2 * D.value))
 
     def pcsq2radsq(r):
-        return (1. / pc2rad(1)**2) * r
+        return (1. / rad2pc(1)**2) * r
 
     def rad2pc(θ):
         return np.tan(θ / 2) * (2 * D.value)
 
     def radsq2radsq(θ):
-        return (1. / rad2pc(1)**2) * θ
+        return (1. / pc2rad(1)**2) * θ
 
     return [(u.pc**2, u.rad**2, pcsq2radsq, radsq2radsq)]
 
