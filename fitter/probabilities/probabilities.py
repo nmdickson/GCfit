@@ -41,6 +41,7 @@ def _angular_units(func):
         model = kwargs.get('model') or args[0]
 
         eqvs = [util.angular_width(model.d)[0],
+                util.angular_area(model.d)[0],
                 util.angular_speed(model.d)[0]]
 
         with u.set_enabled_equivalencies(eqvs):
@@ -998,7 +999,7 @@ def likelihood_mass_func(model, mf, field, *,
         for j in range(model.nms):
             Nj = field_slice.MC_integrate(densityj[j], sample=sample_radii)
             widthj = (model.mj[j] * model.mes_widths[j])
-            binned_N_model[j] = (Nj / widthj).value
+            binned_N_model[j] = Nj / widthj
 
         N_spline = util.QuantitySpline(model.mj[:model.nms],
                                        binned_N_model,
@@ -1008,9 +1009,9 @@ def likelihood_mass_func(model, mf, field, *,
         # Add the error and compute the log likelihood
         # --------------------------------------------------------------
 
-        N_data[r_mask] = N[r_mask].value
+        N_data[r_mask] = N[r_mask]
         N_model[r_mask] = N_spline(mbin_mean[r_mask])
-        err[r_mask] = model.F * ΔN[r_mask].value
+        err[r_mask] = model.F * ΔN[r_mask]
 
     return likelihood(N_data, N_model, err)
 

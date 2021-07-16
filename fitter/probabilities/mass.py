@@ -173,7 +173,14 @@ class Field:
         res = np.sum(func(sample))
 
         # Only use area units if the integrand has units as well
-        V = self.area if hasattr(res, 'unit') else self.area.value
+        V = self.area
+
+        # TODO have to do this cause I cant get composite equivalencies to work
+        if hasattr(func, '_xunit'):
+            V = V.to(func._xunit**2)
+
+        if not hasattr(res, 'unit'):
+            V = V.value
 
         return (V / M) * res
 
