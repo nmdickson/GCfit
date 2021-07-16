@@ -40,11 +40,7 @@ def _angular_units(func):
 
         model = kwargs.get('model') or args[0]
 
-        eqvs = [util.angular_width(model.d)[0],
-                util.angular_area(model.d)[0],
-                util.angular_speed(model.d)[0]]
-
-        with u.set_enabled_equivalencies(eqvs):
+        with u.set_enabled_equivalencies(util.angular_width(model.d)):
             return func(*args, **kwargs)
 
     return angular_units_decorator

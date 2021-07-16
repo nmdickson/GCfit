@@ -3,66 +3,54 @@ import warnings
 import scipy.stats
 import numpy as np
 import astropy.units as u
+from astropy.units.equivalencies import Equivalency
 
 
-__all__ = ['angular_width', 'angular_area', 'angular_speed', 'QuantitySpline']
+__all__ = ['angular_width', 'QuantitySpline']
 
 
 def angular_width(D):
-    '''AstroPy units conversion equivalency for angular to linear widths.
+    '''AstroPy units conversion equivalency for angular to linear widths,
+    and assorted related quantities
     See: https://docs.astropy.org/en/stable/units/equivalencies.html
     '''
 
     D = D.to(u.pc)
 
-    def pc2rad(r):
+    # Angular width
+    def pc_to_rad(r):
         return 2 * np.arctan(r / (2 * D.value))
 
-    def rad2pc(θ):
+    def rad_to_pc(θ):
         return np.tan(θ / 2) * (2 * D.value)
 
-    return [(u.pc, u.rad, pc2rad, rad2pc)]
+    # Angular area
+    def pcsq_to_radsq(r):
+        return (1. / rad_to_pc(1)**2) * r
 
+    def radsq_to_radsq(θ):
+        return (1. / pc_to_rad(1)**2) * θ
 
-def angular_area(D):
-    '''AstroPy units conversion equivalency for angular to linear areas.
-    See: https://docs.astropy.org/en/stable/units/equivalencies.html
+    # Inverse Angular area
+    def inv_pcsq_to_radsq(r):
+        return (rad_to_pc(1)**2) * r
 
-    Given X rad/pc, with X given by your distance conversion,
-    then 1 rad^2 = 1 rad x 1 rad / (X rad/pc)^2 = (1/X^2) pc^2
-    '''
+    def inv_radsq_to_radsq(θ):
+        return (pc_to_rad(1)**2) * θ
 
-    D = D.to(u.pc)
-
-    def pc2rad(r):
-        return 2 * np.arctan(r / (2 * D.value))
-
-    def pcsq2radsq(r):
-        return (1. / rad2pc(1)**2) * r
-
-    def rad2pc(θ):
-        return np.tan(θ / 2) * (2 * D.value)
-
-    def radsq2radsq(θ):
-        return (1. / pc2rad(1)**2) * θ
-
-    return [(u.pc**2, u.rad**2, pcsq2radsq, radsq2radsq)]
-
-
-def angular_speed(D):
-    '''AstroPy units conversion equivalency for angular to tangential speeds.
-    See: https://docs.astropy.org/en/stable/units/equivalencies.html
-    '''
-
-    D = D.to(u.pc)
-
-    def kms2asyr(vt):
+    # Angular Speed
+    def kms_to_asyr(vt):
         return vt / (4.74 * D.value)
 
-    def asyr2kms(μ):
+    def asyr_to_kms(μ):
         return 4.74 * D.value * μ
 
-    return [((u.km / u.s), (u.arcsec / u.yr), kms2asyr, asyr2kms)]
+    return Equivalency([
+        (u.pc, u.rad, pc_to_rad, rad_to_pc),
+        (u.pc**2, u.rad**2, pcsq_to_radsq, radsq_to_radsq),
+        (u.pc**-2, u.rad**-2, inv_pcsq_to_radsq, inv_radsq_to_radsq),
+        ((u.km / u.s), (u.arcsec / u.yr), kms_to_asyr, asyr_to_kms)
+    ], 'angular_width', {"D": D})
 
 
 # TODO this really needs unittest, the unitless stuff made it complicated
