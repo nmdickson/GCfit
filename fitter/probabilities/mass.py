@@ -177,4 +177,55 @@ class Field:
 
         return (V / M) * res
 
-    # TODO def plot()
+    # ----------------------------------------------------------------------
+    # Plotting functionality
+    # ----------------------------------------------------------------------
+
+    def _patch(self, *args, **kwargs):
+        from matplotlib.path import Path
+        from matplotlib.patches import PathPatch
+
+        if self.polygon.is_empty:
+            raise ValueError("This Field is empty, cannot create patch")
+
+        coords, codes = [], []
+
+        for line in [self.polygon.exterior, *self.polygon.interiors]:
+            coords += line.coords
+
+            codes += [Path.MOVETO]
+            codes += ([Path.LINETO] * (len(line.coords) - 2))
+            codes += [Path.CLOSEPOLY]
+
+        path = Path(coords, codes)
+        return PathPatch(path, *args, **kwargs)
+
+    def plot(self, ax, prev_sample=False, adjust_view=True, **kwargs):
+
+        pt = ax.add_patch(self._patch(**kwargs))
+
+        if prev_sample:
+            try:
+                smpl = self._prev_sample
+
+                if hasattr(smpl, 'geom_type'):
+                    smpl_xy = zip(*[p.xy for p in smpl])
+                    sc = ax.scatter(*smpl_xy, marker='.')
+                    sc.set_zorder(pt.zorder + 1)
+
+                else:
+                    mssg = ("Must sample with `return_points=True` in order to"
+                            "plot sampled points")
+                    raise RuntimeError(mssg)
+
+            except AttributeError:
+                mssg = "No previous sample, call `Field.MC_sample` first"
+                raise RuntimeError(mssg)
+
+        if adjust_view:
+            ax.autoscale_view()
+
+        if prev_sample:
+            return pt, sc
+        else:
+            return pt
