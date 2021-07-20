@@ -1556,6 +1556,8 @@ class ObservationsVisualizer(_ClusterVisualizer):
         PI_list = self.obs.filter_datasets('*mass_function*')
         PI_list = sorted(PI_list, key=lambda k: self.obs[k]['r1'].min())
 
+        fc = iter(plt.cm.rainbow(np.linspace(0, 1, len(PI_list))))
+
         for key in PI_list:
             mf = self.obs[key]
 
@@ -1575,6 +1577,10 @@ class ObservationsVisualizer(_ClusterVisualizer):
 
             field = mass.Field(coords, cen=cen, unit=unit)
 
-            field.plot(ax)
+            field.plot(ax, fc=next(fc), alpha=0.7, ec='k', label=key)
+
+        ax.plot(0, 0, 'kx')
+
+        ax.legend()
 
         return fig
