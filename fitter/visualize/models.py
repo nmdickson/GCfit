@@ -792,6 +792,65 @@ class _ClusterVisualizer:
 
         return fig
 
+    @_support_units
+    def plot_MF_fields(self, fig=None, ax=None, cmap=None, radii=("rh",)):
+        '''plot all mass function fields in this observation
+        '''
+        import shapely.geometry as geom
+
+        # TODO some of this should probably be in an init, not here
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        PI_list = self.obs.filter_datasets('*mass_function*')
+        PI_list = sorted(PI_list, key=lambda k: self.obs[k]['r1'].min())
+
+        cmap = cmap or plt.cm.rainbow
+        fc = iter(cmap(np.linspace(0, 1, len(PI_list))))
+
+        for key in PI_list:
+            mf = self.obs[key]
+
+            # TODO this function should go in obs or mass or something
+            #   including the new single coords check
+            cen = (self.obs.mdata['RA'], self.obs.mdata['DEC'])
+            unit = mf.mdata['field_unit']
+            coords = []
+            for ch in string.ascii_letters:
+                try:
+                    coords.append(mf['fields'].mdata[f'{ch}'])
+                except KeyError:
+                    break
+
+            if len(coords) == 1:
+                coords = coords[0]
+
+            field = mass.Field(coords, cen=cen, unit=unit)
+
+            field.plot(ax, fc=next(fc), alpha=0.7, ec='k', label=key)
+
+        ax.plot(0, 0, 'kx')
+
+        # try to plot the various radii from this model
+        try:
+            # TODO for CI this could be a CI of rh, ra, rt actually
+
+            for r_type in radii:
+                radius = getattr(self, r_type).to_value('arcmin')
+                circle = np.array(geom.Point(0, 0).buffer(radius).exterior).T
+                ax.plot(*circle)
+                ax.text(0, circle[1].max(), r_type)
+
+        except AttributeError:
+            pass
+
+        ax.set_xlabel('RA [arcmin]')
+        ax.set_ylabel('DEC [arcmin]')
+
+        ax.legend()
+
+        return fig
+
     # -----------------------------------------------------------------------
     # Model plotting
     # -----------------------------------------------------------------------
@@ -1553,42 +1612,3 @@ class ObservationsVisualizer(_ClusterVisualizer):
         self.obs = observations
 
         self.d = (d or observations.initials['d']) << u.kpc
-
-    @_ClusterVisualizer._support_units
-    def plot_MF_fields(self, fig=None, ax=None):
-        '''plot all mass function fields in this observation
-        '''
-
-        fig, ax = self._setup_artist(fig, ax)
-
-        PI_list = self.obs.filter_datasets('*mass_function*')
-        PI_list = sorted(PI_list, key=lambda k: self.obs[k]['r1'].min())
-
-        fc = iter(plt.cm.rainbow(np.linspace(0, 1, len(PI_list))))
-
-        for key in PI_list:
-            mf = self.obs[key]
-
-            # TODO this function should go in obs or mass or something
-            #   including the new single coords check
-            cen = (self.obs.mdata['RA'], self.obs.mdata['DEC'])
-            unit = mf.mdata['field_unit']
-            coords = []
-            for ch in string.ascii_letters:
-                try:
-                    coords.append(mf['fields'].mdata[f'{ch}'])
-                except KeyError:
-                    break
-
-            if len(coords) == 1:
-                coords = coords[0]
-
-            field = mass.Field(coords, cen=cen, unit=unit)
-
-            field.plot(ax, fc=next(fc), alpha=0.7, ec='k', label=key)
-
-        ax.plot(0, 0, 'kx')
-
-        ax.legend()
-
-        return fig
