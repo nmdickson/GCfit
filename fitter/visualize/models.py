@@ -1540,4 +1540,41 @@ class ObservationsVisualizer(_ClusterVisualizer):
     class for making, showing, saving all the plots related to observables data,
     without any models at all
     '''
-    pass
+
+    def __init__(self, observations, d=None):
+        self.obs = observations
+
+        self.d = (d or observations.initials['d']) << u.kpc
+
+    @_ClusterVisualizer._support_units
+    def plot_MF_fields(self, fig=None, ax=None):
+        '''plot all mass function fields in this observation
+        '''
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        PI_list = self.obs.filter_datasets('*mass_function*')
+        PI_list = sorted(PI_list, key=lambda k: self.obs[k]['r1'].min())
+
+        for key in PI_list:
+            mf = self.obs[key]
+
+            # TODO this function should go in obs or mass or something
+            #   including the new single coords check
+            cen = (self.obs.mdata['RA'], self.obs.mdata['DEC'])
+            unit = mf.mdata['field_unit']
+            coords = []
+            for ch in string.ascii_letters:
+                try:
+                    coords.append(mf['fields'].mdata[f'{ch}'])
+                except KeyError:
+                    break
+
+            if len(coords) == 1:
+                coords = coords[0]
+
+            field = mass.Field(coords, cen=cen, unit=unit)
+
+            field.plot(ax)
+
+        return fig

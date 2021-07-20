@@ -190,12 +190,14 @@ class Field:
 
         coords, codes = [], []
 
-        for line in [self.polygon.exterior, *self.polygon.interiors]:
-            coords += line.coords
+        for poly in (self.polygon if self._multi else [self.polygon]):
 
-            codes += [Path.MOVETO]
-            codes += ([Path.LINETO] * (len(line.coords) - 2))
-            codes += [Path.CLOSEPOLY]
+            for line in [poly.exterior, *poly.interiors]:
+                coords += line.coords
+
+                codes += [Path.MOVETO]
+                codes += ([Path.LINETO] * (len(line.coords) - 2))
+                codes += [Path.CLOSEPOLY]
 
         path = Path(coords, codes)
         return PathPatch(path, *args, **kwargs)
