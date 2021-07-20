@@ -425,8 +425,6 @@ class _ClusterVisualizer:
 
         ax.loglog()
 
-        self._plot_model(ax, self.numdens)
-
         if show_obs:
             pattern, var = '*number_density*', 'Σ'
             strict = show_obs == 'strict'
@@ -973,17 +971,22 @@ class ModelVisualizer(_ClusterVisualizer):
         self.model = model
         self.obs = observations if observations else model.observations
 
+        self.rh = model.rh
+        self.ra = model.ra
+        self.rt = model.rt
         self.F = model.F
         self.s2 = model.s2
         self.d = model.d
 
         self.r = model.r
 
-        self.LOS = np.sqrt(self.model.v2pj)
-        self.pm_T = np.sqrt(model.v2Tj)
-        self.pm_R = np.sqrt(model.v2Rj)
+        self.LOS = np.sqrt(self.model.v2pj)[:, np.newaxis, :]
+        self.pm_T = np.sqrt(model.v2Tj)[:, np.newaxis, :]
+        self.pm_R = np.sqrt(model.v2Rj)[:, np.newaxis, :]
+
         self.pm_tot = np.sqrt(0.5 * (self.pm_T**2 + self.pm_R**2))
         self.pm_ratio = self.pm_T / self.pm_R
+
         self.numdens = self._init_numdens(model, observations)
         self.mass_func = self._init_massfunc(model, observations)
 
@@ -995,14 +998,19 @@ class ModelVisualizer(_ClusterVisualizer):
         obs_nd = observations['number_density']  # <- not very general
         obs_r = obs_nd['r'].to(model.r.unit)
 
-        model_nd = model.Sigmaj[model.nms - 1] / model.mj[model.nms - 1]
+        model_nd = model.Sigmaj / model.mj[:, np.newaxis]
 
-        nd_interp = util.QuantitySpline(model.r, model_nd)
+        nd = np.empty(model_nd.shape)[:, np.newaxis, :]
 
-        K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_nd['Σ']**2)
-             / np.nansum(nd_interp(obs_r)**2 / obs_nd['Σ']**2))
+        for mbin in range(model_nd.shape[0]):
+            nd_interp = util.QuantitySpline(model.r, model_nd[mbin, :])
 
-        return K * model_nd
+            K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_nd['Σ']**2)
+                 / np.nansum(nd_interp(obs_r)**2 / obs_nd['Σ']**2))
+
+            nd[mbin, 0, :] = K * model_nd[mbin, :]
+
+        return nd
 
     @_ClusterVisualizer._support_units
     def _init_massfunc(self, model, observations):
