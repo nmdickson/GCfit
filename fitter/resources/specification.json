@@ -12,23 +12,13 @@
         "a2",
         "a3",
         "BHret",
-        "d",
+        "d"
     ],
 
-    // TODO this metadata is not so well defined (and also units???)
     "METADATA": {
         "requires": ["FeHe", "age", "RA", "DEC", "l", "b", "μ"],
         "optional": ["Ndot"]
     },
-
-    // Dataset
-    // "requires": This thing is required
-    // "choice": One or more of these things is required
-    // "optional": This thing may be given or it may not be
-    // "collective": If one of these exists, they all must exist
-
-    // TODO also include dataset metadata, all need source, 'm' is optional
-    //      MF needs field_unit
 
     "pulsar*":{
         "requires": {
@@ -70,7 +60,6 @@
         "requires": {
             "r": {"requires": ["unit"]},
         },
-        // TODO "choice" might not make it clear that its *at least one of*
         "choice": {
             "PM_R": {"requires": ["unit", "error"]},
             "PM_T": {"requires": ["unit", "error"]},
@@ -87,10 +76,8 @@
             "r2": {"requires": ["unit"]},
             "m1": {"requires": ["unit"]},
             "m2": {"requires": ["unit"]},
-            // TODO change the dumb "fields_unit" to just be a unit on the dset
             "fields": {
                 "requires": ["unit"],
-                // TODO ugly way to document this... but yeah..
                 "choice": ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j",
                            "k", "l", "m", "n", "o", "p", "q", "r", "s", "t",
                            "u", "v", "w", "x", "y", "z"]
