@@ -414,61 +414,101 @@ class ClusterFile:
                 spec = fullspec[spec_pattern]
                 break
 
-        reqd = spec.get('required', {})
+        else:
+            self._inv_mssg.append(f"'{key}' does not match any specification")
+            return False
+
+        reqd = spec.get('requires', {})
         opti = spec.get('optional', {})
         chce = spec.get('choice', {})
 
+        valid = True
+
+        print(f"SPEC:")
+        print(f"pattern: {spec_pattern}")
+        print(f"spec: {spec}")
+        print(f"reqd: {reqd}")
+        print(f"opti: {opti}")
+        print(f"chce: {chce}\n")
+
         # TODO the hierarchy of all this stuff is still not certain
         #   also it feels like there's a chance for recursion here somehow
-        for varname, varspec in reqd.items():
-            self._check_contains(dataset, varname)
+        if reqd:
+            for varname, varspec in reqd.items():
+                print(f"REQUIRED | {varname}")
 
-            if "required" in varspec:
+                if exists := self._check_contains(dataset, varname):
 
-                if "unit" in varspec['required']:
-                    self._check_for_units(dataset, varname)
+                    if "requires" in varspec:
+                        print(f"REQUIRED | \trequires:")
 
-                if "error" in varspec['required']:
-                    self._check_for_error(dataset, varname)
+                        if "unit" in varspec['requires']:
+                            print(f"REQUIRED | \t\tUnits")
+                            valid &= self._check_for_units(dataset, varname)
 
-                # TODO what if this is another dataset (i.e. in pulsars)
+                        if "error" in varspec['requires']:
+                            print(f"REQUIRED | \t\tErrors")
+                            valid &= self._check_for_error(dataset, varname)
 
-            if "choice" in varspec:
+                        # TODO what if this is another dataset (i.e. in pulsars)
 
-                self._check_contains_choice(dataset, varspec["choice"])
+                    if "choice" in varspec:
+                        print(f"REQUIRED | \tchoices:")
+                        print(f"REQUIRED | \t\t{varspec['choice']}")
 
-        for varname, varspec in opti.items():
+                        valid &= self._check_contains_choice(dataset, varspec["choice"])
 
-            if varname in dataset.variables:
+                valid &= exists
 
-                if "required" in varspec:
+        if opti:
+            for varname, varspec in opti.items():
+                print(f"OPTIONAL | {varname}")
 
-                    if "unit" in varspec['required']:
-                        self._check_for_units(dataset, varname)
+                if varname in dataset.variables:
 
-                    if "error" in varspec['required']:
-                        self._check_for_error(dataset, varname)
+                    if "requires" in varspec:
+                        print(f"OPTIONAL | \trequires:")
 
-                if "choice" in varspec:
+                        if "unit" in varspec['requires']:
+                            print(f"OPTIONAL | \t\tUnits")
+                            valid &= self._check_for_units(dataset, varname)
 
-                    self._check_contains_choice(dataset, varspec["choice"])
+                        if "error" in varspec['requires']:
+                            print(f"OPTIONAL | \t\tErrors")
+                            valid &= self._check_for_error(dataset, varname)
 
-        self._check_contains_choice(dataset, chce.keys())
-        for varname, varspec in chce.items():
+                    if "choice" in varspec:
+                        print(f"OPTIONAL | \tchoices:")
+                        print(f"OPTIONAL | \t\t{varspec['choice']}")
+                        valid &= self._check_contains_choice(dataset, varspec["choice"])
 
-            if varname in dataset.variables:
+        if chce:
+            valid &= self._check_contains_choice(dataset, chce.keys())
+            for varname, varspec in chce.items():
+                print(f"CHOICE | {varname}")
+                print(f"CHOICE | \tchoices:")
+                print(f"CHOICE | \t\t{varspec}")
 
-                if "required" in varspec:
+                if varname in dataset.variables:
+                    print(f"CHOICE | \t{varname} chosen")
 
-                    if "unit" in varspec['required']:
-                        self._check_for_units(dataset, varname)
+                    if "requires" in varspec:
+                        print(f"CHOICE | \t\trequires:")
 
-                    if "error" in varspec['required']:
-                        self._check_for_error(dataset, varname)
+                        if "unit" in varspec['requires']:
+                            print(f"CHOICE | \t\t\tUnits")
+                            valid &= self._check_for_units(dataset, varname)
 
-                if "choice" in varspec:
+                        if "error" in varspec['requires']:
+                            print(f"CHOICE | \t\t\tErrors")
+                            valid &= self._check_for_error(dataset, varname)
 
-                    self._check_contains_choice(dataset, varspec["choice"])
+                    if "choice" in varspec:
+                        print(f"CHOICE | \t\tchoices:")
+                        print(f"CHOICE | \t\t\t{varspec['choice']}")
+                        valid &= self._check_contains_choice(dataset, varspec["choice"])
+
+        return valid
 
     # def _test_dataset(self, key, dataset):
     #     '''Strongly inspired by the compliance unittests, could maybe be a way
@@ -583,7 +623,11 @@ class ClusterFile:
         valid = True
 
         for key, dataset in self.live_datasets.items():
+            print(f'TESTING DATASET {key}: {dataset}')
             valid &= self._test_dataset(key, dataset)
+            print(f'RESULT {valid}')
+
+        return valid
 
     def save(self, force=False):
         '''test all the new stuff and then actually write it out, if it passes
