@@ -640,7 +640,19 @@ class Dataset:
         self.metadata = {}
         self.variables = {}
 
-    def add_variable(self, varname, data, unit, metadata):
+    def add_variable(self, varname, data, unit, metadata, error_base=None):
+
+        # If this is an error (given error_base), try to parse into a valid name
+        if error_base:
+
+            if varname.lower().endswith(('up', '+', 'plus', 'high')):
+                varname = f'Δ{error_base},up'
+
+            elif varname.lower().endswith(('down', '-', 'minus', 'low')):
+                varname = f'Δ{error_base},down'
+
+            else:
+                varname = f'Δ{error_base}'
 
         self.variables[varname] = {
             "data": data,
@@ -699,7 +711,8 @@ class Dataset:
                         self.add_metadata(k, v)
 
         def _from_dataframe(df, keys=None, filter_=None,
-                            units=None, metadata=None, **kwargs):
+                            units=None, metadata=None, names=None, errors=None,
+                            **kwargs):
             '''
             called by other methods which split up or read files and stuff and
             then pass it here as a pandas dataframe
@@ -711,7 +724,9 @@ class Dataset:
                 list of valid queries, for use in df.query
             units : dict of unit strings for each `key`. If None, all are None
             metadata : is just a dict of metadata to pass on to the self, idk
-
+            names : a mapping of `keys` to variable names you want
+            errors : a mapping of one `key` to other `key`, indicating that the
+                first key is an uncertainty of the second
             '''
 
             if units is None:
@@ -719,6 +734,12 @@ class Dataset:
 
             if metadata is None:
                 metadata = {}
+
+            if names is None:
+                names = {}
+
+            if errors is None:
+                errors = {}
 
             filter_ = filter_ or kwargs.get('filter', None)
 
@@ -730,26 +751,25 @@ class Dataset:
 
             keys = keys or df.columns
 
-            for varname in keys:
-                data = df[varname]
+            for colname in keys:
+                data = df[colname].to_numpy()
+
+                varname = names.get(colname, colname)
 
                 # TODO still don't know how best to get units from the data file
-                unit = units.get(varname, None)
+                unit = units.get(colname, None)
 
-                self.add_variable(varname, data, unit, metadata)
+                err = errors.get(colname, None)
 
-        def _from_delimfile(src, delim=None, names=None, comment='#', **kwargs):
+                self.add_variable(varname, data, unit, metadata, err)
+
+        def _from_delimfile(src, delim=None, comment='#', **kwargs):
 
             # read file into dataframe
-            df = pd.read_table(src, sep=delim, names=names, comment=comment)
+            df = pd.read_table(src, sep=delim, comment=comment)
 
             # pass to _from_dataframe
             _from_dataframe(df, **kwargs)
-
-        # If not given a self, assume `self` is the name for a new one
-
-        if not isinstance(self, self):
-            self = self(self)
 
         # Parse src, sent to specific function
 
