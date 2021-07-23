@@ -1,5 +1,6 @@
 import io
 import os
+import json
 import shutil
 import pathlib
 import logging
@@ -245,7 +246,7 @@ class ClusterFile:
     def get_dataset(self, key, reset=False):
 
         # Check if this dataset is already live
-        if key in self.live_datasets():
+        if key in self.live_datasets:
 
             # Delete the live one and continue on to reread from the file
             if reset:
@@ -340,6 +341,7 @@ class ClusterFile:
             return True
         else:
             self._inv_mssg.append(f'Required variable {key} not in {dataset}')
+            return False
 
     def _check_contains_choice(self, dataset, key_choices):
 
@@ -399,100 +401,167 @@ class ClusterFile:
             return False
 
     def _test_dataset(self, key, dataset):
-        '''Strongly inspired by the compliance unittests, could maybe be a way
-        to reduce repetition between the two in the future? (If that unittest
-        is still even necessary of course)'''
 
-        valid = True
+        with resources.path('fitter', 'resources') as datadir:
+            with open(f'{datadir}/specifications.json') as ofile:
+                fullspec = json.load(ofile)
 
-        # Pulsars
+        for spec_pattern in fullspec.keys() - {'INITIALS', 'METADATA'}:
+            if fnmatch.fnmatch(key, spec_pattern):
+                spec = fullspec[spec_pattern]
+                break
 
-        if fnmatch.fnmatch(key, '*pulsar*'):
-            valid &= self._check_contains(dataset, 'r')
-            valid &= self._check_for_units(dataset, 'r')
+        reqd = spec.get('required', {})
+        opti = spec.get('optional', {})
+        chce = spec.get('choice', {})
 
-            pulsar_fields = ('P', 'Pb')
-            valid &= self._check_contains_choice(dataset, pulsar_fields)
+        # TODO the hierarchy of all this stuff is still not certain
+        #   also it feels like there's a chance for recursion here somehow
+        for varname, varspec in reqd.items():
+            self._check_contains(dataset, varname)
 
-            if 'P' in dataset:
+            if "required" in varspec:
 
-                valid &= self._check_contains(dataset, 'Pdot')
-                valid &= self._check_for_error(dataset, 'Pdot')
-                valid &= self._check_for_units(dataset, 'Pdot')
+                if "unit" in varspec['required']:
+                    self._check_for_units(dataset, varname)
 
-            elif 'Pb' in dataset:
+                if "error" in varspec['required']:
+                    self._check_for_error(dataset, varname)
 
-                valid &= self._check_contains(dataset, 'Pbdot')
-                valid &= self._check_for_error(dataset, 'Pbdot')
-                valid &= self._check_for_units(dataset, 'Pbdot')
+                # TODO what if this is another dataset (i.e. in pulsars)
 
-        # LOS Velocity Dispersion
+            if "choice" in varspec:
 
-        elif fnmatch.fnmatch(key, '*velocity_dispersion*'):
-            valid &= self._check_contains(dataset, 'r')
-            valid &= self._check_for_units(dataset, 'r')
+                self._check_contains_choice(dataset, varspec["choice"])
 
-            valid &= self._check_contains(dataset, 'σ')
-            valid &= self._check_for_error(dataset, 'σ')
-            valid &= self._check_for_units(dataset, 'σ')
+        for varname, varspec in opti.items():
 
-        # Number Density
+            if varname in dataset.variables:
 
-        elif fnmatch.fnmatch(key, '*number_density*'):
-            valid &= self._check_contains(dataset, 'r')
-            valid &= self._check_for_units(dataset, 'r')
+                if "required" in varspec:
 
-            valid &= self._check_contains(dataset, 'Σ')
-            valid &= self._check_for_error(dataset, 'Σ')
-            valid &= self._check_for_units(dataset, 'Σ')
+                    if "unit" in varspec['required']:
+                        self._check_for_units(dataset, varname)
 
-        # Proper Motion Dispersion
+                    if "error" in varspec['required']:
+                        self._check_for_error(dataset, varname)
 
-        elif fnmatch.fnmatch(key, '*proper_motion*'):
-            valid &= self._check_contains(dataset, 'r')
-            valid &= self._check_for_units(dataset, 'r')
+                if "choice" in varspec:
 
-            # make sure that atleast one usable PM is there
-            pm_fields = ('PM_tot', 'PM_ratio', 'PM_R', 'PM_T')
-            valid &= self._check_contains_choice(dataset, pm_fields)
+                    self._check_contains_choice(dataset, varspec["choice"])
 
-            # Check for corresponding errors/units
-            if 'PM_tot' in dataset:
-                valid &= self._check_for_error(dataset, 'PM_tot')
-                valid &= self._check_for_units(dataset, 'PM_tot')
+        self._check_contains_choice(dataset, chce.keys())
+        for varname, varspec in chce.items():
 
-            if 'PM_ratio' in dataset:
-                valid &= self._check_for_error(dataset, 'PM_ratio')
-                valid &= self._check_for_units(dataset, 'PM_R', none_ok=True)
+            if varname in dataset.variables:
 
-            if 'PM_R' in dataset:
-                valid &= self._check_for_error(dataset, 'PM_R')
-                valid &= self._check_for_units(dataset, 'PM_R')
+                if "required" in varspec:
 
-            if 'PM_T' in dataset:
-                valid &= self._check_for_error(dataset, 'PM_T')
-                valid &= self._check_for_units(dataset, 'PM_T')
+                    if "unit" in varspec['required']:
+                        self._check_for_units(dataset, varname)
 
-        # Mass Function
+                    if "error" in varspec['required']:
+                        self._check_for_error(dataset, varname)
 
-        elif fnmatch.fnmatch(key, '*mass_function*'):
-            valid &= self._check_contains(dataset, 'N')
-            valid &= self._check_contains(dataset, 'ΔN')
+                if "choice" in varspec:
 
-            valid &= self._check_contains(dataset, 'r1')
-            valid &= self._check_for_units(dataset, 'r1')
-            valid &= self._check_contains(dataset, 'r2')
-            valid &= self._check_for_units(dataset, 'r2')
+                    self._check_contains_choice(dataset, varspec["choice"])
 
-            valid &= self._check_contains(dataset, 'm1')
-            valid &= self._check_for_units(dataset, 'm1')
-            valid &= self._check_contains(dataset, 'm2')
-            valid &= self._check_for_units(dataset, 'm2')
+    # def _test_dataset(self, key, dataset):
+    #     '''Strongly inspired by the compliance unittests, could maybe be a way
+    #     to reduce repetition between the two in the future? (If that unittest
+    #     is still even necessary of course)'''
 
-            valid &= self._check_for_field(dataset)
-            valid &= self._check_contains_mdata(dataset, 'field_unit')
+    #     valid = True
 
-        return valid
+    #     # Pulsars
+
+    #     if fnmatch.fnmatch(key, '*pulsar*'):
+    #         valid &= self._check_contains(dataset, 'r')
+    #         valid &= self._check_for_units(dataset, 'r')
+
+    #         pulsar_fields = ('P', 'Pb')
+    #         valid &= self._check_contains_choice(dataset, pulsar_fields)
+
+    #         if 'P' in dataset:
+
+    #             valid &= self._check_contains(dataset, 'Pdot')
+    #             valid &= self._check_for_error(dataset, 'Pdot')
+    #             valid &= self._check_for_units(dataset, 'Pdot')
+
+    #         elif 'Pb' in dataset:
+
+    #             valid &= self._check_contains(dataset, 'Pbdot')
+    #             valid &= self._check_for_error(dataset, 'Pbdot')
+    #             valid &= self._check_for_units(dataset, 'Pbdot')
+
+    #     # LOS Velocity Dispersion
+
+    #     elif fnmatch.fnmatch(key, '*velocity_dispersion*'):
+    #         valid &= self._check_contains(dataset, 'r')
+    #         valid &= self._check_for_units(dataset, 'r')
+
+    #         valid &= self._check_contains(dataset, 'σ')
+    #         valid &= self._check_for_error(dataset, 'σ')
+    #         valid &= self._check_for_units(dataset, 'σ')
+
+    #     # Number Density
+
+    #     elif fnmatch.fnmatch(key, '*number_density*'):
+    #         valid &= self._check_contains(dataset, 'r')
+    #         valid &= self._check_for_units(dataset, 'r')
+
+    #         valid &= self._check_contains(dataset, 'Σ')
+    #         valid &= self._check_for_error(dataset, 'Σ')
+    #         valid &= self._check_for_units(dataset, 'Σ')
+
+    #     # Proper Motion Dispersion
+
+    #     elif fnmatch.fnmatch(key, '*proper_motion*'):
+    #         valid &= self._check_contains(dataset, 'r')
+    #         valid &= self._check_for_units(dataset, 'r')
+
+    #         # make sure that atleast one usable PM is there
+    #         pm_fields = ('PM_tot', 'PM_ratio', 'PM_R', 'PM_T')
+    #         valid &= self._check_contains_choice(dataset, pm_fields)
+
+    #         # Check for corresponding errors/units
+    #         if 'PM_tot' in dataset:
+    #             valid &= self._check_for_error(dataset, 'PM_tot')
+    #             valid &= self._check_for_units(dataset, 'PM_tot')
+
+    #         if 'PM_ratio' in dataset:
+    #             valid &= self._check_for_error(dataset, 'PM_ratio')
+    #             valid &= self._check_for_units(dataset, 'PM_R', none_ok=True)
+
+    #         if 'PM_R' in dataset:
+    #             valid &= self._check_for_error(dataset, 'PM_R')
+    #             valid &= self._check_for_units(dataset, 'PM_R')
+
+    #         if 'PM_T' in dataset:
+    #             valid &= self._check_for_error(dataset, 'PM_T')
+    #             valid &= self._check_for_units(dataset, 'PM_T')
+
+    #     # Mass Function
+
+    #     elif fnmatch.fnmatch(key, '*mass_function*'):
+    #         valid &= self._check_contains(dataset, 'N')
+    #         valid &= self._check_contains(dataset, 'ΔN')
+
+    #         valid &= self._check_contains(dataset, 'r1')
+    #         valid &= self._check_for_units(dataset, 'r1')
+    #         valid &= self._check_contains(dataset, 'r2')
+    #         valid &= self._check_for_units(dataset, 'r2')
+
+    #         valid &= self._check_contains(dataset, 'm1')
+    #         valid &= self._check_for_units(dataset, 'm1')
+    #         valid &= self._check_contains(dataset, 'm2')
+    #         valid &= self._check_for_units(dataset, 'm2')
+
+    #         valid &= self._check_for_field(dataset)
+    #         valid &= self._check_contains_mdata(dataset, 'field_unit')
+
+    #     return valid
 
     def test(self):
         '''Something along lines of the Observation complicance test in "tests"

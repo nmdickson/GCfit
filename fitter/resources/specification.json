@@ -20,9 +20,9 @@
         "optional": ["Ndot"]
     },
 
-    "pulsar*":{
+    "pulsar*": {
         "requires": {
-            "r": {"requires": ["unit"]},
+            "r": {"requires": ["unit"]}
         },
         "optional": {
             "DM": {"requires": ["unit", "error"]}
@@ -30,17 +30,17 @@
         "choice": {
             "collective": {
                 "P": {"requires": ["unit", "error"]},
-                "Pdot": {"requires": ["unit", "error"]},
+                "Pdot": {"requires": ["unit", "error"]}
             },
             "collective": {
                 "Pb": {"requires": ["unit", "error"]},
-                "Pbdot": {"requires": ["unit", "error"]},
-            },
+                "Pbdot": {"requires": ["unit", "error"]}
+            }
         }
     },
 
 
-    "velocity_dispersion*":{
+    "velocity_dispersion*": {
         "requires": {
             "r": {"requires": ["unit"]},
             "σ": {"requires": ["unit", "error"]}
@@ -48,7 +48,7 @@
     },
 
 
-    "number_density*":{
+    "number_density*": {
         "requires": {
             "r": {"requires": ["unit"]},
             "Σ": {"requires": ["unit", "error"]}
@@ -56,15 +56,15 @@
     },
 
 
-    "proper_motion*":{
+    "proper_motion*": {
         "requires": {
-            "r": {"requires": ["unit"]},
+            "r": {"requires": ["unit"]}
         },
         "choice": {
             "PM_R": {"requires": ["unit", "error"]},
             "PM_T": {"requires": ["unit", "error"]},
             "PM_tot": {"requires": ["unit", "error"]},
-            "PM_ratio": {"requires": ["error"], "optional": ["unit"]},
+            "PM_ratio": {"requires": ["error"], "optional": ["unit"]}
         }
     },
 
@@ -83,7 +83,5 @@
                            "u", "v", "w", "x", "y", "z"]
             }
         }
-    },
-
-
+    }
 }
