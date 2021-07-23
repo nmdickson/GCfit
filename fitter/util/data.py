@@ -345,11 +345,14 @@ class ClusterFile:
 
     def _check_contains_choice(self, dataset, key_choices):
 
-        if any([key in dataset for key in key_choices]):
+        if not key_choices:
+            raise ValueError("key_choices must have at least one element")
+
+        if any([key in dataset.variables for key in key_choices]):
             return True
         else:
             self._inv_mssg.append(f'Not one of required variable choices '
-                                  f' ({key_choices}) in {dataset}')
+                                  f'({key_choices}) in {dataset}')
             return False
 
     def _check_for_error(self, dataset, key):
@@ -368,13 +371,13 @@ class ClusterFile:
         variable = dataset.variables[key]
         try:
 
-            unit = u.Unit(variable['unit'])
-
-            if unit is None and not none_ok:
+            if variable['unit'] is None and not none_ok:
                 self._inv_mssg.append(f"Variable {key}'s unit cannot be None")
                 return False
             else:
                 return True
+
+            u.Unit(variable['unit'])
 
         except KeyError:
             self._inv_mssg.append(f"Variable {key} has no attached unit")
@@ -403,7 +406,7 @@ class ClusterFile:
     def _test_dataset(self, key, dataset):
 
         with resources.path('fitter', 'resources') as datadir:
-            with open(f'{datadir}/specifications.json') as ofile:
+            with open(f'{datadir}/specification.json') as ofile:
                 fullspec = json.load(ofile)
 
         for spec_pattern in fullspec.keys() - {'INITIALS', 'METADATA'}:
