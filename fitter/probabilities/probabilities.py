@@ -882,7 +882,7 @@ def likelihood_mass_func(model, mf, field, *,
     '''
     # TODO same as numdens, the units are ignored cause 1/pc^2 != 1/arcmin^2
 
-    M = 300
+    M = 1000
 
     if hyperparams:
         likelihood = util.hyperparam_likelihood
