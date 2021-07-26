@@ -786,6 +786,8 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         # Write run metadata to output (backend) file
         # ----------------------------------------------------------------------
 
+        # TODO not storing any nested sampling arg metadata yet
+
         backend.store_metadata('cluster', cluster)
 
         backend.store_metadata('mpi', mpi)

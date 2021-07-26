@@ -130,6 +130,9 @@ if __name__ == '__main__':
                              help='Maximum number of iterations allowed. May '
                                   'end sampling before the stopping conditions '
                                   'are met')
+    parser_nest.add_argument('--init-maxiter', default=None, type=pos_int,
+                             help='Maximum number of iterations allowed in the '
+                                  'baseline run')
     parser_nest.add_argument('--N-per-batch', default=500, type=pos_int,
                              dest='Nlive_per_batch',
                              help='Number of live points to add each batch')
@@ -192,8 +195,9 @@ if __name__ == '__main__':
 
     elif args.sampler == 'nested':
 
+        # TODO add more of these options
         args.initial_kwargs = {
-            'maxiter': args.maxiter,
+            'maxiter': args.init_maxiter,
             'nlive': args.Nlive_per_batch,
             'dlogz': args.dlogz
         }
