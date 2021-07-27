@@ -10,6 +10,7 @@ from importlib import resources
 
 import h5py
 import fitter
+import numpy as np
 import astropy.units as u
 
 
@@ -195,6 +196,7 @@ class ClusterFile:
     # Initialization
     # ----------------------------------------------------------------------
 
+    # TODO
     def _new(self, path):
         '''if a completely new file, create and fill in some basic structure'''
         hdf = h5py.File(path, 'w')
@@ -215,10 +217,11 @@ class ClusterFile:
         if local_file.exists():
             logging.info(f'{name} is already a local cluster, opening to edit')
 
+            # TODO maybe we should only open as r until _write_* is called
             self.file = h5py.File(local_file, 'r+')
 
         # else Check if this is a "core" file and make a copy locally
-        elif name in fitter.util.cluster_list():
+        elif local_file.stem in fitter.util.cluster_list():
             logging.info(f'{name} is a core cluster, making a new local copy')
 
             # TODO Add a flag that this is a local file? or only n Observations?
@@ -262,12 +265,14 @@ class ClusterFile:
 
         for varname, variable in self.file[key].items():
 
-            unit = variable.attrs['unit']
+            unit = variable.attrs.get('unit', None)
 
             mdata_keys = variable.attrs.keys() - {'unit'}
             metadata = {k: variable.attrs[k] for k in mdata_keys}
 
-            dset.add_variable(varname, variable[:], unit, metadata)
+            data = variable[:] if variable.shape is not None else np.array([])
+
+            dset.add_variable(varname, data, unit, metadata)
 
         for key, val in self.file[key].attrs.items():
             dset.add_metadata(key, val)
@@ -277,6 +282,8 @@ class ClusterFile:
     def _write_datasets(self):
         '''actually write it out to file, after we've tested all changes
         '''
+        # TODO writing empty datasets will actually be tricky here I think
+        #   cause we don't want size-0 arrays (like we read them as) but `Empty`
 
         for name, dset in self.live_datasets.items():
 
@@ -343,7 +350,7 @@ class ClusterFile:
             self._inv_mssg.append(f'Required variable {key} not in {dataset}')
             return False
 
-    def _check_contains_choice(self, dataset, key_choices):
+    def _check_contains_any(self, dataset, key_choices):
 
         if not key_choices:
             raise ValueError("key_choices must have at least one element")
@@ -387,21 +394,96 @@ class ClusterFile:
             self._inv_mssg.append(f"Variable {key}'s unit is invalid")
             return False
 
-    def _check_for_field(self, dataset):
+    def _check_for_field(self, dataset, key):
         import string
-        # TODO this one is definitely not right right now, mf hasnt been tried
         # TODO Should also require the field is valid?
 
-        self._check_contains(dataset, 'fields')
+        fields = dataset.variables[key]['metadata'].keys() - {'unit'}
 
-        fields = dataset.variables['fields'].attrs
-
-        if (fields.keys() & set(string.ascii_letters)):
+        if (fields & set(string.ascii_letters)):
             return True
 
         else:
             self._inv_mssg.append(f"Mass function {dataset} has no fields")
             return False
+
+    def _check_required(self, dataset, key, requirements):
+
+        valid = True
+
+        if exists := self._check_contains(dataset, key):
+
+            for req in requirements:
+
+                if req == "unit":
+                    valid &= self._check_for_units(dataset, key)
+
+                elif req == "error":
+                    valid &= self._check_for_error(dataset, key)
+
+                elif req == "fields":
+                    valid &= self._check_for_field(dataset, key)
+
+                else:
+                    # Assume it's another dataset we need
+                    #   If it needs units or whatever, it needs its own spec too
+                    valid &= self._check_contains(dataset, req)
+
+        valid &= exists
+
+        return valid
+
+    def _check_optional(self, dataset, key, requirements):
+
+        valid = True
+
+        # If this key isn't in the dataset, that's fine & dont check it's spec
+        if key in dataset.variables:
+
+            for req in requirements:
+
+                if req == "unit":
+                    valid &= self._check_for_units(dataset, key)
+
+                elif req == "error":
+                    valid &= self._check_for_error(dataset, key)
+
+                elif req == "fields":
+                    valid &= self._check_for_field(dataset, key)
+
+                else:
+                    valid &= self._check_contains(dataset, req)
+
+        return valid
+
+    def _check_choice(self, dataset, choices):
+
+        valid = True
+
+        if exists := self._check_contains_any(dataset, choices):
+
+            for varname, requirements in choices.items():
+
+                # If this choice is present, it *has* to pass requirements
+                if varname in dataset.variables:
+
+                    for req in requirements:
+
+                        if req == "unit":
+                            valid &= self._check_for_units(dataset, varname)
+
+                        elif req == "error":
+                            valid &= self._check_for_error(dataset, varname)
+
+                        elif req == "fields":
+                            valid &= self._check_for_field(dataset, varname)
+
+                        else:
+                            valid &= self._check_contains(dataset, req)
+
+        valid &= exists
+
+        return valid
 
     def _test_dataset(self, key, dataset):
 
@@ -418,193 +500,25 @@ class ClusterFile:
             self._inv_mssg.append(f"'{key}' does not match any specification")
             return False
 
-        reqd = spec.get('requires', {})
-        opti = spec.get('optional', {})
-        chce = spec.get('choice', {})
-
         valid = True
 
-        print(f"SPEC:")
-        print(f"pattern: {spec_pattern}")
-        print(f"spec: {spec}")
-        print(f"reqd: {reqd}")
-        print(f"opti: {opti}")
-        print(f"chce: {chce}\n")
+        if reqd := spec.get('requires'):
 
-        # TODO the hierarchy of all this stuff is still not certain
-        #   also it feels like there's a chance for recursion here somehow
-        if reqd:
             for varname, varspec in reqd.items():
-                print(f"REQUIRED | {varname}")
 
-                if exists := self._check_contains(dataset, varname):
+                valid &= self._check_required(dataset, varname, varspec)
 
-                    if "requires" in varspec:
-                        print(f"REQUIRED | \trequires:")
+        if opti := spec.get('optional'):
 
-                        if "unit" in varspec['requires']:
-                            print(f"REQUIRED | \t\tUnits")
-                            valid &= self._check_for_units(dataset, varname)
-
-                        if "error" in varspec['requires']:
-                            print(f"REQUIRED | \t\tErrors")
-                            valid &= self._check_for_error(dataset, varname)
-
-                        # TODO what if this is another dataset (i.e. in pulsars)
-
-                    if "choice" in varspec:
-                        print(f"REQUIRED | \tchoices:")
-                        print(f"REQUIRED | \t\t{varspec['choice']}")
-
-                        valid &= self._check_contains_choice(dataset, varspec["choice"])
-
-                valid &= exists
-
-        if opti:
             for varname, varspec in opti.items():
-                print(f"OPTIONAL | {varname}")
 
-                if varname in dataset.variables:
+                valid &= self._check_optional(dataset, varname, varspec)
 
-                    if "requires" in varspec:
-                        print(f"OPTIONAL | \trequires:")
+        if chce := spec.get('choice'):
 
-                        if "unit" in varspec['requires']:
-                            print(f"OPTIONAL | \t\tUnits")
-                            valid &= self._check_for_units(dataset, varname)
-
-                        if "error" in varspec['requires']:
-                            print(f"OPTIONAL | \t\tErrors")
-                            valid &= self._check_for_error(dataset, varname)
-
-                    if "choice" in varspec:
-                        print(f"OPTIONAL | \tchoices:")
-                        print(f"OPTIONAL | \t\t{varspec['choice']}")
-                        valid &= self._check_contains_choice(dataset, varspec["choice"])
-
-        if chce:
-            valid &= self._check_contains_choice(dataset, chce.keys())
-            for varname, varspec in chce.items():
-                print(f"CHOICE | {varname}")
-                print(f"CHOICE | \tchoices:")
-                print(f"CHOICE | \t\t{varspec}")
-
-                if varname in dataset.variables:
-                    print(f"CHOICE | \t{varname} chosen")
-
-                    if "requires" in varspec:
-                        print(f"CHOICE | \t\trequires:")
-
-                        if "unit" in varspec['requires']:
-                            print(f"CHOICE | \t\t\tUnits")
-                            valid &= self._check_for_units(dataset, varname)
-
-                        if "error" in varspec['requires']:
-                            print(f"CHOICE | \t\t\tErrors")
-                            valid &= self._check_for_error(dataset, varname)
-
-                    if "choice" in varspec:
-                        print(f"CHOICE | \t\tchoices:")
-                        print(f"CHOICE | \t\t\t{varspec['choice']}")
-                        valid &= self._check_contains_choice(dataset, varspec["choice"])
+            valid &= self._check_choice(dataset, chce)
 
         return valid
-
-    # def _test_dataset(self, key, dataset):
-    #     '''Strongly inspired by the compliance unittests, could maybe be a way
-    #     to reduce repetition between the two in the future? (If that unittest
-    #     is still even necessary of course)'''
-
-    #     valid = True
-
-    #     # Pulsars
-
-    #     if fnmatch.fnmatch(key, '*pulsar*'):
-    #         valid &= self._check_contains(dataset, 'r')
-    #         valid &= self._check_for_units(dataset, 'r')
-
-    #         pulsar_fields = ('P', 'Pb')
-    #         valid &= self._check_contains_choice(dataset, pulsar_fields)
-
-    #         if 'P' in dataset:
-
-    #             valid &= self._check_contains(dataset, 'Pdot')
-    #             valid &= self._check_for_error(dataset, 'Pdot')
-    #             valid &= self._check_for_units(dataset, 'Pdot')
-
-    #         elif 'Pb' in dataset:
-
-    #             valid &= self._check_contains(dataset, 'Pbdot')
-    #             valid &= self._check_for_error(dataset, 'Pbdot')
-    #             valid &= self._check_for_units(dataset, 'Pbdot')
-
-    #     # LOS Velocity Dispersion
-
-    #     elif fnmatch.fnmatch(key, '*velocity_dispersion*'):
-    #         valid &= self._check_contains(dataset, 'r')
-    #         valid &= self._check_for_units(dataset, 'r')
-
-    #         valid &= self._check_contains(dataset, 'σ')
-    #         valid &= self._check_for_error(dataset, 'σ')
-    #         valid &= self._check_for_units(dataset, 'σ')
-
-    #     # Number Density
-
-    #     elif fnmatch.fnmatch(key, '*number_density*'):
-    #         valid &= self._check_contains(dataset, 'r')
-    #         valid &= self._check_for_units(dataset, 'r')
-
-    #         valid &= self._check_contains(dataset, 'Σ')
-    #         valid &= self._check_for_error(dataset, 'Σ')
-    #         valid &= self._check_for_units(dataset, 'Σ')
-
-    #     # Proper Motion Dispersion
-
-    #     elif fnmatch.fnmatch(key, '*proper_motion*'):
-    #         valid &= self._check_contains(dataset, 'r')
-    #         valid &= self._check_for_units(dataset, 'r')
-
-    #         # make sure that atleast one usable PM is there
-    #         pm_fields = ('PM_tot', 'PM_ratio', 'PM_R', 'PM_T')
-    #         valid &= self._check_contains_choice(dataset, pm_fields)
-
-    #         # Check for corresponding errors/units
-    #         if 'PM_tot' in dataset:
-    #             valid &= self._check_for_error(dataset, 'PM_tot')
-    #             valid &= self._check_for_units(dataset, 'PM_tot')
-
-    #         if 'PM_ratio' in dataset:
-    #             valid &= self._check_for_error(dataset, 'PM_ratio')
-    #             valid &= self._check_for_units(dataset, 'PM_R', none_ok=True)
-
-    #         if 'PM_R' in dataset:
-    #             valid &= self._check_for_error(dataset, 'PM_R')
-    #             valid &= self._check_for_units(dataset, 'PM_R')
-
-    #         if 'PM_T' in dataset:
-    #             valid &= self._check_for_error(dataset, 'PM_T')
-    #             valid &= self._check_for_units(dataset, 'PM_T')
-
-    #     # Mass Function
-
-    #     elif fnmatch.fnmatch(key, '*mass_function*'):
-    #         valid &= self._check_contains(dataset, 'N')
-    #         valid &= self._check_contains(dataset, 'ΔN')
-
-    #         valid &= self._check_contains(dataset, 'r1')
-    #         valid &= self._check_for_units(dataset, 'r1')
-    #         valid &= self._check_contains(dataset, 'r2')
-    #         valid &= self._check_for_units(dataset, 'r2')
-
-    #         valid &= self._check_contains(dataset, 'm1')
-    #         valid &= self._check_for_units(dataset, 'm1')
-    #         valid &= self._check_contains(dataset, 'm2')
-    #         valid &= self._check_for_units(dataset, 'm2')
-
-    #         valid &= self._check_for_field(dataset)
-    #         valid &= self._check_contains_mdata(dataset, 'field_unit')
-
-    #     return valid
 
     def test(self):
         '''Something along lines of the Observation complicance test in "tests"
@@ -623,9 +537,8 @@ class ClusterFile:
         valid = True
 
         for key, dataset in self.live_datasets.items():
-            print(f'TESTING DATASET {key}: {dataset}')
+
             valid &= self._test_dataset(key, dataset)
-            print(f'RESULT {valid}')
 
         return valid
 
@@ -685,6 +598,8 @@ class Dataset:
         self.variables = {}
 
     def add_variable(self, varname, data, unit, metadata, error_base=None):
+        # TODO it's probably fine if we don't require units here
+        #   some actually don't require them, and we test later anyways
 
         # If this is an error (given error_base), try to parse into a valid name
         if error_base:
