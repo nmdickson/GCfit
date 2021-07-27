@@ -568,6 +568,23 @@ class ClusterFile:
 
         return valid
 
+    def _test_metadata(self, metadata):
+
+        with resources.path('fitter', 'resources') as datadir:
+            with open(f'{datadir}/specification.json') as ofile:
+                mdata_spec = json.load(ofile)['METADATA']
+
+        valid = True
+
+        if reqd := mdata_spec.get('requires'):
+
+            for item in reqd:
+                valid &= (item in metadata)
+
+        # if opti := mdata_spec.get('optional'):
+
+        return valid
+
     # ----------------------------------------------------------------------
     # Full tests and file writing
     # ----------------------------------------------------------------------
@@ -589,8 +606,9 @@ class ClusterFile:
         valid = True
 
         for key, dataset in self.live_datasets.items():
-
             valid &= self._test_dataset(key, dataset)
+
+        valid &= self._test_metadata(self.live_metadata)
 
         return valid
 
