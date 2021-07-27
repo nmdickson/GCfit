@@ -13,6 +13,8 @@ import fitter
 import numpy as np
 import astropy.units as u
 
+from .units import angular_width
+
 
 __all__ = ['cluster_list', 'hdf_view', 'get_std_cluster_name',
            'bibcode2bibtex', 'doi2bibtex']
@@ -339,8 +341,9 @@ class ClusterFile:
     # Finalization
     # ----------------------------------------------------------------------
 
-    # TODO these checks check for having the right data, but not that it's valid
-    #   i.e. matching shapes, correct dtype, correct unit class, etc
+    # ----------------------------------------------------------------------
+    # Base checks
+    # ----------------------------------------------------------------------
 
     def _check_contains(self, dataset, key):
 
@@ -374,17 +377,18 @@ class ClusterFile:
                                   f'not in {dataset}')
             return False
 
-    def _check_for_units(self, dataset, key, none_ok=False):
+    def _check_for_units(self, dataset, key, kind=None, *, none_ok=False):
+
         variable = dataset.variables[key]
+
         try:
 
+            # TODO I don't think this is a good way to handle none logic
             if variable['unit'] is None and not none_ok:
                 self._inv_mssg.append(f"Variable {key}'s unit cannot be None")
                 return False
-            else:
-                return True
 
-            u.Unit(variable['unit'])
+            unit = u.Unit(variable['unit'])
 
         except KeyError:
             self._inv_mssg.append(f"Variable {key} has no attached unit")
@@ -393,6 +397,51 @@ class ClusterFile:
         except ValueError:
             self._inv_mssg.append(f"Variable {key}'s unit is invalid")
             return False
+
+        if kind is not None:
+
+            with u.set_enabled_equivalencies(angular_width(1 * u.kpc)):
+
+                # if kind is a physical type, convert it to a default unit
+                try:
+                    match_unit = u.get_physical_type(kind)._unit
+                except ValueError:
+                    match_unit = u.Unit(kind)
+
+                if not unit.is_equivalent(match_unit):
+                    self._inv_mssg.append(f"Variable {key}'s unit does not "
+                                          f"match required type {kind}")
+                    return False
+
+        return True
+
+    def _check_for_size(self, dataset, key, match):
+        '''check that the shape of this variable matches that of its "sibling"
+        size might not be right, but I don't yet have a reason to use shape
+        '''
+        variable = dataset.variables[key]
+
+        try:
+            size = int(match)
+            is_num = True
+
+        except ValueError:
+            is_num = False
+
+            try:
+                sibling = dataset.variables[match]
+                size = sibling['data'].size
+            except KeyError:
+                self._inv_mssg.append(f'Required variable {match} not in '
+                                      f'{dataset}, cannot check size of {key}')
+                return False
+
+        if variable['data'].size != size:
+            self._inv_mssg.append(f'Variable {key} does not match size of '
+                                  f'{size}' if is_num else f'{match} ({size})')
+            return False
+
+        return True
 
     def _check_for_field(self, dataset, key):
         import string
@@ -407,52 +456,59 @@ class ClusterFile:
             self._inv_mssg.append(f"Mass function {dataset} has no fields")
             return False
 
-    def _check_required(self, dataset, key, requirements):
+    def _check_for_all(self, dataset, varname, requirements):
+        '''parse this variables requirements and pass it out to the functions'''
 
         valid = True
 
-        if exists := self._check_contains(dataset, key):
+        for req in requirements:
 
-            for req in requirements:
+            if isinstance(req, (str, bytes)):
+                req = [req]
 
-                if req == "unit":
-                    valid &= self._check_for_units(dataset, key)
+            req_type, *req_args = req
 
-                elif req == "error":
-                    valid &= self._check_for_error(dataset, key)
+            if req_type == "unit":
+                valid &= self._check_for_units(dataset, varname, *req_args)
 
-                elif req == "fields":
-                    valid &= self._check_for_field(dataset, key)
+            elif req_type == "error":
+                valid &= self._check_for_error(dataset, varname, *req_args)
 
-                else:
-                    # Assume it's another dataset we need
-                    #   If it needs units or whatever, it needs its own spec too
-                    valid &= self._check_contains(dataset, req)
+            elif req_type == "fields":
+                valid &= self._check_for_field(dataset, varname, *req_args)
+
+            elif req_type == "size":
+                valid &= self._check_for_size(dataset, varname, *req_args)
+
+            else:
+                valid &= self._check_contains(dataset, req_type)
+
+        return valid
+
+    # ----------------------------------------------------------------------
+    # Specification checks
+    # ----------------------------------------------------------------------
+
+    def _check_required(self, dataset, varname, requirements):
+
+        valid = True
+
+        if exists := self._check_contains(dataset, varname):
+
+            valid &= self._check_for_all(dataset, varname, requirements)
 
         valid &= exists
 
         return valid
 
-    def _check_optional(self, dataset, key, requirements):
+    def _check_optional(self, dataset, varname, requirements):
 
         valid = True
 
-        # If this key isn't in the dataset, that's fine & dont check it's spec
-        if key in dataset.variables:
+        # If this var isn't in the dataset, that's fine & dont check it's spec
+        if varname in dataset.variables:
 
-            for req in requirements:
-
-                if req == "unit":
-                    valid &= self._check_for_units(dataset, key)
-
-                elif req == "error":
-                    valid &= self._check_for_error(dataset, key)
-
-                elif req == "fields":
-                    valid &= self._check_for_field(dataset, key)
-
-                else:
-                    valid &= self._check_contains(dataset, req)
+            valid &= self._check_for_all(dataset, varname, requirements)
 
         return valid
 
@@ -467,23 +523,15 @@ class ClusterFile:
                 # If this choice is present, it *has* to pass requirements
                 if varname in dataset.variables:
 
-                    for req in requirements:
-
-                        if req == "unit":
-                            valid &= self._check_for_units(dataset, varname)
-
-                        elif req == "error":
-                            valid &= self._check_for_error(dataset, varname)
-
-                        elif req == "fields":
-                            valid &= self._check_for_field(dataset, varname)
-
-                        else:
-                            valid &= self._check_contains(dataset, req)
+                    valid &= self._check_for_all(dataset, varname, requirements)
 
         valid &= exists
 
         return valid
+
+    # ----------------------------------------------------------------------
+    # Component tests
+    # ----------------------------------------------------------------------
 
     def _test_dataset(self, key, dataset):
 
@@ -519,6 +567,10 @@ class ClusterFile:
             valid &= self._check_choice(dataset, chce)
 
         return valid
+
+    # ----------------------------------------------------------------------
+    # Full tests and file writing
+    # ----------------------------------------------------------------------
 
     def test(self):
         '''Something along lines of the Observation complicance test in "tests"

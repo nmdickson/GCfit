@@ -26,45 +26,45 @@
 
     "pulsar*": {
         "requires": {
-            "r": ["unit"]
+            "r": [["unit", "length"]]
         },
         "optional": {
-            "DM": ["unit", "error"],
-            "Pdot": ["unit", "error"],
-            "Pbdot": ["unit", "error"]
+            "DM": [["unit", "pc/cm3"], "error", ["size", "r"]],
+            "Pdot": [["unit", "s/s"], "error", ["size", "r"]],
+            "Pbdot": [["unit", "s/s"], "error", ["size", "r"]]
         },
         "choice": {
-            "P": ["unit", "error", "Pdot"],
-            "Pb": ["unit", "error", "Pbdot"]
+            "P": [["unit", "time"], "error", "Pdot", ["size", "r"]],
+            "Pb": [["unit", "time"], "error", "Pbdot", ["size", "r"]]
         }
     },
 
 
     "velocity_dispersion*": {
         "requires": {
-            "r": ["unit"],
-            "σ": ["unit", "error"]
+            "r": [["unit", "length"]],
+            "σ": [["unit", "speed"], "error", ["size", "r"]]
         }
     },
 
 
     "number_density*": {
         "requires": {
-            "r": ["unit"],
-            "Σ": ["unit", "error"]
+            "r": [["unit", "length"]],
+            "Σ": [["unit", "1/arcmin2"], "error", ["size", "r"]]
         }
     },
 
 
     "proper_motion*": {
         "requires": {
-            "r": ["unit"]
+            "r": [["unit", "length"]]
         },
         "choice": {
-            "PM_R": ["unit", "error"],
-            "PM_T": ["unit", "error"],
-            "PM_tot": ["unit", "error"],
-            "PM_ratio": ["error"]
+            "PM_R": [["unit", "speed"], "error", ["size", "r"]],
+            "PM_T": [["unit", "speed"], "error", ["size", "r"]],
+            "PM_tot": [["unit", "speed"], "error", ["size", "r"]],
+            "PM_ratio": ["error", ["size", "r"]]
         }
     },
 
@@ -72,11 +72,11 @@
     "mass_function*":{
         "requires": {
             "N": ["error"],
-            "r1": ["unit"],
-            "r2": ["unit"],
-            "m1": ["unit"],
-            "m2": ["unit"],
-            "fields": ["unit", "fields"]
+            "r1": [["unit", "length"], ["size", "N"]],
+            "r2": [["unit", "length"], ["size", "N"]],
+            "m1": [["unit", "mass"], ["size", "N"]],
+            "m2": [["unit", "mass"], ["size", "N"]],
+            "fields": [["unit", "angle"], "fields"]
         }
     }
 }
