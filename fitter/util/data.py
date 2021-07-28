@@ -235,13 +235,21 @@ class ClusterFile:
 
         return hdf
 
-    def __init__(self, name):
-        # TODO should make some sort of check that it matches std_cluster_names
+    def __init__(self, name, standardize_name=True):
 
         local_dir = pathlib.Path(GCFIT_DIR, 'clusters')
         local_dir.mkdir(parents=True, exist_ok=True)
 
-        local_file = pathlib.Path(local_dir, name).with_suffix('.hdf')
+        # handle if name was cluster name or filename (with/without suffix)
+        filename = pathlib.Path(name).with_suffix('.hdf')
+
+        # get the standardized name, and if desired use it primarily
+        std_name = get_std_cluster_name(filename.stem)
+
+        if standardize_name:
+            filename = pathlib.Path(std_name).with_suffix('.hdf')
+
+        local_file = pathlib.Path(local_dir, filename)
 
         # check if its an already created local file
         if local_file.exists():
@@ -251,7 +259,7 @@ class ClusterFile:
             self.file = h5py.File(local_file, 'r+')
 
         # else Check if this is a "core" file and make a copy locally
-        elif local_file.stem in fitter.util.cluster_list():
+        elif std_name in fitter.util.cluster_list():
             logging.info(f'{name} is a core cluster, making a new local copy')
 
             # TODO Add a flag that this is a local file? or only n Observations?
