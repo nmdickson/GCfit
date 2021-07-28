@@ -25,6 +25,34 @@ GCFIT_DIR = pathlib.Path(os.getenv('GCFIT_DIR', '~/.GCfit')).expanduser()
 
 
 # --------------------------------------------------------------------------
+# Data source retrieval
+# --------------------------------------------------------------------------
+
+
+def doi2bibtex(doi):
+    '''Request the bibtex entry of this `doi` from crossref'''
+    import requests
+
+    headers = {'accept': 'application/x-bibtex'}
+    url = f'http://dx.doi.org/{doi}'
+
+    return requests.get(url=url, headers=headers)
+
+
+def bibcode2bibtex(bibcode):
+    '''Request the bibtex entry of this `bibcode` from the ADS
+
+    Requires the `ads` package and a NASA ADS API-key saved to a file called
+    `~/.ads/dev_key` or as an environment variable named `ADS_DEV_KEY`
+    '''
+    import ads
+
+    query = ads.ExportQuery(bibcode, format='bibtex')
+
+    return query.execute()
+
+
+# --------------------------------------------------------------------------
 # Data file utilities
 # --------------------------------------------------------------------------
 
@@ -245,8 +273,6 @@ class ClusterFile:
     # ----------------------------------------------------------------------
     # Datasets
     # ----------------------------------------------------------------------
-
-    # TODO delete functionality, from live and from file
 
     def get_dataset(self, key, reset=False):
 
@@ -971,31 +997,3 @@ class Dataset:
 
         else:
             raise ValueError("Invalid src")
-
-
-# --------------------------------------------------------------------------
-# Data source retrieval
-# --------------------------------------------------------------------------
-
-
-def doi2bibtex(doi):
-    '''Request the bibtex entry of this `doi` from crossref'''
-    import requests
-
-    headers = {'accept': 'application/x-bibtex'}
-    url = f'http://dx.doi.org/{doi}'
-
-    return requests.get(url=url, headers=headers)
-
-
-def bibcode2bibtex(bibcode):
-    '''Request the bibtex entry of this `bibcode` from the ADS
-
-    Requires the `ads` package and a NASA ADS API-key saved to a file called
-    `~/.ads/dev_key` or as an environment variable named `ADS_DEV_KEY`
-    '''
-    import ads
-
-    query = ads.ExportQuery(bibcode, format='bibtex')
-
-    return query.execute()
