@@ -281,6 +281,15 @@ class ClusterFile:
 
         return dset
 
+    def delete_dataset(self, key):
+
+        if key in self.file:
+            self.live_datasets[key] = 'DELETE'
+
+        else:
+            mssg = f"Can't delete {key}, does not exist in file"
+            raise KeyError(mssg)
+
     def _write_datasets(self, confirm=False):
         '''actually write it out to file, after we've tested all changes
         '''
@@ -293,9 +302,15 @@ class ClusterFile:
 
             if confirm:
 
-                var, Nvar = set(dset.variables), len(dset.variables)
-                while True:
+                if dset == 'DELETE':
+                    mssg = f'Delete Dataset({name})? [y]/n/a/q/? '
+
+                else:
+                    var, Nvar = set(dset.variables), len(dset.variables)
                     mssg = f'Save {dset} ({Nvar} variables {var})? [y]/n/a/q/? '
+
+                while True:
+
                     inp = input(mssg).lower().strip()
 
                     if inp in ('', 'y'):
@@ -331,18 +346,27 @@ class ClusterFile:
 
             if check:
 
-                grp = self.file.create_group(name=dset.name)
+                # Try to delete existing dset, in case this is an edited dset
+                try:
+                    del self.file[name]
+                except KeyError:
+                    if dset == 'DELETE':
+                        logging.warning(f"Can't delete {name}, does not exist")
 
-                for key, val in dset.metadata.items():
-                    grp.attrs[key] = val
+                # if this isn't just a delete operation, write the new stuff
+                if dset != 'DELETE':
 
-                # TODO if editing this need to account for (del) existing dsets
-                for varname, variable in dset.variables.items():
-                    var = grp.create_dataset(varname, data=variable['data'])
-                    var.attrs['unit'] = variable['unit']
+                    grp = self.file.create_group(name=name)
 
-                    for k, v in variable['metadata'].items():
-                        var.attrs[k] = v
+                    for key, val in dset.metadata.items():
+                        grp.attrs[key] = val
+
+                    for varname, variable in dset.variables.items():
+                        var = grp.create_dataset(varname, data=variable['data'])
+                        var.attrs['unit'] = variable['unit']
+
+                        for k, v in variable['metadata'].items():
+                            var.attrs[k] = v
 
         # Reset live datasets
         self.live_datasets = {}
@@ -352,6 +376,17 @@ class ClusterFile:
         tested and written
         '''
         self.live_datasets[dataset.name] = dataset
+
+    def unadd_dataset(self, name):
+        '''take this out of live_datasets (like a soft version of delete)
+        '''
+        try:
+            dset = self.live_datasets[name]
+            del self.live_datasets[name]
+        except KeyError:
+            raise KeyError(f"Can't unadd {name}, does not exist")
+
+        return dset
 
     # ----------------------------------------------------------------------
     # Metadata
