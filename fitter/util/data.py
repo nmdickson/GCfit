@@ -377,16 +377,17 @@ class ClusterFile:
         '''
         self.live_datasets[dataset.name] = dataset
 
-    def unadd_dataset(self, name):
+    def unadd_dataset(self, key, pop=True):
         '''take this out of live_datasets (like a soft version of delete)
         '''
         try:
-            dset = self.live_datasets[name]
-            del self.live_datasets[name]
+            dset = self.live_datasets[key]
+            del self.live_datasets[key]
         except KeyError:
-            raise KeyError(f"Can't unadd {name}, does not exist")
+            raise KeyError(f"Can't unadd {key}, does not exist")
 
-        return dset
+        if pop:
+            return dset
 
     # ----------------------------------------------------------------------
     # Metadata
@@ -410,8 +411,13 @@ class ClusterFile:
 
             if confirm:
 
+                if value == 'DELETE':
+                    mssg = f'Delete metadata {key}? [y]/n/a/q/? '
+
+                else:
+                    mssg = f'Save metadata ({key}: {value})? [y]/n/a/q/? '
+
                 while True:
-                    mssg = f'Save metadata ({key}: value)? [y]/n/a/q/? '
                     inp = input(mssg).lower().strip()
 
                     if inp in ('', 'y'):
@@ -447,7 +453,14 @@ class ClusterFile:
 
             if check:
 
-                self.file.attrs[key] = value
+                if value == 'DELETE':
+                    try:
+                        del self.file.attrs[key]
+                    except KeyError:
+                        logging.warning(f"Can't delete {key}, does not exist")
+
+                else:
+                    self.file.attrs[key] = value
 
         # reset live metadata
         self.live_metadata = {}
@@ -456,6 +469,17 @@ class ClusterFile:
         '''cluster-level metadata'''
         # TODO still need to figure out to store metadata units
         self.live_metadata[key] = value
+
+    def unadd_metadata(self, key, pop=True):
+
+        try:
+            value = self.live_metadata[key]
+            del self.live_metadata[key]
+        except KeyError:
+            raise KeyError(f"Can't unadd {key}, does not exist")
+
+        if pop:
+            return value
 
     # ----------------------------------------------------------------------
     # Finalization
