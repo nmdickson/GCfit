@@ -437,6 +437,14 @@ class ClusterFile:
 
         return self.file.attrs[key]
 
+    def delete_metadata(self, key):
+        if key in self.file.attrs:
+            self.live_metadata[key] = 'DELETE'
+
+        else:
+            mssg = f"Can't delete {key}, does not exist in file"
+            raise KeyError(mssg)
+
     def _write_metadata(self, confirm=False):
 
         check = True
