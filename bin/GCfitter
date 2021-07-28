@@ -197,18 +197,19 @@ if __name__ == '__main__':
 
         # TODO add more of these options
         args.initial_kwargs = {
-            'maxiter': args.init_maxiter,
+            'maxiter': args.init_maxiter or float('inf'),
             'nlive': args.Nlive_per_batch,
             'dlogz': args.dlogz
         }
 
         args.batch_kwargs = {
-            'maxiter': args.maxiter,
+            'maxiter': args.maxiter or float('inf'),
             'nlive_new': args.Nlive_per_batch
         }
 
         del args.dlogz
         del args.maxiter
+        del args.init_maxiter
         del args.Nlive_per_batch
 
     # ----------------------------------------------------------------------

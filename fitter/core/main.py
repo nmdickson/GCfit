@@ -786,15 +786,26 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         # Write run metadata to output (backend) file
         # ----------------------------------------------------------------------
 
-        # TODO not storing any nested sampling arg metadata yet
-
         backend.store_metadata('cluster', cluster)
 
         backend.store_metadata('mpi', mpi)
         backend.store_metadata('Ncpu', Ncpu)
 
+        backend.store_metadata('pfrac', pfrac)
+        backend.store_metadata('bound_type', bound_type)
+        backend.store_metadata('sample_type', sample_type)
+
+        backend.store_metadata('hyperparams', hyperparams)
+
         backend.store_metadata('fixed_params', fixed_initials)
         backend.store_metadata('excluded_likelihoods', excluded_likelihoods)
+
+        if initial_kwargs:
+            print(initial_kwargs)
+            backend.store_metadata('initial_kwargs', initial_kwargs)
+
+        if batch_kwargs:
+            backend.store_metadata('batch_kwargs', batch_kwargs)
 
         if spec_initials is not None:
             backend.store_metadata('specified_initials', spec_initials)
