@@ -1,5 +1,6 @@
 import io
 import os
+import sys
 import json
 import shutil
 import pathlib
@@ -66,7 +67,6 @@ def hdf_view(cluster, attrs=False, spacing='normal', *, outfile="stdout"):
         if `outfile` is 'return', the full output as string, else None
 
     '''
-    import sys
     import h5py
 
     # ----------------------------------------------------------------------
@@ -281,26 +281,68 @@ class ClusterFile:
 
         return dset
 
-    def _write_datasets(self):
+    def _write_datasets(self, confirm=False):
         '''actually write it out to file, after we've tested all changes
         '''
         # TODO writing empty datasets will actually be tricky here I think
         #   cause we don't want size-0 arrays (like we read them as) but `Empty`
 
+        check = True
+
         for name, dset in self.live_datasets.items():
 
-            grp = self.file.create_group(name=dset.name)
+            if confirm:
 
-            for key, val in dset.metadata.items():
-                grp.attrs[key] = val
+                var, Nvar = set(dset.variables), len(dset.variables)
+                while True:
+                    mssg = f'Save {dset} ({Nvar} variables {var})? [y]/n/a/q/? '
+                    inp = input(mssg).lower().strip()
 
-            # TODO if editing this will have to account for (del) existing dsets
-            for varname, variable in dset.variables.items():
-                var = grp.create_dataset(varname, data=variable['data'])
-                var.attrs['unit'] = variable['unit']
+                    if inp in ('', 'y'):
+                        check = True
 
-                for k, v in variable['metadata'].items():
-                    var.attrs[k] = v
+                    elif inp == 'n':
+                        check = False
+
+                    elif inp == 'a':
+                        confirm = False
+                        check = True
+
+                    elif inp == 'q':
+                        check = False
+                        confirm = False
+
+                    elif inp == '?':
+                        sys.stdout.write(f'\x1b[2K\r')
+                        sys.stdout.write(
+                            'y - write this dataset\n'
+                            'n - do not write this dataset\n'
+                            'a - write this and all remaining datasets\n'
+                            'q - quit; do not write this '
+                            'or any remaining datasets\n'
+                        )
+                        continue
+
+                    else:
+                        sys.stdout.write(f'\x1b[2K\rUnrecognized input {inp}')
+                        continue
+
+                    break
+
+            if check:
+
+                grp = self.file.create_group(name=dset.name)
+
+                for key, val in dset.metadata.items():
+                    grp.attrs[key] = val
+
+                # TODO if editing this need to account for (del) existing dsets
+                for varname, variable in dset.variables.items():
+                    var = grp.create_dataset(varname, data=variable['data'])
+                    var.attrs['unit'] = variable['unit']
+
+                    for k, v in variable['metadata'].items():
+                        var.attrs[k] = v
 
         # Reset live datasets
         self.live_datasets = {}
@@ -325,9 +367,52 @@ class ClusterFile:
 
         return self.file.attrs[key]
 
-    def _write_metadata(self):
+    def _write_metadata(self, confirm=False):
+
+        check = True
+
         for key, value in self.live_metadata.items():
-            self.file.attrs[key] = value
+
+            if confirm:
+
+                while True:
+                    mssg = f'Save metadata ({key}: value)? [y]/n/a/q/? '
+                    inp = input(mssg).lower().strip()
+
+                    if inp in ('', 'y'):
+                        check = True
+
+                    elif inp == 'n':
+                        check = False
+
+                    elif inp == 'a':
+                        confirm = False
+                        check = True
+
+                    elif inp == 'q':
+                        check = False
+                        confirm = False
+
+                    elif inp == '?':
+                        sys.stdout.write(f'\x1b[2K\r')
+                        sys.stdout.write(
+                            'y - write this dataset\n'
+                            'n - do not write this dataset\n'
+                            'a - write this and all remaining datasets\n'
+                            'q - quit; do not write this '
+                            'or any remaining datasets\n'
+                        )
+                        continue
+
+                    else:
+                        sys.stdout.write(f'\x1b[2K\rUnrecognized input {inp}')
+                        continue
+
+                    break
+
+            if check:
+
+                self.file.attrs[key] = value
 
         # reset live metadata
         self.live_metadata = {}
@@ -612,7 +697,7 @@ class ClusterFile:
 
         return valid
 
-    def save(self, force=False):
+    def save(self, force=False, confirm=False):
         '''test all the new stuff and then actually write it out, if it passes
         '''
 
@@ -631,8 +716,8 @@ class ClusterFile:
 
         logging.info("Writing live data to file")
 
-        self._write_datasets()
-        self._write_metadata()
+        self._write_datasets(confirm=confirm)
+        self._write_metadata(confirm=confirm)
 
 
 # TODO *really* don't like the potential conflict with this and `fitter.Dataset`
