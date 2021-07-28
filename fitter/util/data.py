@@ -277,6 +277,7 @@ class ClusterFile:
 
         self.live_datasets = {}
         self.live_metadata = {}
+        self.live_initials = {}
 
     # ----------------------------------------------------------------------
     # Datasets
@@ -479,11 +480,11 @@ class ClusterFile:
                     elif inp == '?':
                         sys.stdout.write(f'\x1b[2K\r')
                         sys.stdout.write(
-                            'y - write this dataset\n'
-                            'n - do not write this dataset\n'
-                            'a - write this and all remaining datasets\n'
+                            'y - write this metadata\n'
+                            'n - do not write this metadata\n'
+                            'a - write this and all remaining metadata\n'
                             'q - quit; do not write this '
-                            'or any remaining datasets\n'
+                            'or any remaining metadata\n'
                         )
                         continue
 
@@ -517,6 +518,95 @@ class ClusterFile:
         try:
             value = self.live_metadata[key]
             del self.live_metadata[key]
+        except KeyError:
+            raise KeyError(f"Can't unadd {key}, does not exist")
+
+        if pop:
+            return value
+
+    # ----------------------------------------------------------------------
+    # Initials
+    # ----------------------------------------------------------------------
+
+    def get_initials(self, key, reset=False):
+        if key in self.live_initials:
+            if reset:
+                del self.live_initials[key]
+                pass
+            else:
+                return self.live_initials[key]
+
+        return self.file['intials'].attrs[key]
+
+    def _write_initials(self, confirm=False):
+
+        check = True
+
+        for key, value in self.live_initials.items():
+
+            if confirm:
+
+                if value == 'DELETE':
+                    mssg = f'Delete initial value for {key}? [y]/n/a/q/? '
+
+                else:
+                    mssg = f'Save intial value ({key}: {value})? [y]/n/a/q/? '
+
+                while True:
+                    inp = input(mssg).lower().strip()
+
+                    if inp in ('', 'y'):
+                        check = True
+
+                    elif inp == 'n':
+                        check = False
+
+                    elif inp == 'a':
+                        confirm = False
+                        check = True
+
+                    elif inp == 'q':
+                        check = False
+                        confirm = False
+
+                    elif inp == '?':
+                        sys.stdout.write(f'\x1b[2K\r')
+                        sys.stdout.write(
+                            'y - write this initial value\n'
+                            'n - do not write this initial value\n'
+                            'a - write this and all remaining initial values\n'
+                            'q - quit; do not write this '
+                            'or any remaining initial values\n'
+                        )
+                        continue
+
+                    else:
+                        sys.stdout.write(f'\x1b[2K\rUnrecognized input {inp}')
+                        continue
+
+                    break
+
+            if check:
+
+                if value == 'DELETE':
+                    try:
+                        del self.file['initials'].attrs[key]
+                    except KeyError:
+                        logging.warning(f"Can't delete {key}, does not exist")
+
+                else:
+                    self.file['initials'].attrs[key] = value
+
+        # reset live initials
+        self.live_initials = {}
+
+    def add_initials(self, key, value):
+        self.live_initials[key] = value
+
+    def unadd_initials(self, key, pop=True):
+        try:
+            value = self.live_initials[key]
+            del self.live_initials[key]
         except KeyError:
             raise KeyError(f"Can't unadd {key}, does not exist")
 
@@ -765,9 +855,47 @@ class ClusterFile:
         if reqd := mdata_spec.get('requires'):
 
             for item in reqd:
-                valid &= (item in metadata)
+
+                if item not in metadata:
+
+                    mssg = f"Required metadata item {item} not found"
+                    self._inv_mssg.append(mssg)
+
+                    valid &= False
 
         # if opti := mdata_spec.get('optional'):
+
+        return valid
+
+    def _test_initials(self, initials):
+
+        with resources.path('fitter', 'resources') as datadir:
+            with open(f'{datadir}/specification.json') as ofile:
+                init_spec = json.load(ofile)['INITIALS']
+
+        valid = True
+
+        # if reqd := init_spec.get('requires'):
+
+        if opti := init_spec.get('optional'):
+
+            if extra := initials - opti.keys():
+
+                mssg = f"Extraneous initial values found {extra}"
+                self._inv_mssg.append(mssg)
+
+                valid &= False
+
+        # check all are valid numbers
+        for key, value in initials.items:
+            try:
+                float(value)
+
+            except (TypeError, ValueError):
+                dt = type(value)
+                self._inv_mssg.append(f"Invalid dtype for initial {key} ({dt})")
+
+                valid &= False
 
         return valid
 
@@ -780,11 +908,6 @@ class ClusterFile:
         test that all the "live" data is correct and valid before we write it
         '''
 
-        # TODO how will users handle initials?, feels separate from the rest
-        # test initials (make sure there is no extra initial parameters)
-        # extra = obs.initials.keys() - data.DEFAULT_INITIALS.keys()
-        # self.assertEqual(len(extra), 0)
-
         # test datasets for required variables
 
         self._inv_mssg = []
@@ -795,6 +918,8 @@ class ClusterFile:
             valid &= self._test_dataset(key, dataset)
 
         valid &= self._test_metadata(self.live_metadata)
+
+        valid &= self._test_initials(self.live_initials)
 
         return valid
 
@@ -819,6 +944,7 @@ class ClusterFile:
 
         self._write_datasets(confirm=confirm)
         self._write_metadata(confirm=confirm)
+        self._write_initials(confirm=confirm)
 
 
 # TODO *really* don't like the potential conflict with this and `fitter.Dataset`
