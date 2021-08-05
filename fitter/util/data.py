@@ -1064,7 +1064,7 @@ class Dataset:
                     for k, v in root.attrs.items():
                         self.add_metadata(k, v)
 
-        def _from_dataframe(df, keys=None, filter_=None,
+        def _from_dataframe(df, keys=None, filter_=None, empty_ok=False,
                             units=None, metadata=None, names=None, errors=None,
                             **kwargs):
             '''
@@ -1102,6 +1102,11 @@ class Dataset:
                 df = df.query(expr)
             except TypeError:
                 pass
+
+            if df.empty:
+                if not empty_ok:
+                    mssg = f"{'Filtered' if filter_ else ''} Dataframe is empty"
+                    raise ValueError(mssg)
 
             keys = keys or df.columns
 
