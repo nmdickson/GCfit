@@ -6,7 +6,6 @@ import shutil
 import pathlib
 import logging
 import fnmatch
-import warnings
 from importlib import resources
 
 import h5py
@@ -217,7 +216,7 @@ def get_std_cluster_name(name):
 
     else:
         mssg = f"Cluster Catalogue {name[:3]} not recognized, leaving untouched"
-        warnings.warn(mssg)
+        logging.warning(mssg)
 
     return name
 
