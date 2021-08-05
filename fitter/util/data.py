@@ -242,7 +242,7 @@ class ClusterFile:
 
         return hdf
 
-    def __init__(self, name, standardize_name=True):
+    def __init__(self, name, standardize_name=True, force_new=False):
 
         local_dir = pathlib.Path(GCFIT_DIR, 'clusters')
         local_dir.mkdir(parents=True, exist_ok=True)
@@ -258,8 +258,14 @@ class ClusterFile:
 
         local_file = pathlib.Path(local_dir, filename)
 
+        # If desired, force the creation of a new blank local file
+        if force_new:
+            logging.info('Forcing creation of new local cluster')
+
+            self.file = self._new(local_file)
+
         # check if its an already created local file
-        if local_file.exists():
+        elif local_file.exists():
             logging.info(f'{name} is already a local cluster, opening to edit')
 
             # TODO maybe we should only open as r until _write_* is called
@@ -886,7 +892,7 @@ class ClusterFile:
 
         if opti := init_spec.get('optional'):
 
-            if extra := initials - opti.keys():
+            if extra := initials.keys() - set(opti):
 
                 mssg = f"Extraneous initial values found {extra}"
                 self._inv_mssg.append(mssg)
@@ -894,7 +900,7 @@ class ClusterFile:
                 valid &= False
 
         # check all are valid numbers
-        for key, value in initials.items:
+        for key, value in initials.items():
             try:
                 float(value)
 
@@ -1107,6 +1113,7 @@ class Dataset:
                 # TODO still don't know how best to get units from the data file
                 unit = units.get(colname, None)
 
+                # TODO how does this mesh with a given `names`
                 err = errors.get(colname, None)
 
                 self.add_variable(varname, data, unit, metadata, err)
