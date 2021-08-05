@@ -182,6 +182,8 @@ def get_std_cluster_name(name):
             NGC, no space, 4 numbers, left padded by 0
         - if palomar, PAL##
             PAL, no space, 2 numbers, left padded by 0
+        - if terzan, TER##
+            TER, no space, 2 numbers, left padded by 0
 
         I don't think we'll be using anything else, I think it'll be mostly
         NGC, so this is safe to go with for now.
@@ -201,12 +203,17 @@ def get_std_cluster_name(name):
     if name in COMMON_NAMES:
         name = COMMON_NAMES[name]
 
+    digits = ''.join(filter(str.isdigit, name))
+
     # pad zeroes
     if name[:3] == 'ngc':
-        name = f'NGC{int(name[3:]):04}'
+        name = f'NGC{int(digits):04}'
 
     elif name[:3] == 'pal':
-        name = f'Pal{int(name[3:]):02}'
+        name = f'PAL{int(digits):02}'
+
+    elif name[:3] == 'ter':
+        name = f'TER{int(digits):02}'
 
     else:
         mssg = f"Cluster Catalogue {name[:3]} not recognized, leaving untouched"
