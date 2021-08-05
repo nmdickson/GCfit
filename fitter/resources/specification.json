@@ -19,8 +19,8 @@
 
 
     "METADATA": {
-        "requires": ["FeHe", "age", "RA", "DEC", "l", "b", "μ"],
-        "optional": ["Ndot"]
+        "requires": ["FeHe", "RA", "DEC", "l", "b", "μ"],
+        "optional": ["Ndot", "age"]
     },
 
 
