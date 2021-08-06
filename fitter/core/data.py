@@ -152,13 +152,19 @@ class Dataset:
     def __str__(self):
         return f'{self._name} Dataset'
 
-    def __citation__(self):
-        try:
-            bibcodes = self.mdata['source'].split(';')
-            return util.bibcode2cite(bibcodes)
+    _citation = None
 
-        except KeyError:
-            return None
+    def __citation__(self):
+        if self._citation is not None:
+            return self._citation
+        else:
+            try:
+                bibcodes = self.mdata['source'].split(';')
+                self._citation = util.bibcode2cite(bibcodes)
+                return self._citation
+
+            except KeyError:
+                return None
 
     def __contains__(self, key):
         return key in self._dict_variables
