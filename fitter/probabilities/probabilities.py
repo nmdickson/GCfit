@@ -40,10 +40,7 @@ def _angular_units(func):
 
         model = kwargs.get('model') or args[0]
 
-        eqvs = [util.angular_width(model.d)[0],
-                util.angular_speed(model.d)[0]]
-
-        with u.set_enabled_equivalencies(eqvs):
+        with u.set_enabled_equivalencies(util.angular_width(model.d)):
             return func(*args, **kwargs)
 
     return angular_units_decorator
@@ -151,6 +148,14 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
         # ------------------------------------------------------------------
 
         R = pulsars['r'][i].to(u.pc)
+
+        if R >= model.rt:
+
+            mssg = (f"Pulsar {pulsars['id'][i]} is outside cluster truncation "
+                    f"radius {model.rt}")
+            logging.debug(mssg)
+
+            return np.NINF
 
         P = pulsars['P'][i].to('s')
 
@@ -373,6 +378,14 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
 
         R = pulsars['r'][i].to(u.pc)
 
+        if R >= model.rt:
+
+            mssg = (f"Pulsar {pulsars['id'][i]} is outside cluster truncation "
+                    f"radius {model.rt}")
+            logging.debug(mssg)
+
+            return np.NINF
+
         Pb = pulsars['Pb'][i].to('s')
 
         Pbdot_meas = pulsars['Pbdot'][i]
@@ -538,15 +551,14 @@ def likelihood_number_density(model, ndensity, *,
     valid = (ndensity['Σ'].value > 0.1)
 
     obs_r = ndensity['r'][valid]
-    obs_Σ = ndensity['Σ'][valid].value
-    obs_err = ndensity['ΔΣ'][valid].value
+    obs_Σ = ndensity['Σ'][valid]
+    obs_err = ndensity['ΔΣ'][valid]
 
     # Now nuisance parameter
-    yerr = np.sqrt(obs_err**2 + model.s2)
+    yerr = np.sqrt(obs_err**2 + (model.s2 * obs_err.unit**2))
 
-    # TODO the model Sigma is in pc^-2, and is not being converted to match obs?
     model_r = model.r.to(obs_r.unit)
-    model_Σ = (model.Sigmaj[mass_bin] / model.mj[mass_bin]).value
+    model_Σ = model.Sigmaj[mass_bin] / model.mj[mass_bin]
 
     # Interpolated the model data at the measurement locations
     interpolated = np.interp(obs_r, model_r, model_Σ)
@@ -943,7 +955,7 @@ def likelihood_mass_func(model, mf, field, *,
     '''
     # TODO same as numdens, the units are ignored cause 1/pc^2 != 1/arcmin^2
 
-    M = 300
+    M = 1000
 
     if hyperparams:
         likelihood = util.hyperparam_likelihood
@@ -979,9 +991,9 @@ def likelihood_mass_func(model, mf, field, *,
     # shell from the field
     # ------------------------------------------------------------------
 
-    N_data = np.empty(N.shape)
-    N_model = np.empty(N.shape)
-    err = np.empty(N.shape)
+    N_data = np.empty_like(N)
+    N_model = np.empty_like(N)
+    err = np.empty_like(N)
 
     for r_in, r_out in np.unique(rbins, axis=0):
         r_mask = (mf['r1'] == r_in) & (mf['r2'] == r_out)
@@ -994,11 +1006,12 @@ def likelihood_mass_func(model, mf, field, *,
 
         sample_radii = field_slice.MC_sample(M).to(u.pc)
 
-        binned_N_model = np.empty(model.nms)
+        binned_N_model = np.empty(model.nms) << N_data.unit
         for j in range(model.nms):
+            # TODO units surrounding this are a little uncertain?
             Nj = field_slice.MC_integrate(densityj[j], sample=sample_radii)
             widthj = (model.mj[j] * model.mes_widths[j])
-            binned_N_model[j] = (Nj / widthj).value
+            binned_N_model[j] = Nj / widthj
 
         N_spline = util.QuantitySpline(model.mj[:model.nms],
                                        binned_N_model,
@@ -1008,9 +1021,9 @@ def likelihood_mass_func(model, mf, field, *,
         # Add the error and compute the log likelihood
         # --------------------------------------------------------------
 
-        N_data[r_mask] = N[r_mask].value
+        N_data[r_mask] = N[r_mask]
         N_model[r_mask] = N_spline(mbin_mean[r_mask])
-        err[r_mask] = model.F * ΔN[r_mask].value
+        err[r_mask] = model.F * ΔN[r_mask]
 
     return likelihood(N_data, N_model, err)
 
@@ -1046,8 +1059,9 @@ def log_likelihood(theta, observations, L_components, hyperparams, strict):
     return sum(probs), probs
 
 
-def posterior(theta, observations, fixed_initials=None, L_components=None,
-              prior_likelihood=None, *, hyperparams=True, strict=None):
+def posterior(theta, observations, fixed_initials=None,
+              L_components=None, prior_likelihood=None, *,
+              hyperparams=True, return_indiv=True, strict=None):
     '''
     Combines the likelihood with the prior
 
@@ -1071,6 +1085,15 @@ def posterior(theta, observations, fixed_initials=None, L_components=None,
     if strict is None:
         strict = []
 
+    # Check if any values of theta are not finite, probably caused by invalid
+    # prior transforms, and indicating we should return -inf
+    if not np.all(np.isfinite(theta)):
+
+        if return_indiv:
+            return -np.inf, *(-np.inf * np.ones(len(L_components)))
+        else:
+            return -np.inf
+
     # get a list of variable params, sorted for the unpacking of theta
     variable_params = DEFAULT_INITIALS.keys() - fixed_initials.keys()
     params = sorted(variable_params, key=list(DEFAULT_INITIALS).index)
@@ -1080,12 +1103,24 @@ def posterior(theta, observations, fixed_initials=None, L_components=None,
     theta = dict(zip(params, theta), **fixed_initials)
 
     # prior likelihoods
-    if not np.isfinite(log_Pθ := prior_likelihood(theta)):
-        return -np.inf, *(-np.inf * np.ones(len(L_components)))
+    if prior_likelihood != 'ignore':
+
+        if not np.isfinite(log_Pθ := prior_likelihood(theta)):
+
+            if return_indiv:
+                return -np.inf, *(-np.inf * np.ones(len(L_components)))
+            else:
+                return -np.inf
+
+    else:
+        log_Pθ = 0
 
     log_L, individuals = log_likelihood(theta, observations,
                                         L_components, hyperparams, strict)
 
     probability = log_L + log_Pθ
 
-    return probability, *individuals
+    if return_indiv:
+        return probability, *individuals
+    else:
+        return probability
