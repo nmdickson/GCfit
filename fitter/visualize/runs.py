@@ -490,4 +490,135 @@ class MCMCVisualizer(_RunVisualizer):
 
 
 class NestedVisualizer(_RunVisualizer):
-    pass
+
+    def __init__(self, file, observations, group='nested', name=None):
+
+        # TODO this needs to be closed properly, probably
+        if isinstance(file, h5py.File):
+            self.file = file
+        else:
+            self.file = h5py.File(file, 'r')
+
+        self._gname = group
+
+        if name is not None:
+            self.name = name
+
+        # TODO could also try to get obs automatically from cluster name
+        self.obs = observations
+
+        self.has_meta = 'metadata' in self.file
+
+    def _get_results(self, finite_only=False):
+        '''return a dynesty-style `Results` class'''
+        from dynesty.results import Results
+
+        res = self.file[self._gname]
+
+        if finite_only:
+            inds = res['logl'][:] > -1e300
+        else:
+            inds = slice(None)
+
+        r = {}
+
+        for k, d in res.items():
+
+            if k in ('current_batch', 'bound'):
+                continue
+
+            if d.shape and (d.shape[0] == res['logl'].shape[0]):
+                d = np.array(d)[inds]
+            else:
+                d = np.array(d)
+
+            r[k] = d
+
+        if finite_only:
+            # remove the amount of non-finite values we removed from niter
+            r['niter'] -= (r['niter'] - r['logl'].size)
+
+        r['bound'] = self._get_bounds()
+
+        return Results(r)
+
+    def _get_bounds(self):
+        '''
+        based on the bound info stored in file, get actual dynesty bound objects
+        '''
+        from dynesty import bounding
+
+        res = self.file['nested']
+        bnd_grp = res['bound']
+
+        bnds = []
+        for i in range(len(bnd_grp)):
+
+            ds = bnd_grp[str(i)]
+            btype = ds.attrs['type']
+
+            if btype == 'UnitCube':
+                bnds.append(bounding.UnitCube(ds.attrs['ndim']))
+
+            elif btype == 'MultiEllipsoid':
+                ctrs = ds['centres'][:]
+                covs = ds['covariances'][:]
+                bnds.append(bounding.MultiEllipsoid(ctrs=ctrs, covs=covs))
+
+            elif btype == 'RadFriends':
+                cov = ds['covariances'][:]
+                ndim = ds.attrs['ndim']
+                bnds.append(bounding.RadFriends(ndim=ndim, cov=cov))
+
+            elif btype == 'SupFriends':
+                cov = ds['covariances'][:]
+                ndim = ds.attrs['ndim']
+                bnds.append(bounding.SupFriends(ndim=ndim, cov=cov))
+
+            else:
+                raise RuntimeError('unrecognized type ', btype)
+
+        return bnds
+
+    # TODO how we handle current_batch stuff will probably need to be sorted out
+    def _get_chains(self, current_batch=True):
+        '''for nested sampling results (current Batch)'''
+
+        if current_batch:
+            chain = self.file[self._gname]['current_batch']['vstar'][:]
+
+        else:
+            chain = self.file[self._gname]['samples'][:]
+
+        labels = list(self.obs.initials)
+
+        if self.has_meta:
+
+            fixed = sorted(
+                ((k, v, labels.index(k)) for k, v in
+                 self.file['metadata']['fixed_params'].attrs.items()),
+                key=lambda item: labels.index(item[0])
+            )
+
+            for k, v, i in fixed:
+                labels[i] += ' (fixed)'
+                chain = np.insert(chain, i, v, axis=-1)
+
+        return labels, chain
+
+    def plot_marginals(self, fig=None, **corner_kw):
+        import corner
+
+        fig, ax = self._setup_multi_artist(fig, shape=None)
+
+        labels, chain = self._get_chains()
+
+        chain = chain.reshape((-1, chain.shape[-1]))
+
+        # ugly
+        ranges = [1. if 'fixed' not in lbl
+                  else (chain[0, i] - 1, chain[0, i] + 1)
+                  for i, lbl in enumerate(labels)]
+
+        return corner.corner(chain, labels=labels, fig=fig,
+                             range=ranges, plot_datapoints=False, **corner_kw)
