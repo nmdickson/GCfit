@@ -8,17 +8,11 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mpl_clr
 
 
-__all__ = ['RunVisualizer']
+__all__ = ['MCMCVisualizer']
 
 
-class RunVisualizer:
-    '''All the plots based on a model run, like the chains and likelihoods
-    and marginals corner plots and etc
-
-    based on an output file I guess?
-    '''
-    # TODO a way to find the converged iteration automatcially (even possible?)
-    # TODO a nice way to print the sources (accounting for excluded likelihoods)
+class _RunVisualizer:
+    '''base class for all visualizers of all run types'''
 
     _REDUC_METHODS = {'median': np.median, 'mean': np.mean}
 
@@ -73,6 +67,16 @@ class RunVisualizer:
             fig.suptitle(self.name)
 
         return fig, axarr
+
+
+class MCMCVisualizer(_RunVisualizer):
+    '''All the plots based on a model run, like the chains and likelihoods
+    and marginals corner plots and etc
+
+    based on an output file I guess?
+    '''
+    # TODO a way to find the converged iteration automatcially (even possible?)
+    # TODO a nice way to print the sources (accounting for excluded likelihoods)
 
     def __str__(self):
         return f'{self.file.filename} - Run Results'
@@ -483,3 +487,7 @@ class RunVisualizer:
                 # mssg += 'Specified prior bounds'
 
         out.write(mssg)
+
+
+class NestedVisualizer(_RunVisualizer):
+    pass
