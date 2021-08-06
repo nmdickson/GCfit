@@ -78,6 +78,11 @@ if __name__ == '__main__':
                                action='store_false',
                                help="Don't use Bayesian hyperparams")
 
+    shared_parser.add_argument('--strict', nargs='+',
+                               metavar=('[STRICT]', 'LIKELIHOOD'),
+                               help="A (numeric) strictness factor to be "
+                                    "applied to each specified likelihood")
+
     shared_parser.add_argument('--verbose', action='store_true')
     shared_parser.add_argument('--debug', action='store_true')
 
@@ -112,6 +117,9 @@ if __name__ == '__main__':
                              help='Continue from previous saved run')
     parser_MCMC.add_argument('--backup', action='store_true',
                              help='Create continuous backups during run')
+
+    parser_MCMC.add_argument('--show-progress', action='store_true',
+                             dest='progress', help="Display progress bar")
 
     parser_MCMC.set_defaults(fit_func=fitter.MCMC_fit)
 
@@ -175,6 +183,16 @@ if __name__ == '__main__':
 
         else:
             parser.error(f"Cannot access '{bnd_file}': No such file")
+
+    # TODO could also be a way here for setting `err_on_fail` in the priors
+    if args.strict is not None:
+        try:
+            args.strict[0] = float(args.strict[0])
+        except (ValueError, TypeError):
+            args.strict = [1.] + args.strict
+
+        if len(args.strict) == 1:
+            args.strict.append('*')
 
     pathlib.Path(args.savedir).mkdir(exist_ok=True)
 

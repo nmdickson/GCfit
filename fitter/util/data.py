@@ -10,7 +10,7 @@ __all__ = ['cluster_list', 'hdf_view', 'get_std_cluster_name',
 def cluster_list():
     '''Return a list of cluster names, useable by `fitter.Observations`'''
     with resources.path('fitter', 'resources') as datadir:
-        return [f.stem for f in pathlib.Path(datadir).glob('[!TEST]*.hdf5')]
+        return [f.stem for f in pathlib.Path(datadir).glob('[!TEST]*.hdf')]
 
 
 def hdf_view(cluster, attrs=False, spacing='normal', *, outfile="stdout"):
@@ -90,7 +90,7 @@ def hdf_view(cluster, attrs=False, spacing='normal', *, outfile="stdout"):
 
     # TODO use get_std_cluster_name here
     with resources.path('fitter', 'resources') as datadir:
-        with h5py.File(f'{datadir}/{cluster}.hdf5', 'r') as file:
+        with h5py.File(f'{datadir}/{cluster}.hdf', 'r') as file:
 
             out = f"{f' {cluster} ':=^40}\n\n"
 

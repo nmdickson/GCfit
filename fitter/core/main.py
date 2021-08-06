@@ -259,7 +259,8 @@ class NestedSamplingOutput(Output):
 def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
              mpi=False, initials=None, param_priors=None, moves=None,
              fixed_params=None, excluded_likelihoods=None, hyperparams=True,
-             cont_run=False, savedir=_here, backup=False, verbose=False):
+             cont_run=False, savedir=_here, strict=None,
+             backup=False, verbose=False, progress=False):
     '''Main MCMC fitting pipeline
 
     Execute the full MCMC cluster fitting algorithm.
@@ -323,6 +324,12 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         Whether to include bayesian hyperparameters (see Hobson et al., 2002)
         in all likelihood functions.
 
+    strict : list of (float, str), optional
+        A strictness parameter to be applied to each likelihood specified, as
+        the `strict` kwarg. As implementation is specific to each likelihood,
+        see individual functions for more information. Default is None, applied
+        to all likelihoods.
+
     cont_run : bool, optional
         Not Implemented
 
@@ -335,6 +342,9 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
     verbose : bool, optional
         Increase verbosity (currently only affects output of run final summary)
+
+    progress : bool, optional
+        Whether to displace emcee's progress bar.
 
     See Also
     --------
@@ -364,6 +374,10 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     if not savedir.is_dir():
         raise ValueError(f"Cannot access '{savedir}': No such directory")
 
+    if strict is not None and not isinstance(strict[0], float):
+        invtype = type(strict[0])
+        raise TypeError(f"First `strict` argument must be float, not {invtype}")
+
     # ----------------------------------------------------------------------
     # Load obeservational data, determine which likelihoods are valid/desired
     # ----------------------------------------------------------------------
@@ -374,15 +388,7 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
     logging.debug(f"Observation datasets: {observations}")
 
-    likelihoods = []
-    for component in observations.valid_likelihoods:
-        key, func, *_ = component
-        func_name = func.__name__
-
-        if not any(fnmatch(key, pattern) or fnmatch(func_name, pattern)
-                   for pattern in excluded_likelihoods):
-
-            likelihoods.append(component)
+    likelihoods = observations.filter_likelihoods(excluded_likelihoods, True)
 
     blobs_dtype = [(f'{key}/{func.__qualname__}', float)
                    for (key, func, *_) in likelihoods]
@@ -467,9 +473,9 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
             pool.wait()
             sys.exit(0)
 
-        # ----------------------------------------------------------------------
+        # ------------------------------------------------------------------
         # Write run metadata to output (backend) file
-        # ----------------------------------------------------------------------
+        # ------------------------------------------------------------------
 
         backend.store_metadata('cluster', cluster)
 
@@ -478,6 +484,9 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
         backend.store_metadata('fixed_params', fixed_initials)
         backend.store_metadata('excluded_likelihoods', excluded_likelihoods)
+
+        # MCMC moves
+        backend.store_metadata('moves', [mv.__class__.__name__ for mv in moves])
 
         if spec_initials is not None:
             backend.store_metadata('specified_initials', spec_initials)
@@ -492,12 +501,15 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
         logging.info("Initializing sampler")
 
+        sampler_kwargs = {'hyperparams': hyperparams, 'return_indiv': True,
+                          'strict': strict}
+
         sampler = emcee.EnsembleSampler(
             nwalkers=Nwalkers,
             ndim=init_pos.shape[-1],
             log_prob_fn=posterior,
             args=(observations, fixed_initials, likelihoods, prior_likelihood),
-            kwargs={'hyperparams': hyperparams, 'return_indiv': True},
+            kwargs=sampler_kwargs,
             pool=pool,
             moves=moves,
             backend=backend,
@@ -516,7 +528,7 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
         # TODO implement cont_run
         # Set initial state to None if resuming run (`cont_run`)
-        for _ in sampler.sample(init_pos, iterations=Niters):
+        for _ in sampler.sample(init_pos, iterations=Niters, progress=progress):
 
             # TODO it would be nice if iteration num was added to log preamble
 
@@ -576,7 +588,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
                initial_kwargs=None, batch_kwargs=None, pfrac=1.0,
                Ncpu=2, mpi=False, initials=None, param_priors=None,
                fixed_params=None, excluded_likelihoods=None, hyperparams=True,
-               savedir=_here, verbose=False):
+               strict=None, savedir=_here, verbose=False):
     '''Main nested sampling fitting pipeline
 
     Execute the full nested sampling cluster fitting algorithm.
@@ -653,6 +665,12 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         Whether to include bayesian hyperparameters (see Hobson et al., 2002)
         in all likelihood functions.
 
+    strict : list of (float, str), optional
+        A strictness parameter to be applied to each likelihood specified, as
+        the `strict` kwarg. As implementation is specific to each likelihood,
+        see individual functions for more information. Default is None, applied
+        to all likelihoods.
+
     savedir : path-like, optional
         The directory within which the HDF output file is stored, defaults to
         the current working directory.
@@ -690,6 +708,10 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
     savedir = pathlib.Path(savedir)
     if not savedir.is_dir():
         raise ValueError(f"Cannot access '{savedir}': No such directory")
+
+    if strict is not None and not isinstance(strict[0], float):
+        invtype = type(strict[0])
+        raise TypeError(f"First `strict` argument must be float, not {invtype}")
 
     # ----------------------------------------------------------------------
     # Load obeservational data, determine which likelihoods are valid/desired
@@ -824,12 +846,15 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
         backend.ndim = ndim
 
+        logl_kwargs = {'hyperparams': hyperparams, 'return_indiv': False,
+                       'strict': strict}
+
         sampler = dynesty.DynamicNestedSampler(
             ndim=ndim,
             loglikelihood=posterior,  # cause we need the defaults/checks it has
             prior_transform=prior_transform,
             logl_args=(observations, fixed_initials, likelihoods, 'ignore'),
-            logl_kwargs={'hyperparams': hyperparams, 'return_indiv': False},
+            logl_kwargs=logl_kwargs,
             pool=pool,
             bound=bound_type,
             method=sample_type

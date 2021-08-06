@@ -236,7 +236,7 @@ class Dataset:
 
 
 class Observations:
-    '''Collection of Datasets, read from a corresponding hdf5 file (READONLY)'''
+    '''Collection of Datasets, read from a corresponding hdf file (READONLY)'''
     # TODO interesting errors occur when trying to iterate over Observ
 
     _valid_likelihoods = None
@@ -311,6 +311,30 @@ class Observations:
 
         return groups
 
+    def filter_likelihoods(self, patterns, exclude=False, keys_only=False):
+        '''filter the valid likelihoods based on list of patterns, matching
+        either the dataset name or likelihood function name.
+        if exclude is true, returns everything but those matching the patterns,
+        else vice versa
+        if keys_only, only returns a list of dataset keys, no function data
+        patterns must be a list (todo)
+        '''
+        matches, no_matches = [], []
+        for component in self.valid_likelihoods:
+            key, func, *_ = component
+            func_name = func.__name__
+
+            if keys_only:
+                component = key
+
+            if any(fnmatch.fnmatch(key, p) or fnmatch.fnmatch(func_name, p)
+                   for p in patterns):
+                matches.append(component)
+            else:
+                no_matches.append(component)
+
+        return matches if not exclude else no_matches
+
     def get_sources(self, fmt='bibtex'):
         '''return a dict of all used sources
 
@@ -348,7 +372,7 @@ class Observations:
         self.initials = DEFAULT_INITIALS.copy()
 
         with resources.path('fitter', 'resources') as datadir:
-            with h5py.File(f'{datadir}/{self.cluster}.hdf5', 'r') as file:
+            with h5py.File(f'{datadir}/{self.cluster}.hdf', 'r') as file:
 
                 logging.info(f"Observations read from {file.filename}")
 
@@ -395,7 +419,11 @@ class Observations:
 
             if fnmatch.fnmatch(key, '*pulsar*'):
 
-                metadata = self.mdata['μ'], (self.mdata['b'], self.mdata['l'])
+                metadata = (
+                    self.mdata['μ'],
+                    (self.mdata['b'], self.mdata['l']),
+                    'DM' in self[key]
+                )
 
                 if 'Pdot' in self[key]:
 
@@ -583,6 +611,7 @@ class Model(lp.limepy):
         self.mj <<= M_units
         self.Mj <<= M_units
         self.mc <<= M_units
+        self.mes_widths <<= M_units
 
         self.r <<= R_units
         self.rh <<= R_units
@@ -651,6 +680,7 @@ class Model(lp.limepy):
         # TODO still don't entriely understand when this is to be used
         # mj is middle of mass bins, mes are edges, widths are sizes of bins
         # self.mbin_widths = np.diff(self._mf.mes[-1]) ??
+        # TODO is this supposed to habe units? I think so
         self.mes_widths = np.diff(self._mf.mes[-1])
 
         # append tracer mass bins (must be appended to end to not affect nms)
