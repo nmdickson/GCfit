@@ -31,6 +31,7 @@ REQUIRED = [
     "scipy",
     "h5py",
     "tqdm",
+    "dynesty",
     "gala==1.3",
     "shapely"
 ]
