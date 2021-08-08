@@ -1,4 +1,5 @@
 from .models import CIModelVisualizer, ModelVisualizer
+from ..probabilities import priors
 
 import sys
 
@@ -8,7 +9,7 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mpl_clr
 
 
-__all__ = ['MCMCVisualizer']
+__all__ = ['MCMCVisualizer', 'NestedVisualizer']
 
 
 class _RunVisualizer:
@@ -507,7 +508,13 @@ class NestedVisualizer(_RunVisualizer):
         # TODO could also try to get obs automatically from cluster name
         self.obs = observations
 
+        self.results = self._get_results()
+
         self.has_meta = 'metadata' in self.file
+
+    # ----------------------------------------------------------------------
+    # Helpers
+    # ----------------------------------------------------------------------
 
     def _get_results(self, finite_only=False):
         '''return a dynesty-style `Results` class'''
@@ -538,11 +545,11 @@ class NestedVisualizer(_RunVisualizer):
             # remove the amount of non-finite values we removed from niter
             r['niter'] -= (r['niter'] - r['logl'].size)
 
-        r['bound'] = self._get_bounds()
+        r['bound'] = self._reconstruct_bounds()
 
         return Results(r)
 
-    def _get_bounds(self):
+    def _reconstruct_bounds(self):
         '''
         based on the bound info stored in file, get actual dynesty bound objects
         '''
@@ -606,6 +613,36 @@ class NestedVisualizer(_RunVisualizer):
 
         return labels, chain
 
+    def _reconstruct_priors(self):
+        '''based on the stored "specified_priors" get a PriorTransform object'''
+
+        if not self.has_meta:
+            raise AttributeError("No metadata stored in file")
+
+        stored_priors = self.file['metadata']['specified_priors'].attrs
+        fixed = self.file['metadata']['fixed_params'].attrs
+
+        prior_params = {}
+
+        for key in list(self.obs.initials):
+            try:
+                type_ = stored_priors[f'{key}_type'].decode('utf-8')
+                args = stored_priors[f'{key}_args']
+
+                if args.dtype.kind == 'S':
+                    args = args.astype('U')
+
+                prior_params[key] = (type_, *args)
+            except KeyError:
+                continue
+
+        prior_kwargs = {'fixed_initials': fixed, 'err_on_fail': False}
+        return priors.PriorTransforms(prior_params, **prior_kwargs)
+
+    # ----------------------------------------------------------------------
+    # Plots
+    # ----------------------------------------------------------------------
+
     def plot_marginals(self, fig=None, **corner_kw):
         import corner
 
@@ -622,3 +659,21 @@ class NestedVisualizer(_RunVisualizer):
 
         return corner.corner(chain, labels=labels, fig=fig,
                              range=ranges, plot_datapoints=False, **corner_kw)
+
+    def plot_bounds(self, iter, fig=None, **kw):
+        from dynesty import plotting as dyplot
+
+        # TODO id rather use contours or polygons showing the bounds,
+        #   rather than how dyplot does it by sampling a bunch of random points
+
+        # TODO this doesn't seem to work the same way corner did
+        # fig = self._setup_multi_artist(fig, shape=None)
+
+        priors = self._reconstruct_priors()
+
+        # TODO option for plotting a bunch of iters on top of eachother
+        #   preferably using a nice colormap
+        fig = dyplot.cornerbound(self.results, iter, fig=fig,
+                                 prior_transform=priors, **kw)
+
+        return fig[0]
