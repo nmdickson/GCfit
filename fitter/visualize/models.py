@@ -89,8 +89,7 @@ class _ClusterVisualizer:
         def _unit_decorator(self, *args, **kwargs):
 
             # convert based on median distance parameter
-            eqvs = [util.angular_width(self.d)[0],
-                    util.angular_speed(self.d)[0]]
+            eqvs = util.angular_width(self.d)
 
             with astroviz.quantity_support(), u.set_enabled_equivalencies(eqvs):
                 return method(self, *args, **kwargs)
