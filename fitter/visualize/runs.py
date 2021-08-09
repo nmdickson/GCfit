@@ -17,6 +17,8 @@ class _RunVisualizer:
 
     _REDUC_METHODS = {'median': np.median, 'mean': np.mean}
 
+    _cmap = plt.cm.get_cmap('viridis')
+
     def _setup_artist(self, fig, ax, *, use_name=True):
         # TODO should maybe attempt to use gcf, gca first
         if ax is None:
@@ -588,7 +590,7 @@ class NestedVisualizer(_RunVisualizer):
         return bnds
 
     # TODO how we handle current_batch stuff will probably need to be sorted out
-    def _get_chains(self, current_batch=True):
+    def _get_chains(self, current_batch=False, include_fixed=True):
         '''for nested sampling results (current Batch)'''
 
         if current_batch:
@@ -607,9 +609,13 @@ class NestedVisualizer(_RunVisualizer):
                 key=lambda item: labels.index(item[0])
             )
 
-            for k, v, i in fixed:
-                labels[i] += ' (fixed)'
-                chain = np.insert(chain, i, v, axis=-1)
+            if include_fixed:
+                for k, v, i in fixed:
+                    labels[i] += ' (fixed)'
+                    chain = np.insert(chain, i, v, axis=-1)
+            else:
+                for *_, i in reversed(fixed):
+                    del labels[i]
 
         return labels, chain
 
@@ -657,23 +663,46 @@ class NestedVisualizer(_RunVisualizer):
                   else (chain[0, i] - 1, chain[0, i] + 1)
                   for i, lbl in enumerate(labels)]
 
-        return corner.corner(chain, labels=labels, fig=fig,
-                             range=ranges, plot_datapoints=False, **corner_kw)
+        corner_kw.setdefault('plot_datapoints', False)
 
-    def plot_bounds(self, iter, fig=None, **kw):
+        return corner.corner(chain, labels=labels, fig=fig,
+                             range=ranges, **corner_kw)
+
+    def plot_bounds(self, iteration, fig=None, **kw):
         from dynesty import plotting as dyplot
+        from matplotlib.patches import Patch
 
         # TODO id rather use contours or polygons showing the bounds,
         #   rather than how dyplot does it by sampling a bunch of random points
 
         # TODO this doesn't seem to work the same way corner did
-        # fig = self._setup_multi_artist(fig, shape=None)
+        # fig = self._setup_multi_artist(fig, shape=(10,10))
+        # TODO real strange bug with failing on 4th ind on second function call
 
         priors = self._reconstruct_priors()
 
-        # TODO option for plotting a bunch of iters on top of eachother
-        #   preferably using a nice colormap
-        fig = dyplot.cornerbound(self.results, iter, fig=fig,
-                                 prior_transform=priors, **kw)
+        clr = kw.pop('color', None)
+
+        labels, _ = self._get_chains(include_fixed=False)
+
+        try:
+            N = len(iteration)
+        except TypeError:
+            N = 1
+            iteration = [iteration]
+
+        legends = []
+
+        for ind, it in enumerate(iteration):
+
+            if N > 1:
+                clr = self._cmap((ind + 1) / N)
+
+            fig = dyplot.cornerbound(self.results, it, fig=fig, labels=labels,
+                                     prior_transform=priors, color=clr, **kw)
+
+            legends.append(Patch(facecolor=clr, label=f'Iteration {it}'))
+
+        fig[0].legend(handles=legends)
 
         return fig[0]
