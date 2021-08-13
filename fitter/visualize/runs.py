@@ -668,7 +668,7 @@ class NestedVisualizer(_RunVisualizer):
         return corner.corner(chain, labels=labels, fig=fig,
                              range=ranges, **corner_kw)
 
-    def plot_bounds(self, iteration, fig=None, **kw):
+    def plot_bounds(self, iteration, fig=None, show_live=False, **kw):
         from dynesty import plotting as dyplot
         from matplotlib.patches import Patch
 
@@ -698,8 +698,13 @@ class NestedVisualizer(_RunVisualizer):
             if N > 1:
                 clr = self._cmap((ind + 1) / N)
 
+            if show_live:
+                kw.setdefault('live_color', clr)
+                kw.setdefault('live_kwargs', {'marker': 'x'})
+
             fig = dyplot.cornerbound(self.results, it, fig=fig, labels=labels,
-                                     prior_transform=priors, color=clr, **kw)
+                                     prior_transform=priors, color=clr,
+                                     show_live=show_live, **kw)
 
             legends.append(Patch(facecolor=clr, label=f'Iteration {it}'))
 
