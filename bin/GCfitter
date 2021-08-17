@@ -130,9 +130,9 @@ if __name__ == '__main__':
 
     parser_nest = subparsers.add_parser('nested', parents=[shared_parser])
 
-    parser_nest.add_argument('--pfrac', default=0.8, type=float,
+    parser_nest.add_argument('--pfrac', default=1.0, type=float,
                              help='Posterior weighting fraction f_p')
-    parser_nest.add_argument('--dlogz', default=0.05, type=float,
+    parser_nest.add_argument('--dlogz', default=0.25, type=float,
                              help='Δln(Z) tolerance initial stopping condition')
     parser_nest.add_argument('--maxiter', default=None, type=pos_int,
                              help='Maximum number of iterations allowed. May '
@@ -141,10 +141,10 @@ if __name__ == '__main__':
     parser_nest.add_argument('--init-maxiter', default=None, type=pos_int,
                              help='Maximum number of iterations allowed in the '
                                   'baseline run')
-    parser_nest.add_argument('--N-per-batch', default=500, type=pos_int,
+    parser_nest.add_argument('--N-per-batch', default=100, type=pos_int,
                              dest='Nlive_per_batch',
                              help='Number of live points to add each batch')
-    parser_nest.add_argument('--bound-type', default='multi',
+    parser_nest.add_argument('--bound-type', default='balls',
                              choices=bound_choices,
                              help='Method used to bound sampling on the prior')
     parser_nest.add_argument('--sample-type', default='auto',
