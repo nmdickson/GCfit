@@ -889,6 +889,8 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
             wt = dysamp.weight_function(sampler.results, stop_kw)
 
+            logging.info(f"Sampling new batch bebtween logl bounds {wt}")
+
             for results in sampler.sample_batch(logl_bounds=wt, **batch_kwargs):
                 backend.update_current_batch(results)
 
