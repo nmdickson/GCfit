@@ -853,42 +853,54 @@ class _ClusterVisualizer:
     # -----------------------------------------------------------------------
     # Model plotting
     # -----------------------------------------------------------------------
-    # TODO plot_remnant_fraction (see baumgardt cat)
 
     @_support_units
     def plot_density(self, fig=None, ax=None, *, kind='all'):
-
-        # TODO some z-order stuff is off, and alpha needs to be better
 
         if kind == 'all':
             kind = {'MS', 'tot', 'BH', 'WD', 'NS'}
 
         fig, ax = self._setup_artist(fig, ax)
 
-        ax.set_title('Mass Density')
-
-        # Main sequence density
-        if 'MS' in kind:
-            self._plot_model_CI(ax, self.rho_MS, label='Main Sequence')
+        # ax.set_title('Surface Mass Density')
 
         # Total density
         if 'tot' in kind:
-            self._plot_model_CI(ax, self.rho_tot, label='Total')
+            kw = {"label": "Total", "c": "tab:cyan"}
+            self._plot(ax, None, None, self.rho_tot, model_kwargs=kw)
+
+        # Total Remnant density
+        if 'rem' in kind:
+            kw = {"label": "Total", "c": "tab:purple"}
+            self._plot(ax, None, None, self.rho_rem, model_kwargs=kw)
+
+        # Main sequence density
+        if 'MS' in kind:
+            kw = {"label": "Main-sequence stars", "c": "tab:orange"}
+            self._plot(ax, None, None, self.rho_MS, model_kwargs=kw)
+
+        if 'WD' in kind:
+            kw = {"label": "White Dwarfs", "c": "tab:green"}
+            self._plot(ax, None, None, self.rho_WD, model_kwargs=kw)
+
+        if 'NS' in kind:
+            kw = {"label": "Neutron Stars", "c": "tab:red"}
+            self._plot(ax, None, None, self.rho_NS, model_kwargs=kw)
 
         # Black hole density
         if 'BH' in kind:
-            self._plot_model_CI(ax, self.rho_BH, label='Black Hole')
-
-        if 'WD' in kind:
-            self._plot_model_CI(ax, self.rho_WD, label='White Dwarf')
-
-        if 'NS' in kind:
-            self._plot_model_CI(ax, self.rho_NS, label='Neutron Star')
+            kw = {"label": "Black Holes", "c": "tab:gray"}
+            self._plot(ax, None, None, self.rho_BH, model_kwargs=kw)
 
         ax.set_yscale("log")
         ax.set_xscale("log")
 
-        ax.legend()
+        ax.set_ylabel(rf'Surface Density $[M_\odot / pc^3]$')
+        ax.set_xlabel('arcsec')
+
+        # ax.legend()
+        fig.legend(loc='upper center', ncol=6,
+                   bbox_to_anchor=(0.5, 1.), fancybox=True)
 
         return fig
 
@@ -1072,6 +1084,7 @@ class ModelVisualizer(_ClusterVisualizer):
         self._init_massfunc(model, observations)
 
         self._init_surfdens(model, observations)
+        self._init_dens(model, observations)
 
         self._init_mass_frac(model, observations)
         self._init_cum_mass(model, observations)
@@ -1147,9 +1160,21 @@ class ModelVisualizer(_ClusterVisualizer):
         self.mass_func = mass_func
 
     @_ClusterVisualizer._support_units
+    def _init_dens(self, model, observations):
+
+        shp = (np.newaxis, np.newaxis, slice(None))
+
+        self.rho_tot = np.sum(model.rhoj, axis=0)[shp]
+        self.rho_MS = np.sum(model.rhoj[model._star_bins], axis=0)[shp]
+        self.rho_rem = np.sum(model.rhoj[model._remnant_bins], axis=0)[shp]
+        self.rho_BH = np.sum(model.BH_rhoj, axis=0)[shp]
+        self.rho_WD = np.sum(model.WD_rhoj, axis=0)[shp]
+        self.rho_NS = np.sum(model.NS_rhoj, axis=0)[shp]
+
+    @_ClusterVisualizer._support_units
     def _init_surfdens(self, model, observations):
 
-        shp = [np.newaxis, np.newaxis, slice(None)]
+        shp = (np.newaxis, np.newaxis, slice(None))
 
         self.Sigma_tot = np.sum(model.Sigmaj, axis=0)[shp]
         self.Sigma_MS = np.sum(model.Sigmaj[model._star_bins], axis=0)[shp]
