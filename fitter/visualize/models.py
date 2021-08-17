@@ -934,26 +934,26 @@ class _ClusterVisualizer:
 
         # Total density
         if 'tot' in kind:
-            self._plot_model_CI(ax, self.cum_M_tot,
-                                r_unit=x_unit, label='Total', c='tab:cyan')
+            kw = {"label": "Total", "c": "tab:cyan"}
+            self._plot(ax, None, None, self.cum_M_tot, model_kwargs=kw)
 
         # Main sequence density
         if 'MS' in kind:
-            self._plot_model_CI(ax, self.cum_M_MS,
-                                r_unit=x_unit, label='Main Sequence', c='tab:orange')
+            kw = {"label": "Main-sequence stars", "c": "tab:orange"}
+            self._plot(ax, None, None, self.cum_M_MS, model_kwargs=kw)
 
         if 'WD' in kind:
-            self._plot_model_CI(ax, self.cum_M_WD,
-                                r_unit=x_unit, label='White Dwarf', c='tab:green')
+            kw = {"label": "White Dwarfs", "c": "tab:green"}
+            self._plot(ax, None, None, self.cum_M_WD, model_kwargs=kw)
 
         if 'NS' in kind:
-            self._plot_model_CI(ax, self.cum_M_NS,
-                                r_unit=x_unit, label='Neutron Star', c='tab:red')
+            kw = {"label": "Neutron Stars", "c": "tab:red"}
+            self._plot(ax, None, None, self.cum_M_NS, model_kwargs=kw)
 
         # Black hole density
         if 'BH' in kind:
-            self._plot_model_CI(ax, self.cum_M_BH,
-                                r_unit=x_unit, label='Black Hole', c='tab:gray')
+            kw = {"label": "Black Holes", "c": "tab:gray"}
+            self._plot(ax, None, None, self.cum_M_BH, model_kwargs=kw)
 
         ax.set_yscale("log")
         ax.set_xscale("log")
@@ -963,7 +963,8 @@ class _ClusterVisualizer:
         ax.set_xlabel('arcsec')
 
         # ax.legend()
-        fig.legend(loc='upper center', bbox_to_anchor=(0.5, 1.), ncol=5, fancybox=True)
+        fig.legend(loc='upper center', ncol=5,
+                   bbox_to_anchor=(0.5, 1.), fancybox=True)
 
         return fig
 
@@ -976,9 +977,9 @@ class _ClusterVisualizer:
 
         ax.set_xscale("log")
 
-        self._plot(ax, None, None, self.mass_frac_MS,
+        self._plot(ax, None, None, self.frac_M_MS,
                    model_kwargs={"label": "Main-sequence stars"})
-        self._plot(ax, None, None, self.mass_frac_rem,
+        self._plot(ax, None, None, self.frac_M_rem,
                    model_kwargs={"label": "Remnants"})
 
         ax.set_ylabel(r"Mass fraction $M_{MS}/M_{tot}$, $M_{remn.}/M_{tot}$")
@@ -1045,15 +1046,16 @@ class ModelVisualizer(_ClusterVisualizer):
         self.pm_tot = np.sqrt(0.5 * (self.pm_T**2 + self.pm_R**2))
         self.pm_ratio = self.pm_T / self.pm_R
 
-        self.numdens = self._init_numdens(model, observations)
-        self.mass_func = self._init_massfunc(model, observations)
+        self._init_numdens(model, observations)
+        self._init_massfunc(model, observations)
 
-        self.mass_frac_MS, self.mass_frac_rem = self._init_mass_frac(model, observations)
+        self._init_mass_frac(model, observations)
+        self._init_cum_mass(model, observations)
 
     @_ClusterVisualizer._support_units
     def _init_numdens(self, model, observations):
 
-        obs_nd = observations['number_density']  # <- not very general
+        obs_nd = observations['number_density']  # <- TODO not very general
         obs_r = obs_nd['r'].to(model.r.unit)
 
         model_nd = model.Sigmaj / model.mj[:, np.newaxis]
@@ -1068,7 +1070,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
             nd[mbin, 0, :] = K * model_nd[mbin, :]
 
-        return nd
+        self.numdens = nd
 
     @_ClusterVisualizer._support_units
     def _init_massfunc(self, model, observations):
@@ -1118,7 +1120,7 @@ class ModelVisualizer(_ClusterVisualizer):
                     widthj = (model.mj[j] * model.mes_widths[j])
                     mass_func[0, rbin_ind, j] = (Nj / widthj).value
 
-        return mass_func
+        self.mass_func = mass_func
 
     @_ClusterVisualizer._support_units
     def _init_mass_frac(self, model, observations):
@@ -1143,7 +1145,42 @@ class ModelVisualizer(_ClusterVisualizer):
             mass_rem[0, 0, i] = int_rem.integral(self.r[i], self.r[i + 1]).value
             mass_tot[0, 0, i] = int_tot.integral(self.r[i], self.r[i + 1]).value
 
-        return mass_MS / mass_tot, mass_rem / mass_tot
+        self.frac_M_MS = mass_MS / mass_tot
+        self.frac_M_rem = mass_rem / mass_tot
+
+    @_ClusterVisualizer._support_units
+    def _init_cum_mass(self, model, observations):
+
+        Sigma_tot = np.sum(model.Sigmaj, axis=0)
+        Sigma_MS = np.sum(model.Sigmaj[model._star_bins], axis=0)
+        Sigma_BH = np.sum(model.BH_Sigmaj, axis=0)
+        Sigma_WD = np.sum(model.WD_Sigmaj, axis=0)
+        Sigma_NS = np.sum(model.NS_Sigmaj, axis=0)
+
+        int_tot = util.QuantitySpline(self.r, 2 * np.pi * self.r * Sigma_tot)
+        int_MS = util.QuantitySpline(self.r, 2 * np.pi * self.r * Sigma_MS)
+        int_BH = util.QuantitySpline(self.r, 2 * np.pi * self.r * Sigma_BH)
+        int_WD = util.QuantitySpline(self.r, 2 * np.pi * self.r * Sigma_WD)
+        int_NS = util.QuantitySpline(self.r, 2 * np.pi * self.r * Sigma_NS)
+
+        cum_tot = np.empty((1, 1, self.r.size)) << u.Msun
+        cum_MS = np.empty((1, 1, self.r.size)) << u.Msun
+        cum_BH = np.empty((1, 1, self.r.size)) << u.Msun
+        cum_WD = np.empty((1, 1, self.r.size)) << u.Msun
+        cum_NS = np.empty((1, 1, self.r.size)) << u.Msun
+
+        for i in range(0, self.r.size):
+            cum_tot[0, 0, i] = int_tot.integral(model.r[0], model.r[i])
+            cum_MS[0, 0, i] = int_MS.integral(model.r[0], model.r[i])
+            cum_BH[0, 0, i] = int_BH.integral(model.r[0], model.r[i])
+            cum_WD[0, 0, i] = int_WD.integral(model.r[0], model.r[i])
+            cum_NS[0, 0, i] = int_NS.integral(model.r[0], model.r[i])
+
+        self.cum_M_tot = cum_tot
+        self.cum_M_MS = cum_MS
+        self.cum_M_WD = cum_WD
+        self.cum_M_NS = cum_NS
+        self.cum_M_BH = cum_BH
 
 
 class CIModelVisualizer(_ClusterVisualizer):
@@ -1205,6 +1242,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         else:
             chain_loader = chain[-N:]
 
+        # This uses up an inordinate amount of memory, should be generator
         model_sample = []
         for i, θ in enumerate(chain_loader):
             try:
