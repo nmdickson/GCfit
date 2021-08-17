@@ -896,28 +896,49 @@ class _ClusterVisualizer:
     def plot_surface_density(self, fig=None, ax=None, *, kind='all'):
 
         if kind == 'all':
-            kind = {'MS', 'tot', 'BH'}
+            kind = {'MS', 'tot', 'BH', 'WD', 'NS'}
 
         fig, ax = self._setup_artist(fig, ax)
 
-        ax.set_title('Surface Mass Density')
-
-        # Main sequence density
-        if 'MS' in kind:
-            self._plot_model_CI(ax, self.Sigma_MS, label='Main Sequence')
+        # ax.set_title('Surface Mass Density')
 
         # Total density
         if 'tot' in kind:
-            self._plot_model_CI(ax, self.Sigma_tot, label='Total')
+            kw = {"label": "Total", "c": "tab:cyan"}
+            self._plot(ax, None, None, self.Sigma_tot, model_kwargs=kw)
+
+        # Total Remnant density
+        if 'rem' in kind:
+            kw = {"label": "Total", "c": "tab:purple"}
+            self._plot(ax, None, None, self.Sigma_rem, model_kwargs=kw)
+
+        # Main sequence density
+        if 'MS' in kind:
+            kw = {"label": "Main-sequence stars", "c": "tab:orange"}
+            self._plot(ax, None, None, self.Sigma_MS, model_kwargs=kw)
+
+        if 'WD' in kind:
+            kw = {"label": "White Dwarfs", "c": "tab:green"}
+            self._plot(ax, None, None, self.Sigma_WD, model_kwargs=kw)
+
+        if 'NS' in kind:
+            kw = {"label": "Neutron Stars", "c": "tab:red"}
+            self._plot(ax, None, None, self.Sigma_NS, model_kwargs=kw)
 
         # Black hole density
         if 'BH' in kind:
-            self._plot_model_CI(ax, self.Sigma_BH, label='Black Hole')
+            kw = {"label": "Black Holes", "c": "tab:gray"}
+            self._plot(ax, None, None, self.Sigma_BH, model_kwargs=kw)
 
         ax.set_yscale("log")
         ax.set_xscale("log")
 
-        ax.legend()
+        ax.set_ylabel(rf'Surface Density $[M_\odot / pc^2]$')
+        ax.set_xlabel('arcsec')
+
+        # ax.legend()
+        fig.legend(loc='upper center', ncol=6,
+                   bbox_to_anchor=(0.5, 1.), fancybox=True)
 
         return fig
 
@@ -1038,6 +1059,7 @@ class ModelVisualizer(_ClusterVisualizer):
         self.d = model.d
 
         self.r = model.r
+        self._2πr = 2 * np.pi * model.r
 
         self.LOS = np.sqrt(self.model.v2pj)[:, np.newaxis, :]
         self.pm_T = np.sqrt(model.v2Tj)[:, np.newaxis, :]
@@ -1048,6 +1070,8 @@ class ModelVisualizer(_ClusterVisualizer):
 
         self._init_numdens(model, observations)
         self._init_massfunc(model, observations)
+
+        self._init_surfdens(model, observations)
 
         self._init_mass_frac(model, observations)
         self._init_cum_mass(model, observations)
@@ -1123,15 +1147,23 @@ class ModelVisualizer(_ClusterVisualizer):
         self.mass_func = mass_func
 
     @_ClusterVisualizer._support_units
+    def _init_surfdens(self, model, observations):
+
+        shp = [np.newaxis, np.newaxis, slice(None)]
+
+        self.Sigma_tot = np.sum(model.Sigmaj, axis=0)[shp]
+        self.Sigma_MS = np.sum(model.Sigmaj[model._star_bins], axis=0)[shp]
+        self.Sigma_rem = np.sum(model.Sigmaj[model._remnant_bins], axis=0)[shp]
+        self.Sigma_BH = np.sum(model.BH_Sigmaj, axis=0)[shp]
+        self.Sigma_WD = np.sum(model.WD_Sigmaj, axis=0)[shp]
+        self.Sigma_NS = np.sum(model.NS_Sigmaj, axis=0)[shp]
+
+    @_ClusterVisualizer._support_units
     def _init_mass_frac(self, model, observations):
 
-        Sigma_MS = np.sum(model.Sigmaj[model._star_bins], axis=0)
-        Sigma_rem = np.sum(model.Sigmaj[model._remnant_bins], axis=0)
-        Sigma_tot = np.sum(model.Sigmaj[:], axis=0)
-
-        int_MS = util.QuantitySpline(self.r, 2 * np.pi * self.r * Sigma_MS)
-        int_rem = util.QuantitySpline(self.r, 2 * np.pi * self.r * Sigma_rem)
-        int_tot = util.QuantitySpline(self.r, 2 * np.pi * self.r * Sigma_tot)
+        int_MS = util.QuantitySpline(self.r, self._2πr * self.Sigma_MS)
+        int_rem = util.QuantitySpline(self.r, self._2πr * self.Sigma_rem)
+        int_tot = util.QuantitySpline(self.r, self._2πr * self.Sigma_tot)
 
         mass_MS = np.empty((1, 1, self.r.size))
         mass_rem = np.empty((1, 1, self.r.size))
@@ -1151,17 +1183,11 @@ class ModelVisualizer(_ClusterVisualizer):
     @_ClusterVisualizer._support_units
     def _init_cum_mass(self, model, observations):
 
-        Sigma_tot = np.sum(model.Sigmaj, axis=0)
-        Sigma_MS = np.sum(model.Sigmaj[model._star_bins], axis=0)
-        Sigma_BH = np.sum(model.BH_Sigmaj, axis=0)
-        Sigma_WD = np.sum(model.WD_Sigmaj, axis=0)
-        Sigma_NS = np.sum(model.NS_Sigmaj, axis=0)
-
-        int_tot = util.QuantitySpline(self.r, 2 * np.pi * self.r * Sigma_tot)
-        int_MS = util.QuantitySpline(self.r, 2 * np.pi * self.r * Sigma_MS)
-        int_BH = util.QuantitySpline(self.r, 2 * np.pi * self.r * Sigma_BH)
-        int_WD = util.QuantitySpline(self.r, 2 * np.pi * self.r * Sigma_WD)
-        int_NS = util.QuantitySpline(self.r, 2 * np.pi * self.r * Sigma_NS)
+        int_tot = util.QuantitySpline(self.r, self._2πr * self.Sigma_tot)
+        int_MS = util.QuantitySpline(self.r, self._2πr * self.Sigma_MS)
+        int_BH = util.QuantitySpline(self.r, self._2πr * self.Sigma_BH)
+        int_WD = util.QuantitySpline(self.r, self._2πr * self.Sigma_WD)
+        int_NS = util.QuantitySpline(self.r, self._2πr * self.Sigma_NS)
 
         cum_tot = np.empty((1, 1, self.r.size)) << u.Msun
         cum_MS = np.empty((1, 1, self.r.size)) << u.Msun
