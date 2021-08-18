@@ -1277,7 +1277,9 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         viz = cls()
 
-        # Get info and models
+        # ------------------------------------------------------------------
+        # Get info about the chain and set of models
+        # ------------------------------------------------------------------
 
         chain = chain.reshape((-1, chain.shape[-1]))
 
@@ -1298,7 +1300,8 @@ class CIModelVisualizer(_ClusterVisualizer):
         else:
             chain_loader = chain[-N:]
 
-        # This uses up an inordinate amount of memory, should be generator
+        # TODO uses up an inordinate amount of memory, should be generator (5)
+        # model_sample = [Model(θ, viz.obs) for θ in chain_loader]
         model_sample = []
         for i, θ in enumerate(chain_loader):
             try:
@@ -1306,25 +1309,31 @@ class CIModelVisualizer(_ClusterVisualizer):
             except ValueError:
                 print(f"{i} did not converge")
                 continue
-        N = len(model_sample)
-        # model_sample = [Model(θ, viz.obs) for θ in chain_loader]
+
+        N = len(model_sample)  # Account for unconverged models
+
+        ex_model = model_sample[0]
 
         viz.star_bin = 0
-        viz.mj = [MEDIAN NMS VALUE, *TRACER MASSES (GET FROM A MODEL)]
+        mj_MS = ex_model.mj[ex_model.nms - 1]
+        mj_tracer = ex_model.mj[ex_model._tracer_bins]
+        viz.mj = np.r_[mj_MS, mj_tracer]
 
         # Setup the radial domain to interpolate everything onto
 
         max_r = max(model_sample, key=lambda m: m.rt).rt
         viz.r = np.r_[0, np.geomspace(1e-5, max_r.value, num=99)] << u.pc
 
-        # Setup the final full parameters arrays
+        # ------------------------------------------------------------------
+        # Setup the final full parameters arrays with dims of
         # [mass bins, intervals (from percentile of models), radial bins]
+        # ------------------------------------------------------------------
 
         # velocities
 
-        vel_unit = np.sqrt(model_sample[0].v2Tj).unit
+        vel_unit = np.sqrt(ex_model.v2Tj).unit
 
-        Nm = 1 + len(model_sample[0].mj[model_sample[0]._tracer_bins])
+        Nm = 1 + len(ex_model.mj[ex_model._tracer_bins])
 
         vTj = np.empty((Nm, N, viz.r.size)) << vel_unit
         vRj = np.empty((Nm, N, viz.r.size)) << vel_unit
@@ -1334,7 +1343,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         # mass density
 
-        rho_unit = model_sample[0].rhoj.unit
+        rho_unit = ex_model.rhoj.unit
 
         rho_MS = np.empty((1, N, viz.r.size)) << rho_unit
         rho_tot = np.empty((1, N, viz.r.size)) << rho_unit
@@ -1344,7 +1353,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         # surface density
 
-        Sigma_unit = model_sample[0].Sigmaj.unit
+        Sigma_unit = ex_model.Sigmaj.unit
 
         Sigma_MS = np.empty((1, N, viz.r.size)) << Sigma_unit
         Sigma_tot = np.empty((1, N, viz.r.size)) << Sigma_unit
@@ -1354,7 +1363,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         # Cumulative mass
 
-        mass_unit = model_sample[0].M.unit
+        mass_unit = ex_model.M.unit
 
         cum_M_MS = np.empty((1, N, viz.r.size)) << mass_unit
         cum_M_tot = np.empty((1, N, viz.r.size)) << mass_unit
@@ -1362,20 +1371,32 @@ class CIModelVisualizer(_ClusterVisualizer):
         cum_M_WD = np.empty((1, N, viz.r.size)) << mass_unit
         cum_M_NS = np.empty((1, N, viz.r.size)) << mass_unit
 
+        # Mass Fraction
+
+        frac_M_MS = np.empty((1, N, viz.r.size)) << u.dimensionless_unscaled
+        frac_M_rem = np.empty((1, N, viz.r.size)) << u.dimensionless_unscaled
+
         # number density
 
         numdens = np.empty((1, N, viz.r.size)) << u.arcmin**-2
 
         # mass function
 
-        massfunc = np.empty((N, N_rbins, N_mbins))
+        # TODO no clue how to set this up
+        # Beggining to think its wrong to try and force the mf into the same
+        # format as all these other profiles, as its not a profile at all
+
+        # massfunc = np.empty((N, N_rbins, N_mbins))
 
         # BH mass (exclusive to CI models, so it's different)
 
         BH_mass = np.empty(N) << u.Msun
         BH_num = np.empty(N) << u.dimensionless_unscaled
 
-        # Get the interpolater and interpolate every parameter
+        # ------------------------------------------------------------------
+        # iterate over all models in the sample and compute/store their
+        # relevant parameters
+        # ------------------------------------------------------------------
 
         for model_ind, model in enumerate(model_sample):
 
@@ -1384,7 +1405,7 @@ class CIModelVisualizer(_ClusterVisualizer):
             # Velocities
 
             # convoluted way of going from a slice to a list of indices
-            tracers = list(range(len(m.mj))[m._tracer_bins])
+            tracers = list(range(len(model.mj))[model._tracer_bins])
 
             for i, mass_bin in enumerate([model.nms - 1] + tracers):
 
@@ -1416,47 +1437,53 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             # Mass Functions
 
-            massfunc[slc] = viz._init_massfunc(model, viz.obs, equivs=equivs)
+            # massfunc[slc] = viz._init_massfunc(model, viz.obs, equivs=equivs)
 
             # Mass Fractions
 
-            frac_M_MS[slc], frac_M_rem[slc] = self._init_mass_frac(model)
+            frac_M_MS[slc], frac_M_rem[slc] = viz._init_mass_frac(model)
 
             # Black holes
 
             BH_mass[model_ind] = np.sum(model.BH_Mj)
             BH_num[model_ind] = np.sum(model.BH_Nj)
 
-        # compute and store the percentiles and median
+        # ------------------------------------------------------------------
+        # compute and store the percentiles and medians
+        # ------------------------------------------------------------------
+
         # TODO get sigmas dynamically ased on an arg
         q = [97.72, 84.13, 50., 15.87, 2.28]
 
-        viz.vTj = np.percentile(vTj, q, axis=1)
-        viz.vRj = np.percentile(vRj, q, axis=1)
-        viz.vtotj = np.percentile(vtotj, q, axis=1)
-        viz.vaj = np.nanpercentile(vaj, q, axis=1)
-        viz.vpj = np.percentile(vpj, q, axis=1)
+        axes = (1, 0, 2)  # `np.percentile` messes up the dimensions
 
-        viz.rho_MS = np.percentile(rho_MS, q, axis=1)
-        viz.rho_tot = np.percentile(rho_tot, q, axis=1)
-        viz.rho_BH = np.percentile(rho_BH, q, axis=1)
-        viz.rho_WD = np.percentile(rho_WD, q, axis=1)
-        viz.rho_NS = np.percentile(rho_NS, q, axis=1)
+        viz.pm_T = np.transpose(np.percentile(vTj, q, axis=1), axes)
+        viz.pm_R = np.transpose(np.percentile(vRj, q, axis=1), axes)
+        viz.pm_tot = np.transpose(np.percentile(vtotj, q, axis=1), axes)
+        viz.pm_ratio = np.transpose(np.nanpercentile(vaj, q, axis=1), axes)
+        viz.LOS = np.transpose(np.percentile(vpj, q, axis=1), axes)
 
-        viz.Sigma_MS = np.percentile(Sigma_MS, q, axis=1)
-        viz.Sigma_tot = np.percentile(Sigma_tot, q, axis=1)
-        viz.Sigma_BH = np.percentile(Sigma_BH, q, axis=1)
-        viz.Sigma_WD = np.percentile(Sigma_WD, q, axis=1)
-        viz.Sigma_NS = np.percentile(Sigma_NS, q, axis=1)
+        viz.rho_MS = np.transpose(np.percentile(rho_MS, q, axis=1), axes)
+        viz.rho_tot = np.transpose(np.percentile(rho_tot, q, axis=1), axes)
+        viz.rho_BH = np.transpose(np.percentile(rho_BH, q, axis=1), axes)
+        viz.rho_WD = np.transpose(np.percentile(rho_WD, q, axis=1), axes)
+        viz.rho_NS = np.transpose(np.percentile(rho_NS, q, axis=1), axes)
 
-        viz.cum_M_MS = np.percentile(cum_M_MS, q, axis=1)
-        viz.cum_M_tot = np.percentile(cum_M_tot, q, axis=1)
-        viz.cum_M_BH = np.percentile(cum_M_BH, q, axis=1)
-        viz.cum_M_WD = np.percentile(cum_M_WD, q, axis=1)
-        viz.cum_M_NS = np.percentile(cum_M_NS, q, axis=1)
+        viz.Sigma_MS = np.transpose(np.percentile(Sigma_MS, q, axis=1), axes)
+        viz.Sigma_tot = np.transpose(np.percentile(Sigma_tot, q, axis=1), axes)
+        viz.Sigma_BH = np.transpose(np.percentile(Sigma_BH, q, axis=1), axes)
+        viz.Sigma_WD = np.transpose(np.percentile(Sigma_WD, q, axis=1), axes)
+        viz.Sigma_NS = np.transpose(np.percentile(Sigma_NS, q, axis=1), axes)
 
-        viz.numdens = np.percentile(numdens, q, axis=1)
-        viz.mass_func = np.percentile(massfunc, q, axis=1)
+        viz.cum_M_MS = np.transpose(np.percentile(cum_M_MS, q, axis=1), axes)
+        viz.cum_M_tot = np.transpose(np.percentile(cum_M_tot, q, axis=1), axes)
+        viz.cum_M_BH = np.transpose(np.percentile(cum_M_BH, q, axis=1), axes)
+        viz.cum_M_WD = np.transpose(np.percentile(cum_M_WD, q, axis=1), axes)
+        viz.cum_M_NS = np.transpose(np.percentile(cum_M_NS, q, axis=1), axes)
+
+        viz.numdens = np.transpose(np.percentile(numdens, q, axis=1), axes)
+        # viz.mass_func = np.percentile(massfunc, q, axis=1)
+        viz.mass_func = np.empty((0, 0, 0))
 
         viz.frac_M_MS = np.percentile(frac_M_MS, q, axis=1)
         viz.frac_M_rem = np.percentile(frac_M_rem, q, axis=1)
@@ -1574,26 +1601,26 @@ class CIModelVisualizer(_ClusterVisualizer):
         int_tot = util.QuantitySpline(model.r, dens_tot)
         mass_MS = np.empty((1, self.r.size))
 
-        dens_MS = _2πr * np.sum(model.Sigmaj[:model._star_bins], axis=0)
+        dens_MS = _2πr * np.sum(model.Sigmaj[model._star_bins], axis=0)
         int_MS = util.QuantitySpline(model.r, dens_MS)
         mass_rem = np.empty((1, self.r.size))
 
-        dens_rem = _2πr * np.sum(model.Sigmaj[:model._remnant_bins], axis=0)
+        dens_rem = _2πr * np.sum(model.Sigmaj[model._remnant_bins], axis=0)
         int_rem = util.QuantitySpline(model.r, dens_rem)
         mass_tot = np.empty((1, self.r.size))
 
         mass_MS[0, 0] = mass_rem[0, 0] = mass_tot[0, 0] = np.nan
 
         for i in range(1, self.r.size - 2):
-            mass_MS[0, i] = int_MS.integral(self.r[i], self.r[i + 1])
-            mass_rem[0, i] = int_rem.integral(self.r[i], self.r[i + 1])
-            mass_tot[0, i] = int_tot.integral(self.r[i], self.r[i + 1])
+            mass_MS[0, i] = int_MS.integral(self.r[i], self.r[i + 1]).value
+            mass_rem[0, i] = int_rem.integral(self.r[i], self.r[i + 1]).value
+            mass_tot[0, i] = int_tot.integral(self.r[i], self.r[i + 1]).value
 
         return mass_MS / mass_tot, mass_rem / mass_tot
 
     def _init_numdens(self, model, observations, equivs=None):
 
-        obs_nd = viz.obs['number_density']
+        obs_nd = observations['number_density']
         obs_r = obs_nd['r'].to(model.r.unit, equivs)
 
         model_nd = model.Sigmaj[model.nms - 1] / model.mj[model.nms - 1]
@@ -1603,7 +1630,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_nd['Σ']**2)
              / np.nansum(nd_interp(obs_r)**2 / obs_nd['Σ']**2))
 
-        return = K * nd_interp(self.r)
+        return K * nd_interp(self.r)
 
     def _init_massfunc(self, model, observations, equivs=None):
         # TODO I really don't think this will work at all at this point (25)
@@ -1737,6 +1764,12 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             ds = perc_grp.create_dataset('cum_M_NS', data=self.cum_M_NS)
             ds.attrs['unit'] = self.cum_M_NS.unit.to_string()
+
+            ds = perc_grp.create_dataset('frac_M_MS', data=self.frac_M_MS)
+            ds.attrs['unit'] = self.frac_M_MS.unit.to_string()
+
+            ds = perc_grp.create_dataset('frac_M_rem', data=self.frac_M_rem)
+            ds.attrs['unit'] = self.frac_M_rem.unit.to_string()
 
             ds = perc_grp.create_dataset('numdens', data=self.numdens)
             ds.attrs['unit'] = self.numdens.unit.to_string()
