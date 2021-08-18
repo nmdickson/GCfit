@@ -1696,6 +1696,7 @@ class CIModelVisualizer(_ClusterVisualizer):
             meta_grp = file.create_group('metadata')
 
             meta_grp.create_dataset('r', data=self.r)
+            meta_grp.create_dataset('star_bin', data=self.star_bin)
             meta_grp.create_dataset('mj', data=self.mj)
             meta_grp.attrs['s2'] = self.s2
             meta_grp.attrs['F'] = self.F
@@ -1720,20 +1721,20 @@ class CIModelVisualizer(_ClusterVisualizer):
             ds = perc_grp.create_dataset('rho_NS', data=self.rho_NS)
             ds.attrs['unit'] = self.rho_NS.unit.to_string()
 
-            ds = perc_grp.create_dataset('vTj', data=self.vTj)
-            ds.attrs['unit'] = self.vTj.unit.to_string()
+            ds = perc_grp.create_dataset('pm_T', data=self.pm_T)
+            ds.attrs['unit'] = self.pm_T.unit.to_string()
 
-            ds = perc_grp.create_dataset('vRj', data=self.vRj)
-            ds.attrs['unit'] = self.vRj.unit.to_string()
+            ds = perc_grp.create_dataset('pm_R', data=self.pm_R)
+            ds.attrs['unit'] = self.pm_R.unit.to_string()
 
-            ds = perc_grp.create_dataset('vtotj', data=self.vtotj)
-            ds.attrs['unit'] = self.vtotj.unit.to_string()
+            ds = perc_grp.create_dataset('pm_tot', data=self.pm_tot)
+            ds.attrs['unit'] = self.pm_tot.unit.to_string()
 
-            ds = perc_grp.create_dataset('vaj', data=self.vaj)
-            ds.attrs['unit'] = self.vaj.unit.to_string()
+            ds = perc_grp.create_dataset('pm_ratio', data=self.pm_ratio)
+            ds.attrs['unit'] = self.pm_ratio.unit.to_string()
 
-            ds = perc_grp.create_dataset('vpj', data=self.vpj)
-            ds.attrs['unit'] = self.vpj.unit.to_string()
+            ds = perc_grp.create_dataset('LOS', data=self.LOS)
+            ds.attrs['unit'] = self.LOS.unit.to_string()
 
             ds = perc_grp.create_dataset('Sigma_MS', data=self.Sigma_MS)
             ds.attrs['unit'] = self.Sigma_MS.unit.to_string()
