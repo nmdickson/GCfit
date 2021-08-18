@@ -209,9 +209,9 @@ class _ClusterVisualizer:
             # get mass bin of this dataset, for later model plotting
             if 'm' in dset.mdata:
                 m = dset.mdata['m'] * u.Msun
-                mass_bin = np.where(self.model.mj == m)[0][0]
+                mass_bin = np.where(self.mj == m)[0][0]
             else:
-                mass_bin = self.model.nms - 1
+                mass_bin = self.star_bin
 
             # plot the data
             try:
@@ -236,7 +236,7 @@ class _ClusterVisualizer:
 
             if not masses:
                 if N_mbin > 1:
-                    masses = [self.model.nms - 1]
+                    masses = [self.star_bin]
                 else:
                     masses = [0]
 
@@ -380,6 +380,8 @@ class _ClusterVisualizer:
             pattern = var = None
             strict = False
 
+        # TODO cant plot ObservationsVisualizer cause it doesnt have this
+        #   these should all be set to None I guess, but also this line optional
         pm_T = self.pm_T.to('mas/yr')
 
         self._plot(ax, pattern, var, pm_T, strict=strict)
@@ -1073,6 +1075,9 @@ class ModelVisualizer(_ClusterVisualizer):
         self.r = model.r
         self._2πr = 2 * np.pi * model.r
 
+        self.star_bin = model.nms - 1
+        self.mj = model.mj
+
         self.LOS = np.sqrt(self.model.v2pj)[:, np.newaxis, :]
         self.pm_T = np.sqrt(model.v2Tj)[:, np.newaxis, :]
         self.pm_R = np.sqrt(model.v2Rj)[:, np.newaxis, :]
@@ -1089,6 +1094,7 @@ class ModelVisualizer(_ClusterVisualizer):
         self._init_mass_frac(model, observations)
         self._init_cum_mass(model, observations)
 
+    # TODO alot of these init functions could be more homogenous
     @_ClusterVisualizer._support_units
     def _init_numdens(self, model, observations):
 
@@ -1280,12 +1286,11 @@ class CIModelVisualizer(_ClusterVisualizer):
         viz.obs = observations
 
         median_chain = np.median(chain[-N:], axis=0)
-        # median_model = Model(median_chain, viz.obs)
+        # median_model = Model(median_chain, viz.obs)  # Doesnt converge a lot
 
         viz.F = median_chain[7]
         viz.s2 = median_chain[6]
         viz.d = median_chain[12] << u.kpc
-        # viz.median_mj = median_model.mj
 
         if verbose:
             import tqdm
@@ -1304,7 +1309,8 @@ class CIModelVisualizer(_ClusterVisualizer):
         N = len(model_sample)
         # model_sample = [Model(θ, viz.obs) for θ in chain_loader]
 
-        viz.median_mj = model_sample[0].mj
+        viz.star_bin = 0
+        viz.mj = [MEDIAN NMS VALUE, *TRACER MASSES (GET FROM A MODEL)]
 
         # Setup the radial domain to interpolate everything onto
 
@@ -1312,261 +1318,346 @@ class CIModelVisualizer(_ClusterVisualizer):
         viz.r = np.r_[0, np.geomspace(1e-5, max_r.value, num=99)] << u.pc
 
         # Setup the final full parameters arrays
+        # [mass bins, intervals (from percentile of models), radial bins]
 
         # velocities
 
         vel_unit = np.sqrt(model_sample[0].v2Tj).unit
 
-        vTj_full = np.empty((N, viz.r.size)) << vel_unit
-        vRj_full = np.empty((N, viz.r.size)) << vel_unit
+        Nm = 1 + len(model_sample[0].mj[model_sample[0]._tracer_bins])
 
-        vtotj_full = np.empty((N, viz.r.size)) << vel_unit
-        vaj_full = np.empty((N, viz.r.size)) << u.dimensionless_unscaled
-
-        vpj_full = np.empty((N, viz.r.size)) << vel_unit
+        vTj = np.empty((Nm, N, viz.r.size)) << vel_unit
+        vRj = np.empty((Nm, N, viz.r.size)) << vel_unit
+        vtotj = np.empty((Nm, N, viz.r.size)) << vel_unit
+        vaj = np.empty((Nm, N, viz.r.size)) << u.dimensionless_unscaled
+        vpj = np.empty((Nm, N, viz.r.size)) << vel_unit
 
         # mass density
 
         rho_unit = model_sample[0].rhoj.unit
 
-        rho_MS_full = np.empty((N, viz.r.size)) << rho_unit
-        rho_tot_full = np.empty((N, viz.r.size)) << rho_unit
-        rho_BH_full = np.empty((N, viz.r.size)) << rho_unit
-        rho_WD_full = np.empty((N, viz.r.size)) << rho_unit
-        rho_NS_full = np.empty((N, viz.r.size)) << rho_unit
+        rho_MS = np.empty((1, N, viz.r.size)) << rho_unit
+        rho_tot = np.empty((1, N, viz.r.size)) << rho_unit
+        rho_BH = np.empty((1, N, viz.r.size)) << rho_unit
+        rho_WD = np.empty((1, N, viz.r.size)) << rho_unit
+        rho_NS = np.empty((1, N, viz.r.size)) << rho_unit
 
         # surface density
 
         Sigma_unit = model_sample[0].Sigmaj.unit
 
-        Sigma_MS_full = np.empty((N, viz.r.size)) << Sigma_unit
-        Sigma_tot_full = np.empty((N, viz.r.size)) << Sigma_unit
-        Sigma_BH_full = np.empty((N, viz.r.size)) << Sigma_unit
-        Sigma_WD_full = np.empty((N, viz.r.size)) << Sigma_unit
-        Sigma_NS_full = np.empty((N, viz.r.size)) << Sigma_unit
+        Sigma_MS = np.empty((1, N, viz.r.size)) << Sigma_unit
+        Sigma_tot = np.empty((1, N, viz.r.size)) << Sigma_unit
+        Sigma_BH = np.empty((1, N, viz.r.size)) << Sigma_unit
+        Sigma_WD = np.empty((1, N, viz.r.size)) << Sigma_unit
+        Sigma_NS = np.empty((1, N, viz.r.size)) << Sigma_unit
 
         # Cumulative mass
 
         mass_unit = model_sample[0].M.unit
 
-        cum_M_MS_full = np.empty((N, viz.r.size)) << mass_unit
-        cum_M_tot_full = np.empty((N, viz.r.size)) << mass_unit
-        cum_M_BH_full = np.empty((N, viz.r.size)) << mass_unit
-        cum_M_WD_full = np.empty((N, viz.r.size)) << mass_unit
-        cum_M_NS_full = np.empty((N, viz.r.size)) << mass_unit
+        cum_M_MS = np.empty((1, N, viz.r.size)) << mass_unit
+        cum_M_tot = np.empty((1, N, viz.r.size)) << mass_unit
+        cum_M_BH = np.empty((1, N, viz.r.size)) << mass_unit
+        cum_M_WD = np.empty((1, N, viz.r.size)) << mass_unit
+        cum_M_NS = np.empty((1, N, viz.r.size)) << mass_unit
 
         # number density
 
-        nd_full = np.empty((N, viz.r.size)) << u.arcmin**-2
+        numdens = np.empty((1, N, viz.r.size)) << u.arcmin**-2
 
         # mass function
 
-        PI_list = fnmatch.filter([k[0] for k in viz.obs.valid_likelihoods],
-                                 '*mass_function*')
+        massfunc = np.empty((N, N_rbins, N_mbins))
 
-        PI_list = sorted(PI_list, key=lambda k: viz.obs[k]['r1'].min())
-
-        N_rbins = sum([np.unique(viz.obs[k]['r1']).size for k in PI_list])
-        N_mbins = max(model_sample, key=lambda m: m.nms).nms
-        mf_full = np.empty((N, N_rbins, N_mbins))
-
-        # BH mass
+        # BH mass (exclusive to CI models, so it's different)
 
         BH_mass = np.empty(N) << u.Msun
         BH_num = np.empty(N) << u.dimensionless_unscaled
 
         # Get the interpolater and interpolate every parameter
 
-        for ind, model in enumerate(model_sample):
+        for model_ind, model in enumerate(model_sample):
 
-            mass_bin = model.nms - 1
             equivs = util.angular_width(model.d)
 
             # Velocities
 
-            vT = np.sqrt(model.v2Tj[mass_bin])
-            vTj_interp = util.QuantitySpline(model.r, vT)
-            vTj_full[ind, :] = vTj_interp(viz.r)
+            # convoluted way of going from a slice to a list of indices
+            tracers = list(range(len(m.mj))[m._tracer_bins])
 
-            vR = np.sqrt(model.v2Rj[mass_bin])
-            vRj_interp = util.QuantitySpline(model.r, vR)
-            vRj_full[ind, :] = vRj_interp(viz.r)
+            for i, mass_bin in enumerate([model.nms - 1] + tracers):
 
-            vtot = np.sqrt(0.5 * (model.v2Tj[mass_bin] + model.v2Rj[mass_bin]))
-            vtotj_interp = util.QuantitySpline(model.r, vtot)
-            vtotj_full[ind, :] = vtotj_interp(viz.r)
+                slc = (i, model_ind, slice(None))
 
-            va = np.sqrt(model.v2Tj[mass_bin] / model.v2Rj[mass_bin])
-            finite = np.isnan(va)
-            vaj_interp = util.QuantitySpline(model.r[~finite], va[~finite])
-            vaj_full[ind, :] = vaj_interp(viz.r)
+                vTj[slc], vRj[slc], vtotj[slc], \
+                    vaj[slc], vpj[slc] = viz._init_velocities(model, mass_bin)
 
-            vp = np.sqrt(model.v2pj[mass_bin])
-            vpj_interp = util.QuantitySpline(model.r, vp)
-            vpj_full[ind, :] = vpj_interp(viz.r)
+            slc = (0, model_ind, slice(None))
 
             # Mass Densities
 
-            rho_MS = np.sum(model.rhoj[:model.nms], axis=0)
-            rho_MS_interp = util.QuantitySpline(model.r, rho_MS)
-            rho_MS_full[ind, :] = rho_MS_interp(viz.r)
-
-            rho_tot = np.sum(model.rhoj, axis=0)
-            rho_tot_interp = util.QuantitySpline(model.r, rho_tot)
-            rho_tot_full[ind, :] = rho_tot_interp(viz.r)
-
-            rho_BH = np.sum(model.BH_rhoj, axis=0)
-            rho_BH_interp = util.QuantitySpline(model.r, rho_BH)
-            rho_BH_full[ind, :] = rho_BH_interp(viz.r)
-
-            rho_WD = np.sum(model.WD_rhoj, axis=0)
-            rho_WD_interp = util.QuantitySpline(model.r, rho_WD)
-            rho_WD_full[ind, :] = rho_WD_interp(viz.r)
-
-            rho_NS = np.sum(model.NS_rhoj, axis=0)
-            rho_NS_interp = util.QuantitySpline(model.r, rho_NS)
-            rho_NS_full[ind, :] = rho_NS_interp(viz.r)
+            rho_MS[slc], rho_tot[slc], rho_BH[slc], \
+                rho_WD[slc], rho_NS[slc] = viz._init_dens(model)
 
             # Surface Densities
 
-            Sigma_MS = np.sum(model.Sigmaj[:model.nms], axis=0)
-            Sigma_MS_interp = util.QuantitySpline(model.r, Sigma_MS)
-            Sigma_MS_full[ind, :] = Sigma_MS_interp(viz.r)
-
-            Sigma_tot = np.sum(model.Sigmaj, axis=0)
-            Sigma_tot_interp = util.QuantitySpline(model.r, Sigma_tot)
-            Sigma_tot_full[ind, :] = Sigma_tot_interp(viz.r)
-
-            Sigma_BH = np.sum(model.BH_Sigmaj, axis=0)
-            Sigma_BH_interp = util.QuantitySpline(model.r, Sigma_BH)
-            Sigma_BH_full[ind, :] = Sigma_BH_interp(viz.r)
-
-            Sigma_WD = np.sum(model.WD_Sigmaj, axis=0)
-            Sigma_WD_interp = util.QuantitySpline(model.r, Sigma_WD)
-            Sigma_WD_full[ind, :] = Sigma_WD_interp(viz.r)
-
-            Sigma_NS = np.sum(model.NS_Sigmaj, axis=0)
-            Sigma_NS_interp = util.QuantitySpline(model.r, Sigma_NS)
-            Sigma_NS_full[ind, :] = Sigma_NS_interp(viz.r)
+            Sigma_MS[slc], Sigma_tot[slc], Sigma_BH[slc], \
+                Sigma_WD[slc], Sigma_NS[slc] = viz._init_surfdens(model)
 
             # Cumulative Mass distribution
-            # TODO it seems like the integrated mass is a bit less than total Mj
 
-            cum_M_MS = 2 * np.pi * model.r * Sigma_MS
-            cum_M_MS_interp = util.QuantitySpline(model.r, cum_M_MS)
-            cum_M_MS_full[ind, :] = [cum_M_MS_interp.integral(viz.r[0], ri)
-                                     for ri in viz.r]
-
-            cum_M_tot = 2 * np.pi * model.r * Sigma_tot
-            cum_M_tot_interp = util.QuantitySpline(model.r, cum_M_tot)
-            cum_M_tot_full[ind, :] = [cum_M_tot_interp.integral(viz.r[0], ri)
-                                      for ri in viz.r]
-
-            cum_M_BH = 2 * np.pi * model.r * Sigma_BH
-            cum_M_BH_interp = util.QuantitySpline(model.r, cum_M_BH)
-            cum_M_BH_full[ind, :] = [cum_M_BH_interp.integral(viz.r[0], ri)
-                                     for ri in viz.r]
-
-            cum_M_WD = 2 * np.pi * model.r * Sigma_WD
-            cum_M_WD_interp = util.QuantitySpline(model.r, cum_M_WD)
-            cum_M_WD_full[ind, :] = [cum_M_WD_interp.integral(viz.r[0], ri)
-                                     for ri in viz.r]
-
-            cum_M_NS = 2 * np.pi * model.r * Sigma_NS
-            cum_M_NS_interp = util.QuantitySpline(model.r, cum_M_NS)
-            cum_M_NS_full[ind, :] = [cum_M_NS_interp.integral(viz.r[0], ri)
-                                     for ri in viz.r]
+            cum_M_MS[slc], cum_M_tot[slc], cum_M_BH[slc], \
+                cum_M_WD[slc], cum_M_NS[slc] = viz._init_cum_mass(model)
 
             # Number Densities
 
-            obs_nd = viz.obs['number_density']
-            obs_r = obs_nd['r'].to(model.r.unit, equivs)
-            # TODO maybe this should actually be a part of `Model`
-            model_nd = model.Sigmaj[mass_bin] / model.mj[mass_bin]
-
-            nd_interp = util.QuantitySpline(model.r, model_nd)
-
-            K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_nd['Σ']**2)
-                 / np.nansum(nd_interp(obs_r)**2 / obs_nd['Σ']**2))
-
-            nd_full[ind, :] = K * nd_interp(viz.r)
+            numdens[slc] = viz._init_numdens(model, viz.obs, equivs=equivs)
 
             # Mass Functions
 
-            densityj = [util.QuantitySpline(model.r, model.Sigmaj[j])
-                        for j in range(model.nms)]
+            massfunc[slc] = viz._init_massfunc(model, viz.obs, equivs=equivs)
 
-            rbin_ind = -1
+            # Mass Fractions
 
-            for key in PI_list:
-                mf = viz.obs[key]
-
-                cen = (viz.obs.mdata['RA'], viz.obs.mdata['DEC'])
-                unit = mf.mdata['field_unit']
-                coords = []
-                for ch in string.ascii_letters:
-                    try:
-                        coords.append(mf['fields'].mdata[f'{ch}'])
-                    except KeyError:
-                        break
-
-                field = mass.Field(coords, cen=cen, unit=unit)
-
-                rbins = np.c_[mf['r1'], mf['r2']]
-
-                for r_in, r_out in np.unique(rbins, axis=0):
-                    rbin_ind += 1
-
-                    with u.set_enabled_equivalencies(equivs):
-                        field_slice = field.slice_radially(r_in, r_out)
-                        sample_radii = field_slice.MC_sample(300).to(u.pc)
-
-                    for j in range(model.nms):
-                        Nj = field_slice.MC_integrate(densityj[j], sample_radii)
-                        widthj = (model.mj[j] * model.mes_widths[j])
-                        mf_full[ind, rbin_ind, j] = (Nj / widthj).value
+            frac_M_MS[slc], frac_M_rem[slc] = self._init_mass_frac(model)
 
             # Black holes
-            BH_mass[ind] = np.sum(model.BH_Mj)
-            BH_num[ind] = np.sum(model.BH_Nj)
-            # TODO Some way to quantify mass of indiv BHs? like a 2dhist of N&m?
+
+            BH_mass[model_ind] = np.sum(model.BH_Mj)
+            BH_num[model_ind] = np.sum(model.BH_Nj)
 
         # compute and store the percentiles and median
         # TODO get sigmas dynamically ased on an arg
         q = [97.72, 84.13, 50., 15.87, 2.28]
 
-        viz.rho_MS = np.percentile(rho_MS_full, q, axis=0)
-        viz.rho_tot = np.percentile(rho_tot_full, q, axis=0)
-        viz.rho_BH = np.percentile(rho_BH_full, q, axis=0)
-        viz.rho_WD = np.percentile(rho_WD_full, q, axis=0)
-        viz.rho_NS = np.percentile(rho_NS_full, q, axis=0)
+        viz.vTj = np.percentile(vTj, q, axis=1)
+        viz.vRj = np.percentile(vRj, q, axis=1)
+        viz.vtotj = np.percentile(vtotj, q, axis=1)
+        viz.vaj = np.nanpercentile(vaj, q, axis=1)
+        viz.vpj = np.percentile(vpj, q, axis=1)
 
-        viz.vTj = np.percentile(vTj_full, q, axis=0)
-        viz.vRj = np.percentile(vRj_full, q, axis=0)
-        viz.vtotj = np.percentile(vtotj_full, q, axis=0)
-        # print(vaj_full)
-        viz.vaj = np.nanpercentile(vaj_full, q, axis=0)
-        # print(viz.vaj)
-        viz.vpj = np.percentile(vpj_full, q, axis=0)
+        viz.rho_MS = np.percentile(rho_MS, q, axis=1)
+        viz.rho_tot = np.percentile(rho_tot, q, axis=1)
+        viz.rho_BH = np.percentile(rho_BH, q, axis=1)
+        viz.rho_WD = np.percentile(rho_WD, q, axis=1)
+        viz.rho_NS = np.percentile(rho_NS, q, axis=1)
 
-        viz.Sigma_MS = np.percentile(Sigma_MS_full, q, axis=0)
-        viz.Sigma_tot = np.percentile(Sigma_tot_full, q, axis=0)
-        viz.Sigma_BH = np.percentile(Sigma_BH_full, q, axis=0)
-        viz.Sigma_WD = np.percentile(Sigma_WD_full, q, axis=0)
-        viz.Sigma_NS = np.percentile(Sigma_NS_full, q, axis=0)
+        viz.Sigma_MS = np.percentile(Sigma_MS, q, axis=1)
+        viz.Sigma_tot = np.percentile(Sigma_tot, q, axis=1)
+        viz.Sigma_BH = np.percentile(Sigma_BH, q, axis=1)
+        viz.Sigma_WD = np.percentile(Sigma_WD, q, axis=1)
+        viz.Sigma_NS = np.percentile(Sigma_NS, q, axis=1)
 
-        viz.cum_M_MS = np.percentile(cum_M_MS_full, q, axis=0)
-        viz.cum_M_tot = np.percentile(cum_M_tot_full, q, axis=0)
-        viz.cum_M_BH = np.percentile(cum_M_BH_full, q, axis=0)
-        viz.cum_M_WD = np.percentile(cum_M_WD_full, q, axis=0)
-        viz.cum_M_NS = np.percentile(cum_M_NS_full, q, axis=0)
+        viz.cum_M_MS = np.percentile(cum_M_MS, q, axis=1)
+        viz.cum_M_tot = np.percentile(cum_M_tot, q, axis=1)
+        viz.cum_M_BH = np.percentile(cum_M_BH, q, axis=1)
+        viz.cum_M_WD = np.percentile(cum_M_WD, q, axis=1)
+        viz.cum_M_NS = np.percentile(cum_M_NS, q, axis=1)
 
-        viz.numdens = np.percentile(nd_full, q, axis=0)
-        viz.mass_func = np.percentile(mf_full, q, axis=0)
+        viz.numdens = np.percentile(numdens, q, axis=1)
+        viz.mass_func = np.percentile(massfunc, q, axis=1)
+
+        viz.frac_M_MS = np.percentile(frac_M_MS, q, axis=1)
+        viz.frac_M_rem = np.percentile(frac_M_rem, q, axis=1)
+
         viz.BH_mass = BH_mass
         viz.BH_num = BH_num
 
         return viz
+
+    def _init_velocities(self, model, mass_bin):
+
+        vT = np.sqrt(model.v2Tj[mass_bin])
+        vT_interp = util.QuantitySpline(model.r, vT)
+        vT = vT_interp(self.r)
+
+        vR = np.sqrt(model.v2Rj[mass_bin])
+        vR_interp = util.QuantitySpline(model.r, vR)
+        vR = vR_interp(self.r)
+
+        vtot = np.sqrt(0.5 * (model.v2Tj[mass_bin] + model.v2Rj[mass_bin]))
+        vtot_interp = util.QuantitySpline(model.r, vtot)
+        vtot = vtot_interp(self.r)
+
+        va = np.sqrt(model.v2Tj[mass_bin] / model.v2Rj[mass_bin])
+        finite = np.isnan(va)
+        va_interp = util.QuantitySpline(model.r[~finite], va[~finite])
+        va = va_interp(self.r)
+
+        vp = np.sqrt(model.v2pj[mass_bin])
+        vp_interp = util.QuantitySpline(model.r, vp)
+        vp = vp_interp(self.r)
+
+        return vT, vR, vtot, va, vp
+
+    def _init_dens(self, model):
+
+        rho_MS = np.sum(model.rhoj[:model.nms], axis=0)
+        rho_MS_interp = util.QuantitySpline(model.r, rho_MS)
+        rho_MS = rho_MS_interp(self.r)
+
+        rho_tot = np.sum(model.rhoj, axis=0)
+        rho_tot_interp = util.QuantitySpline(model.r, rho_tot)
+        rho_tot = rho_tot_interp(self.r)
+
+        rho_BH = np.sum(model.BH_rhoj, axis=0)
+        rho_BH_interp = util.QuantitySpline(model.r, rho_BH)
+        rho_BH = rho_BH_interp(self.r)
+
+        rho_WD = np.sum(model.WD_rhoj, axis=0)
+        rho_WD_interp = util.QuantitySpline(model.r, rho_WD)
+        rho_WD = rho_WD_interp(self.r)
+
+        rho_NS = np.sum(model.NS_rhoj, axis=0)
+        rho_NS_interp = util.QuantitySpline(model.r, rho_NS)
+        rho_NS = rho_NS_interp(self.r)
+
+        return rho_MS, rho_tot, rho_BH, rho_WD, rho_NS
+
+    def _init_surfdens(self, model):
+
+        Sigma_MS = np.sum(model.Sigmaj[:model.nms], axis=0)
+        Sigma_MS_interp = util.QuantitySpline(model.r, Sigma_MS)
+        Sigma_MS = Sigma_MS_interp(self.r)
+
+        Sigma_tot = np.sum(model.Sigmaj, axis=0)
+        Sigma_tot_interp = util.QuantitySpline(model.r, Sigma_tot)
+        Sigma_tot = Sigma_tot_interp(self.r)
+
+        Sigma_BH = np.sum(model.BH_Sigmaj, axis=0)
+        Sigma_BH_interp = util.QuantitySpline(model.r, Sigma_BH)
+        Sigma_BH = Sigma_BH_interp(self.r)
+
+        Sigma_WD = np.sum(model.WD_Sigmaj, axis=0)
+        Sigma_WD_interp = util.QuantitySpline(model.r, Sigma_WD)
+        Sigma_WD = Sigma_WD_interp(self.r)
+
+        Sigma_NS = np.sum(model.NS_Sigmaj, axis=0)
+        Sigma_NS_interp = util.QuantitySpline(model.r, Sigma_NS)
+        Sigma_NS = Sigma_NS_interp(self.r)
+
+        return Sigma_MS, Sigma_tot, Sigma_BH, Sigma_WD, Sigma_NS
+
+    def _init_cum_mass(self, model):
+        # TODO it seems like the integrated mass is a bit less than total Mj?
+
+        _2πr = 2 * np.pi * model.r
+
+        cum_M_MS = _2πr * np.sum(model.Sigmaj[:model.nms], axis=0)
+        cum_M_MS_interp = util.QuantitySpline(model.r, cum_M_MS)
+        cum_M_MS = [cum_M_MS_interp.integral(self.r[0], ri) for ri in self.r]
+
+        cum_M_tot = _2πr * np.sum(model.Sigmaj, axis=0)
+        cum_M_tot_interp = util.QuantitySpline(model.r, cum_M_tot)
+        cum_M_tot = [cum_M_tot_interp.integral(self.r[0], ri) for ri in self.r]
+
+        cum_M_BH = _2πr * np.sum(model.BH_Sigmaj, axis=0)
+        cum_M_BH_interp = util.QuantitySpline(model.r, cum_M_BH)
+        cum_M_BH = [cum_M_BH_interp.integral(self.r[0], ri) for ri in self.r]
+
+        cum_M_WD = _2πr * np.sum(model.WD_Sigmaj, axis=0)
+        cum_M_WD_interp = util.QuantitySpline(model.r, cum_M_WD)
+        cum_M_WD = [cum_M_WD_interp.integral(self.r[0], ri) for ri in self.r]
+
+        cum_M_NS = _2πr * np.sum(model.NS_Sigmaj, axis=0)
+        cum_M_NS_interp = util.QuantitySpline(model.r, cum_M_NS)
+        cum_M_NS = [cum_M_NS_interp.integral(self.r[0], ri) for ri in self.r]
+
+        return cum_M_MS, cum_M_tot, cum_M_BH, cum_M_WD, cum_M_NS
+
+    def _init_mass_frac(self, model):
+
+        _2πr = 2 * np.pi * model.r
+
+        dens_tot = _2πr * np.sum(model.Sigmaj, axis=0)
+        int_tot = util.QuantitySpline(model.r, dens_tot)
+        mass_MS = np.empty((1, self.r.size))
+
+        dens_MS = _2πr * np.sum(model.Sigmaj[:model._star_bins], axis=0)
+        int_MS = util.QuantitySpline(model.r, dens_MS)
+        mass_rem = np.empty((1, self.r.size))
+
+        dens_rem = _2πr * np.sum(model.Sigmaj[:model._remnant_bins], axis=0)
+        int_rem = util.QuantitySpline(model.r, dens_rem)
+        mass_tot = np.empty((1, self.r.size))
+
+        mass_MS[0, 0] = mass_rem[0, 0] = mass_tot[0, 0] = np.nan
+
+        for i in range(1, self.r.size - 2):
+            mass_MS[0, i] = int_MS.integral(self.r[i], self.r[i + 1])
+            mass_rem[0, i] = int_rem.integral(self.r[i], self.r[i + 1])
+            mass_tot[0, i] = int_tot.integral(self.r[i], self.r[i + 1])
+
+        return mass_MS / mass_tot, mass_rem / mass_tot
+
+    def _init_numdens(self, model, observations, equivs=None):
+
+        obs_nd = viz.obs['number_density']
+        obs_r = obs_nd['r'].to(model.r.unit, equivs)
+
+        model_nd = model.Sigmaj[model.nms - 1] / model.mj[model.nms - 1]
+
+        nd_interp = util.QuantitySpline(model.r, model_nd)
+
+        K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_nd['Σ']**2)
+             / np.nansum(nd_interp(obs_r)**2 / obs_nd['Σ']**2))
+
+        return = K * nd_interp(self.r)
+
+    def _init_massfunc(self, model, observations, equivs=None):
+        # TODO I really don't think this will work at all at this point (25)
+
+        densityj = [util.QuantitySpline(model.r, model.Sigmaj[j])
+                    for j in range(model.nms)]
+
+        # TODO change these to filter_likelihoods obviously
+        PI_list = fnmatch.filter([k[0] for k in observations.valid_likelihoods],
+                                 '*mass_function*')
+
+        PI_list = sorted(PI_list, key=lambda k: observations[k]['r1'].min())
+
+        N_rbins = sum([np.unique(observations[k]['r1']).size for k in PI_list])
+        N_mbins = max(model_sample, key=lambda m: m.nms).nms
+
+        rbin_ind = -1
+
+        # TODO units?
+        mf = np.empty((N_rbins, N_mbins))
+
+        for key in PI_list:
+            mf = observations[key]
+
+            cen = (observations.mdata['RA'], observations.mdata['DEC'])
+            unit = mf.mdata['field_unit']
+            coords = []
+            for ch in string.ascii_letters:
+                try:
+                    coords.append(mf['fields'].mdata[f'{ch}'])
+                except KeyError:
+                    break
+
+            field = mass.Field(coords, cen=cen, unit=unit)
+
+            rbins = np.c_[mf['r1'], mf['r2']]
+
+            for r_in, r_out in np.unique(rbins, axis=0):
+                rbin_ind += 1
+
+                with u.set_enabled_equivalencies(equivs):
+                    field_slice = field.slice_radially(r_in, r_out)
+                    sample_radii = field_slice.MC_sample(300).to(u.pc)
+
+                    for j in range(model.nms):
+                        Nj = field_slice.MC_integrate(densityj[j], sample_radii)
+                        widthj = (model.mj[j] * model.mes_widths[j])
+                        mf[rbin_ind, j] = (Nj / widthj).value
+
+        return mf
+
+    # ----------------------------------------------------------------------
+    # Save and load confidence intervals to a file
+    # ----------------------------------------------------------------------
 
     def save(self, filename):
         '''save the confidence intervals to a file so we can load them more
@@ -1578,7 +1669,7 @@ class CIModelVisualizer(_ClusterVisualizer):
             meta_grp = file.create_group('metadata')
 
             meta_grp.create_dataset('r', data=self.r)
-            meta_grp.create_dataset('median_mj', data=self.median_mj)
+            meta_grp.create_dataset('mj', data=self.mj)
             meta_grp.attrs['s2'] = self.s2
             meta_grp.attrs['F'] = self.F
             meta_grp.attrs['d'] = self.d
@@ -1675,7 +1766,7 @@ class CIModelVisualizer(_ClusterVisualizer):
             viz.d = file['metadata'].attrs['d'] << u.kpc
 
             viz.r = file['metadata']['r'][:] << u.pc
-            viz.median_mj = file['metadata']['median_mj'][:] << u.Msun
+            viz.mj = file['metadata']['mj'][:] << u.Msun
 
             for key in file['percentiles']:
                 value = file['percentiles'][key][:]
