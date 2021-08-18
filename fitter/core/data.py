@@ -717,15 +717,16 @@ class Model(lp.limepy):
         # append tracer mass bins (must be appended to end to not affect nms)
         if observations is not None:
 
-            # TODO should only append tracer masses for valid likelihood dsets
+            # TODO should only append tracer masses for valid likelihood dsets?
             tracer_mj = np.unique([
                 dataset.mdata['m'] for dataset in observations.datasets.values()
                 if 'm' in dataset.mdata
             ])
 
-            # TODO shouldn't append multiple of same tracer mass
             mj = np.concatenate((mj, tracer_mj))
             Mj = np.concatenate((Mj, 0.1 * np.ones_like(tracer_mj)))
+
+            self._tracer_bins = slice(self.nms + self.nmr, None)
 
         else:
             logging.warning("No `Observations` given, no tracer masses added")
