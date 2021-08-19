@@ -363,31 +363,32 @@ class Observations:
 
         return res
 
-    def __init__(self, cluster):
-
-        self.cluster = util.get_std_cluster_name(cluster)
+    def __init__(self, cluster, *, standardize_name=True, restrict_to=None):
 
         self.mdata = {}
         self._dict_datasets = {}
         self.initials = DEFAULT_INITIALS.copy()
 
-        with resources.path('fitter', 'resources') as datadir:
-            with h5py.File(f'{datadir}/{self.cluster}.hdf', 'r') as file:
+        filename = util.get_cluster_path(cluster, standardize_name, restrict_to)
 
-                logging.info(f"Observations read from {file.filename}")
+        self.cluster = filename.stem
 
-                for group in self._find_groups(file):
-                    self._dict_datasets[group] = Dataset(file[group])
+        with h5py.File(filename, 'r') as file:
 
-                try:
-                    # This updates defaults with data while keeping default sort
-                    self.initials = {**self.initials, **file['initials'].attrs}
-                except KeyError:
-                    logging.info("No initial state stored, using defaults")
-                    pass
+            logging.info(f"Observations read from {filename}")
 
-                # TODO need a way to read units for some mdata from file
-                self.mdata = dict(file.attrs)
+            for group in self._find_groups(file):
+                self._dict_datasets[group] = Dataset(file[group])
+
+            try:
+                # This updates defaults with data while keeping default sort
+                self.initials = {**self.initials, **file['initials'].attrs}
+            except KeyError:
+                logging.info("No initial state stored, using defaults")
+                pass
+
+            # TODO need a way to read units for some mdata from file
+            self.mdata = dict(file.attrs)
 
     def _determine_likelihoods(self):
         '''from observations, determine which likelihood functions will be

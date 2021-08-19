@@ -9,14 +9,14 @@ import fnmatch
 from importlib import resources
 
 import h5py
-import fitter
 import numpy as np
 import astropy.units as u
 
 from .units import angular_width
 
 
-__all__ = ['cluster_list', 'hdf_view', 'get_std_cluster_name',
+__all__ = ['core_cluster_list', 'hdf_view',
+           'get_std_cluster_name', 'get_cluster_path',
            'bibcode2bibtex', 'doi2bibtex']
 
 
@@ -56,7 +56,7 @@ def bibcode2bibtex(bibcode):
 # --------------------------------------------------------------------------
 
 
-def cluster_list():
+def core_cluster_list():
     '''Return a list of cluster names, useable by `fitter.Observations`'''
     with resources.path('fitter', 'resources') as datadir:
         return [f.stem for f in pathlib.Path(datadir).glob('[!TEST]*.hdf')]
@@ -221,6 +221,74 @@ def get_std_cluster_name(name):
     return name
 
 
+def get_cluster_path(name, standardize_name=True, restrict_to='local'):
+    '''based on a cluster name, try to get its clusterfile pathname, either
+    locally or in the core files,
+
+    name: cluster name
+    standardize_name : run it through get_std_cluster_name first. Searches
+        against core clusters will always be standardized, no matter this arg
+    restrict_to : (None, 'local', 'core') whether to only search for files in
+        the local or core clusters. By default (None) searches local first,
+        then core if no matching local found.
+    '''
+
+    if restrict_to not in (None, 'local', 'core'):
+        mssg = "Invalid `restrict_to`, must be one of (None, 'local', 'core') "
+        raise ValueError(mssg)
+
+    # ----------------------------------------------------------------------
+    # Get file paths of prospective local and core cluster files
+    # ----------------------------------------------------------------------
+
+    local_dir = pathlib.Path(GCFIT_DIR, 'clusters')
+    local_dir.mkdir(parents=True, exist_ok=True)
+
+    # handle if name was cluster name or filename (with/without suffix)
+    filename = pathlib.Path(name).with_suffix('.hdf')
+
+    # get the standardized name, and if desired use it primarily
+    std_name = get_std_cluster_name(filename.stem)
+    std_filename = pathlib.Path(std_name).with_suffix('.hdf')
+
+    if standardize_name:
+        filename = std_filename
+
+    # Get full paths to each file
+    local_file = pathlib.Path(local_dir, filename)
+
+    with resources.path('fitter', 'resources') as core_dir:
+        core_file = pathlib.Path(core_dir, std_filename)
+
+    # ----------------------------------------------------------------------
+    # Check which files exists and return based on restrict_to
+    # ----------------------------------------------------------------------
+
+    if restrict_to == 'local':
+        if local_file.exists():
+            return local_file
+        else:
+            mssg = f"No local cluster file matching {filename} in {local_dir}"
+            raise FileNotFoundError(mssg)
+
+    elif restrict_to == 'core':
+        if core_file.exists():
+            return core_file
+        else:
+            mssg = f"No core cluster file matching {std_filename}"
+            raise FileNotFoundError(mssg)
+
+    elif restrict_to is None:
+
+        if local_file.exists():
+            return local_file
+        elif core_file.exists():
+            return core_file
+        else:
+            mssg = f"No local or core cluster file matching {std_filename}"
+            raise FileNotFoundError(mssg)
+
+
 # --------------------------------------------------------------------------
 # Data file creation and editing
 # --------------------------------------------------------------------------
@@ -271,7 +339,7 @@ class ClusterFile:
             self.file = h5py.File(local_file, 'r+')
 
         # else Check if this is a "core" file and make a copy locally
-        elif std_name in fitter.util.cluster_list():
+        elif std_name in core_cluster_list():
             logging.info(f'{name} is a core cluster, making a new local copy')
 
             # TODO Add a flag that this is a local file? or only n Observations?
