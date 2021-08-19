@@ -117,10 +117,16 @@ class _ClusterVisualizer:
             except KeyError:
                 return None
 
-    def _plot_model(self, ax, data, intervals=None, r_unit='pc', *,
+    def _plot_model(self, ax, data, intervals=None, *,
+                    x_data=None, x_unit='pc', y_unit=None,
                     CI_kwargs=None, **kwargs):
 
         CI_kwargs = dict() if CI_kwargs is None else CI_kwargs
+
+        # ------------------------------------------------------------------
+        # Evaluate the shape of the data array to determine confidence
+        # intervals, if applicable
+        # ------------------------------------------------------------------
 
         if data is None or data.ndim == 0:
             return
@@ -141,11 +147,29 @@ class _ClusterVisualizer:
             mssg = f'{intervals}σ is outside stored range of {midpoint}σ'
             raise ValueError(mssg)
 
-        r_domain = self.r.to(r_unit)
+        # ------------------------------------------------------------------
+        # Convert any units desired
+        # ------------------------------------------------------------------
+
+        x_domain = self.r if x_data is None else x_data
+
+        if x_unit:
+            x_domain = x_domain.to(x_unit)
+
+        if y_unit:
+            data = data.to(y_unit)
+
+        # ------------------------------------------------------------------
+        # Plot the median (assumed to be the middle axis of the intervals)
+        # ------------------------------------------------------------------
 
         median = data[midpoint]
 
-        med_plot, = ax.plot(r_domain, median, **kwargs)
+        med_plot, = ax.plot(x_domain, median, **kwargs)
+
+        # ------------------------------------------------------------------
+        # Plot confidence intervals successively from the midpoint
+        # ------------------------------------------------------------------
 
         CI_kwargs.setdefault('color', med_plot.get_color())
 
@@ -153,7 +177,7 @@ class _ClusterVisualizer:
         for sigma in range(1, intervals + 1):
 
             ax.fill_between(
-                r_domain, data[midpoint + sigma], data[midpoint - sigma],
+                x_domain, data[midpoint + sigma], data[midpoint - sigma],
                 alpha=(1 - alpha), **CI_kwargs
             )
 
@@ -161,49 +185,86 @@ class _ClusterVisualizer:
 
         return ax
 
-    def _plot_data(self, ax, dataset, y_key, *, r_key='r', r_unit='pc',
+    def _plot_data(self, ax, dataset, y_key, *,
+                   x_key='r', x_unit='pc', y_unit=None,
                    err_transform=None, **kwargs):
 
         # TODO need to handle colours better
         defaultcolour = None
 
-        xdata = dataset[r_key]
+        # ------------------------------------------------------------------
+        # Get data and relevant errors for plotting
+        # ------------------------------------------------------------------
+
+        xdata = dataset[x_key]
         ydata = dataset[y_key]
 
-        xerr = self._get_err(dataset, r_key)
+        xerr = self._get_err(dataset, x_key)
         yerr = self._get_err(dataset, y_key)
+
+        # ------------------------------------------------------------------
+        # Convert any units desired
+        # ------------------------------------------------------------------
+
+        if x_unit is not None:
+            xdata = xdata.to(x_unit)
+
+        if y_unit is not None:
+            ydata = ydata.to(y_unit)
+
+        # ------------------------------------------------------------------
+        # If given, transform errors based on `err_transform` function
+        # ------------------------------------------------------------------
 
         if err_transform is not None:
             yerr = err_transform(yerr)
 
-        kwargs.setdefault('linestyle', 'None')
+        # ------------------------------------------------------------------
+        # Setup plotting details, style, labels
+        # ------------------------------------------------------------------
+
         kwargs.setdefault('marker', '.')
+        kwargs.setdefault('linestyle', 'None')
         kwargs.setdefault('color', defaultcolour)
 
         label = dataset.cite()
         if 'm' in dataset.mdata:
             label += fr' ($m={dataset.mdata["m"]}$)'
 
-        ax.errorbar(xdata.to(r_unit), ydata, xerr=xerr, yerr=yerr,
+        # ------------------------------------------------------------------
+        # Plot
+        # ------------------------------------------------------------------
+
+        ax.errorbar(xdata, ydata, xerr=xerr, yerr=yerr,
                     label=label, **kwargs)
 
         return ax
 
-    def _plot(self, ax, ds_pattern, y_key, model_data, *, strict=False,
-              data_kwargs=None, model_kwargs=None):
+    def _plot(self, ax, ds_pattern, y_key, model_data, **kwargs):
         '''figure out what needs to be plotted and call model/data plotters
+        all **kwargs passed to both _plot_model and _plot_data
+        model_data dimensions *must* be (mass bins, intervals, r axis)
         '''
+
         ds_pattern = ds_pattern or ''
 
-        data_kwargs = data_kwargs or {}
-        model_kwargs = model_kwargs or {}
+        strict = kwargs.get('strict', False)
 
-        datasets = self.obs.filter_datasets(ds_pattern, True)
+        # ------------------------------------------------------------------
+        # Determine the relevant datasets to the given pattern
+        # ------------------------------------------------------------------
 
-        if data_kwargs.get('strict', False) and ds_pattern and not datasets:
+        datasets = self.obs.filter_datasets(ds_pattern)
+
+        if strict and ds_pattern and not datasets:
             mssg = f"Dataset matching '{ds_pattern}' do not exist in {self.obs}"
             # raise DataError
             raise KeyError(mssg)
+
+        # ------------------------------------------------------------------
+        # Iterate over the datasets, keeping track of all relevant masses
+        # and calling `_plot_data`
+        # ------------------------------------------------------------------
 
         masses = []
 
@@ -218,7 +279,7 @@ class _ClusterVisualizer:
 
             # plot the data
             try:
-                self._plot_data(ax, dset, y_key, **data_kwargs)
+                self._plot_data(ax, dset, y_key, **kwargs)
 
             except KeyError as err:
                 if strict:
@@ -230,8 +291,14 @@ class _ClusterVisualizer:
             if mass_bin not in masses:
                 masses.append(mass_bin)
 
+        # ------------------------------------------------------------------
+        # Based on the masses of data plotted, plot the corresponding axes of
+        # the model data, calling `_plot_model`
+        # ------------------------------------------------------------------
+
         if model_data is not None:
 
+            # ensure that the data is (mass bin, intervals, r domain)
             if len(model_data.shape) != 3:
                 raise ValueError("invalid model data shape")
 
@@ -244,10 +311,8 @@ class _ClusterVisualizer:
                     masses = [0]
 
             # TODO make sure the colors between data and model match, if masses
-            # TODO the dimensions are muddled here, what are they, is always 3d?
-            #   Going to assume for now its always [mbin, intervals, model.r]
             for mbin in masses:
-                self._plot_model(ax, model_data[mbin, :, :], **model_kwargs)
+                self._plot_model(ax, model_data[mbin, :, :], **kwargs)
 
     # -----------------------------------------------------------------------
     # Plot extras
