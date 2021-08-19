@@ -16,7 +16,10 @@ import astropy.visualization as astroviz
 __all__ = ['ModelVisualizer', 'CIModelVisualizer', 'ObservationsVisualizer']
 
 # TODO fix all spacings
-
+# TODO add "require_data" and "require_model" decorators that check that
+#   the required attribute exists, so we dont plot any completely empty plots
+#   (i.e. dont even try to plot cum_mass from an ObservationsVisualizer
+#   but should error nicely)
 
 class _ClusterVisualizer:
 
@@ -332,9 +335,10 @@ class _ClusterVisualizer:
             pattern = var = None
             strict = False
 
-        pm_tot = self.pm_tot.to('mas/yr')
+        # TODO add a 'yunit' to _plot so this can still be done there
+        # pm_tot = self.pm_tot.to('mas/yr')
 
-        self._plot(ax, pattern, var, pm_tot, strict=strict)
+        self._plot(ax, pattern, var, self.pm_tot, strict=strict)
 
         ax.legend()
 
@@ -380,11 +384,9 @@ class _ClusterVisualizer:
             pattern = var = None
             strict = False
 
-        # TODO cant plot ObservationsVisualizer cause it doesnt have this
-        #   these should all be set to None I guess, but also this line optional
-        pm_T = self.pm_T.to('mas/yr')
+        # pm_T = self.pm_T.to('mas/yr')
 
-        self._plot(ax, pattern, var, pm_T, strict=strict)
+        self._plot(ax, pattern, var, self.pm_T, strict=strict)
 
         ax.legend()
 
@@ -407,9 +409,9 @@ class _ClusterVisualizer:
             pattern = var = None
             strict = False
 
-        pm_R = self.pm_R.to('mas/yr')
+        # pm_R = self.pm_R.to('mas/yr')
 
-        self._plot(ax, pattern, var, pm_R, strict=strict)
+        self._plot(ax, pattern, var, self.pm_R, strict=strict)
         ax.legend()
 
         return fig
@@ -1824,4 +1826,34 @@ class ObservationsVisualizer(_ClusterVisualizer):
     def __init__(self, observations, d=None):
         self.obs = observations
 
+        self.star_bin = None
+
         self.d = (d or observations.initials['d']) << u.kpc
+        self.s2 = 0.
+        self.F = 1.
+
+        self.pm_T = None
+        self.pm_R = None
+        self.pm_tot = None
+        self.pm_ratio = None
+        self.LOS = None
+        self.numdens = None
+        self.mass_func = None
+        # These dont even plot data so they dont make sense, see way above todo
+        # self.rho_MS
+        # self.rho_tot
+        # self.rho_BH
+        # self.rho_WD
+        # self.rho_NS
+        # self.Sigma_MS
+        # self.Sigma_tot
+        # self.Sigma_BH
+        # self.Sigma_WD
+        # self.Sigma_NS
+        # self.cum_M_MS
+        # self.cum_M_tot
+        # self.cum_M_BH
+        # self.cum_M_WD
+        # self.cum_M_NS
+        # self.frac_M_MS
+        # self.frac_M_rem

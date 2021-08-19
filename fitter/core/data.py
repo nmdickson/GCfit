@@ -369,6 +369,7 @@ class Observations:
 
         fmt : 'bibtex', 'bibcode', 'citep'
         '''
+        # TODO make this use dataset __citation__'s so it doesnt pull each time
 
         res = {}
 
