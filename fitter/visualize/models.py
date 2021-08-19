@@ -246,6 +246,8 @@ class _ClusterVisualizer:
         model_data dimensions *must* be (mass bins, intervals, r axis)
         '''
 
+        # TODO we might still want to allow for specific model/data kwargs
+
         ds_pattern = ds_pattern or ''
 
         strict = kwargs.get('strict', False)
@@ -361,7 +363,8 @@ class _ClusterVisualizer:
     # -----------------------------------------------------------------------
 
     @_support_units
-    def plot_LOS(self, fig=None, ax=None, show_obs=True):
+    def plot_LOS(self, fig=None, ax=None, show_obs=True,
+                 x_unit='pc', y_unit='km/s'):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -377,14 +380,16 @@ class _ClusterVisualizer:
             pattern = var = None
             strict = False
 
-        self._plot(ax, pattern, var, self.LOS, strict=strict)
+        self._plot(ax, pattern, var, self.LOS, strict=strict,
+                   x_unit=x_unit, y_unit=y_unit)
 
         ax.legend()
 
         return fig
 
     @_support_units
-    def plot_pm_tot(self, fig=None, ax=None, show_obs=True, x_unit='pc'):
+    def plot_pm_tot(self, fig=None, ax=None, show_obs=True,
+                    x_unit='pc', y_unit='mas/yr'):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -400,17 +405,15 @@ class _ClusterVisualizer:
             pattern = var = None
             strict = False
 
-        # TODO add a 'yunit' to _plot so this can still be done there
-        # pm_tot = self.pm_tot.to('mas/yr')
-
-        self._plot(ax, pattern, var, self.pm_tot, strict=strict)
+        self._plot(ax, pattern, var, self.pm_tot, strict=strict,
+                   x_unit=x_unit, y_unit=y_unit)
 
         ax.legend()
 
         return fig
 
     @_support_units
-    def plot_pm_ratio(self, fig=None, ax=None, show_obs=True):
+    def plot_pm_ratio(self, fig=None, ax=None, show_obs=True, x_unit='pc'):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -426,14 +429,16 @@ class _ClusterVisualizer:
             pattern = var = None
             strict = False
 
-        self._plot(ax, pattern, var, self.pm_ratio, strict=strict)
+        self._plot(ax, pattern, var, self.pm_ratio, strict=strict,
+                   x_unit=x_unit)
 
         ax.legend()
 
         return fig
 
     @_support_units
-    def plot_pm_T(self, fig=None, ax=None, show_obs=True):
+    def plot_pm_T(self, fig=None, ax=None, show_obs=True,
+                  x_unit='pc', y_unit='mas/yr'):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -451,14 +456,16 @@ class _ClusterVisualizer:
 
         # pm_T = self.pm_T.to('mas/yr')
 
-        self._plot(ax, pattern, var, self.pm_T, strict=strict)
+        self._plot(ax, pattern, var, self.pm_T, strict=strict,
+                   x_unit=x_unit, y_unit=y_unit)
 
         ax.legend()
 
         return fig
 
     @_support_units
-    def plot_pm_R(self, fig=None, ax=None, show_obs=True):
+    def plot_pm_R(self, fig=None, ax=None, show_obs=True,
+                  x_unit='pc', y_unit='mas/yr'):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -476,13 +483,16 @@ class _ClusterVisualizer:
 
         # pm_R = self.pm_R.to('mas/yr')
 
-        self._plot(ax, pattern, var, self.pm_R, strict=strict)
+        self._plot(ax, pattern, var, self.pm_R, strict=strict,
+                   x_unit=x_unit, y_unit=y_unit)
+
         ax.legend()
 
         return fig
 
     @_support_units
-    def plot_number_density(self, fig=None, ax=None, show_obs=True):
+    def plot_number_density(self, fig=None, ax=None, show_obs=True,
+                            x_unit='pc'):
 
         def quad_nuisance(err):
             return np.sqrt(err**2 + (self.s2 << err.unit**2))
@@ -499,11 +509,12 @@ class _ClusterVisualizer:
             kwargs = {'err_transform': quad_nuisance}
 
         else:
-            pattern = var = kwargs = None
+            pattern = var = None
             strict = False
+            kwargs = {}
 
         self._plot(ax, pattern, var, self.numdens, strict=strict,
-                   data_kwargs=kwargs)
+                   x_unit=x_unit, **kwargs)
 
         ax.legend()
 
@@ -924,7 +935,7 @@ class _ClusterVisualizer:
     # -----------------------------------------------------------------------
 
     @_support_units
-    def plot_density(self, fig=None, ax=None, *, kind='all'):
+    def plot_density(self, fig=None, ax=None, *, kind='all', x_unit='pc'):
 
         if kind == 'all':
             kind = {'MS', 'tot', 'BH', 'WD', 'NS'}
@@ -936,36 +947,36 @@ class _ClusterVisualizer:
         # Total density
         if 'tot' in kind:
             kw = {"label": "Total", "c": "tab:cyan"}
-            self._plot(ax, None, None, self.rho_tot, model_kwargs=kw)
+            self._plot(ax, None, None, self.rho_tot, x_unit=x_unit, **kw)
 
         # Total Remnant density
         if 'rem' in kind:
             kw = {"label": "Total", "c": "tab:purple"}
-            self._plot(ax, None, None, self.rho_rem, model_kwargs=kw)
+            self._plot(ax, None, None, self.rho_rem, x_unit=x_unit, **kw)
 
         # Main sequence density
         if 'MS' in kind:
             kw = {"label": "Main-sequence stars", "c": "tab:orange"}
-            self._plot(ax, None, None, self.rho_MS, model_kwargs=kw)
+            self._plot(ax, None, None, self.rho_MS, x_unit=x_unit, **kw)
 
         if 'WD' in kind:
             kw = {"label": "White Dwarfs", "c": "tab:green"}
-            self._plot(ax, None, None, self.rho_WD, model_kwargs=kw)
+            self._plot(ax, None, None, self.rho_WD, x_unit=x_unit, **kw)
 
         if 'NS' in kind:
             kw = {"label": "Neutron Stars", "c": "tab:red"}
-            self._plot(ax, None, None, self.rho_NS, model_kwargs=kw)
+            self._plot(ax, None, None, self.rho_NS, x_unit=x_unit, **kw)
 
         # Black hole density
         if 'BH' in kind:
             kw = {"label": "Black Holes", "c": "tab:gray"}
-            self._plot(ax, None, None, self.rho_BH, model_kwargs=kw)
+            self._plot(ax, None, None, self.rho_BH, x_unit=x_unit, **kw)
 
         ax.set_yscale("log")
         ax.set_xscale("log")
 
         ax.set_ylabel(rf'Surface Density $[M_\odot / pc^3]$')
-        ax.set_xlabel('arcsec')
+        # ax.set_xlabel('arcsec')
 
         # ax.legend()
         fig.legend(loc='upper center', ncol=6,
@@ -974,7 +985,8 @@ class _ClusterVisualizer:
         return fig
 
     @_support_units
-    def plot_surface_density(self, fig=None, ax=None, *, kind='all'):
+    def plot_surface_density(self, fig=None, ax=None, *, kind='all',
+                             x_unit='pc'):
 
         if kind == 'all':
             kind = {'MS', 'tot', 'BH', 'WD', 'NS'}
@@ -986,36 +998,36 @@ class _ClusterVisualizer:
         # Total density
         if 'tot' in kind:
             kw = {"label": "Total", "c": "tab:cyan"}
-            self._plot(ax, None, None, self.Sigma_tot, model_kwargs=kw)
+            self._plot(ax, None, None, self.Sigma_tot, x_unit=x_unit, **kw)
 
         # Total Remnant density
         if 'rem' in kind:
             kw = {"label": "Total", "c": "tab:purple"}
-            self._plot(ax, None, None, self.Sigma_rem, model_kwargs=kw)
+            self._plot(ax, None, None, self.Sigma_rem, x_unit=x_unit, **kw)
 
         # Main sequence density
         if 'MS' in kind:
             kw = {"label": "Main-sequence stars", "c": "tab:orange"}
-            self._plot(ax, None, None, self.Sigma_MS, model_kwargs=kw)
+            self._plot(ax, None, None, self.Sigma_MS, x_unit=x_unit, **kw)
 
         if 'WD' in kind:
             kw = {"label": "White Dwarfs", "c": "tab:green"}
-            self._plot(ax, None, None, self.Sigma_WD, model_kwargs=kw)
+            self._plot(ax, None, None, self.Sigma_WD, x_unit=x_unit, **kw)
 
         if 'NS' in kind:
             kw = {"label": "Neutron Stars", "c": "tab:red"}
-            self._plot(ax, None, None, self.Sigma_NS, model_kwargs=kw)
+            self._plot(ax, None, None, self.Sigma_NS, x_unit=x_unit, **kw)
 
         # Black hole density
         if 'BH' in kind:
             kw = {"label": "Black Holes", "c": "tab:gray"}
-            self._plot(ax, None, None, self.Sigma_BH, model_kwargs=kw)
+            self._plot(ax, None, None, self.Sigma_BH, x_unit=x_unit, **kw)
 
         ax.set_yscale("log")
         ax.set_xscale("log")
 
         ax.set_ylabel(rf'Surface Density $[M_\odot / pc^2]$')
-        ax.set_xlabel('arcsec')
+        # ax.set_xlabel('arcsec')
 
         # ax.legend()
         fig.legend(loc='upper center', ncol=6,
@@ -1037,32 +1049,32 @@ class _ClusterVisualizer:
         # Total density
         if 'tot' in kind:
             kw = {"label": "Total", "c": "tab:cyan"}
-            self._plot(ax, None, None, self.cum_M_tot, model_kwargs=kw)
+            self._plot(ax, None, None, self.cum_M_tot, x_unit=x_unit, **kw)
 
         # Main sequence density
         if 'MS' in kind:
             kw = {"label": "Main-sequence stars", "c": "tab:orange"}
-            self._plot(ax, None, None, self.cum_M_MS, model_kwargs=kw)
+            self._plot(ax, None, None, self.cum_M_MS, x_unit=x_unit, **kw)
 
         if 'WD' in kind:
             kw = {"label": "White Dwarfs", "c": "tab:green"}
-            self._plot(ax, None, None, self.cum_M_WD, model_kwargs=kw)
+            self._plot(ax, None, None, self.cum_M_WD, x_unit=x_unit, **kw)
 
         if 'NS' in kind:
             kw = {"label": "Neutron Stars", "c": "tab:red"}
-            self._plot(ax, None, None, self.cum_M_NS, model_kwargs=kw)
+            self._plot(ax, None, None, self.cum_M_NS, x_unit=x_unit, **kw)
 
         # Black hole density
         if 'BH' in kind:
             kw = {"label": "Black Holes", "c": "tab:gray"}
-            self._plot(ax, None, None, self.cum_M_BH, model_kwargs=kw)
+            self._plot(ax, None, None, self.cum_M_BH, x_unit=x_unit, **kw)
 
         ax.set_yscale("log")
         ax.set_xscale("log")
 
         # ax.set_ylabel(rf'$M_{{enc}} ({self.cum_M_tot.unit})$')
         ax.set_ylabel(rf'$M_{{enc}}$ $[M_\odot]$')
-        ax.set_xlabel('arcsec')
+        # ax.set_xlabel('arcsec')
 
         # ax.legend()
         fig.legend(loc='upper center', ncol=5,
@@ -1080,9 +1092,9 @@ class _ClusterVisualizer:
         ax.set_xscale("log")
 
         self._plot(ax, None, None, self.frac_M_MS,
-                   model_kwargs={"label": "Main-sequence stars"})
+                   x_unit=x_unit, label="Main-sequence stars")
         self._plot(ax, None, None, self.frac_M_rem,
-                   model_kwargs={"label": "Remnants"})
+                   x_unit=x_unit, label="Remnants")
 
         ax.set_ylabel(r"Mass fraction $M_{MS}/M_{tot}$, $M_{remn.}/M_{tot}$")
 
