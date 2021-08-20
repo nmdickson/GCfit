@@ -15,8 +15,6 @@ __all__ = ['MCMCVisualizer', 'NestedVisualizer']
 class _RunVisualizer:
     '''base class for all visualizers of all run types'''
 
-    _REDUC_METHODS = {'median': np.median, 'mean': np.mean}
-
     _cmap = plt.cm.get_cmap('viridis')
 
     def _setup_artist(self, fig, ax, *, use_name=True):
@@ -78,7 +76,6 @@ class MCMCVisualizer(_RunVisualizer):
 
     based on an output file I guess?
     '''
-    # TODO a way to find the converged iteration automatcially (even possible?)
     # TODO a nice way to print the sources (accounting for excluded likelihoods)
 
     def __str__(self):
@@ -97,7 +94,6 @@ class MCMCVisualizer(_RunVisualizer):
         if name is not None:
             self.name = name
 
-        # TODO could also try to get obs automatically from cluster name
         self.obs = observations
 
         self.has_indiv = 'blobs' in self.file[self._gname]
@@ -109,9 +105,44 @@ class MCMCVisualizer(_RunVisualizer):
         self.walkers = slice(None)
 
     # ----------------------------------------------------------------------
-    # Dimensions - Walkers
+    # Dimensions
     # ----------------------------------------------------------------------
-    # TODO also support an array of indices, or like a condition.
+
+    def _reduce(self, array, *, only_iterations=False):
+        '''apply the necesary iterations and walkers slicing to given `array`
+        '''
+
+        # Apply iterations cut
+
+        array = array[self.iterations]
+
+        # Apply walkers cut
+
+        if not only_iterations:
+
+            if callable(self.walkers):
+
+                # Call on array, and ensure the dimensions still work out
+
+                dims = array.shape
+
+                try:
+                    array = self.walkers(array, axis=1)
+                except TypeError:
+                    array = self.walkers(array)
+
+                newdim = array.shape
+
+                if not (len(dims) == len(newdim) and dims[::2] == newdim[::2]):
+                    mssg = ("Invalid `walkers`, callables must operate along "
+                            "only the 1st axis, or accept an `axis` keyword")
+                    raise ValueError(mssg)
+
+            else:
+                # assume walkers is a slice or 1-d array
+                array = array[:, self.walkers, :]
+
+        return array
 
     @property
     def walkers(self):
@@ -120,20 +151,14 @@ class MCMCVisualizer(_RunVisualizer):
 
     @walkers.setter
     def walkers(self, value):
-        # if not isinstance(value, slice) and value not in self._REDUC_METHODS:
-        #     mssg = (f"`walkers` must be slice or one of "
-        #             f"{set(self._REDUC_METHODS)}, not {type(value)}")
-        #     raise TypeError(mssg)
+        '''walkers must be a slice, callable to be applied to walkers axes or
+        1-D boolean mask array
+        '''
 
-        if value is None:
-            self._walkers = slice(None)
+        if value is None or value is Ellipsis:
+            value = slice(None)
 
-        else:
-            self._walkers = value
-
-    # ----------------------------------------------------------------------
-    # Dimensions - Iterations
-    # ----------------------------------------------------------------------
+        self._walkers = value
 
     # cut the ending zeroed iterations, if a run was cut short
     cut_incomplete = True
@@ -175,22 +200,13 @@ class MCMCVisualizer(_RunVisualizer):
     # Helpers
     # ----------------------------------------------------------------------
 
-    def _get_chains(self, iterations=None, walkers=None):
-        '''get the chains, properly using the iterations and walkers set or
-        given, and accounting for fixed params'''
-
-        iterations = self.iterations if iterations is None else iterations
-        walkers = self.walkers if walkers is None else walkers
+    def _get_chains(self):
+        '''get the chains, properly using the iterations and walkers set,
+        and accounting for fixed params'''
 
         labels = list(self.obs.initials)
 
-        chain = self.file[self._gname]['chain'][iterations]
-
-        if isinstance(walkers, str):
-            reduc = self._REDUC_METHODS[walkers]
-            chain = reduc(chain, axis=1)
-        else:
-            chain = chain[:, walkers]
+        chain = self._reduce(self.file[self._gname]['chain'])
 
         # Handle fixed parameters
         if self.has_meta:
@@ -211,20 +227,17 @@ class MCMCVisualizer(_RunVisualizer):
     # Model Visualizers
     # ----------------------------------------------------------------------
 
-    def get_model(self, iterations=None, walkers=None, method='median'):
-        '''
-        if iterations, walkers is None, will use self.iterations, self.walkers
-        '''
+    def get_model(self, method='median'):
         # TODO there should be a method for comparing models w/ diff chain inds
         #   i.e. seeing how a model progresses over iterations
 
-        labels, chain = self._get_chains(iterations, walkers)
+        labels, chain = self._get_chains()
 
         return ModelVisualizer.from_chain(chain, self.obs, method)
 
-    def get_CImodel(self, N=100, iterations=None, walkers=None):
+    def get_CImodel(self, N=100):
 
-        labels, chain = self._get_chains(iterations, walkers)
+        labels, chain = self._get_chains()
 
         return CIModelVisualizer.from_chain(chain, self.obs, N)
 
@@ -257,7 +270,7 @@ class MCMCVisualizer(_RunVisualizer):
         if not self.has_indiv:
             raise AttributeError("No blobs stored in file")
 
-        probs = self.file[self._gname]['blobs'][self.iterations]
+        probs = self.file[self._gname]['blobs']
 
         fig, axes = self._setup_multi_artist(fig, (len(probs.dtype), ),
                                              sharex=True)
@@ -266,13 +279,7 @@ class MCMCVisualizer(_RunVisualizer):
 
             label = probs.dtype.names[ind]
 
-            indiv = probs[:][label]
-
-            if isinstance(self.walkers, str):
-                reduc = self._REDUC_METHODS[self.walkers]
-                indiv = reduc(indiv, axis=1)
-            else:
-                indiv = indiv[:, self.walkers]
+            indiv = self._reduce(probs[:][label])
 
             ax.plot(self._iteration_domain, indiv)
 
@@ -339,18 +346,10 @@ class MCMCVisualizer(_RunVisualizer):
 
         if not self.has_stats:
             raise AttributeError("No statistics stored in file")
-        else:
-            stat_grp = self.file['statistics']
 
         fig, ax = self._setup_artist(fig, ax)
 
-        acc = stat_grp['acceptance_rate'][self.iterations]
-
-        if isinstance(self.walkers, str):
-            reduc = self._REDUC_METHODS[self.walkers]
-            acc = reduc(acc, axis=1)
-        else:
-            acc = acc[:, self.walkers]
+        acc = self._reduce(self.file['statistics']['acceptance_rate'])
 
         ax.plot(self._iteration_domain, acc)
 
@@ -363,13 +362,7 @@ class MCMCVisualizer(_RunVisualizer):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        prob = self.file[self._gname]['log_prob'][self.iterations]
-
-        if isinstance(self.walkers, str):
-            reduc = self._REDUC_METHODS[self.walkers]
-            prob = reduc(prob, axis=1)
-        else:
-            prob = prob[:, self.walkers]
+        prob = self._reduce(self.file[self._gname]['log_prob'])
 
         ax.plot(self._iteration_domain, prob)
 
