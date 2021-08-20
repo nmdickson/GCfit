@@ -233,7 +233,7 @@ class _ClusterVisualizer:
 
         label = dataset.cite()
         if 'm' in dataset.mdata:
-            label += fr' ($m={dataset.mdata["m"]}$)'
+            label += fr' ($m={dataset.mdata["m"]}\ M_\odot$)'
 
         # ------------------------------------------------------------------
         # Plot
@@ -321,24 +321,17 @@ class _ClusterVisualizer:
 
             res_ax = None
 
-            # TODO make sure the colors between data and model match, if masses
-            for mbin in masses:
+            for mbin, errbar in masses.items():
 
                 ymodel = model_data[mbin, :, :]
 
-                self._plot_model(ax, ymodel, **kwargs)
+                # TODO only works right if each mass has one dataset
+                clr = errbar[0][0].get_color()
+
+                self._plot_model(ax, ymodel, color=clr, **kwargs)
 
                 if residuals:
-
-                    try:
-                        errorbars = masses[mbin]
-
-                    except TypeError:
-                        mssg = (f"Cannot plot residuals for mass={mbin}, "
-                                "no corresponding data has been plotted")
-                        raise ValueError(mssg)
-
-                    res_ax = self._add_residuals(ax, ymodel, errorbars,
+                    res_ax = self._add_residuals(ax, ymodel, errbar,
                                                  res_ax=res_ax)
 
     # -----------------------------------------------------------------------
