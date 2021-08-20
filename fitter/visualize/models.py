@@ -332,14 +332,14 @@ class _ClusterVisualizer:
 
                 if residuals:
                     res_ax = self._add_residuals(ax, ymodel, errbar,
-                                                 res_ax=res_ax)
+                                                 res_ax=res_ax, **kwargs)
 
     # -----------------------------------------------------------------------
     # Plot extras
     # -----------------------------------------------------------------------
 
     def _add_residuals(self, ax, ymodel, errorbars, *,
-                       xmodel=None, res_ax=None):
+                       xmodel=None, y_unit=None, res_ax=None, **kwargs):
         '''
         errorbars : a list of outputs from calls to plt.errorbars
         '''
@@ -351,6 +351,9 @@ class _ClusterVisualizer:
 
         if xmodel is None:
             xmodel = self.r
+
+        if y_unit is not None:
+            ymodel = ymodel.to(y_unit)
 
         ymedian = self._get_median(ymodel)
 
@@ -384,7 +387,17 @@ class _ClusterVisualizer:
 
         for errbar in errorbars:
 
+            # --------------------------------------------------------------
+            # Get the actual datapoints, and the hopefully correct units
+            # --------------------------------------------------------------
+
             xdata, ydata = errbar[0].get_data()
+            ydata = ydata.to(ymedian.unit)
+
+            # --------------------------------------------------------------
+            # Parse the errors from the size of the errorbar lines (messy)
+            # --------------------------------------------------------------
+
             xerr = yerr = None
 
             if errbar.has_xerr:
@@ -406,6 +419,10 @@ class _ClusterVisualizer:
                                  for seg in yerr_lines.get_segments()]).T[0]
 
                 yerr <<= ydata.unit
+
+            # --------------------------------------------------------------
+            # Compute the residuals and plot them
+            # --------------------------------------------------------------
 
             res = yspline(xdata) - ydata
 
