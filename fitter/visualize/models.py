@@ -1268,7 +1268,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
         model_nd = model.Sigmaj / model.mj[:, np.newaxis]
 
-        nd = np.empty(model_nd.shape)[:, np.newaxis, :]
+        nd = np.empty(model_nd.shape)[:, np.newaxis, :] << model_nd.unit
 
         for mbin in range(model_nd.shape[0]):
             nd_interp = util.QuantitySpline(model.r, model_nd[mbin, :])
