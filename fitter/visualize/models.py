@@ -321,6 +321,8 @@ class _ClusterVisualizer:
                 ymodel = model_data[mbin, :, :]
 
                 # TODO only works right if each mass has one dataset
+                #   I think we should make datasets with same mass use same clr
+                #   but different markers
                 if errbar is not None:
                     clr = errbar[0][0].get_color()
                 else:
@@ -715,7 +717,7 @@ class _ClusterVisualizer:
         ax.set_ylabel('dN/dm')
         ax.set_xlabel(r'Mass [$M_\odot$]')
 
-        fig.tight_layout()
+        # fig.tight_layout()
 
         return fig
 
@@ -966,7 +968,6 @@ class _ClusterVisualizer:
         axbig = fig.add_subplot(gs[2:, 0])
 
         self.plot_mass_func(fig=fig, ax=axbig, show_obs=show_obs,)
-                            # residuals=False, hyperparam=True)
 
         for ax in axes.flatten():
             ax.set_xlabel('')
