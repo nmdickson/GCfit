@@ -171,19 +171,23 @@ class _ClusterVisualizer:
         # Plot confidence intervals successively from the midpoint
         # ------------------------------------------------------------------
 
+        output = [med_plot]
+
         CI_kwargs.setdefault('color', med_plot.get_color())
 
         alpha = 0.8 / (intervals + 1)
         for sigma in range(1, intervals + 1):
 
-            ax.fill_between(
+            CI = ax.fill_between(
                 x_domain, data[midpoint + sigma], data[midpoint - sigma],
                 alpha=(1 - alpha), **CI_kwargs
             )
 
+            output.append(CI)
+
             alpha += alpha
 
-        return ax
+        return output
 
     def _plot_data(self, ax, dataset, y_key, *,
                    x_key='r', x_unit='pc', y_unit=None,
@@ -235,22 +239,21 @@ class _ClusterVisualizer:
         # Plot
         # ------------------------------------------------------------------
 
-        ax.errorbar(xdata, ydata, xerr=xerr, yerr=yerr,
-                    label=label, **kwargs)
+        return ax.errorbar(xdata, ydata, xerr=xerr, yerr=yerr,
+                           label=label, **kwargs)
 
-        return ax
-
-    def _plot(self, ax, ds_pattern, y_key, model_data, **kwargs):
+    def _plot(self, ax, ds_pattern, y_key, model_data, *, residuals=False,
+              **kwargs):
         '''figure out what needs to be plotted and call model/data plotters
         all **kwargs passed to both _plot_model and _plot_data
         model_data dimensions *must* be (mass bins, intervals, r axis)
         '''
 
-        # TODO we might still want to allow for specific model/data kwargs
+        # TODO we might still want to allow for specific model/data kwargs?
 
         ds_pattern = ds_pattern or ''
 
-        strict = kwargs.get('strict', False)
+        strict = kwargs.pop('strict', False)
 
         # ------------------------------------------------------------------
         # Determine the relevant datasets to the given pattern
@@ -268,7 +271,8 @@ class _ClusterVisualizer:
         # and calling `_plot_data`
         # ------------------------------------------------------------------
 
-        masses = []
+        # TODO this new handling of masses (for residuals) is way fragile
+        masses = {}
 
         for key, dset in datasets.items():
 
@@ -281,7 +285,7 @@ class _ClusterVisualizer:
 
             # plot the data
             try:
-                self._plot_data(ax, dset, y_key, **kwargs)
+                line = self._plot_data(ax, dset, y_key, **kwargs)
 
             except KeyError as err:
                 if strict:
@@ -290,8 +294,9 @@ class _ClusterVisualizer:
                     # warnings.warn(err.args[0])
                     continue
 
-            if mass_bin not in masses:
-                masses.append(mass_bin)
+            masses.setdefault(mass_bin, [])
+
+            masses[mass_bin].append(line)
 
         # ------------------------------------------------------------------
         # Based on the masses of data plotted, plot the corresponding axes of
@@ -314,31 +319,95 @@ class _ClusterVisualizer:
 
             # TODO make sure the colors between data and model match, if masses
             for mbin in masses:
-                self._plot_model(ax, model_data[mbin, :, :], **kwargs)
+
+                ymodel = model_data[mbin, :, :]
+
+                self._plot_model(ax, ymodel, **kwargs)
+
+                if residuals:
+
+                    try:
+                        errorbars = masses[mbin]
+
+                    except TypeError:
+                        mssg = (f"Cannot plot residuals for mass={mbin}, "
+                                "no corresponding data has been plotted")
+                        raise ValueError(mssg)
+
+                    self._add_residuals(ax, ymodel, errorbars)
 
     # -----------------------------------------------------------------------
     # Plot extras
     # -----------------------------------------------------------------------
 
-    def _add_residuals(self, ax, ymodel, xdata, ydata, xerr=None, yerr=None):
+    def _add_residuals(self, ax, ymodel, errorbars, *, xmodel=None):
+        '''
+        errorbars : a list of outputs from calls to plt.errorbars
+        '''
         from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+        # ------------------------------------------------------------------
+        # Get model data and spline
+        # ------------------------------------------------------------------
+
+        if xmodel is None:
+            xmodel = self.r
 
         ymedian = self._get_median(ymodel)
 
-        yspline = util.QuantitySpline(self.r, ymedian)
+        yspline = util.QuantitySpline(xmodel, ymedian)
 
-        res = yspline(xdata) - ydata
+        # ------------------------------------------------------------------
+        # Setup axes, adding a new smaller axe for the residual underneath
+        # ------------------------------------------------------------------
 
         divider = make_axes_locatable(ax)
         res_ax = divider.append_axes('bottom', size="15%", pad=0, sharex=ax)
 
-        res_ax.errorbar(xdata, res, fmt='k.', xerr=xerr, yerr=yerr)
-
         res_ax.grid()
+
+        res_ax.set_xscale(ax.get_xscale())
+
+        # ------------------------------------------------------------------
+        # Plot the model line, hopefully centred on zero
+        # ------------------------------------------------------------------
 
         self._plot_model(res_ax, ymodel - ymedian, color='k')
 
-        res_ax.set_xscale(ax.get_xscale())
+        # ------------------------------------------------------------------
+        # Get data from the plotted errorbars
+        # ------------------------------------------------------------------
+
+        # TODO also copy all formatting from each errorbars to this one
+
+        for errbar in errorbars:
+
+            xdata, ydata = errbar[0].get_data()
+            xerr = yerr = None
+
+            if errbar.has_xerr:
+                xerr_lines = errbar[2][0]
+                yerr_lines = errbar[2][1] if errbar.has_yerr else None
+            elif errbar.has_yerr:
+                xerr_lines, yerr_lines = None, errbar[2][0]
+            else:
+                xerr_lines = yerr_lines = None
+
+            if xerr_lines:
+                xerr = np.array([(np.diff(seg, axis=0) / 2)[..., -1]
+                                 for seg in xerr_lines.get_segments()]).T[0]
+
+                xerr <<= xdata.unit
+
+            if yerr_lines:
+                yerr = np.array([(np.diff(seg, axis=0) / 2)[..., -1]
+                                 for seg in yerr_lines.get_segments()]).T[0]
+
+                yerr <<= ydata.unit
+
+            res = yspline(xdata) - ydata
+
+            res_ax.errorbar(xdata, res, fmt='k.', xerr=xerr, yerr=yerr)
 
     def _add_hyperparam(self, ax, ymodel, xdata, ydata, yerr):
         # TODO this is still a bit of a mess
@@ -363,7 +432,7 @@ class _ClusterVisualizer:
     # -----------------------------------------------------------------------
 
     @_support_units
-    def plot_LOS(self, fig=None, ax=None, show_obs=True,
+    def plot_LOS(self, fig=None, ax=None, show_obs=True, residuals=False,
                  x_unit='pc', y_unit='km/s'):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -380,7 +449,8 @@ class _ClusterVisualizer:
             pattern = var = None
             strict = False
 
-        self._plot(ax, pattern, var, self.LOS, strict=strict,
+        self._plot(ax, pattern, var, self.LOS,
+                   strict=strict, residuals=residuals,
                    x_unit=x_unit, y_unit=y_unit)
 
         ax.legend()
@@ -388,7 +458,8 @@ class _ClusterVisualizer:
         return fig
 
     @_support_units
-    def plot_pm_tot(self, fig=None, ax=None, show_obs=True,
+    def plot_pm_tot(self, fig=None, ax=None,
+                    show_obs=True, residuals=False,
                     x_unit='pc', y_unit='mas/yr'):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -405,7 +476,8 @@ class _ClusterVisualizer:
             pattern = var = None
             strict = False
 
-        self._plot(ax, pattern, var, self.pm_tot, strict=strict,
+        self._plot(ax, pattern, var, self.pm_tot,
+                   strict=strict, residuals=residuals,
                    x_unit=x_unit, y_unit=y_unit)
 
         ax.legend()
@@ -413,7 +485,9 @@ class _ClusterVisualizer:
         return fig
 
     @_support_units
-    def plot_pm_ratio(self, fig=None, ax=None, show_obs=True, x_unit='pc'):
+    def plot_pm_ratio(self, fig=None, ax=None,
+                      show_obs=True, residuals=False,
+                      x_unit='pc'):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -429,7 +503,8 @@ class _ClusterVisualizer:
             pattern = var = None
             strict = False
 
-        self._plot(ax, pattern, var, self.pm_ratio, strict=strict,
+        self._plot(ax, pattern, var, self.pm_ratio,
+                   strict=strict, residuals=residuals,
                    x_unit=x_unit)
 
         ax.legend()
@@ -437,7 +512,8 @@ class _ClusterVisualizer:
         return fig
 
     @_support_units
-    def plot_pm_T(self, fig=None, ax=None, show_obs=True,
+    def plot_pm_T(self, fig=None, ax=None,
+                  show_obs=True, residuals=False,
                   x_unit='pc', y_unit='mas/yr'):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -456,7 +532,8 @@ class _ClusterVisualizer:
 
         # pm_T = self.pm_T.to('mas/yr')
 
-        self._plot(ax, pattern, var, self.pm_T, strict=strict,
+        self._plot(ax, pattern, var, self.pm_T,
+                   strict=strict, residuals=residuals,
                    x_unit=x_unit, y_unit=y_unit)
 
         ax.legend()
@@ -464,7 +541,8 @@ class _ClusterVisualizer:
         return fig
 
     @_support_units
-    def plot_pm_R(self, fig=None, ax=None, show_obs=True,
+    def plot_pm_R(self, fig=None, ax=None,
+                  show_obs=True, residuals=False,
                   x_unit='pc', y_unit='mas/yr'):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -483,7 +561,8 @@ class _ClusterVisualizer:
 
         # pm_R = self.pm_R.to('mas/yr')
 
-        self._plot(ax, pattern, var, self.pm_R, strict=strict,
+        self._plot(ax, pattern, var, self.pm_R,
+                   strict=strict, residuals=residuals,
                    x_unit=x_unit, y_unit=y_unit)
 
         ax.legend()
@@ -491,7 +570,8 @@ class _ClusterVisualizer:
         return fig
 
     @_support_units
-    def plot_number_density(self, fig=None, ax=None, show_obs=True,
+    def plot_number_density(self, fig=None, ax=None,
+                            show_obs=True, residuals=False,
                             x_unit='pc'):
 
         def quad_nuisance(err):
@@ -513,7 +593,8 @@ class _ClusterVisualizer:
             strict = False
             kwargs = {}
 
-        self._plot(ax, pattern, var, self.numdens, strict=strict,
+        self._plot(ax, pattern, var, self.numdens,
+                   strict=strict, residuals=residuals,
                    x_unit=x_unit, **kwargs)
 
         ax.legend()
