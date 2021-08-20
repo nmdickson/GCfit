@@ -30,7 +30,6 @@ class _ClusterVisualizer:
     # -----------------------------------------------------------------------
 
     def _setup_artist(self, fig, ax, *, use_name=True):
-        # TODO should maybe attempt to use gcf, gca first
         if ax is None:
             if fig is None:
                 fig, ax = plt.subplots()
@@ -311,13 +310,9 @@ class _ClusterVisualizer:
             if len(model_data.shape) != 3:
                 raise ValueError("invalid model data shape")
 
-            N_mbin = model_data.shape[0]
-
+            # No data plotted, use the star_bin
             if not masses:
-                if N_mbin > 1:
-                    masses = [self.star_bin]
-                else:
-                    masses = [0]
+                masses = {self.star_bin: None}
 
             res_ax = None
 
@@ -326,7 +321,10 @@ class _ClusterVisualizer:
                 ymodel = model_data[mbin, :, :]
 
                 # TODO only works right if each mass has one dataset
-                clr = errbar[0][0].get_color()
+                if errbar is not None:
+                    clr = errbar[0][0].get_color()
+                else:
+                    clr = kwargs.pop("color", None)
 
                 self._plot_model(ax, ymodel, color=clr, **kwargs)
 
@@ -344,6 +342,10 @@ class _ClusterVisualizer:
         errorbars : a list of outputs from calls to plt.errorbars
         '''
         from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+        if not errorbars:
+            mssg = "Cannot compute residuals, no observables data provided"
+            raise ValueError(mssg)
 
         # ------------------------------------------------------------------
         # Get model data and spline
