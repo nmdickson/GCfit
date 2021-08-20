@@ -242,7 +242,8 @@ class _ClusterVisualizer:
         return ax.errorbar(xdata, ydata, xerr=xerr, yerr=yerr,
                            label=label, **kwargs)
 
-    def _plot(self, ax, ds_pattern, y_key, model_data, *, residuals=False,
+    def _plot(self, ax, ds_pattern, y_key, model_data, *,
+              residuals=False, err_transform=None,
               **kwargs):
         '''figure out what needs to be plotted and call model/data plotters
         all **kwargs passed to both _plot_model and _plot_data
@@ -285,7 +286,8 @@ class _ClusterVisualizer:
 
             # plot the data
             try:
-                line = self._plot_data(ax, dset, y_key, **kwargs)
+                line = self._plot_data(ax, dset, y_key,
+                                       err_transform=err_transform, **kwargs)
 
             except KeyError as err:
                 if strict:
