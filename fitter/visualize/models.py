@@ -319,6 +319,8 @@ class _ClusterVisualizer:
                 else:
                     masses = [0]
 
+            res_ax = None
+
             # TODO make sure the colors between data and model match, if masses
             for mbin in masses:
 
@@ -336,13 +338,15 @@ class _ClusterVisualizer:
                                 "no corresponding data has been plotted")
                         raise ValueError(mssg)
 
-                    self._add_residuals(ax, ymodel, errorbars)
+                    res_ax = self._add_residuals(ax, ymodel, errorbars,
+                                                 res_ax=res_ax)
 
     # -----------------------------------------------------------------------
     # Plot extras
     # -----------------------------------------------------------------------
 
-    def _add_residuals(self, ax, ymodel, errorbars, *, xmodel=None):
+    def _add_residuals(self, ax, ymodel, errorbars, *,
+                       xmodel=None, res_ax=None):
         '''
         errorbars : a list of outputs from calls to plt.errorbars
         '''
@@ -360,15 +364,18 @@ class _ClusterVisualizer:
         yspline = util.QuantitySpline(xmodel, ymedian)
 
         # ------------------------------------------------------------------
-        # Setup axes, adding a new smaller axe for the residual underneath
+        # Setup axes, adding a new smaller axe for the residual underneath,
+        # if it hasn't already been created (and passed to `res_ax`)
         # ------------------------------------------------------------------
 
-        divider = make_axes_locatable(ax)
-        res_ax = divider.append_axes('bottom', size="15%", pad=0, sharex=ax)
+        if res_ax is None:
 
-        res_ax.grid()
+            divider = make_axes_locatable(ax)
+            res_ax = divider.append_axes('bottom', size="15%", pad=0, sharex=ax)
 
-        res_ax.set_xscale(ax.get_xscale())
+            res_ax.grid()
+
+            res_ax.set_xscale(ax.get_xscale())
 
         # ------------------------------------------------------------------
         # Plot the model line, hopefully centred on zero
@@ -410,6 +417,8 @@ class _ClusterVisualizer:
             res = yspline(xdata) - ydata
 
             res_ax.errorbar(xdata, res, fmt='k.', xerr=xerr, yerr=yerr)
+
+        return res_ax
 
     def _add_hyperparam(self, ax, ymodel, xdata, ydata, yerr):
         # TODO this is still a bit of a mess
