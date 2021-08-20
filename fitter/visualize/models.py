@@ -1163,6 +1163,7 @@ class _ClusterVisualizer:
 
         return fig
 
+    @_support_units
     def plot_remnant_fraction(self, fig=None, ax=None, *, x_unit='pc'):
         '''Fraction of mass in remnants vs MS stars, like in baumgardt'''
 
