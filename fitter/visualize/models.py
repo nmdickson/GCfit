@@ -432,7 +432,8 @@ class _ClusterVisualizer:
     # -----------------------------------------------------------------------
 
     @_support_units
-    def plot_LOS(self, fig=None, ax=None, show_obs=True, residuals=False,
+    def plot_LOS(self, fig=None, ax=None,
+                 show_obs=True, residuals=False, *,
                  x_unit='pc', y_unit='km/s'):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -459,7 +460,7 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_pm_tot(self, fig=None, ax=None,
-                    show_obs=True, residuals=False,
+                    show_obs=True, residuals=False, *,
                     x_unit='pc', y_unit='mas/yr'):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -486,7 +487,7 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_pm_ratio(self, fig=None, ax=None,
-                      show_obs=True, residuals=False,
+                      show_obs=True, residuals=False, *,
                       x_unit='pc'):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -513,7 +514,7 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_pm_T(self, fig=None, ax=None,
-                  show_obs=True, residuals=False,
+                  show_obs=True, residuals=False, *,
                   x_unit='pc', y_unit='mas/yr'):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -542,7 +543,7 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_pm_R(self, fig=None, ax=None,
-                  show_obs=True, residuals=False,
+                  show_obs=True, residuals=False, *,
                   x_unit='pc', y_unit='mas/yr'):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -571,7 +572,7 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_number_density(self, fig=None, ax=None,
-                            show_obs=True, residuals=False,
+                            show_obs=True, residuals=False, *,
                             x_unit='pc'):
 
         def quad_nuisance(err):
@@ -1016,7 +1017,8 @@ class _ClusterVisualizer:
     # -----------------------------------------------------------------------
 
     @_support_units
-    def plot_density(self, fig=None, ax=None, *, kind='all', x_unit='pc'):
+    def plot_density(self, fig=None, ax=None, kind='all', *,
+                     x_unit='pc'):
 
         if kind == 'all':
             kind = {'MS', 'tot', 'BH', 'WD', 'NS'}
@@ -1066,7 +1068,7 @@ class _ClusterVisualizer:
         return fig
 
     @_support_units
-    def plot_surface_density(self, fig=None, ax=None, *, kind='all',
+    def plot_surface_density(self, fig=None, ax=None, kind='all', *,
                              x_unit='pc'):
 
         if kind == 'all':
@@ -1117,8 +1119,8 @@ class _ClusterVisualizer:
         return fig
 
     @_support_units
-    def plot_cumulative_mass(self, fig=None, ax=None, *,
-                             kind='all', x_unit='pc'):
+    def plot_cumulative_mass(self, fig=None, ax=None, kind='all', *,
+                             x_unit='pc'):
 
         if kind == 'all':
             kind = {'MS', 'tot', 'BH', 'WD', 'NS'}
