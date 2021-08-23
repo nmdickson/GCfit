@@ -4,6 +4,7 @@ from ..probabilities import pulsars, mass
 
 import fnmatch
 import string
+import warnings
 
 import h5py
 import numpy as np
@@ -1476,6 +1477,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         median_chain = np.median(chain[-N:], axis=0)
 
+        # TODO get these indices more dynamically
         viz.F = median_chain[7]
         viz.s2 = median_chain[6]
         viz.d = median_chain[12] << u.kpc
@@ -1486,30 +1488,27 @@ class CIModelVisualizer(_ClusterVisualizer):
         else:
             chain_loader = chain[-N:]
 
-        # TODO uses up an inordinate amount of memory, should be generator (5)
-        # and be pooled
-        # model_sample = [Model(θ, viz.obs) for θ in chain_loader]
-        model_sample = []
-        for i, θ in enumerate(chain_loader):
-            try:
-                model_sample.append(Model(θ, viz.obs))
-            except ValueError:
-                print(f"{i} did not converge")
-                continue
+        # Setup the radial domain to interpolate everything onto
+        # We estimate the maximum radius needed will be given by the model with
+        # the largest value of the truncation parameter "g". This should be a
+        # valid enough assumption for our needs. While we have it, we'll also
+        # use this model to grab the other values we need, which shouldn't
+        # change much between models, so using this extreme model is okay.
+        # warning: in very large N samples, this g might be huge, and lead to a
+        # very large rt. I'm not really sure yet how that might affect the CIs
+        # or plots
 
-        N = len(model_sample)  # Account for unconverged models
+        huge_model = Model(chain[:, np.argmax(chain[:, 4])], viz.obs)
 
-        ex_model = model_sample[0]
+        max_r = huge_model.rt
+        viz.r = np.r_[0, np.geomspace(1e-5, max_r.value, num=99)] << u.pc
 
         viz.star_bin = 0
-        mj_MS = ex_model.mj[ex_model.nms - 1]
-        mj_tracer = ex_model.mj[ex_model._tracer_bins]
+
+        mj_MS = huge_model.mj[huge_model.nms - 1]
+        mj_tracer = huge_model.mj[huge_model._tracer_bins]
+
         viz.mj = np.r_[mj_MS, mj_tracer]
-
-        # Setup the radial domain to interpolate everything onto
-
-        max_r = max(model_sample, key=lambda m: m.rt).rt
-        viz.r = np.r_[0, np.geomspace(1e-5, max_r.value, num=99)] << u.pc
 
         # ------------------------------------------------------------------
         # Setup the final full parameters arrays with dims of
@@ -1518,9 +1517,9 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         # velocities
 
-        vel_unit = np.sqrt(ex_model.v2Tj).unit
+        vel_unit = np.sqrt(huge_model.v2Tj).unit
 
-        Nm = 1 + len(ex_model.mj[ex_model._tracer_bins])
+        Nm = len(mj_MS) + len(mj_tracer)
 
         vpj = np.empty((Nm, N, viz.r.size)) << vel_unit
         vTj, vRj, vtotj = vpj.copy(), vpj.copy(), vpj.copy()
@@ -1529,7 +1528,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         # mass density
 
-        rho_unit = ex_model.rhoj.unit
+        rho_unit = huge_model.rhoj.unit
 
         rho_tot = np.empty((1, N, viz.r.size)) << rho_unit
         rho_MS, rho_BH = rho_tot.copy(), rho_tot.copy()
@@ -1537,7 +1536,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         # surface density
 
-        Sigma_unit = ex_model.Sigmaj.unit
+        Sigma_unit = huge_model.Sigmaj.unit
 
         Sigma_tot = np.empty((1, N, viz.r.size)) << Sigma_unit
         Sigma_MS, Sigma_BH = Sigma_tot.copy(), Sigma_tot.copy()
@@ -1545,7 +1544,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         # Cumulative mass
 
-        mass_unit = ex_model.M.unit
+        mass_unit = huge_model.M.unit
 
         cum_M_tot = np.empty((1, N, viz.r.size)) << mass_unit
         cum_M_MS, cum_M_BH = cum_M_tot.copy(), cum_M_tot.copy()
@@ -1578,7 +1577,16 @@ class CIModelVisualizer(_ClusterVisualizer):
         # relevant parameters
         # ------------------------------------------------------------------
 
-        for model_ind, model in enumerate(model_sample):
+        # TODO should be pooled
+        for model_ind, θ in enumerate(chain_loader):
+
+            try:
+                model = Model(θ, viz.obs)
+
+            except ValueError:
+                # TODO does this ever happen? it might mess up everything if so
+                warnings.warn(f"{model_ind} did not converge, might be bad")
+                continue
 
             equivs = util.angular_width(model.d)
 
