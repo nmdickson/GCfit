@@ -223,6 +223,9 @@ class MCMCVisualizer(_RunVisualizer):
 
         return labels, chain
 
+    # TODO method which creates a mask array for walkers based on a condition
+    #   i.e. "walkers where final delta > 0.35" or something
+
     # ----------------------------------------------------------------------
     # Model Visualizers
     # ----------------------------------------------------------------------
@@ -486,6 +489,10 @@ class MCMCVisualizer(_RunVisualizer):
 
 
 class NestedVisualizer(_RunVisualizer):
+
+    @property
+    def weights(self):
+        return np.exp(self.results.logwt - self.results.logz[-1])
 
     def __init__(self, file, observations, group='nested', name=None):
 
