@@ -1461,7 +1461,8 @@ class CIModelVisualizer(_ClusterVisualizer):
         return fig
 
     @classmethod
-    def from_chain(cls, chain, observations, N=100, *, verbose=True):
+    def from_chain(cls, chain, observations, N=100, *, verbose=True, pool=None):
+        import functools
 
         viz = cls()
 
@@ -1473,20 +1474,14 @@ class CIModelVisualizer(_ClusterVisualizer):
         # ------------------------------------------------------------------
 
         # Flatten walkers, if not already
-        chain = chain.reshape((-1, chain.shape[-1]))
+        chain = chain.reshape((-1, chain.shape[-1]))[-N:]
 
-        median_chain = np.median(chain[-N:], axis=0)
+        median_chain = np.median(chain, axis=0)
 
         # TODO get these indices more dynamically
         viz.F = median_chain[7]
         viz.s2 = median_chain[6]
         viz.d = median_chain[12] << u.kpc
-
-        if verbose:
-            import tqdm
-            chain_loader = tqdm.tqdm(chain[-N:])
-        else:
-            chain_loader = chain[-N:]
 
         # Setup the radial domain to interpolate everything onto
         # We estimate the maximum radius needed will be given by the model with
@@ -1498,7 +1493,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         # very large rt. I'm not really sure yet how that might affect the CIs
         # or plots
 
-        huge_model = Model(chain[:, np.argmax(chain[:, 4])], viz.obs)
+        huge_model = Model(chain[np.argmax(chain[:, 4])], viz.obs)
 
         max_r = huge_model.rt
         viz.r = np.r_[0, np.geomspace(1e-5, max_r.value, num=99)] << u.pc
@@ -1519,7 +1514,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         vel_unit = np.sqrt(huge_model.v2Tj).unit
 
-        Nm = len(mj_MS) + len(mj_tracer)
+        Nm = 1 + len(mj_tracer)
 
         vpj = np.empty((Nm, N, viz.r.size)) << vel_unit
         vTj, vRj, vtotj = vpj.copy(), vpj.copy(), vpj.copy()
@@ -1573,20 +1568,33 @@ class CIModelVisualizer(_ClusterVisualizer):
         BH_num = np.empty(N) << u.dimensionless_unscaled
 
         # ------------------------------------------------------------------
+        # Setup iteration and pooling
+        # ------------------------------------------------------------------
+
+        # TODO currently does nothing
+        # if verbose:
+        #     import tqdm
+        #     chain_loader = tqdm.tqdm(chain)
+        # else:
+        #     chain_loader = chain
+
+        # TODO assuming that chain always converges, might err if not the case
+        get_model = functools.partial(Model, observations=viz.obs)
+
+        try:
+            _map = map if pool is None else pool.imap_unordered
+        except AttributeError:
+            mssg = ("Invalid pool, currently only support pools with an "
+                    "`imap_unordered` method")
+            raise ValueError(mssg)
+
+        # ------------------------------------------------------------------
         # iterate over all models in the sample and compute/store their
         # relevant parameters
         # ------------------------------------------------------------------
 
         # TODO should be pooled
-        for model_ind, θ in enumerate(chain_loader):
-
-            try:
-                model = Model(θ, viz.obs)
-
-            except ValueError:
-                # TODO does this ever happen? it might mess up everything if so
-                warnings.warn(f"{model_ind} did not converge, might be bad")
-                continue
+        for model_ind, model in enumerate(_map(get_model, chain)):
 
             equivs = util.angular_width(model.d)
 

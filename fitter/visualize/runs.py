@@ -238,11 +238,13 @@ class MCMCVisualizer(_RunVisualizer):
 
         return ModelVisualizer.from_chain(chain, self.obs, method)
 
-    def get_CImodel(self, N=100):
+    def get_CImodel(self, N=100, Nprocesses=1):
+        import multiprocessing
 
         labels, chain = self._get_chains()
 
-        return CIModelVisualizer.from_chain(chain, self.obs, N)
+        with multiprocessing.Pool(processes=Nprocesses) as pool:
+            return CIModelVisualizer.from_chain(chain, self.obs, N, pool=pool)
 
     # ----------------------------------------------------------------------
     # Plots
@@ -644,6 +646,24 @@ class NestedVisualizer(_RunVisualizer):
 
         prior_kwargs = {'fixed_initials': fixed, 'err_on_fail': False}
         return priors.PriorTransforms(prior_params, **prior_kwargs)
+
+    # ----------------------------------------------------------------------
+    # Model Visualizers
+    # ----------------------------------------------------------------------
+
+    def get_model(self, method='median'):
+
+        labels, chain = self._get_chains()
+
+        return ModelVisualizer.from_chain(chain, self.obs, method)
+
+    def get_CImodel(self, N=100, Nprocesses=1):
+        import multiprocessing
+
+        labels, chain = self._get_chains()
+
+        with multiprocessing.Pool(processes=Nprocesses) as pool:
+            return CIModelVisualizer.from_chain(chain, self.obs, N, pool=pool)
 
     # ----------------------------------------------------------------------
     # Plots
