@@ -1464,18 +1464,17 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         viz = cls()
 
+        viz.N = N
+        viz.obs = observations
+
         # ------------------------------------------------------------------
         # Get info about the chain and set of models
         # ------------------------------------------------------------------
 
+        # Flatten walkers, if not already
         chain = chain.reshape((-1, chain.shape[-1]))
 
-        viz.N = N
-
-        viz.obs = observations
-
         median_chain = np.median(chain[-N:], axis=0)
-        # median_model = Model(median_chain, viz.obs)  # Doesnt converge a lot
 
         viz.F = median_chain[7]
         viz.s2 = median_chain[6]
@@ -1488,6 +1487,7 @@ class CIModelVisualizer(_ClusterVisualizer):
             chain_loader = chain[-N:]
 
         # TODO uses up an inordinate amount of memory, should be generator (5)
+        # and be pooled
         # model_sample = [Model(θ, viz.obs) for θ in chain_loader]
         model_sample = []
         for i, θ in enumerate(chain_loader):
@@ -1522,46 +1522,39 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         Nm = 1 + len(ex_model.mj[ex_model._tracer_bins])
 
-        vTj = np.empty((Nm, N, viz.r.size)) << vel_unit
-        vRj = np.empty((Nm, N, viz.r.size)) << vel_unit
-        vtotj = np.empty((Nm, N, viz.r.size)) << vel_unit
-        vaj = np.empty((Nm, N, viz.r.size)) << u.dimensionless_unscaled
         vpj = np.empty((Nm, N, viz.r.size)) << vel_unit
+        vTj, vRj, vtotj = vpj.copy(), vpj.copy(), vpj.copy()
+
+        vaj = np.empty((Nm, N, viz.r.size)) << u.dimensionless_unscaled
 
         # mass density
 
         rho_unit = ex_model.rhoj.unit
 
-        rho_MS = np.empty((1, N, viz.r.size)) << rho_unit
         rho_tot = np.empty((1, N, viz.r.size)) << rho_unit
-        rho_BH = np.empty((1, N, viz.r.size)) << rho_unit
-        rho_WD = np.empty((1, N, viz.r.size)) << rho_unit
-        rho_NS = np.empty((1, N, viz.r.size)) << rho_unit
+        rho_MS, rho_BH = rho_tot.copy(), rho_tot.copy()
+        rho_WD, rho_NS = rho_tot.copy(), rho_tot.copy()
 
         # surface density
 
         Sigma_unit = ex_model.Sigmaj.unit
 
-        Sigma_MS = np.empty((1, N, viz.r.size)) << Sigma_unit
         Sigma_tot = np.empty((1, N, viz.r.size)) << Sigma_unit
-        Sigma_BH = np.empty((1, N, viz.r.size)) << Sigma_unit
-        Sigma_WD = np.empty((1, N, viz.r.size)) << Sigma_unit
-        Sigma_NS = np.empty((1, N, viz.r.size)) << Sigma_unit
+        Sigma_MS, Sigma_BH = Sigma_tot.copy(), Sigma_tot.copy()
+        Sigma_WD, Sigma_NS = Sigma_tot.copy(), Sigma_tot.copy()
 
         # Cumulative mass
 
         mass_unit = ex_model.M.unit
 
-        cum_M_MS = np.empty((1, N, viz.r.size)) << mass_unit
         cum_M_tot = np.empty((1, N, viz.r.size)) << mass_unit
-        cum_M_BH = np.empty((1, N, viz.r.size)) << mass_unit
-        cum_M_WD = np.empty((1, N, viz.r.size)) << mass_unit
-        cum_M_NS = np.empty((1, N, viz.r.size)) << mass_unit
+        cum_M_MS, cum_M_BH = cum_M_tot.copy(), cum_M_tot.copy()
+        cum_M_WD, cum_M_NS = cum_M_tot.copy(), cum_M_tot.copy()
 
         # Mass Fraction
 
         frac_M_MS = np.empty((1, N, viz.r.size)) << u.dimensionless_unscaled
-        frac_M_rem = np.empty((1, N, viz.r.size)) << u.dimensionless_unscaled
+        frac_M_rem = frac_M_MS.copy()
 
         # number density
 
