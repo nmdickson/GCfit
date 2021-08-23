@@ -556,14 +556,6 @@ class Observations:
 
 class Model(lp.limepy):
 
-    def __getattr__(self, key):
-        '''If `key` is not defined in the limepy model, try to get it from θ'''
-        try:
-            return self._theta[key]
-        except KeyError as err:
-            msg = f"'{self.__class__.__name__}' object has no attribute '{key}'"
-            raise AttributeError(msg) from err
-
     def _init_mf(self):
 
         m123 = [0.1, 0.5, 1.0, 100]  # Slope breakpoints for imf
@@ -679,6 +671,9 @@ class Model(lp.limepy):
             raise KeyError(mssg)
 
         self._theta = theta
+
+        for key, val in self._theta.items():
+            setattr(self, key, val)
 
         # ------------------------------------------------------------------
         # Get mass function
