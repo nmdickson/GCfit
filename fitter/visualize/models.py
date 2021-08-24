@@ -242,9 +242,9 @@ class _ClusterVisualizer:
         return ax.errorbar(xdata, ydata, xerr=xerr, yerr=yerr,
                            label=label, **kwargs)
 
-    def _plot(self, ax, ds_pattern, y_key, model_data, *,
-              residuals=False, err_transform=None,
-              **kwargs):
+    def _plot_profile(self, ax, ds_pattern, y_key, model_data, *,
+                      residuals=False, err_transform=None,
+                      **kwargs):
         '''figure out what needs to be plotted and call model/data plotters
         all **kwargs passed to both _plot_model and _plot_data
         model_data dimensions *must* be (mass bins, intervals, r axis)
@@ -476,9 +476,9 @@ class _ClusterVisualizer:
             pattern = var = None
             strict = False
 
-        self._plot(ax, pattern, var, self.LOS,
-                   strict=strict, residuals=residuals,
-                   x_unit=x_unit, y_unit=y_unit)
+        self._plot_profile(ax, pattern, var, self.LOS,
+                           strict=strict, residuals=residuals,
+                           x_unit=x_unit, y_unit=y_unit)
 
         ax.legend()
 
@@ -503,9 +503,9 @@ class _ClusterVisualizer:
             pattern = var = None
             strict = False
 
-        self._plot(ax, pattern, var, self.pm_tot,
-                   strict=strict, residuals=residuals,
-                   x_unit=x_unit, y_unit=y_unit)
+        self._plot_profile(ax, pattern, var, self.pm_tot,
+                           strict=strict, residuals=residuals,
+                           x_unit=x_unit, y_unit=y_unit)
 
         ax.legend()
 
@@ -530,9 +530,9 @@ class _ClusterVisualizer:
             pattern = var = None
             strict = False
 
-        self._plot(ax, pattern, var, self.pm_ratio,
-                   strict=strict, residuals=residuals,
-                   x_unit=x_unit)
+        self._plot_profile(ax, pattern, var, self.pm_ratio,
+                           strict=strict, residuals=residuals,
+                           x_unit=x_unit)
 
         ax.legend()
 
@@ -559,9 +559,9 @@ class _ClusterVisualizer:
 
         # pm_T = self.pm_T.to('mas/yr')
 
-        self._plot(ax, pattern, var, self.pm_T,
-                   strict=strict, residuals=residuals,
-                   x_unit=x_unit, y_unit=y_unit)
+        self._plot_profile(ax, pattern, var, self.pm_T,
+                           strict=strict, residuals=residuals,
+                           x_unit=x_unit, y_unit=y_unit)
 
         ax.legend()
 
@@ -588,9 +588,9 @@ class _ClusterVisualizer:
 
         # pm_R = self.pm_R.to('mas/yr')
 
-        self._plot(ax, pattern, var, self.pm_R,
-                   strict=strict, residuals=residuals,
-                   x_unit=x_unit, y_unit=y_unit)
+        self._plot_profile(ax, pattern, var, self.pm_R,
+                           strict=strict, residuals=residuals,
+                           x_unit=x_unit, y_unit=y_unit)
 
         ax.legend()
 
@@ -620,9 +620,9 @@ class _ClusterVisualizer:
             strict = False
             kwargs = {}
 
-        self._plot(ax, pattern, var, self.numdens,
-                   strict=strict, residuals=residuals,
-                   x_unit=x_unit, **kwargs)
+        self._plot_profile(ax, pattern, var, self.numdens,
+                           strict=strict, residuals=residuals,
+                           x_unit=x_unit, **kwargs)
 
         ax.legend()
 
@@ -1055,30 +1055,36 @@ class _ClusterVisualizer:
         # Total density
         if 'tot' in kind:
             kw = {"label": "Total", "c": "tab:cyan"}
-            self._plot(ax, None, None, self.rho_tot, x_unit=x_unit, **kw)
+            self._plot_profile(ax, None, None, self.rho_tot,
+                               x_unit=x_unit, **kw)
 
         # Total Remnant density
         if 'rem' in kind:
             kw = {"label": "Total", "c": "tab:purple"}
-            self._plot(ax, None, None, self.rho_rem, x_unit=x_unit, **kw)
+            self._plot_profile(ax, None, None, self.rho_rem,
+                               x_unit=x_unit, **kw)
 
         # Main sequence density
         if 'MS' in kind:
             kw = {"label": "Main-sequence stars", "c": "tab:orange"}
-            self._plot(ax, None, None, self.rho_MS, x_unit=x_unit, **kw)
+            self._plot_profile(ax, None, None, self.rho_MS,
+                               x_unit=x_unit, **kw)
 
         if 'WD' in kind:
             kw = {"label": "White Dwarfs", "c": "tab:green"}
-            self._plot(ax, None, None, self.rho_WD, x_unit=x_unit, **kw)
+            self._plot_profile(ax, None, None, self.rho_WD,
+                               x_unit=x_unit, **kw)
 
         if 'NS' in kind:
             kw = {"label": "Neutron Stars", "c": "tab:red"}
-            self._plot(ax, None, None, self.rho_NS, x_unit=x_unit, **kw)
+            self._plot_profile(ax, None, None, self.rho_NS,
+                               x_unit=x_unit, **kw)
 
         # Black hole density
         if 'BH' in kind:
             kw = {"label": "Black Holes", "c": "tab:gray"}
-            self._plot(ax, None, None, self.rho_BH, x_unit=x_unit, **kw)
+            self._plot_profile(ax, None, None, self.rho_BH,
+                               x_unit=x_unit, **kw)
 
         ax.set_yscale("log")
         ax.set_xscale("log")
@@ -1106,30 +1112,36 @@ class _ClusterVisualizer:
         # Total density
         if 'tot' in kind:
             kw = {"label": "Total", "c": "tab:cyan"}
-            self._plot(ax, None, None, self.Sigma_tot, x_unit=x_unit, **kw)
+            self._plot_profile(ax, None, None, self.Sigma_tot,
+                               x_unit=x_unit, **kw)
 
         # Total Remnant density
         if 'rem' in kind:
             kw = {"label": "Total", "c": "tab:purple"}
-            self._plot(ax, None, None, self.Sigma_rem, x_unit=x_unit, **kw)
+            self._plot_profile(ax, None, None, self.Sigma_rem,
+                               x_unit=x_unit, **kw)
 
         # Main sequence density
         if 'MS' in kind:
             kw = {"label": "Main-sequence stars", "c": "tab:orange"}
-            self._plot(ax, None, None, self.Sigma_MS, x_unit=x_unit, **kw)
+            self._plot_profile(ax, None, None, self.Sigma_MS,
+                               x_unit=x_unit, **kw)
 
         if 'WD' in kind:
             kw = {"label": "White Dwarfs", "c": "tab:green"}
-            self._plot(ax, None, None, self.Sigma_WD, x_unit=x_unit, **kw)
+            self._plot_profile(ax, None, None, self.Sigma_WD,
+                               x_unit=x_unit, **kw)
 
         if 'NS' in kind:
             kw = {"label": "Neutron Stars", "c": "tab:red"}
-            self._plot(ax, None, None, self.Sigma_NS, x_unit=x_unit, **kw)
+            self._plot_profile(ax, None, None, self.Sigma_NS,
+                               x_unit=x_unit, **kw)
 
         # Black hole density
         if 'BH' in kind:
             kw = {"label": "Black Holes", "c": "tab:gray"}
-            self._plot(ax, None, None, self.Sigma_BH, x_unit=x_unit, **kw)
+            self._plot_profile(ax, None, None, self.Sigma_BH,
+                               x_unit=x_unit, **kw)
 
         ax.set_yscale("log")
         ax.set_xscale("log")
@@ -1157,25 +1169,30 @@ class _ClusterVisualizer:
         # Total density
         if 'tot' in kind:
             kw = {"label": "Total", "c": "tab:cyan"}
-            self._plot(ax, None, None, self.cum_M_tot, x_unit=x_unit, **kw)
+            self._plot_profile(ax, None, None, self.cum_M_tot,
+                               x_unit=x_unit, **kw)
 
         # Main sequence density
         if 'MS' in kind:
             kw = {"label": "Main-sequence stars", "c": "tab:orange"}
-            self._plot(ax, None, None, self.cum_M_MS, x_unit=x_unit, **kw)
+            self._plot_profile(ax, None, None, self.cum_M_MS,
+                               x_unit=x_unit, **kw)
 
         if 'WD' in kind:
             kw = {"label": "White Dwarfs", "c": "tab:green"}
-            self._plot(ax, None, None, self.cum_M_WD, x_unit=x_unit, **kw)
+            self._plot_profile(ax, None, None, self.cum_M_WD,
+                               x_unit=x_unit, **kw)
 
         if 'NS' in kind:
             kw = {"label": "Neutron Stars", "c": "tab:red"}
-            self._plot(ax, None, None, self.cum_M_NS, x_unit=x_unit, **kw)
+            self._plot_profile(ax, None, None, self.cum_M_NS,
+                               x_unit=x_unit, **kw)
 
         # Black hole density
         if 'BH' in kind:
             kw = {"label": "Black Holes", "c": "tab:gray"}
-            self._plot(ax, None, None, self.cum_M_BH, x_unit=x_unit, **kw)
+            self._plot_profile(ax, None, None, self.cum_M_BH,
+                               x_unit=x_unit, **kw)
 
         ax.set_yscale("log")
         ax.set_xscale("log")
@@ -1200,10 +1217,10 @@ class _ClusterVisualizer:
 
         ax.set_xscale("log")
 
-        self._plot(ax, None, None, self.frac_M_MS,
-                   x_unit=x_unit, label="Main-sequence stars")
-        self._plot(ax, None, None, self.frac_M_rem,
-                   x_unit=x_unit, label="Remnants")
+        self._plot_profile(ax, None, None, self.frac_M_MS,
+                           x_unit=x_unit, label="Main-sequence stars")
+        self._plot_profile(ax, None, None, self.frac_M_rem,
+                           x_unit=x_unit, label="Remnants")
 
         ax.set_ylabel(r"Mass fraction $M_{MS}/M_{tot}$, $M_{remn.}/M_{tot}$")
 
