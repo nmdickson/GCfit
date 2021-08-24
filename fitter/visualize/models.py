@@ -631,17 +631,11 @@ class _ClusterVisualizer:
     @_support_units
     def plot_mass_func(self, fig=None, ax=None, show_obs=True):
 
-        # TODO cause this doesn't use _plot_model_CI its less robust
-
         fig, ax = self._setup_artist(fig, ax)
 
         scale = 10
-        # yticks = []
-        # ylabels = []
 
         XTEXT = 0.81 * u.Msun
-        # ax.annotate("Radial Bins", (XTEXT, 10**scale), fontsize=12)
-        # scale -= 4
 
         PI_list = fnmatch.filter([k[0] for k in self.obs.valid_likelihoods],
                                  '*mass_function*')
@@ -679,7 +673,7 @@ class _ClusterVisualizer:
 
                 midpoint = self.mass_func.shape[0] // 2
 
-                m_domain = self.model.mj[:self.mass_func.shape[-1]]
+                m_domain = self.mj[:self.mass_func.shape[-1]]
                 median = self.mass_func[midpoint, rbin] * 10**scale
 
                 med_plot, = ax.plot(m_domain, median, '--', c=clr,
@@ -697,9 +691,6 @@ class _ClusterVisualizer:
 
                     alpha += alpha
 
-                # yticks.append(med_plot.get_ydata()[0])
-                # ylabels.append(f"{r_in.value:.2f}'-{r_out.value:.2f}'")
-
                 xy_pnt = (med_plot.get_xdata()[-1], med_plot.get_ydata()[-1])
                 xy_txt = (XTEXT, med_plot.get_ydata()[-1])
                 text = f"{r_in.value:.2f}'-{r_out.value:.2f}'"
@@ -712,13 +703,8 @@ class _ClusterVisualizer:
         ax.set_yscale("log")
         ax.set_xscale("log")
 
-        # ax.set_yticks(yticks)
-        # ax.set_yticklabels(ylabels)
-
         ax.set_ylabel('dN/dm')
         ax.set_xlabel(r'Mass [$M_\odot$]')
-
-        # fig.tight_layout()
 
         return fig
 
@@ -1515,16 +1501,19 @@ class CIModelVisualizer(_ClusterVisualizer):
         max_r = huge_model.rt
         viz.r = np.r_[0, np.geomspace(1e-5, max_r.value, num=99)] << u.pc
 
-        viz.star_bin = 0
+        # Assume that this example model has same nms, mj[:nms] as all models
+        # This approximation isn't exactly correct, but close enough for plots
+        viz.star_bin = huge_model.nms - 1
 
-        mj_MS = huge_model.mj[huge_model.nms - 1]
+        mj_MS = huge_model.mj[:huge_model.nms]
         mj_tracer = huge_model.mj[huge_model._tracer_bins]
 
         viz.mj = np.r_[mj_MS, mj_tracer]
 
         # ------------------------------------------------------------------
         # Setup the final full parameters arrays with dims of
-        # [mass bins, intervals (from percentile of models), radial bins]
+        # [mass bins, intervals (from percentile of models), radial bins] for
+        # all "profile" datasets
         # ------------------------------------------------------------------
 
         # velocities
@@ -1573,13 +1562,13 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         # mass function
 
-        # TODO no clue how to set this up
-        # Beggining to think its wrong to try and force the mf into the same
-        # format as all these other profiles, as its not a profile at all
+        PI_list = viz.obs.filter_datasets('*mass_function*')
+        N_rbins = sum([np.unique(viz.obs[k]['r1']).size for k in PI_list])
+        N_mbins = huge_model.nms
 
-        # massfunc = np.empty((N, N_rbins, N_mbins))
+        massfunc = np.empty((N, N_rbins, N_mbins))
 
-        # BH mass (exclusive to CI models, so it's different)
+        # BH mass
 
         BH_mass = np.empty(N) << u.Msun
         BH_num = np.empty(N) << u.dimensionless_unscaled
@@ -1646,11 +1635,11 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             # Number Densities
 
-            numdens[slc] = viz._init_numdens(model, viz.obs, equivs=equivs)
+            numdens[slc] = viz._init_numdens(model, equivs=equivs)
 
             # Mass Functions
 
-            # massfunc[slc] = viz._init_massfunc(model, viz.obs, equivs=equivs)
+            massfunc[model_ind, ...] = viz._init_massfunc(model, equivs=equivs)
 
             # Mass Fractions
 
@@ -1695,8 +1684,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         viz.cum_M_NS = np.transpose(np.percentile(cum_M_NS, q, axis=1), axes)
 
         viz.numdens = np.transpose(np.percentile(numdens, q, axis=1), axes)
-        # viz.mass_func = np.percentile(massfunc, q, axis=1)
-        viz.mass_func = np.empty((0, 0, 0))
+        viz.mass_func = np.percentile(massfunc, q, axis=0)
 
         viz.frac_M_MS = np.percentile(frac_M_MS, q, axis=1)
         viz.frac_M_rem = np.percentile(frac_M_rem, q, axis=1)
@@ -1831,9 +1819,9 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         return mass_MS / mass_tot, mass_rem / mass_tot
 
-    def _init_numdens(self, model, observations, equivs=None):
+    def _init_numdens(self, model, equivs=None):
 
-        obs_nd = observations['number_density']
+        obs_nd = self.obs['number_density']
         obs_r = obs_nd['r'].to(model.r.unit, equivs)
 
         model_nd = model.Sigmaj[model.nms - 1] / model.mj[model.nms - 1]
@@ -1845,30 +1833,28 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         return K * nd_interp(self.r)
 
-    def _init_massfunc(self, model, observations, equivs=None):
-        # TODO I really don't think this will work at all at this point (25)
+    def _init_massfunc(self, model, equivs=None):
 
         densityj = [util.QuantitySpline(model.r, model.Sigmaj[j])
                     for j in range(model.nms)]
 
-        # TODO change these to filter_likelihoods obviously
-        PI_list = fnmatch.filter([k[0] for k in observations.valid_likelihoods],
-                                 '*mass_function*')
+        PI_list = self.obs.filter_datasets('*mass_function*')
+        PI_list = sorted(PI_list, key=lambda k: self.obs[k]['r1'].min())
 
-        PI_list = sorted(PI_list, key=lambda k: observations[k]['r1'].min())
+        N_rbins = sum([np.unique(self.obs[k]['r1']).size for k in PI_list])
 
-        N_rbins = sum([np.unique(observations[k]['r1']).size for k in PI_list])
-        N_mbins = max(model_sample, key=lambda m: m.nms).nms
+        # In testing seems like all models have same nms, I hope thats the case
+        N_mbins = model.nms
 
         rbin_ind = -1
 
         # TODO units?
-        mf = np.empty((N_rbins, N_mbins))
+        mass_func = np.empty((N_rbins, N_mbins))
 
         for key in PI_list:
-            mf = observations[key]
+            mf = self.obs[key]
 
-            cen = (observations.mdata['RA'], observations.mdata['DEC'])
+            cen = (self.obs.mdata['RA'], self.obs.mdata['DEC'])
             unit = mf.mdata['field_unit']
             coords = []
             for ch in string.ascii_letters:
@@ -1891,9 +1877,9 @@ class CIModelVisualizer(_ClusterVisualizer):
                     for j in range(model.nms):
                         Nj = field_slice.MC_integrate(densityj[j], sample_radii)
                         widthj = (model.mj[j] * model.mes_widths[j])
-                        mf[rbin_ind, j] = (Nj / widthj).value
+                        mass_func[rbin_ind, j] = (Nj / widthj).value
 
-        return mf
+        return mass_func
 
     # ----------------------------------------------------------------------
     # Save and load confidence intervals to a file
