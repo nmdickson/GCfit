@@ -4,7 +4,6 @@ from ..probabilities import pulsars, mass
 
 import fnmatch
 import string
-import warnings
 
 import h5py
 import numpy as np
@@ -22,9 +21,10 @@ __all__ = ['ModelVisualizer', 'CIModelVisualizer', 'ObservationsVisualizer']
 #   (i.e. dont even try to plot cum_mass from an ObservationsVisualizer
 #   but should error nicely)
 
+
 class _ClusterVisualizer:
 
-    _REDUC_METHODS = {'median': np.median, 'mean': np.mean}
+    _MARKERS = ('o', '^', 'D', '+', 'x', '*', 's', 'p', 'h', 'v', '1', '2')
 
     # -----------------------------------------------------------------------
     # Artist setups
@@ -224,7 +224,7 @@ class _ClusterVisualizer:
             yerr = err_transform(yerr)
 
         # ------------------------------------------------------------------
-        # Setup plotting details, style, labels
+        # Setup default plotting details, style, labels
         # ------------------------------------------------------------------
 
         kwargs.setdefault('marker', '.')
@@ -239,7 +239,9 @@ class _ClusterVisualizer:
         # Plot
         # ------------------------------------------------------------------
 
-        return ax.errorbar(xdata, ydata, xerr=xerr, yerr=yerr,
+        # TODO not sure if I like the mfc=none style,
+        #   mostly due to https://github.com/matplotlib/matplotlib/issues/3400
+        return ax.errorbar(xdata, ydata, xerr=xerr, yerr=yerr, mfc='none',
                            label=label, **kwargs)
 
     def _plot_profile(self, ax, ds_pattern, y_key, model_data, *,
@@ -255,6 +257,9 @@ class _ClusterVisualizer:
         ds_pattern = ds_pattern or ''
 
         strict = kwargs.pop('strict', False)
+
+        # Restart marker styles each plotting call
+        markers = iter(self._MARKERS)
 
         # ------------------------------------------------------------------
         # Determine the relevant datasets to the given pattern
@@ -272,10 +277,11 @@ class _ClusterVisualizer:
         # and calling `_plot_data`
         # ------------------------------------------------------------------
 
-        # TODO this new handling of masses (for residuals) is way fragile
         masses = {}
 
         for key, dset in datasets.items():
+
+            mrk = next(markers)
 
             # get mass bin of this dataset, for later model plotting
             if 'm' in dset.mdata:
@@ -284,9 +290,14 @@ class _ClusterVisualizer:
             else:
                 mass_bin = self.star_bin
 
+            if mass_bin in masses:
+                clr = masses[mass_bin][0][0].get_color()
+            else:
+                clr = None
+
             # plot the data
             try:
-                line = self._plot_data(ax, dset, y_key,
+                line = self._plot_data(ax, dset, y_key, marker=mrk, color=clr,
                                        err_transform=err_transform, **kwargs)
 
             except KeyError as err:
@@ -317,22 +328,21 @@ class _ClusterVisualizer:
 
             res_ax = None
 
-            for mbin, errbar in masses.items():
+            for mbin, errbars in masses.items():
 
                 ymodel = model_data[mbin, :, :]
 
-                # TODO only works right if each mass has one dataset
-                #   I think we should make datasets with same mass use same clr
-                #   but different markers
-                if errbar is not None:
-                    clr = errbar[0][0].get_color()
+                # TODO having model/data be same color is kinda hard to read
+                #   this is why I added mfc=none, but I dont like that either
+                if errbars is not None:
+                    clr = errbars[0][0].get_color()
                 else:
-                    clr = kwargs.pop("color", None)
+                    clr = None
 
                 self._plot_model(ax, ymodel, color=clr, **kwargs)
 
                 if residuals:
-                    res_ax = self._add_residuals(ax, ymodel, errbar,
+                    res_ax = self._add_residuals(ax, ymodel, errbars,
                                                  res_ax=res_ax, **kwargs)
 
     # -----------------------------------------------------------------------
@@ -1232,15 +1242,14 @@ class ModelVisualizer(_ClusterVisualizer):
         create a Visualizer instance based on a chain, y taking the median
         of the chain parameters
         '''
-
-        reduc = cls._REDUC_METHODS[method]
+        reduc_methods = {'median': np.median, 'mean': np.mean}
 
         # if 3d (Niters, Nwalkers, Nparams)
         # if 2d (Nwalkers, Nparams)
         # if 1d (Nparams)
         chain = chain.reshape((-1, chain.shape[-1]))
 
-        theta = reduc(chain, axis=0)
+        theta = reduc_methods[method](chain, axis=0)
 
         return cls(Model(theta, observations), observations)
 
@@ -1503,7 +1512,8 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         # Assume that this example model has same nms, mj[:nms] as all models
         # This approximation isn't exactly correct, but close enough for plots
-        viz.star_bin = huge_model.nms - 1
+        # viz.star_bin = huge_model.nms - 1
+        viz.star_bin = 0
 
         mj_MS = huge_model.mj[:huge_model.nms]
         mj_tracer = huge_model.mj[huge_model._tracer_bins]
