@@ -26,6 +26,9 @@ class _ClusterVisualizer:
 
     _MARKERS = ('o', '^', 'D', '+', 'x', '*', 's', 'p', 'h', 'v', '1', '2')
 
+    # Default xaxis limits for all profiles. Set by inits, can be reset by user
+    rlims = None
+
     # -----------------------------------------------------------------------
     # Artist setups
     # -----------------------------------------------------------------------
@@ -345,6 +348,9 @@ class _ClusterVisualizer:
                     res_ax = self._add_residuals(ax, ymodel, errbars,
                                                  res_ax=res_ax, **kwargs)
 
+        if self.rlims is not None:
+            ax.set_xlim(*self.rlims)
+
     # -----------------------------------------------------------------------
     # Plot extras
     # -----------------------------------------------------------------------
@@ -398,7 +404,7 @@ class _ClusterVisualizer:
         # Get data from the plotted errorbars
         # ------------------------------------------------------------------
 
-        # TODO also copy all formatting from each errorbars to this one
+        # TODO also copy all formatting from each errorbars to this one (mrks)
 
         for errbar in errorbars:
 
@@ -1273,6 +1279,9 @@ class ModelVisualizer(_ClusterVisualizer):
         self.d = model.d
 
         self.r = model.r
+
+        self.rlims = (9e-3, self.r.max() + (5 << self.r.unit))
+
         self._2πr = 2 * np.pi * model.r
 
         self.star_bin = model.nms - 1
@@ -1509,6 +1518,8 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         max_r = huge_model.rt
         viz.r = np.r_[0, np.geomspace(1e-5, max_r.value, num=99)] << u.pc
+
+        viz.rlims = (9e-3, viz.r.max() + (5 << viz.r.unit))
 
         # Assume that this example model has same nms, mj[:nms] as all models
         # This approximation isn't exactly correct, but close enough for plots
