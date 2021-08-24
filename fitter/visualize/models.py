@@ -264,6 +264,7 @@ class _ClusterVisualizer:
         # Restart marker styles each plotting call
         markers = iter(self._MARKERS)
 
+        # TODO need to figure out how we handle passed kwargs better
         default_clr = kwargs.pop('color', None)
 
         # ------------------------------------------------------------------
@@ -409,8 +410,6 @@ class _ClusterVisualizer:
         # Get data from the plotted errorbars
         # ------------------------------------------------------------------
 
-        # TODO also copy all formatting from each errorbars to this one (mrks)
-
         for errbar in errorbars:
 
             # --------------------------------------------------------------
@@ -419,6 +418,13 @@ class _ClusterVisualizer:
 
             xdata, ydata = errbar[0].get_data()
             ydata = ydata.to(ymedian.unit)
+
+            # --------------------------------------------------------------
+            # Grab relevant formatting (colours and markers)
+            # --------------------------------------------------------------
+
+            clr = errbar[0].get_color()
+            mrk = errbar[0].get_marker()
 
             # --------------------------------------------------------------
             # Parse the errors from the size of the errorbar lines (messy)
@@ -452,7 +458,8 @@ class _ClusterVisualizer:
 
             res = yspline(xdata) - ydata
 
-            res_ax.errorbar(xdata, res, fmt='k.', xerr=xerr, yerr=yerr)
+            res_ax.errorbar(xdata, res, xerr=xerr, yerr=yerr,
+                            color=clr, marker=mrk, linestyle='none')
 
         return res_ax
 
