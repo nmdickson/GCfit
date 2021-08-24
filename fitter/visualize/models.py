@@ -327,7 +327,10 @@ class _ClusterVisualizer:
 
             # No data plotted, use the star_bin
             if not masses:
-                masses = {self.star_bin: None}
+                if model_data.shape[0] > 1:
+                    masses = {self.star_bin: None}
+                else:
+                    masses = {0: None}
 
             res_ax = None
 
@@ -1065,7 +1068,7 @@ class _ClusterVisualizer:
 
         # Total Remnant density
         if 'rem' in kind:
-            kw = {"label": "Total", "c": "tab:purple"}
+            kw = {"label": "Remnants", "c": "tab:purple"}
             self._plot_profile(ax, None, None, self.rho_rem,
                                x_unit=x_unit, **kw)
 
@@ -1122,7 +1125,7 @@ class _ClusterVisualizer:
 
         # Total Remnant density
         if 'rem' in kind:
-            kw = {"label": "Total", "c": "tab:purple"}
+            kw = {"label": "Remnants", "c": "tab:purple"}
             self._plot_profile(ax, None, None, self.Sigma_rem,
                                x_unit=x_unit, **kw)
 
