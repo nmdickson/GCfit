@@ -206,6 +206,13 @@ def bibcode2cite(bibcode):
     cites = []
     for entry in query.execute().strip().split('\n'):
         entry = entry.replace('\\', '')
-        cites.append(entry[entry.index('[') + 1: entry.index(']')])
+
+        # Grab citation from initial square brackets of aastex format
+        entry = entry[entry.index('[') + 1: entry.index(']')]
+
+        # Add a space between the authors and the year
+        entry = f"{entry[:entry.index('(')]} {entry[entry.index('('):]}"
+
+        cites.append(entry)
 
     return '; '.join(cites)
