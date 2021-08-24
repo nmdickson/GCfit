@@ -640,6 +640,9 @@ class _ClusterVisualizer:
                            strict=strict, residuals=residuals,
                            x_unit=x_unit, **kwargs)
 
+        # bit arbitrary, but probably fine for the most part
+        ax.set_ylim(bottom=1e-4)
+
         ax.legend()
 
         return fig
