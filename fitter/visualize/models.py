@@ -962,15 +962,10 @@ class _ClusterVisualizer:
         return fig
 
     @_support_units
-    def plot_all(self, fig=None, axes=None, show_obs='attempt'):
+    def plot_all(self, fig=None, show_obs='attempt'):
+        # TODO this still needs tweaking, in what is plotted and in ax spacing
 
-        # TODO a better method for being able to overplot multiple show_alls?
-        fig, axes = plt.subplots(4, 2)
-        # if fig is None:
-        #     fig, axes = plt.subplots(4, 2)
-        #     axes = axes.flatten()
-        # else:
-        #     axes = fig.axes
+        fig, axes = self._setup_multi_artist(fig, (4, 2))
 
         fig.suptitle(str(self.obs))
 
@@ -997,7 +992,6 @@ class _ClusterVisualizer:
         for ax in axes.flatten():
             ax.set_xlabel('')
 
-        # TODO maybe have some written info in one of the empty panels (ax6)
         # fig.tight_layout()
 
         return fig
