@@ -49,40 +49,37 @@ class _RunVisualizer:
 
         return fig, ax
 
-    # TODO this shsould handle an axes arg as well
-    #   The whole point of these methods is so we can reuse the fig, but thats
-    #   not currenlty possible with the multi artist like it is for singles
     def _setup_multi_artist(self, fig, shape, *, use_name=True, **subplot_kw):
-        '''setup a subplot with multiple axes, don't supply ax cause it doesnt
-        really make sense in this case, you would need to supply the same
-        amount of axes as shape and everything, just don't deal with it'''
+        '''setup a subplot with multiple axes'''
 
         if shape is None:
+            # If no shape is provided, just return the figure, probably empty
 
             axarr = []
             if fig is None:
                 fig = plt.figure()
 
         else:
-            # TODO axarr should always be an arr, even if shape=1
+            # If shape, try to either get or create a matching array of axes
 
             if fig is None:
                 fig, axarr = plt.subplots(*shape, **subplot_kw)
 
             elif not fig.axes:
-                fig, axarr = plt.subplots(*shape, num=fig.number, **subplot_kw)
+                axarr = fig.subplots(*shape, **subplot_kw)
 
             else:
-                # TODO make sure this is using the correct order
-                axarr = np.array(fig.axes).reshape(shape)
-                # we shouldn't add axes to a fig that already has some
-                # maybe just warn or error if the shape doesn't match `shape`
-                pass
+                axarr = fig.axes
+
+                if axarr.shape != shape:
+                    mssg = (f"figure {fig} already contains axes with "
+                            f"mismatched shape ({axarr.shape} != {shape})")
+                    raise ValueError(mssg)
 
         if hasattr(self, 'name') and use_name:
             fig.suptitle(self.name)
 
-        return fig, axarr
+        return fig, np.atleast_1d(axarr)
 
 
 class MCMCVisualizer(_RunVisualizer):
