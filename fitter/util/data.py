@@ -4,7 +4,7 @@ from importlib import resources
 
 
 __all__ = ['cluster_list', 'hdf_view', 'get_std_cluster_name',
-           'bibcode2bibtex', 'doi2bibtex']
+           'bibcode2bibtex', 'doi2bibtex', 'bibcode2cite']
 
 
 def cluster_list():
@@ -186,3 +186,33 @@ def bibcode2bibtex(bibcode):
     query = ads.ExportQuery(bibcode, format='bibtex')
 
     return query.execute()
+
+
+def bibcode2cite(bibcode):
+    r'''Request thisthis `bibcode` from ADS and attempt to parse a \cite from it
+
+    Requires the `ads` package and a NASA ADS API-key saved to a file called
+    `~/.ads/dev_key` or as an environment variable named `ADS_DEV_KEY`
+
+    although this would be better with an actual bibtex parser which could
+    create various cite styles, here we'll just
+    attempt to grab the start of a bib format which already has a "\cite" style
+    to it and return that
+    '''
+    import ads
+
+    query = ads.ExportQuery(bibcode, format='aastex')
+
+    cites = []
+    for entry in query.execute().strip().split('\n'):
+        entry = entry.replace('\\', '')
+
+        # Grab citation from initial square brackets of aastex format
+        entry = entry[entry.index('[') + 1: entry.index(']')]
+
+        # Add a space between the authors and the year
+        entry = f"{entry[:entry.index('(')]} {entry[entry.index('('):]}"
+
+        cites.append(entry)
+
+    return '; '.join(cites)
