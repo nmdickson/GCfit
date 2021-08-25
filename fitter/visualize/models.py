@@ -1,9 +1,9 @@
 from .. import util
-from ..core.data import Observations, Model
 from ..probabilities import pulsars, mass
+from ..core.data import Observations, Model
 
-import fnmatch
 import string
+import fnmatch
 
 import h5py
 import numpy as np
@@ -14,12 +14,6 @@ import astropy.visualization as astroviz
 
 
 __all__ = ['ModelVisualizer', 'CIModelVisualizer', 'ObservationsVisualizer']
-
-# TODO fix all spacings
-# TODO add "require_data" and "require_model" decorators that check that
-#   the required attribute exists, so we dont plot any completely empty plots
-#   (i.e. dont even try to plot cum_mass from an ObservationsVisualizer
-#   but should error nicely)
 
 
 class _ClusterVisualizer:
@@ -1933,6 +1927,7 @@ class CIModelVisualizer(_ClusterVisualizer):
             meta_grp.create_dataset('r', data=self.r)
             meta_grp.create_dataset('star_bin', data=self.star_bin)
             meta_grp.create_dataset('mj', data=self.mj)
+            meta_grp.attrs['rlims'] = self.rlims
             meta_grp.attrs['s2'] = self.s2
             meta_grp.attrs['F'] = self.F
             meta_grp.attrs['d'] = self.d
@@ -2033,6 +2028,7 @@ class CIModelVisualizer(_ClusterVisualizer):
             viz.s2 = file['metadata'].attrs['s2']
             viz.F = file['metadata'].attrs['F']
             viz.d = file['metadata'].attrs['d'] << u.kpc
+            viz.rlims = file['metadata'].attrs['rlims'] << u.pc
 
             viz.r = file['metadata']['r'][:] << u.pc
             viz.mj = file['metadata']['mj'][:] << u.Msun
