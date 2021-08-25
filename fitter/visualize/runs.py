@@ -18,15 +18,30 @@ class _RunVisualizer:
     _cmap = plt.cm.get_cmap('viridis')
 
     def _setup_artist(self, fig, ax, *, use_name=True):
-        # TODO should maybe attempt to use gcf, gca first
+        '''setup a plot (figure and ax) with one single ax'''
+
         if ax is None:
             if fig is None:
+                # no figure or ax provided, make one here
                 fig, ax = plt.subplots()
+
             else:
-                # TODO how to handle the shapes of subplots here probs read fig
-                ax = fig.add_subplot()
+                # Figure provided, no ax provided. Try to grab it from the fig
+                # if that doens't work, create it
+                cur_axes = fig.axes
+
+                if len(cur_axes) > 1:
+                    raise ValueError(f"figure {fig} already has too many axes")
+
+                elif len(cur_axes) == 1:
+                    ax = cur_axes[0]
+
+                else:
+                    ax = fig.add_subplot()
+
         else:
             if fig is None:
+                # ax is provided, but no figure. Grab it's figure from it
                 fig = ax.get_figure()
 
         if hasattr(self, 'name') and use_name:
@@ -76,7 +91,6 @@ class MCMCVisualizer(_RunVisualizer):
 
     based on an output file I guess?
     '''
-    # TODO a nice way to print the sources (accounting for excluded likelihoods)
 
     def __str__(self):
         return f'{self.file.filename} - Run Results'

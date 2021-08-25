@@ -28,14 +28,30 @@ class _ClusterVisualizer:
     # -----------------------------------------------------------------------
 
     def _setup_artist(self, fig, ax, *, use_name=True):
+        '''setup a plot (figure and ax) with one single ax'''
+
         if ax is None:
             if fig is None:
+                # no figure or ax provided, make one here
                 fig, ax = plt.subplots()
+
             else:
-                # TODO how to handle the shapes of subplots here probs read fig
-                ax = fig.add_subplot()
+                # Figure provided, no ax provided. Try to grab it from the fig
+                # if that doens't work, create it
+                cur_axes = fig.axes
+
+                if len(cur_axes) > 1:
+                    raise ValueError(f"figure {fig} already has too many axes")
+
+                elif len(cur_axes) == 1:
+                    ax = cur_axes[0]
+
+                else:
+                    ax = fig.add_subplot()
+
         else:
             if fig is None:
+                # ax is provided, but no figure. Grab it's figure from it
                 fig = ax.get_figure()
 
         if hasattr(self, 'name') and use_name:
@@ -458,7 +474,7 @@ class _ClusterVisualizer:
         return res_ax
 
     def _add_hyperparam(self, ax, ymodel, xdata, ydata, yerr):
-        # TODO this is still a bit of a mess
+        # TODO this is still a complete mess
 
         yspline = util.QuantitySpline(self.r, ymodel)
 
@@ -1316,7 +1332,7 @@ class ModelVisualizer(_ClusterVisualizer):
     @_ClusterVisualizer._support_units
     def _init_numdens(self, model, observations):
 
-        obs_nd = observations['number_density']  # <- TODO not very general
+        obs_nd = observations['number_density']
         obs_r = obs_nd['r'].to(model.r.unit)
 
         model_nd = model.Sigmaj / model.mj[:, np.newaxis]
@@ -2068,21 +2084,3 @@ class ObservationsVisualizer(_ClusterVisualizer):
         self.LOS = None
         self.numdens = None
         self.mass_func = None
-        # These dont even plot data so they dont make sense, see way above todo
-        # self.rho_MS
-        # self.rho_tot
-        # self.rho_BH
-        # self.rho_WD
-        # self.rho_NS
-        # self.Sigma_MS
-        # self.Sigma_tot
-        # self.Sigma_BH
-        # self.Sigma_WD
-        # self.Sigma_NS
-        # self.cum_M_MS
-        # self.cum_M_tot
-        # self.cum_M_BH
-        # self.cum_M_WD
-        # self.cum_M_NS
-        # self.frac_M_MS
-        # self.frac_M_rem
