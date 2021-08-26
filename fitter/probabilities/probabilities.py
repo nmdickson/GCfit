@@ -166,22 +166,31 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
         # Compute the cluster component distribution, from the model
         # ------------------------------------------------------------------
 
-        # TODO this shouldn't be so convoluted, rearrange some data to make easier
-        if use_DM and pulsars['DM'].mdata['confidence'][i] >= strict:
+        try:
+            # TODO this shouldn't be so convoluted, rearrange some data to make easier
+            if use_DM and pulsars['DM'].mdata['confidence'][i] >= strict:
 
-            DM = pulsars['DM'][i]
-            ΔDM = pulsars['ΔDM'][i]
+                DM = pulsars['DM'][i]
+                ΔDM = pulsars['ΔDM'][i]
 
-            DM_mdata = pulsars.mdata
+                DM_mdata = pulsars.mdata
 
-            PdotP_domain, PdotP_c_prob = cluster_component(
-                model, R, DM=DM, ΔDM=ΔDM, DM_mdata=DM_mdata, mass_bin=mass_bin
-            )
+                PdotP_domain, PdotP_c_prob = cluster_component(
+                    model, R, DM=DM, ΔDM=ΔDM, DM_mdata=DM_mdata, mass_bin=mass_bin
+                )
 
-        else:
-            PdotP_domain, PdotP_c_prob = cluster_component(
-                model, R, DM=None, DM_mdata=None, mass_bin=mass_bin
-            )
+            else:
+                PdotP_domain, PdotP_c_prob = cluster_component(
+                    model, R, DM=None, DM_mdata=None, mass_bin=mass_bin
+                )
+
+        except ValueError as err:
+            # temporary fix for z2 interpolation error
+
+            mssg = "Pulsar `cluster_component` failed with error:"
+            logging.warning(mssg, exc_info=err)
+
+            return np.NINF
 
         Pdot_domain = (P * PdotP_domain).decompose()
 
