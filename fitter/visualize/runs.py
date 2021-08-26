@@ -505,7 +505,16 @@ class NestedVisualizer(_RunVisualizer):
 
     @property
     def weights(self):
-        return np.exp(self.results.logwt - self.results.logz[-1])
+
+        from dynesty.dynamicsampler import weight_function
+
+        # If maxfrac is added as arg, make sure to add here as well
+        if self.has_meta:
+            stop_kw = {'pfrac': self.file['metadata'].attrs['pfrac']}
+        else:
+            stop_kw = {}
+
+        return weight_function(self.results, stop_kw, return_weights=True)[1][2]
 
     def __init__(self, file, observations, group='nested', name=None):
 
@@ -598,7 +607,7 @@ class NestedVisualizer(_RunVisualizer):
                 bnds.append(bounding.SupFriends(ndim=ndim, cov=cov))
 
             else:
-                raise RuntimeError('unrecognized type ', btype)
+                raise RuntimeError('unrecognized bound type ', btype)
 
         return bnds
 
@@ -706,6 +715,8 @@ class NestedVisualizer(_RunVisualizer):
         # TODO id rather use contours or polygons showing the bounds,
         #   rather than how dyplot does it by sampling a bunch of random points
 
+        # TODO doesnt work for some bound types (like balls)
+
         # TODO this doesn't seem to work the same way corner did
         # fig = self._setup_multi_artist(fig, shape=(10,10))
         # TODO real strange bug with failing on 4th ind on second function call
@@ -742,3 +753,18 @@ class NestedVisualizer(_RunVisualizer):
         fig[0].legend(handles=legends)
 
         return fig[0]
+
+    def plot_weights(self, fig=None, ax=None, show_bounds=False, **kw):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        ax.plot(-self.results.logvol, self.weights, **kw)
+
+        if show_bounds:
+            # assumes maxfrac is default (0.8)
+            ax.axhline(0.8 * max(self.weights), c='g')
+
+        ax.set_ylabel('weights')
+        ax.set_xlabel(r'$-ln(X)$')
+
+        return fig
