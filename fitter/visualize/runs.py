@@ -768,3 +768,16 @@ class NestedVisualizer(_RunVisualizer):
         ax.set_xlabel(r'$-ln(X)$')
 
         return fig
+
+    def plot_probability(self, fig=None, ax=None, **kw):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        finite = self.results.logl > -1e300
+
+        ax.plot(-self.results.logvol[finite], self.results.logl[finite], **kw)
+
+        ax.set_ylabel('Total Log Likelihood')
+        ax.set_xlabel(r'$-ln(X)$')
+
+        return fig
