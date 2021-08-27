@@ -152,6 +152,20 @@ class Dataset:
     def __str__(self):
         return f'{self._name} Dataset'
 
+    _citation = None
+
+    def __citation__(self):
+        if self._citation is not None:
+            return self._citation
+        else:
+            try:
+                bibcodes = self.mdata['source'].split(';')
+                self._citation = util.bibcode2cite(bibcodes)
+                return self._citation
+
+            except KeyError:
+                return None
+
     def __contains__(self, key):
         return key in self._dict_variables
 
@@ -181,6 +195,9 @@ class Dataset:
     @property
     def variables(self):
         return self._dict_variables
+
+    def cite(self):
+        return self.__citation__()
 
     def build_err(self, varname, model_r, model_val, strict=True):
         '''
@@ -274,6 +291,7 @@ class Observations:
                 mssg = f"Dataset '{key}' does not exist in {self}"
                 raise KeyError(mssg) from err
 
+    # TODO a filter method for finding all datasets matching a pattern
     @property
     def datasets(self):
         return self._dict_datasets
@@ -311,6 +329,17 @@ class Observations:
 
         return groups
 
+    def filter_datasets(self, pattern, valid_only=True):
+        # TODO maybe `datasets` and this should only return ds list not dict?
+        #   if thats the case, make `datasets._name` public
+
+        if valid_only:
+            datasets = {key for (key, *_) in self.valid_likelihoods}
+        else:
+            datasets = self.datasets.keys
+
+        return {key: self[key] for key in fnmatch.filter(datasets, pattern)}
+
     def filter_likelihoods(self, patterns, exclude=False, keys_only=False):
         '''filter the valid likelihoods based on list of patterns, matching
         either the dataset name or likelihood function name.
@@ -340,6 +369,7 @@ class Observations:
 
         fmt : 'bibtex', 'bibcode', 'citep'
         '''
+        # TODO make this use dataset __citation__'s so it doesnt pull each time
 
         res = {}
 
@@ -523,16 +553,9 @@ class Observations:
 # --------------------------------------------------------------------------
 
 # TODO The units are *quite* incomplete in Model (10)
+# TODO would be cool to get this to work with limepy's `sampling`
 
 class Model(lp.limepy):
-
-    def __getattr__(self, key):
-        '''If `key` is not defined in the limepy model, try to get it from θ'''
-        try:
-            return self._theta[key]
-        except KeyError as err:
-            msg = f"'{self.__class__.__name__}' object has no attribute '{key}'"
-            raise AttributeError(msg) from err
 
     def _init_mf(self):
 
@@ -650,6 +673,9 @@ class Model(lp.limepy):
 
         self._theta = theta
 
+        for key, val in self._theta.items():
+            setattr(self, key, val)
+
         # ------------------------------------------------------------------
         # Get mass function
         # ------------------------------------------------------------------
@@ -681,21 +707,23 @@ class Model(lp.limepy):
         # TODO still don't entriely understand when this is to be used
         # mj is middle of mass bins, mes are edges, widths are sizes of bins
         # self.mbin_widths = np.diff(self._mf.mes[-1]) ??
+        # Whats the differences with `mes` and `me`?
         # TODO is this supposed to habe units? I think so
         self.mes_widths = np.diff(self._mf.mes[-1])
 
         # append tracer mass bins (must be appended to end to not affect nms)
         if observations is not None:
 
-            # TODO should only append tracer masses for valid likelihood dsets
+            # TODO should only append tracer masses for valid likelihood dsets?
             tracer_mj = np.unique([
                 dataset.mdata['m'] for dataset in observations.datasets.values()
                 if 'm' in dataset.mdata
             ])
 
-            # TODO shouldn't append multiple of same tracer mass
             mj = np.concatenate((mj, tracer_mj))
             Mj = np.concatenate((Mj, 0.1 * np.ones_like(tracer_mj)))
+
+            self._tracer_bins = slice(self.nms + self.nmr, None)
 
         else:
             logging.warning("No `Observations` given, no tracer masses added")
