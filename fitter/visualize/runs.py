@@ -722,7 +722,7 @@ class NestedVisualizer(_RunVisualizer):
 
         # TODO add a colorbar for the weights
 
-        axes[-1].set_xlabel(r'$-ln(X)$')
+        axes[-1].set_xlabel(r'$-\ln(X)$')
 
         return fig
 
@@ -802,7 +802,7 @@ class NestedVisualizer(_RunVisualizer):
             ax.axhline(0.8 * max(self.weights), c='g')
 
         ax.set_ylabel('weights')
-        ax.set_xlabel(r'$-ln(X)$')
+        ax.set_xlabel(r'$-\ln(X)$')
 
         return fig
 
@@ -815,6 +815,19 @@ class NestedVisualizer(_RunVisualizer):
         ax.plot(-self.results.logvol[finite], self.results.logl[finite], **kw)
 
         ax.set_ylabel('Total Log Likelihood')
-        ax.set_xlabel(r'$-ln(X)$')
+        ax.set_xlabel(r'$-\ln(X)$')
+
+        return fig
+
+    def plot_evidence(self, fig=None, ax=None, **kw):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        finite = self.results.logz > -1e300
+
+        ax.plot(-self.results.logvol[finite], self.results.logz[finite], **kw)
+
+        ax.set_ylabel(r'Estimated Evidence $\log(Z)$')
+        ax.set_xlabel(r'$-\ln(X)$')
 
         return fig
