@@ -259,8 +259,8 @@ class NestedSamplingOutput(Output):
 def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
              mpi=False, initials=None, param_priors=None, moves=None,
              fixed_params=None, excluded_likelihoods=None, hyperparams=True,
-             cont_run=False, savedir=_here, strict=None,
-             backup=False, verbose=False, progress=False):
+             cont_run=False, savedir=_here, backup=False,
+             verbose=False, progress=False):
     '''Main MCMC fitting pipeline
 
     Execute the full MCMC cluster fitting algorithm.
@@ -324,12 +324,6 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         Whether to include bayesian hyperparameters (see Hobson et al., 2002)
         in all likelihood functions.
 
-    strict : list of (float, str), optional
-        A strictness parameter to be applied to each likelihood specified, as
-        the `strict` kwarg. As implementation is specific to each likelihood,
-        see individual functions for more information. Default is None, applied
-        to all likelihoods.
-
     cont_run : bool, optional
         Not Implemented
 
@@ -373,10 +367,6 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     savedir = pathlib.Path(savedir)
     if not savedir.is_dir():
         raise ValueError(f"Cannot access '{savedir}': No such directory")
-
-    if strict is not None and not isinstance(strict[0], float):
-        invtype = type(strict[0])
-        raise TypeError(f"First `strict` argument must be float, not {invtype}")
 
     # ----------------------------------------------------------------------
     # Load obeservational data, determine which likelihoods are valid/desired
@@ -501,8 +491,7 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
         logging.info("Initializing sampler")
 
-        sampler_kwargs = {'hyperparams': hyperparams, 'return_indiv': True,
-                          'strict': strict}
+        sampler_kwargs = {'hyperparams': hyperparams, 'return_indiv': True}
 
         sampler = emcee.EnsembleSampler(
             nwalkers=Nwalkers,
@@ -588,7 +577,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
                initial_kwargs=None, batch_kwargs=None, pfrac=1.0,
                Ncpu=2, mpi=False, initials=None, param_priors=None,
                fixed_params=None, excluded_likelihoods=None, hyperparams=True,
-               strict=None, savedir=_here, verbose=False):
+               savedir=_here, verbose=False):
     '''Main nested sampling fitting pipeline
 
     Execute the full nested sampling cluster fitting algorithm.
@@ -665,12 +654,6 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         Whether to include bayesian hyperparameters (see Hobson et al., 2002)
         in all likelihood functions.
 
-    strict : list of (float, str), optional
-        A strictness parameter to be applied to each likelihood specified, as
-        the `strict` kwarg. As implementation is specific to each likelihood,
-        see individual functions for more information. Default is None, applied
-        to all likelihoods.
-
     savedir : path-like, optional
         The directory within which the HDF output file is stored, defaults to
         the current working directory.
@@ -708,10 +691,6 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
     savedir = pathlib.Path(savedir)
     if not savedir.is_dir():
         raise ValueError(f"Cannot access '{savedir}': No such directory")
-
-    if strict is not None and not isinstance(strict[0], float):
-        invtype = type(strict[0])
-        raise TypeError(f"First `strict` argument must be float, not {invtype}")
 
     # ----------------------------------------------------------------------
     # Load obeservational data, determine which likelihoods are valid/desired
@@ -846,8 +825,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
         backend.ndim = ndim
 
-        logl_kwargs = {'hyperparams': hyperparams, 'return_indiv': False,
-                       'strict': strict}
+        logl_kwargs = {'hyperparams': hyperparams, 'return_indiv': False}
 
         sampler = dynesty.DynamicNestedSampler(
             ndim=ndim,
