@@ -791,11 +791,14 @@ class NestedVisualizer(_RunVisualizer):
 
         return fig[0]
 
-    def plot_weights(self, fig=None, ax=None, show_bounds=False, **kw):
+    def plot_weights(self, fig=None, ax=None, show_bounds=False,
+                     resampled=False, **kw):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        ax.plot(-self.results.logvol, self.weights, **kw)
+        wts = self._resampled_weights if resampled else self.weights
+
+        ax.plot(-self.results.logvol, wts, **kw)
 
         if show_bounds:
             # assumes maxfrac is default (0.8)
