@@ -835,7 +835,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
             logl_kwargs=logl_kwargs,
             pool=pool,
             bound=bound_type,
-            method=sample_type
+            sample=sample_type
         )
 
         logging.debug(f"Sampler class: {sampler}")
