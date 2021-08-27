@@ -149,6 +149,14 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
 
         R = pulsars['r'][i].to(u.pc)
 
+        if R >= model.rt:
+
+            mssg = (f"Pulsar {pulsars['id'][i]} is outside cluster truncation "
+                    f"radius {model.rt}")
+            logging.debug(mssg)
+
+            return np.NINF
+
         P = pulsars['P'][i].to('s')
 
         Pdot_meas = pulsars['Pdot'][i]
@@ -158,22 +166,31 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
         # Compute the cluster component distribution, from the model
         # ------------------------------------------------------------------
 
-        # TODO this shouldn't be so convoluted, rearrange some data to make easier
-        if use_DM and pulsars['DM'].mdata['confidence'][i] >= strict:
+        try:
+            # TODO this shouldn't be so convoluted, rearrange some data to make easier
+            if use_DM and pulsars['DM'].mdata['confidence'][i] >= strict:
 
-            DM = pulsars['DM'][i]
-            ΔDM = pulsars['ΔDM'][i]
+                DM = pulsars['DM'][i]
+                ΔDM = pulsars['ΔDM'][i]
 
-            DM_mdata = pulsars.mdata
+                DM_mdata = pulsars.mdata
 
-            PdotP_domain, PdotP_c_prob = cluster_component(
-                model, R, DM=DM, ΔDM=ΔDM, DM_mdata=DM_mdata, mass_bin=mass_bin
-            )
+                PdotP_domain, PdotP_c_prob = cluster_component(
+                    model, R, DM=DM, ΔDM=ΔDM, DM_mdata=DM_mdata, mass_bin=mass_bin
+                )
 
-        else:
-            PdotP_domain, PdotP_c_prob = cluster_component(
-                model, R, DM=None, DM_mdata=None, mass_bin=mass_bin
-            )
+            else:
+                PdotP_domain, PdotP_c_prob = cluster_component(
+                    model, R, DM=None, DM_mdata=None, mass_bin=mass_bin
+                )
+
+        except ValueError as err:
+            # temporary fix for z2 interpolation error
+
+            mssg = "Pulsar `cluster_component` failed with error:"
+            logging.warning(mssg, exc_info=err)
+
+            return np.NINF
 
         Pdot_domain = (P * PdotP_domain).decompose()
 
@@ -369,6 +386,14 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
         # ------------------------------------------------------------------
 
         R = pulsars['r'][i].to(u.pc)
+
+        if R >= model.rt:
+
+            mssg = (f"Pulsar {pulsars['id'][i]} is outside cluster truncation "
+                    f"radius {model.rt}")
+            logging.debug(mssg)
+
+            return np.NINF
 
         Pb = pulsars['Pb'][i].to('s')
 
@@ -939,7 +964,7 @@ def likelihood_mass_func(model, mf, field, *,
     '''
     # TODO same as numdens, the units are ignored cause 1/pc^2 != 1/arcmin^2
 
-    M = 300
+    M = 1000
 
     if hyperparams:
         likelihood = util.hyperparam_likelihood
@@ -1043,8 +1068,9 @@ def log_likelihood(theta, observations, L_components, hyperparams, strict):
     return sum(probs), probs
 
 
-def posterior(theta, observations, fixed_initials=None, L_components=None,
-              prior_likelihood=None, *, hyperparams=True, strict=None):
+def posterior(theta, observations, fixed_initials=None,
+              L_components=None, prior_likelihood=None, *,
+              hyperparams=True, return_indiv=True, strict=None):
     '''
     Combines the likelihood with the prior
 
@@ -1068,6 +1094,15 @@ def posterior(theta, observations, fixed_initials=None, L_components=None,
     if strict is None:
         strict = []
 
+    # Check if any values of theta are not finite, probably caused by invalid
+    # prior transforms, and indicating we should return -inf
+    if not np.all(np.isfinite(theta)):
+
+        if return_indiv:
+            return -np.inf, *(-np.inf * np.ones(len(L_components)))
+        else:
+            return -np.inf
+
     # get a list of variable params, sorted for the unpacking of theta
     variable_params = DEFAULT_INITIALS.keys() - fixed_initials.keys()
     params = sorted(variable_params, key=list(DEFAULT_INITIALS).index)
@@ -1077,12 +1112,24 @@ def posterior(theta, observations, fixed_initials=None, L_components=None,
     theta = dict(zip(params, theta), **fixed_initials)
 
     # prior likelihoods
-    if not np.isfinite(log_Pθ := prior_likelihood(theta)):
-        return -np.inf, *(-np.inf * np.ones(len(L_components)))
+    if prior_likelihood != 'ignore':
+
+        if not np.isfinite(log_Pθ := prior_likelihood(theta)):
+
+            if return_indiv:
+                return -np.inf, *(-np.inf * np.ones(len(L_components)))
+            else:
+                return -np.inf
+
+    else:
+        log_Pθ = 0
 
     log_L, individuals = log_likelihood(theta, observations,
                                         L_components, hyperparams, strict)
 
     probability = log_L + log_Pθ
 
-    return probability, *individuals
+    if return_indiv:
+        return probability, *individuals
+    else:
+        return probability

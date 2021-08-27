@@ -4,7 +4,6 @@ __all__ = ['gaussian', 'RV_transform', 'gaussian_likelihood',
            'hyperparam_likelihood', 'hyperparam_effective', 'div_error',
            'trim_peaks']
 
-
 # --------------------------------------------------------------------------
 # Generic Distribution Helpers
 # --------------------------------------------------------------------------
