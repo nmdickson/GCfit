@@ -834,3 +834,15 @@ class NestedVisualizer(_RunVisualizer):
         ax.set_xlabel(r'$-\ln(X)$')
 
         return fig
+
+    def plot_nlive(self, fig=None, ax=None, **kw):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        # TODO indicate where the final live points were added, by line or color
+        ax.plot(-self.results.logvol, self.results.sample_n, **kw)
+
+        ax.set_ylabel(r'Number of live points')
+        ax.set_xlabel(r'$-\ln(X)$')
+
+        return fig
