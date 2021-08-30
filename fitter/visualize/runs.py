@@ -846,6 +846,22 @@ class NestedVisualizer(_RunVisualizer):
 
         return fig
 
+    def plot_H(self, fig=None, ax=None, **kw):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        finite = self.results.information > -1e300
+
+        logvol = self.results.logvol[finite]
+
+        ax.plot(-logvol, self.results.information[finite], **kw)
+
+        ax.set_ylabel(r'Information $H \equiv \int_{\Omega_{\Theta}} '
+                      r'P(\Theta)\ln\frac{P(\Theta)}{\pi(\Theta)} \,d\Theta$')
+        ax.set_xlabel(r'$-\ln(X)$')
+
+        return fig
+
     def plot_nlive(self, fig=None, ax=None, **kw):
 
         fig, ax = self._setup_artist(fig, ax)
