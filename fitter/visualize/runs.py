@@ -822,13 +822,24 @@ class NestedVisualizer(_RunVisualizer):
 
         return fig
 
-    def plot_evidence(self, fig=None, ax=None, **kw):
+    def plot_evidence(self, fig=None, ax=None, error=False, **kw):
 
         fig, ax = self._setup_artist(fig, ax)
 
         finite = self.results.logz > -1e300
 
-        ax.plot(-self.results.logvol[finite], self.results.logz[finite], **kw)
+        logvol = self.results.logvol[finite]
+        logz = self.results.logz[finite]
+
+        line, = ax.plot(-logvol, logz, **kw)
+
+        # TODO this seems to be nonsensical, at this point
+        if error:
+            err_up = logz + self.results.logzerr[finite]
+            err_down = logz - self.results.logzerr[finite]
+
+            ax.fill_between(-logvol, err_up, err_down,
+                            color=line.get_color(), alpha=0.5)
 
         ax.set_ylabel(r'Estimated Evidence $\log(Z)$')
         ax.set_xlabel(r'$-\ln(X)$')
