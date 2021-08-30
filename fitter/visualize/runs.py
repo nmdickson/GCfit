@@ -873,3 +873,26 @@ class NestedVisualizer(_RunVisualizer):
         ax.set_xlabel(r'$-\ln(X)$')
 
         return fig
+
+    def plot_KL_divergence(self, fig=None, ax=None, Nruns=100,
+                           kl_kwargs=None, **kw):
+        from dynesty.utils import kld_error
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        if kl_kwargs is None:
+            kl_kwargs = {}
+
+        kw.setdefault('color', 'b')
+        kw.setdefault('alpha', 0.25)
+
+        for _ in range(Nruns):
+
+            KL = kld_error(self.results, **kl_kwargs)
+
+            ax.plot(KL, **kw)
+
+        ax.set_ylabel('KL Divergence')
+        ax.set_xlabel('Iterations')
+
+        return fig
