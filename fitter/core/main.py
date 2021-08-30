@@ -861,7 +861,8 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         logging.info("Beginning dynamic batch sampling")
 
         # run the dynamic sampler in batches, until the stop condition is met
-        while not dysamp.stopping_function(sampler.results, stop_kw, M=map_):
+        while not dysamp.stopping_function(sampler.results, stop_kw,
+                                           M=map_, rstate=sampler.rstate):
 
             backend.reset_current_batch()
 
