@@ -896,3 +896,64 @@ class NestedVisualizer(_RunVisualizer):
         ax.set_xlabel('Iterations')
 
         return fig
+
+    # ----------------------------------------------------------------------
+    # Parameter estimation
+    # ----------------------------------------------------------------------
+
+    # TODO the diagrammatic plot from (Higson, 2018)
+
+    def _sim_errors(self, Nruns=250):
+        '''add the statistical and sampling errors not normally accounted for
+        by using the built-in `simulate_run` function (resamples and jitters)
+
+        returns list `Nruns` results
+        '''
+        from dynesty.utils import simulate_run
+
+        return [simulate_run(self.results) for _ in range(Nruns)]
+
+    def parameter_means(self, Nruns=250, sim_runs=None, return_err=True, **kw):
+        '''
+        return the means of each parameter, and the corresponding error on that
+        mean if desired.
+        errors come from the two main sources of error present in nested
+        sampling and are computed using the standard deviation of the mean
+        from `Nruns` simulated (resampled and jittered) runs of this sampling
+        run. See https://dynesty.readthedocs.io/en/latest/errors.html for more
+        '''
+        from dynesty.utils import mean_and_cov
+
+        if sim_runs is None:
+            sim_runs = self._sim_errors(Nruns)
+
+        means = []
+        for res in sim_runs:
+            wt = np.exp(res.logwt - res.logz[-1])
+            means.append(mean_and_cov(self.samples, wt)[0])
+
+        mean = np.mean(means, axis=0)
+        err = np.std(means, axis=0)
+
+        return mean, err
+
+    def parameter_vars(self, Nruns=250, sim_runs=None, return_err=True, **kw):
+        '''
+        return the variance of each parameter, and the corresponding error on
+        that variance if desired.
+        See `parameter_means` for more
+        '''
+        from dynesty.utils import mean_and_cov
+
+        if sim_runs is None:
+            sim_runs = self._sim_errors(Nruns)
+
+        means = []
+        for res in sim_runs:
+            wt = np.exp(res.logwt - res.logz[-1])
+            means.append(mean_and_cov(self.samples, wt)[1])
+
+        mean = np.mean(means, axis=0)
+        err = np.std(means, axis=0)
+
+        return mean, err
