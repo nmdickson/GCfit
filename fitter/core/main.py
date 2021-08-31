@@ -702,15 +702,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
     logging.debug(f"Observation datasets: {observations}")
 
-    likelihoods = []
-    for component in observations.valid_likelihoods:
-        key, func, *_ = component
-        func_name = func.__name__
-
-        if not any(fnmatch(key, pattern) or fnmatch(func_name, pattern)
-                   for pattern in excluded_likelihoods):
-
-            likelihoods.append(component)
+    likelihoods = observations.filter_likelihoods(excluded_likelihoods, True)
 
     logging.debug(f"Likelihood components: {likelihoods}")
 
