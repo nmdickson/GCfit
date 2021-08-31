@@ -867,7 +867,7 @@ class NestedVisualizer(_RunVisualizer):
         fig, ax = self._setup_artist(fig, ax)
 
         # TODO indicate where the final live points were added, by line or color
-        ax.plot(-self.results.logvol, self.results.sample_n, **kw)
+        ax.plot(-self.results.logvol, self.results.samples_n, **kw)
 
         ax.set_ylabel(r'Number of live points')
         ax.set_xlabel(r'$-\ln(X)$')
@@ -930,7 +930,7 @@ class NestedVisualizer(_RunVisualizer):
         means = []
         for res in sim_runs:
             wt = np.exp(res.logwt - res.logz[-1])
-            means.append(mean_and_cov(self.samples, wt)[0])
+            means.append(mean_and_cov(res.samples, wt)[0])
 
         mean = np.mean(means, axis=0)
         err = np.std(means, axis=0)
@@ -951,7 +951,7 @@ class NestedVisualizer(_RunVisualizer):
         means = []
         for res in sim_runs:
             wt = np.exp(res.logwt - res.logz[-1])
-            means.append(mean_and_cov(self.samples, wt)[1])
+            means.append(mean_and_cov(res.samples, wt)[1])
 
         mean = np.mean(means, axis=0)
         err = np.std(means, axis=0)
