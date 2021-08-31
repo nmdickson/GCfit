@@ -72,6 +72,8 @@ class _ClusterVisualizer:
         else:
             # If shape, try to either get or create a matching array of axes
 
+            subplot_kw.setdefault('constrained_layout', True)
+
             if fig is None:
                 fig, axarr = plt.subplots(*shape, **subplot_kw)
 
