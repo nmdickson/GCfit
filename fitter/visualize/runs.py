@@ -652,6 +652,39 @@ class NestedVisualizer(_RunVisualizer):
 
         return labels, chain
 
+    def _get_equal_weight_chains(self, include_fixed=True, add_errors=False):
+        from dynesty.utils import resample_equal
+
+        if add_errors is False:
+            chain = self.file[self._gname]['samples'][:]
+            eq_chain = resample_equal(chain, self.weights)
+
+        else:
+            from dynesty.dynamicsampler import weight_function
+            sim_run = self._sim_errors(1)[0]
+            sim_wt = weight_function(sim_run, {'pfrac': 1.}, True)[1][2]
+            eq_chain = resample_equal(sim_run.samples, sim_wt)
+
+        labels = list(self.obs.initials)
+
+        if self.has_meta:
+
+            fixed = sorted(
+                ((k, v, labels.index(k)) for k, v in
+                 self.file['metadata']['fixed_params'].attrs.items()),
+                key=lambda item: labels.index(item[0])
+            )
+
+            if include_fixed:
+                for k, v, i in fixed:
+                    labels[i] += ' (fixed)'
+                    eq_chain = np.insert(eq_chain, i, v, axis=-1)
+            else:
+                for *_, i in reversed(fixed):
+                    del labels[i]
+
+        return labels, eq_chain
+
     def _reconstruct_priors(self):
         '''based on the stored "specified_priors" get a PriorTransform object'''
 
@@ -684,14 +717,14 @@ class NestedVisualizer(_RunVisualizer):
 
     def get_model(self, method='median'):
 
-        labels, chain = self._get_chains()
+        labels, chain = self._get_equal_weight_chains()
 
         return ModelVisualizer.from_chain(chain, self.obs, method)
 
-    def get_CImodel(self, N=100, Nprocesses=1):
+    def get_CImodel(self, N=100, Nprocesses=1, add_errors=False):
         import multiprocessing
 
-        labels, chain = self._get_chains()
+        labels, chain = self._get_equal_weight_chains(add_errors=add_errors)
 
         with multiprocessing.Pool(processes=Nprocesses) as pool:
             return CIModelVisualizer.from_chain(chain, self.obs, N, pool=pool)
