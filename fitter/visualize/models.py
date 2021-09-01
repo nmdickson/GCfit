@@ -920,7 +920,7 @@ class _ClusterVisualizer:
     # Mass Function Plotting
     # -----------------------------------------------------------------------
 
-    Change this to subplots with one radial bin per plot, and with their own independant y-axes
+    # Change this to subplots with one radial bin per plot, and with their own independant y-axes
 
     @_support_units
     def plot_mass_func(self, fig=None, ax=None, show_obs=True):
@@ -1324,46 +1324,47 @@ class ModelVisualizer(_ClusterVisualizer):
 
     @_ClusterVisualizer._support_units
     def _init_massfunc(self, model, observations):
+        '''
+        sets self.mass_func as a dict of PI's, where each PI has a list of
+        subdicts. Each subdict represents a single radial slice (within this PI)
+        and contains the radii, the mass func values, and the field slice
+        '''
 
-        # TODO don't treat any PI different than we would any subgroup
-        #   might need to add an offset param to plotdata, or redo this logic
+        self.mass_func = {}
 
         cen = (observations.mdata['RA'], observations.mdata['DEC'])
 
-        PI_list = fnmatch.filter([k[0] for k in observations.valid_likelihoods],
-                                 '*mass_function*')
-
-        PI_list = sorted(PI_list, key=lambda k: observations[k]['r1'].min())
-
-        N_rbins = sum([np.unique(observations[k]['r1']).size for k in PI_list])
-        N_mbins = model.nms
-        # mf_full = np.empty((N, N_rbins, N_mbins))
-        mass_func = np.empty((1, N_rbins, N_mbins))
+        PI_list = observations.filter_datasets('*mass_function*')
 
         densityj = [util.QuantitySpline(model.r, model.Sigmaj[j])
                     for j in range(model.nms)]
 
-        rbin_ind = -1
+        for key, mf in PI_list.items():
 
-        for key in PI_list:
-            mf = observations[key]
+            self.mass_func[key] = []
 
             field = mass.Field.from_dataset(mf, cen=cen)
 
-            rbins = np.c_[mf['r1'], mf['r2']]
+            for r_in, r_out in np.unique(np.c_[mf['r1'], mf['r2']], axis=0):
 
-            for r_in, r_out in np.unique(rbins, axis=0):
-                rbin_ind += 1
+                this_slc = {'r1': r_in, 'r2': r_out}
 
                 field_slice = field.slice_radially(r_in, r_out)
+
+                this_slc['field'] = field_slice
+
+                this_slc['dNdm'] = np.empty((1, model.nms))
+
                 sample_radii = field_slice.MC_sample(300).to(u.pc)
 
                 for j in range(model.nms):
+
                     Nj = field_slice.MC_integrate(densityj[j], sample_radii)
                     widthj = (model.mj[j] * model.mes_widths[j])
-                    mass_func[0, rbin_ind, j] = (Nj / widthj).value
 
-        self.mass_func = mass_func
+                    this_slc['dNdm'][0, j] = (Nj / widthj).value
+
+                self.mass_func[key].append(this_slc)
 
     @_ClusterVisualizer._support_units
     def _init_dens(self, model, observations):
