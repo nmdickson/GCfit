@@ -920,24 +920,23 @@ class _ClusterVisualizer:
     # Mass Function Plotting
     # -----------------------------------------------------------------------
 
-    # Change this to subplots with one radial bin per plot, and with their own independant y-axes
-
     @_support_units
-    def plot_mass_func(self, fig=None, ax=None, show_obs=True):
+    def plot_mass_func(self, fig=None, show_obs=True):
 
-        fig, ax = self._setup_artist(fig, ax)
+        N_rbins = sum([len(d) for d in self.mass_func.values()])
+        shape = (int(np.ceil(N_rbins / 2)), 2)
 
-        PI_list = fnmatch.filter([k[0] for k in self.obs.valid_likelihoods],
-                                 '*mass_function*')
+        fig, axes = self._setup_multi_artist(fig, shape)
 
-        PI_list = sorted(PI_list, key=lambda k: self.obs[k]['r1'].min())
+        axes = axes.flatten()
 
-        rbin = 0
+        ax_ind = 0
 
-        for key in PI_list:
-            mf = self.obs[key]
+        for PI, bins in self.mass_func.items():
 
-            rbins = np.c_[mf['r1'], mf['r2']]
+            # Get data for this PI
+
+            mf = self.obs[PI]
 
             mbin_mean = (mf['m1'] + mf['m2']) / 2.
             mbin_width = mf['m2'] - mf['m1']
@@ -945,26 +944,33 @@ class _ClusterVisualizer:
             N = mf['N'] / mbin_width
             ΔN = mf['ΔN'] / mbin_width
 
-            for r_in, r_out in np.unique(rbins, axis=0):
-                r_mask = ((mf['r1'] == r_in)
-                          & (mf['r2'] == r_out))
+            # Iterate over radial bin dicts for this PI
+
+            for rbin in bins:
+
+                ax = axes[ax_ind]
+
+                # Get obs data corresponding to this radial bin
+
+                r_mask = ((mf['r1'] == rbin['r1']) & (mf['r2'] == rbin['r2']))
 
                 N_data = N[r_mask].value
                 err_data = ΔN[r_mask].value
 
                 err = self.F * err_data
 
-                pnts = ax.errorbar(mbin_mean[r_mask], N_data * 10**scale,
-                                   fmt='o', yerr=err * 10**scale)
+                pnts = ax.errorbar(mbin_mean[r_mask], N_data, fmt='o', yerr=err)
 
                 clr = pnts[0].get_color()
 
-                # plot contours
+                # plot models
 
-                midpoint = self.mass_func.shape[0] // 2
+                dNdm = rbin['dNdm']
 
-                m_domain = self.mj[:self.mass_func.shape[-1]]
-                median = self.mass_func[midpoint, rbin] * 10**scale
+                midpoint = dNdm.shape[0] // 2
+
+                m_domain = self.mj[:dNdm.shape[-1]]
+                median = dNdm[midpoint]
 
                 med_plot, = ax.plot(m_domain, median, '--', c=clr)
 
@@ -973,20 +979,20 @@ class _ClusterVisualizer:
 
                     ax.fill_between(
                         m_domain,
-                        self.mass_func[midpoint + sigma, rbin] * 10**scale,
-                        self.mass_func[midpoint - sigma, rbin] * 10**scale,
+                        dNdm[midpoint + sigma],
+                        dNdm[midpoint - sigma],
                         alpha=1 - alpha, color=clr
                     )
 
                     alpha += alpha
 
-                rbin += 1
+                ax.set_yscale("log")
+                ax.set_xscale("log")
 
-        ax.set_yscale("log")
-        ax.set_xscale("log")
+                ax.set_ylabel('dN/dm')
+                ax.set_xlabel(r'Mass [$M_\odot$]')
 
-        ax.set_ylabel('dN/dm')
-        ax.set_xlabel(r'Mass [$M_\odot$]')
+                ax_ind += 1
 
         return fig
 
