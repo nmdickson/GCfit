@@ -920,14 +920,12 @@ class _ClusterVisualizer:
     # Mass Function Plotting
     # -----------------------------------------------------------------------
 
+    Change this to subplots with one radial bin per plot, and with their own independant y-axes
+
     @_support_units
     def plot_mass_func(self, fig=None, ax=None, show_obs=True):
 
         fig, ax = self._setup_artist(fig, ax)
-
-        scale = 10
-
-        XTEXT = 0.81 * u.Msun
 
         PI_list = fnmatch.filter([k[0] for k in self.obs.valid_likelihoods],
                                  '*mass_function*')
@@ -968,8 +966,7 @@ class _ClusterVisualizer:
                 m_domain = self.mj[:self.mass_func.shape[-1]]
                 median = self.mass_func[midpoint, rbin] * 10**scale
 
-                med_plot, = ax.plot(m_domain, median, '--', c=clr,
-                                    label=f"R={r_in:.1f}-{r_out:.1f}")
+                med_plot, = ax.plot(m_domain, median, '--', c=clr)
 
                 alpha = 0.8 / (midpoint + 1)
                 for sigma in range(1, midpoint + 1):
@@ -983,13 +980,6 @@ class _ClusterVisualizer:
 
                     alpha += alpha
 
-                xy_pnt = (med_plot.get_xdata()[-1], med_plot.get_ydata()[-1])
-                xy_txt = (XTEXT, med_plot.get_ydata()[-1])
-                text = f"{r_in.value:.2f}'-{r_out.value:.2f}'"
-
-                ax.annotate(text, xy_pnt, xytext=xy_txt, fontsize=12, color=clr)
-
-                scale -= 1
                 rbin += 1
 
         ax.set_yscale("log")
@@ -1010,6 +1000,8 @@ class _ClusterVisualizer:
 
         fig, ax = self._setup_artist(fig, ax)
 
+        cen = (self.obs.mdata['RA'], self.obs.mdata['DEC'])
+
         PI_list = self.obs.filter_datasets('*mass_function*')
         PI_list = sorted(PI_list, key=lambda k: self.obs[k]['r1'].min())
 
@@ -1019,21 +1011,7 @@ class _ClusterVisualizer:
         for key in PI_list:
             mf = self.obs[key]
 
-            # TODO this function should go in obs or mass or something
-            #   including the new single coords check
-            cen = (self.obs.mdata['RA'], self.obs.mdata['DEC'])
-            unit = mf.mdata['field_unit']
-            coords = []
-            for ch in string.ascii_letters:
-                try:
-                    coords.append(mf['fields'].mdata[f'{ch}'])
-                except KeyError:
-                    break
-
-            if len(coords) == 1:
-                coords = coords[0]
-
-            field = mass.Field(coords, cen=cen, unit=unit)
+            field = mass.Field.from_dataset(mf, cen=cen)
 
             field.plot(ax, fc=next(fc), alpha=0.7, ec='k', label=key)
 
@@ -1350,6 +1328,8 @@ class ModelVisualizer(_ClusterVisualizer):
         # TODO don't treat any PI different than we would any subgroup
         #   might need to add an offset param to plotdata, or redo this logic
 
+        cen = (observations.mdata['RA'], observations.mdata['DEC'])
+
         PI_list = fnmatch.filter([k[0] for k in observations.valid_likelihoods],
                                  '*mass_function*')
 
@@ -1368,16 +1348,7 @@ class ModelVisualizer(_ClusterVisualizer):
         for key in PI_list:
             mf = observations[key]
 
-            cen = (observations.mdata['RA'], observations.mdata['DEC'])
-            unit = mf.mdata['field_unit']
-            coords = []
-            for ch in string.ascii_letters:
-                try:
-                    coords.append(mf['fields'].mdata[f'{ch}'])
-                except KeyError:
-                    break
-
-            field = mass.Field(coords, cen=cen, unit=unit)
+            field = mass.Field.from_dataset(mf, cen=cen)
 
             rbins = np.c_[mf['r1'], mf['r2']]
 
@@ -1876,6 +1847,8 @@ class CIModelVisualizer(_ClusterVisualizer):
 
     def _init_massfunc(self, model, equivs=None):
 
+        cen = (self.obs.mdata['RA'], self.obs.mdata['DEC'])
+
         densityj = [util.QuantitySpline(model.r, model.Sigmaj[j])
                     for j in range(model.nms)]
 
@@ -1895,16 +1868,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         for key in PI_list:
             mf = self.obs[key]
 
-            cen = (self.obs.mdata['RA'], self.obs.mdata['DEC'])
-            unit = mf.mdata['field_unit']
-            coords = []
-            for ch in string.ascii_letters:
-                try:
-                    coords.append(mf['fields'].mdata[f'{ch}'])
-                except KeyError:
-                    break
-
-            field = mass.Field(coords, cen=cen, unit=unit)
+            field = mass.Field.from_dataset(mf, cen=cen)
 
             rbins = np.c_[mf['r1'], mf['r2']]
 
