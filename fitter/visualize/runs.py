@@ -52,6 +52,8 @@ class _RunVisualizer:
     def _setup_multi_artist(self, fig, shape, *, use_name=True, **subplot_kw):
         '''setup a subplot with multiple axes'''
 
+        # TODO need to allow this setup to handle fancier shapes
+
         if shape is None:
             # If no shape is provided, just return the figure, probably empty
 
@@ -267,6 +269,8 @@ class MCMCVisualizer(_RunVisualizer):
 
     def plot_chains(self, fig=None):
 
+        # TODO maybe make this match Nested's `plot_params` more
+
         labels, chain = self._get_chains()
 
         fig, axes = self._setup_multi_artist(fig, (len(labels), ), sharex=True)
@@ -329,6 +333,8 @@ class MCMCVisualizer(_RunVisualizer):
     def plot_params(self, params, quants=None, fig=None, *,
                     colors=None, math_labels=None, bins=None):
         # TODO handle colors in more plots, and handle iterator based colors
+
+        # TODO make the names of plots match more between MCMC and nested
 
         fig, ax = self._setup_multi_artist(fig, shape=(1, len(params)))
 
@@ -829,13 +835,22 @@ class NestedVisualizer(_RunVisualizer):
         return fig[0]
 
     def plot_weights(self, fig=None, ax=None, show_bounds=False,
-                     resampled=False, **kw):
+                     resampled=False, filled=False, **kw):
 
         fig, ax = self._setup_artist(fig, ax)
 
         wts = self._resampled_weights if resampled else self.weights
 
-        ax.plot(-self.results.logvol, wts, **kw)
+        line, = ax.plot(-self.results.logvol, wts, **kw)
+
+        if filled:
+            color = mpl_clr.to_rgb(line.get_color())
+            facecolor = color + (0.33, )
+
+            # TODO would be nice to have a color gradient somewheres here
+            #   But thats not the easiest to do
+            ax.fill_between(-self.results.logvol, 0, wts,
+                            color=color, fc=facecolor)
 
         if show_bounds:
             # assumes maxfrac is default (0.8)
@@ -934,7 +949,9 @@ class NestedVisualizer(_RunVisualizer):
 
         return fig
 
-    def plot_params(self, fig=None, posterior_color='tab:blue', **kw):
+    def plot_params(self, fig=None, posterior_color='tab:blue',
+                    show_weight=True, **kw):
+
         from scipy.stats import gaussian_kde
         from mpl_toolkits.axes_grid1 import make_axes_locatable
 
@@ -944,27 +961,33 @@ class NestedVisualizer(_RunVisualizer):
         labels, chain = self._get_chains()
         eq_chain = self._get_equal_weight_chains()[1]
 
-        if (shape := len(labels) + 1) > 5 + 1:
-            shape = (int(np.ceil(shape / 2)) + 1, 2)
+        gs_kw = {}
 
-            gs_kw = {"height_ratios": [0.5] + [1] * (shape[0] - 1)}
+        if (shape := len(labels) + show_weight) > 5 + show_weight:
+            shape = (int(np.ceil(shape / 2)) + show_weight, 2)
 
-        # TODO need to allow this setup to handle fancier shapes
+            if show_weight:
+                gs_kw = {"height_ratios": [0.5] + [1] * (shape[0] - 1)}
+
         fig, axes = self._setup_multi_artist(fig, shape, sharex=True,
                                              squeeze=False, gridspec_kw=gs_kw)
 
-        for ax in axes[0]:
-            # plot weights above scatter plots
-            self.plot_weights(fig=fig, ax=ax, resampled=True)
+        if show_weight:
+            for ax in axes[0]:
+                # plot weights above scatter plots
+                # TODO figure out what colors to use
+                self.plot_weights(fig=fig, ax=ax, resampled=True, filled=True,
+                                  color=self._cmap(np.inf))
 
-            ax.set_xticklabels([])
-            ax.set_xlabel(None)
-            ax.set_yticklabels([])
-            ax.set_ylabel(None)
+                ax.set_xticklabels([])
+                ax.set_xlabel(None)
+                ax.set_yticklabels([])
+                ax.set_ylabel(None)
 
-            # Theres probably a cleaner way to do this
-            divider = make_axes_locatable(ax)
-            divider.append_axes('right', size="25%", pad=0).set_visible(False)
+                # Theres probably a cleaner way to do this
+                divider = make_axes_locatable(ax)
+                spacer = divider.append_axes('right', size="25%", pad=0)
+                spacer.set_visible(False)
 
         for ax in axes[-1]:
             ax.set_xlabel(r'$-\ln(X)$')
