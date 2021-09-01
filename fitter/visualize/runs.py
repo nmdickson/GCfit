@@ -934,15 +934,7 @@ class NestedVisualizer(_RunVisualizer):
 
         return fig
 
-    # ----------------------------------------------------------------------
-    # Parameter estimation
-    # ----------------------------------------------------------------------
-
     def plot_params(self, fig=None, posterior_color='tab:blue', **kw):
-        '''attempting to make a better "traceplot", maybe using the plots
-        proposed in Higson 2018?
-        '''
-        # TODO doesnt exactly match Higson they have a more "CIed" approach
         from scipy.stats import gaussian_kde
         from mpl_toolkits.axes_grid1 import make_axes_locatable
 
@@ -955,11 +947,24 @@ class NestedVisualizer(_RunVisualizer):
         if (shape := len(labels)) > 5:
             shape = (int(np.ceil(shape / 2)), 2)
 
-        fig, axes = self._setup_multi_artist(fig, shape, sharex=True)
+        # TODO need to allow this setup to handle fancier shapes
+        fig, axes = self._setup_multi_artist(fig, shape,
+                                             sharex=True, squeeze=False)
+
+        for ax in axes[-1]:
+            ax.set_xlabel(r'$-\ln(X)$')
+
+        axes = axes.flatten()
 
         for ind, ax in enumerate(axes.flatten()):
 
-            prm, eq_prm = chain[:, ind], eq_chain[:, ind]
+            try:
+                prm, eq_prm = chain[:, ind], eq_chain[:, ind]
+            except IndexError:
+                # If theres an odd number of (>5) params need to delete last one
+                # TODO preferably this would also resize this column of plots
+                ax.remove()
+                continue
 
             ax.set_ylabel(labels[ind])
 
@@ -982,10 +987,15 @@ class NestedVisualizer(_RunVisualizer):
 
             post_ax.fill_betweenx(y, 0, kde(y), color=color, fc=facecolor)
 
+            # TODO maybe put ticks on right side as well?
             for tk in post_ax.get_yticklabels():
                 tk.set_visible(False)
 
             post_ax.set_xlim(left=0)
+
+    # ----------------------------------------------------------------------
+    # Parameter estimation
+    # ----------------------------------------------------------------------
 
     def _sim_errors(self, Nruns=250):
         '''add the statistical and sampling errors not normally accounted for
