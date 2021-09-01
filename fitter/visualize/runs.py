@@ -938,7 +938,7 @@ class NestedVisualizer(_RunVisualizer):
     # Parameter estimation
     # ----------------------------------------------------------------------
 
-    def plot_params(self, fig=None, **kw):
+    def plot_params(self, fig=None, posterior_color='tab:blue', **kw):
         '''attempting to make a better "traceplot", maybe using the plots
         proposed in Higson 2018?
         '''
@@ -946,47 +946,46 @@ class NestedVisualizer(_RunVisualizer):
         from scipy.stats import gaussian_kde
         from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+        color = mpl_clr.to_rgb(posterior_color)
+        facecolor = color + (0.33, )
+
         labels, chain = self._get_chains()
         eq_chain = self._get_equal_weight_chains()[1]
 
         if (shape := len(labels)) > 5:
             shape = (int(np.ceil(shape / 2)), 2)
 
-        fig, axes = self._setup_multi_artist(fig, shape, sharex=True,
-                                             constrained_layout=False)
+        fig, axes = self._setup_multi_artist(fig, shape, sharex=True)
 
         for ind, ax in enumerate(axes.flatten()):
 
-            divider = make_axes_locatable(ax)
+            prm, eq_prm = chain[:, ind], eq_chain[:, ind]
 
-            upper_ax = divider.append_axes('top', size="15%", pad="1%", sharex=ax)
-            right_ax = divider.append_axes('right', size="10%", pad="1%", sharey=ax)
+            ax.set_ylabel(labels[ind])
+
+            divider = make_axes_locatable(ax)
+            post_ax = divider.append_axes('right', size="25%", pad=0, sharey=ax)
+
+            post_ax.set_xticks([])
 
             # a) plot distribution of values with respect to ln(X)
 
-            # ax.scatter(-self.results.logvol, chain[:, ind])
-            # TODO this is obviously in need of tweaks,
-            #   and if we do contours, should use an alpha-colormap
+            wts = self._resampled_weights
+            ax.scatter(-self.results.logvol, prm, c=wts, cmap=self._cmap, **kw)
 
-            x, y = -self.results.logvol, chain[:, ind]
-
-            X, Y = np.mgrid[x.min():x.max():100j, y.min():y.max():100j]
-            positions = np.vstack([X.ravel(), Y.ravel()])
-            values = np.vstack([x, y])
-            kernel = gaussian_kde(values)
-            Z = np.reshape(kernel(positions).T, X.shape)
-
-            ax.contourf(X, Y, Z)
-
-            # b) plot relative posterior mass (weight?) on top
-
-            self.plot_weights(fig=fig, ax=upper_ax, resampled=True)
+            ax.set_xlim(left=0)
 
             # c) plot posterior distribution (accounting for weights) on side
+            kde = gaussian_kde(eq_prm)
 
-            kde = gaussian_kde(eq_chain[:, ind])
-            y = np.linspace(eq_chain[:, ind].min(), eq_chain[:, ind].max(), 500)
-            right_ax.plot(kde(y), y)
+            y = np.linspace(eq_prm.min(), eq_prm.max(), 500)
+
+            post_ax.fill_betweenx(y, 0, kde(y), color=color, fc=facecolor)
+
+            for tk in post_ax.get_yticklabels():
+                tk.set_visible(False)
+
+            post_ax.set_xlim(left=0)
 
     def _sim_errors(self, Nruns=250):
         '''add the statistical and sampling errors not normally accounted for
