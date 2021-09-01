@@ -944,19 +944,32 @@ class NestedVisualizer(_RunVisualizer):
         labels, chain = self._get_chains()
         eq_chain = self._get_equal_weight_chains()[1]
 
-        if (shape := len(labels)) > 5:
-            shape = (int(np.ceil(shape / 2)), 2)
+        if (shape := len(labels) + 1) > 5 + 1:
+            shape = (int(np.ceil(shape / 2)) + 1, 2)
+
+            gs_kw = {"height_ratios": [0.5] + [1] * (shape[0] - 1)}
 
         # TODO need to allow this setup to handle fancier shapes
-        fig, axes = self._setup_multi_artist(fig, shape,
-                                             sharex=True, squeeze=False)
+        fig, axes = self._setup_multi_artist(fig, shape, sharex=True,
+                                             squeeze=False, gridspec_kw=gs_kw)
+
+        for ax in axes[0]:
+            # plot weights above scatter plots
+            self.plot_weights(fig=fig, ax=ax, resampled=True)
+
+            ax.set_xticklabels([])
+            ax.set_xlabel(None)
+            ax.set_yticklabels([])
+            ax.set_ylabel(None)
+
+            # Theres probably a cleaner way to do this
+            divider = make_axes_locatable(ax)
+            divider.append_axes('right', size="25%", pad=0).set_visible(False)
 
         for ax in axes[-1]:
             ax.set_xlabel(r'$-\ln(X)$')
 
-        axes = axes.flatten()
-
-        for ind, ax in enumerate(axes.flatten()):
+        for ind, ax in enumerate(axes[1:].flatten()):
 
             try:
                 prm, eq_prm = chain[:, ind], eq_chain[:, ind]
