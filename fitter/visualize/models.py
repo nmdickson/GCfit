@@ -667,86 +667,6 @@ class _ClusterVisualizer:
         return fig
 
     @_support_units
-    def plot_mass_func(self, fig=None, ax=None, show_obs=True):
-
-        fig, ax = self._setup_artist(fig, ax)
-
-        scale = 10
-
-        XTEXT = 0.81 * u.Msun
-
-        PI_list = fnmatch.filter([k[0] for k in self.obs.valid_likelihoods],
-                                 '*mass_function*')
-
-        PI_list = sorted(PI_list, key=lambda k: self.obs[k]['r1'].min())
-
-        rbin = 0
-
-        for key in PI_list:
-            mf = self.obs[key]
-
-            rbins = np.c_[mf['r1'], mf['r2']]
-
-            mbin_mean = (mf['m1'] + mf['m2']) / 2.
-            mbin_width = mf['m2'] - mf['m1']
-
-            N = mf['N'] / mbin_width
-            ΔN = mf['ΔN'] / mbin_width
-
-            for r_in, r_out in np.unique(rbins, axis=0):
-                r_mask = ((mf['r1'] == r_in)
-                          & (mf['r2'] == r_out))
-
-                N_data = N[r_mask].value
-                err_data = ΔN[r_mask].value
-
-                err = self.F * err_data
-
-                pnts = ax.errorbar(mbin_mean[r_mask], N_data * 10**scale,
-                                   fmt='o', yerr=err * 10**scale)
-
-                clr = pnts[0].get_color()
-
-                # plot contours
-
-                midpoint = self.mass_func.shape[0] // 2
-
-                m_domain = self.mj[:self.mass_func.shape[-1]]
-                median = self.mass_func[midpoint, rbin] * 10**scale
-
-                med_plot, = ax.plot(m_domain, median, '--', c=clr,
-                                    label=f"R={r_in:.1f}-{r_out:.1f}")
-
-                alpha = 0.8 / (midpoint + 1)
-                for sigma in range(1, midpoint + 1):
-
-                    ax.fill_between(
-                        m_domain,
-                        self.mass_func[midpoint + sigma, rbin] * 10**scale,
-                        self.mass_func[midpoint - sigma, rbin] * 10**scale,
-                        alpha=1 - alpha, color=clr
-                    )
-
-                    alpha += alpha
-
-                xy_pnt = (med_plot.get_xdata()[-1], med_plot.get_ydata()[-1])
-                xy_txt = (XTEXT, med_plot.get_ydata()[-1])
-                text = f"{r_in.value:.2f}'-{r_out.value:.2f}'"
-
-                ax.annotate(text, xy_pnt, xytext=xy_txt, fontsize=12, color=clr)
-
-                scale -= 1
-                rbin += 1
-
-        ax.set_yscale("log")
-        ax.set_xscale("log")
-
-        ax.set_ylabel('dN/dm')
-        ax.set_xlabel(r'Mass [$M_\odot$]')
-
-        return fig
-
-    @_support_units
     def plot_pulsar(self, fig=None, ax=None, show_obs=True):
         # TODO this is out of date with the new pulsar probability code
         # TODO I dont even think this is what we should use anymore, but the
@@ -993,6 +913,90 @@ class _ClusterVisualizer:
             ax.set_xlabel('')
 
         # fig.tight_layout()
+
+        return fig
+
+    # -----------------------------------------------------------------------
+    # Mass Function Plotting
+    # -----------------------------------------------------------------------
+
+    @_support_units
+    def plot_mass_func(self, fig=None, ax=None, show_obs=True):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        scale = 10
+
+        XTEXT = 0.81 * u.Msun
+
+        PI_list = fnmatch.filter([k[0] for k in self.obs.valid_likelihoods],
+                                 '*mass_function*')
+
+        PI_list = sorted(PI_list, key=lambda k: self.obs[k]['r1'].min())
+
+        rbin = 0
+
+        for key in PI_list:
+            mf = self.obs[key]
+
+            rbins = np.c_[mf['r1'], mf['r2']]
+
+            mbin_mean = (mf['m1'] + mf['m2']) / 2.
+            mbin_width = mf['m2'] - mf['m1']
+
+            N = mf['N'] / mbin_width
+            ΔN = mf['ΔN'] / mbin_width
+
+            for r_in, r_out in np.unique(rbins, axis=0):
+                r_mask = ((mf['r1'] == r_in)
+                          & (mf['r2'] == r_out))
+
+                N_data = N[r_mask].value
+                err_data = ΔN[r_mask].value
+
+                err = self.F * err_data
+
+                pnts = ax.errorbar(mbin_mean[r_mask], N_data * 10**scale,
+                                   fmt='o', yerr=err * 10**scale)
+
+                clr = pnts[0].get_color()
+
+                # plot contours
+
+                midpoint = self.mass_func.shape[0] // 2
+
+                m_domain = self.mj[:self.mass_func.shape[-1]]
+                median = self.mass_func[midpoint, rbin] * 10**scale
+
+                med_plot, = ax.plot(m_domain, median, '--', c=clr,
+                                    label=f"R={r_in:.1f}-{r_out:.1f}")
+
+                alpha = 0.8 / (midpoint + 1)
+                for sigma in range(1, midpoint + 1):
+
+                    ax.fill_between(
+                        m_domain,
+                        self.mass_func[midpoint + sigma, rbin] * 10**scale,
+                        self.mass_func[midpoint - sigma, rbin] * 10**scale,
+                        alpha=1 - alpha, color=clr
+                    )
+
+                    alpha += alpha
+
+                xy_pnt = (med_plot.get_xdata()[-1], med_plot.get_ydata()[-1])
+                xy_txt = (XTEXT, med_plot.get_ydata()[-1])
+                text = f"{r_in.value:.2f}'-{r_out.value:.2f}'"
+
+                ax.annotate(text, xy_pnt, xytext=xy_txt, fontsize=12, color=clr)
+
+                scale -= 1
+                rbin += 1
+
+        ax.set_yscale("log")
+        ax.set_xscale("log")
+
+        ax.set_ylabel('dN/dm')
+        ax.set_xlabel(r'Mass [$M_\odot$]')
 
         return fig
 
