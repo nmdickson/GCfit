@@ -1014,24 +1014,18 @@ class _ClusterVisualizer:
         '''
         import shapely.geometry as geom
 
-        # TODO some of this should probably be in an init, not here
-
         fig, ax = self._setup_artist(fig, ax)
 
-        cen = (self.obs.mdata['RA'], self.obs.mdata['DEC'])
+        # TODO this only plots the slices, which cuts some corners of the fields
+        for PI, bins in self.mass_func.items():
 
-        PI_list = self.obs.filter_datasets('*mass_function*')
-        PI_list = sorted(PI_list, key=lambda k: self.obs[k]['r1'].min())
+            for rbin in bins:
 
-        cmap = cmap or plt.cm.rainbow
-        fc = iter(cmap(np.linspace(0, 1, len(PI_list))))
+                clr = rbin.get("colour", None)
 
-        for key in PI_list:
-            mf = self.obs[key]
+                rbin['field'].plot(ax, fc=clr, alpha=0.7, ec='k', label=PI)
 
-            field = mass.Field.from_dataset(mf, cen=cen)
-
-            field.plot(ax, fc=next(fc), alpha=0.7, ec='k', label=key)
+                PI = f'_{PI}'
 
         ax.plot(0, 0, 'kx')
 
