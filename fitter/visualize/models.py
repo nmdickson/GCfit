@@ -6,6 +6,7 @@ import string
 import fnmatch
 
 import h5py
+import cycler
 import numpy as np
 import astropy.units as u
 import matplotlib.pyplot as plt
@@ -912,8 +913,6 @@ class _ClusterVisualizer:
         for ax in axes.flatten():
             ax.set_xlabel('')
 
-        # fig.tight_layout()
-
         return fig
 
     # -----------------------------------------------------------------------
@@ -921,7 +920,7 @@ class _ClusterVisualizer:
     # -----------------------------------------------------------------------
 
     @_support_units
-    def plot_mass_func(self, fig=None, show_obs=True):
+    def plot_mass_func(self, fig=None, show_obs=True, colours=None):
 
         N_rbins = sum([len(d) for d in self.mass_func.values()])
         shape = (int(np.ceil(N_rbins / 2)), 2)
@@ -954,6 +953,8 @@ class _ClusterVisualizer:
 
                 ax = axes[ax_ind]
 
+                clr = rbin.get('colour', None)
+
                 # Get obs data corresponding to this radial bin
 
                 if show_obs:
@@ -966,7 +967,8 @@ class _ClusterVisualizer:
 
                     err = self.F * err_data
 
-                    pnts = ax.errorbar(mbin_mean[r_mask], N_data, err, fmt='o')
+                    pnts = ax.errorbar(mbin_mean[r_mask], N_data, yerr=err,
+                                       fmt='o', color=clr)
 
                     clr = pnts[0].get_color()
 
@@ -1021,7 +1023,7 @@ class _ClusterVisualizer:
         PI_list = self.obs.filter_datasets('*mass_function*')
         PI_list = sorted(PI_list, key=lambda k: self.obs[k]['r1'].min())
 
-        cmap = cmap or plt.cm.rainbow
+        cmap = cmap or plt.cm.prism
         fc = iter(cmap(np.linspace(0, 1, len(PI_list))))
 
         for key in PI_list:
@@ -1339,12 +1341,14 @@ class ModelVisualizer(_ClusterVisualizer):
         self.numdens = nd
 
     @_ClusterVisualizer._support_units
-    def _init_massfunc(self, model, observations):
+    def _init_massfunc(self, model, observations, *, cmap=None):
         '''
         sets self.mass_func as a dict of PI's, where each PI has a list of
         subdicts. Each subdict represents a single radial slice (within this PI)
         and contains the radii, the mass func values, and the field slice
         '''
+
+        cmap = cmap or plt.cm.prism
 
         self.mass_func = {}
 
@@ -1355,9 +1359,12 @@ class ModelVisualizer(_ClusterVisualizer):
         densityj = [util.QuantitySpline(model.r, model.Sigmaj[j])
                     for j in range(model.nms)]
 
-        for key, mf in PI_list.items():
+        for i, (key, mf) in enumerate(PI_list.items()):
 
             self.mass_func[key] = []
+
+            # TODO same colour for each PI or different for each slice?
+            clr = cmap(i / len(PI_list))
 
             field = mass.Field.from_dataset(mf, cen=cen)
 
@@ -1368,6 +1375,8 @@ class ModelVisualizer(_ClusterVisualizer):
                 field_slice = field.slice_radially(r_in, r_out)
 
                 this_slc['field'] = field_slice
+
+                this_slc['colour'] = clr
 
                 this_slc['dNdm'] = np.empty((1, model.nms))
 
@@ -1863,6 +1872,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         return K * nd_interp(self.r)
 
     def _init_massfunc(self, model, equivs=None):
+        # TODO implement new mass funcs stuff (this is all broken now)
 
         cen = (self.obs.mdata['RA'], self.obs.mdata['DEC'])
 
