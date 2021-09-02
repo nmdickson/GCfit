@@ -956,16 +956,19 @@ class _ClusterVisualizer:
 
                 # Get obs data corresponding to this radial bin
 
-                r_mask = ((mf['r1'] == rbin['r1']) & (mf['r2'] == rbin['r2']))
+                if show_obs:
 
-                N_data = N[r_mask].value
-                err_data = ΔN[r_mask].value
+                    r_mask = ((mf['r1'] == rbin['r1'])
+                              & (mf['r2'] == rbin['r2']))
 
-                err = self.F * err_data
+                    N_data = N[r_mask].value
+                    err_data = ΔN[r_mask].value
 
-                pnts = ax.errorbar(mbin_mean[r_mask], N_data, fmt='o', yerr=err)
+                    err = self.F * err_data
 
-                clr = pnts[0].get_color()
+                    pnts = ax.errorbar(mbin_mean[r_mask], N_data, err, fmt='o')
+
+                    clr = pnts[0].get_color()
 
                 # plot models
 
