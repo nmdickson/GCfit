@@ -1023,7 +1023,7 @@ class _ClusterVisualizer:
         PI_list = self.obs.filter_datasets('*mass_function*')
         PI_list = sorted(PI_list, key=lambda k: self.obs[k]['r1'].min())
 
-        cmap = cmap or plt.cm.prism
+        cmap = cmap or plt.cm.rainbow
         fc = iter(cmap(np.linspace(0, 1, len(PI_list))))
 
         for key in PI_list:
@@ -1348,7 +1348,7 @@ class ModelVisualizer(_ClusterVisualizer):
         and contains the radii, the mass func values, and the field slice
         '''
 
-        cmap = cmap or plt.cm.prism
+        cmap = cmap or plt.cm.rainbow
 
         self.mass_func = {}
 
