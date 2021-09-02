@@ -926,9 +926,13 @@ class _ClusterVisualizer:
         N_rbins = sum([len(d) for d in self.mass_func.values()])
         shape = (int(np.ceil(N_rbins / 2)), 2)
 
-        fig, axes = self._setup_multi_artist(fig, shape)
+        fig, axes = self._setup_multi_artist(fig, shape, sharex=True,
+                                             constrained_layout=True)
 
         axes = axes.flatten()
+
+        if N_rbins % 2:
+            axes[-1].remove()
 
         ax_ind = 0
 
@@ -986,13 +990,15 @@ class _ClusterVisualizer:
 
                     alpha += alpha
 
-                ax.set_yscale("log")
                 ax.set_xscale("log")
 
                 ax.set_ylabel('dN/dm')
-                ax.set_xlabel(r'Mass [$M_\odot$]')
+                ax.set_xlabel(None)
 
                 ax_ind += 1
+
+        for ax in axes[(-3 if N_rbins % 2 else -2):]:
+            ax.set_xlabel(r'Mass [$M_\odot$]')
 
         return fig
 
