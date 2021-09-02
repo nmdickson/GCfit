@@ -997,6 +997,13 @@ class _ClusterVisualizer:
 
                 ax.set_xlabel(None)
 
+                # Fake text to allow for radial bins using loc='best'
+                # Really this should be a part of plt (see matplotlib#17946)
+                r1 = rbin['r1'].to_value('arcmin')
+                r2 = rbin['r2'].to_value('arcmin')
+                fake = plt.Line2D([], [], label=f"r = {r1:.2f}'-{r2:.2f}'")
+                ax.legend(handles=[fake], handlelength=0, handletextpad=0)
+
                 ax_ind += 1
 
         for ax in axes[(-3 if N_rbins % 2 else -2):]:
@@ -1363,7 +1370,10 @@ class ModelVisualizer(_ClusterVisualizer):
 
             field = mass.Field.from_dataset(mf, cen=cen)
 
-            for r_in, r_out in np.unique(np.c_[mf['r1'], mf['r2']], axis=0):
+            rbins = np.unique(np.c_[mf['r1'], mf['r2']], axis=0)
+            rbins.sort(axis=0)
+
+            for r_in, r_out in rbins:
 
                 this_slc = {'r1': r_in, 'r2': r_out}
 
