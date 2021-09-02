@@ -924,7 +924,7 @@ class _ClusterVisualizer:
         fig, axes = self._setup_multi_artist(fig, shape, sharex=True,
                                              constrained_layout=True)
 
-        axes = axes.flatten()
+        axes = axes.T.flatten()
 
         if N_rbins % 2:
             axes[-1].remove()
@@ -964,9 +964,11 @@ class _ClusterVisualizer:
                     err = self.F * err_data
 
                     pnts = ax.errorbar(mbin_mean[r_mask], N_data, yerr=err,
-                                       fmt='o', color=clr)
+                                       fmt='o', color=clr, label=PI)
 
                     clr = pnts[0].get_color()
+
+                    PI = f'_{PI}'
 
                 # plot models
 
@@ -1001,6 +1003,9 @@ class _ClusterVisualizer:
             ax.set_xlabel(r'Mass [$M_\odot$]')
 
         fig.supylabel('dN/dm')
+
+        # TODO the placement of this should probably be better
+        fig.legend(loc='lower right')
 
         return fig
 
