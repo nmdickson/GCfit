@@ -1006,7 +1006,7 @@ class _ClusterVisualizer:
 
                 ax_ind += 1
 
-        for ax in axes[(-3 if N_rbins % 2 else -2):]:
+        for ax in axes[[shape[0] - 1, -2 if N_rbins % 2 else -1]]:
             ax.set_xlabel(r'Mass [$M_\odot$]')
 
         fig.supylabel('dN/dm')
