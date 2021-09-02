@@ -2,11 +2,7 @@ from .. import util
 from ..probabilities import pulsars, mass
 from ..core.data import Observations, Model
 
-import string
-import fnmatch
-
 import h5py
-import cycler
 import numpy as np
 import astropy.units as u
 import matplotlib.pyplot as plt
