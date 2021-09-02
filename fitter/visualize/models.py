@@ -995,13 +995,14 @@ class _ClusterVisualizer:
 
                 ax.set_xscale("log")
 
-                ax.set_ylabel('dN/dm')
                 ax.set_xlabel(None)
 
                 ax_ind += 1
 
         for ax in axes[(-3 if N_rbins % 2 else -2):]:
             ax.set_xlabel(r'Mass [$M_\odot$]')
+
+        fig.supylabel('dN/dm')
 
         return fig
 
