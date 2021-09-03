@@ -50,7 +50,7 @@ class _RunVisualizer:
         return fig, ax
 
     def _setup_multi_artist(self, fig, shape, *, allow_blank=True,
-                            use_name=True, **subplot_kw):
+                            use_name=True, constrained_layout=True, **sub_kw):
         '''setup a subplot with multiple axes'''
 
         def create_axes(base, shape, **kw):
@@ -129,7 +129,7 @@ class _RunVisualizer:
         # ------------------------------------------------------------------
 
         if fig is None:
-            fig = plt.figure()
+            fig = plt.figure(constrained_layout=constrained_layout)
 
         # ------------------------------------------------------------------
         # If no shape is provided, just return the figure, probably empty
@@ -152,7 +152,7 @@ class _RunVisualizer:
                     raise ValueError(mssg)
 
             else:
-                fig, axarr = create_axes(fig, shape, **subplot_kw)
+                fig, axarr = create_axes(fig, shape, **sub_kw)
 
         # ------------------------------------------------------------------
         # If desired, default to titling the figure based on it's "name"

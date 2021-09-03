@@ -57,7 +57,7 @@ class _ClusterVisualizer:
         return fig, ax
 
     def _setup_multi_artist(self, fig, shape, *, allow_blank=True,
-                            use_name=True, **subplot_kw):
+                            use_name=True, constrained_layout=True, **sub_kw):
         '''setup a subplot with multiple axes'''
 
         def create_axes(base, shape, **kw):
@@ -136,7 +136,7 @@ class _ClusterVisualizer:
         # ------------------------------------------------------------------
 
         if fig is None:
-            fig = plt.figure()
+            fig = plt.figure(constrained_layout=constrained_layout)
 
         # ------------------------------------------------------------------
         # If no shape is provided, just return the figure, probably empty
@@ -153,13 +153,14 @@ class _ClusterVisualizer:
 
             # this fig has axes, check that they match shape
             if axarr := fig.axes:
+                # TODO this won't actually work, cause fig.axes is just a list
                 if axarr.shape != shape:
                     mssg = (f"figure {fig} already contains axes with "
                             f"mismatched shape ({axarr.shape} != {shape})")
                     raise ValueError(mssg)
 
             else:
-                fig, axarr = create_axes(fig, shape, **subplot_kw)
+                fig, axarr = create_axes(fig, shape, **sub_kw)
 
         # ------------------------------------------------------------------
         # If desired, default to titling the figure based on it's "name"
@@ -1005,15 +1006,11 @@ class _ClusterVisualizer:
     def plot_mass_func(self, fig=None, show_obs=True, colours=None):
 
         N_rbins = sum([len(d) for d in self.mass_func.values()])
-        shape = (int(np.ceil(N_rbins / 2)), 2)
+        shape = ((int(np.ceil(N_rbins / 2)), int(np.floor(N_rbins / 2))), 2)
 
-        fig, axes = self._setup_multi_artist(fig, shape, sharex=True,
-                                             constrained_layout=True)
+        fig, axes = self._setup_multi_artist(fig, shape, sharex=True)
 
         axes = axes.T.flatten()
-
-        if N_rbins % 2:
-            axes[-1].remove()
 
         ax_ind = 0
 
@@ -1083,7 +1080,7 @@ class _ClusterVisualizer:
 
                 ax.set_xlabel(None)
 
-                # Fake text to allow for radial bins using loc='best'
+                # Fake text to allow for radial bins "label" using loc='best'
                 # Really this should be a part of plt (see matplotlib#17946)
                 r1 = rbin['r1'].to_value('arcmin')
                 r2 = rbin['r2'].to_value('arcmin')
@@ -1092,13 +1089,11 @@ class _ClusterVisualizer:
 
                 ax_ind += 1
 
-        for ax in axes[[shape[0] - 1, -2 if N_rbins % 2 else -1]]:
-            ax.set_xlabel(r'Mass [$M_\odot$]')
-
         fig.supylabel('dN/dm')
+        fig.supxlabel(r'Mass [$M_\odot$]')
 
-        # TODO the placement of this should probably be better
-        fig.legend(loc='lower right')
+        # TODO this isn't showing up, probably due to new subfigures?
+        fig.legend()
 
         return fig
 
