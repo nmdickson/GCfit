@@ -57,10 +57,14 @@ class _ClusterVisualizer:
         return fig, ax
 
     def _setup_multi_artist(self, fig, shape, *, allow_blank=True,
-                            use_name=True, constrained_layout=True, **sub_kw):
+                            use_name=True, constrained_layout=True,
+                            subfig_kw=None, **sub_kw):
         '''setup a subplot with multiple axes'''
 
-        def create_axes(base, shape, **kw):
+        if subfig_kw is None:
+            subfig_kw = {}
+
+        def create_axes(base, shape):
             '''create the axes of `shape` on this base (fig)'''
 
             # make sure shape is a tuple of atleast 1d, at most 2d
@@ -88,7 +92,7 @@ class _ClusterVisualizer:
             if isinstance(shape['nrows'], tuple):
 
                 subfigs = base.subfigures(ncols=shape['ncols'], nrows=1,
-                                          squeeze=False)
+                                          squeeze=False, **subfig_kw)
 
                 for ind, sf in enumerate(subfigs.flatten()):
 
@@ -103,12 +107,12 @@ class _ClusterVisualizer:
                                 f"match number of columns ({shape['ncols']})")
                         raise ValueError(mssg)
 
-                    sf.subplots(ncols=1, nrows=nr, **kw)
+                    sf.subplots(ncols=1, nrows=nr, **sub_kw)
 
             elif isinstance(shape['ncols'], tuple):
 
                 subfigs = base.subfigures(nrows=shape['nrows'], ncols=1,
-                                          squeeze=False)
+                                          squeeze=False, **subfig_kw)
 
                 for ind, sf in enumerate(subfigs.flatten()):
 
@@ -123,11 +127,11 @@ class _ClusterVisualizer:
                                 f"match number of rows ({shape['nrows']})")
                         raise ValueError(mssg)
 
-                    sf.subplots(nrows=1, ncols=nc, **kw)
+                    sf.subplots(nrows=1, ncols=nc, **sub_kw)
 
             # otherwise just make a simple subplots and return that
             else:
-                base.subplots(**shape, **kw)
+                base.subplots(**shape, **sub_kw)
 
             return base, base.axes
 
@@ -160,7 +164,7 @@ class _ClusterVisualizer:
                     raise ValueError(mssg)
 
             else:
-                fig, axarr = create_axes(fig, shape, **sub_kw)
+                fig, axarr = create_axes(fig, shape)
 
         # ------------------------------------------------------------------
         # If desired, default to titling the figure based on it's "name"
@@ -1003,16 +1007,34 @@ class _ClusterVisualizer:
     # -----------------------------------------------------------------------
 
     @_support_units
-    def plot_mass_func(self, fig=None, show_obs=True, colours=None):
+    def plot_mass_func(self, fig=None, show_obs=True, show_field=False,
+                       colours=None):
 
         N_rbins = sum([len(d) for d in self.mass_func.values()])
         shape = ((int(np.ceil(N_rbins / 2)), int(np.floor(N_rbins / 2))), 2)
+        sf_kw = {}
 
-        fig, axes = self._setup_multi_artist(fig, shape, sharex=True)
+        # If adding the fields, include an extra column on the left for it
+        if show_field:
+            shape = ((1, *shape[0]), shape[1] + 1)
+            # sf_kw = {'height_ratios': (0.33, 1, 1)}
+
+        fig, axes = self._setup_multi_artist(fig, shape,
+                                             sharex=True, subfig_kw=sf_kw)
 
         axes = axes.T.flatten()
 
         ax_ind = 0
+
+        if show_field:
+
+            ax = axes[ax_ind]
+
+            # TODO would be nice to adjust this ax to be 1/3 the height
+            #   but the heigh_ratios keyword isn't really meant for this
+            self.plot_MF_fields(fig, ax)
+
+            ax_ind += 1
 
         for PI, bins in self.mass_func.items():
 
@@ -1089,8 +1111,11 @@ class _ClusterVisualizer:
 
                 ax_ind += 1
 
-        fig.supylabel('dN/dm')
         fig.supxlabel(r'Mass [$M_\odot$]')
+
+        if not show_field:
+            # TODO yes during showfield, just need to figure out where to put it
+            fig.supylabel('dN/dm')
 
         # TODO this isn't showing up, probably due to new subfigures?
         fig.legend()
