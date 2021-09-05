@@ -743,32 +743,6 @@ class NestedVisualizer(_RunVisualizer):
     # Plots
     # ----------------------------------------------------------------------
 
-    def plot_chains(self, fig=None, **kw):
-
-        labels, chain = self._get_chains()
-
-        fig, axes = self._setup_multi_artist(fig, (len(labels), ), sharex=True)
-
-        kw.setdefault('marker', '.')
-
-        for ind, ax in enumerate(axes.flatten()):
-
-            try:
-                ax.scatter(-self.results.logvol, chain[..., ind],
-                           c=self._resampled_weights, cmap=self._cmap, **kw)
-
-            except IndexError as err:
-                mssg = 'reduced parameters, but no explanatory metadata stored'
-                raise err(mssg)
-
-            ax.set_ylabel(labels[ind])
-
-        # TODO add a colorbar for the weights
-
-        axes[-1].set_xlabel(r'$-\ln(X)$')
-
-        return fig
-
     def plot_marginals(self, fig=None, **corner_kw):
         import corner
 
