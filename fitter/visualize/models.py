@@ -1153,7 +1153,7 @@ class _ClusterVisualizer:
             for r_type in radii:
                 radius = getattr(self, r_type).to_value('arcmin')
                 circle = np.array(geom.Point(0, 0).buffer(radius).exterior).T
-                ax.plot(*circle)
+                ax.plot(*circle, ls='--')
                 ax.text(0, circle[1].max(), r_type)
 
         except AttributeError:
