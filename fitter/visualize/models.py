@@ -1010,7 +1010,7 @@ class _ClusterVisualizer:
 
         # If adding the fields, include an extra column on the left for it
         if show_fields:
-            shape = ((3, *shape[0]), shape[1] + 1)
+            shape = ((1, *shape[0]), shape[1] + 1)
 
         fig, axes = self._setup_multi_artist(fig, shape,
                                              sharex=True)
