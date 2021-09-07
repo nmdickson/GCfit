@@ -1007,15 +1007,13 @@ class _ClusterVisualizer:
 
         N_rbins = sum([len(d) for d in self.mass_func.values()])
         shape = ((int(np.ceil(N_rbins / 2)), int(np.floor(N_rbins / 2))), 2)
-        sf_kw = {}
 
         # If adding the fields, include an extra column on the left for it
         if show_fields:
-            shape = ((1, *shape[0]), shape[1] + 1)
-            # sf_kw = {'height_ratios': (0.33, 1, 1)}
+            shape = ((3, *shape[0]), shape[1] + 1)
 
         fig, axes = self._setup_multi_artist(fig, shape,
-                                             sharex=True, subfig_kw=sf_kw)
+                                             sharex=True)
 
         axes = axes.T.flatten()
 
@@ -1023,13 +1021,14 @@ class _ClusterVisualizer:
 
         if show_fields:
 
-            ax = axes[ax_ind]
+            # TODO still not happy about the size, with or without the extra axs
+            axes[0].remove()
+            ax = axes[1]
+            axes[2].remove()
 
-            # TODO would be nice to adjust this ax to be 1/3 the height
-            #   but the heigh_ratios keyword isn't really meant for this
             self.plot_MF_fields(fig, ax)
 
-            ax_ind += 1
+            ax_ind = 3
 
         for PI in sorted(self.mass_func,
                          key=lambda k: self.mass_func[k][0]['r1']):
