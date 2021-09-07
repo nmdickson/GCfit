@@ -1021,14 +1021,12 @@ class _ClusterVisualizer:
 
         if show_fields:
 
-            # TODO still not happy about the size, with or without the extra axs
-            axes[0].remove()
-            ax = axes[1]
-            axes[2].remove()
+            ax = axes[ax_ind]
 
+            # TODO need to figure out a good size and how to do it, for this ax
             self.plot_MF_fields(fig, ax)
 
-            ax_ind = 3
+            ax_ind += 1
 
         for PI in sorted(self.mass_func,
                          key=lambda k: self.mass_func[k][0]['r1']):
