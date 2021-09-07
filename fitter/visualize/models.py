@@ -1007,7 +1007,7 @@ class _ClusterVisualizer:
     # -----------------------------------------------------------------------
 
     @_support_units
-    def plot_mass_func(self, fig=None, show_obs=True, show_field=False,
+    def plot_mass_func(self, fig=None, show_obs=True, show_fields=False,
                        colours=None):
 
         N_rbins = sum([len(d) for d in self.mass_func.values()])
@@ -1015,7 +1015,7 @@ class _ClusterVisualizer:
         sf_kw = {}
 
         # If adding the fields, include an extra column on the left for it
-        if show_field:
+        if show_fields:
             shape = ((1, *shape[0]), shape[1] + 1)
             # sf_kw = {'height_ratios': (0.33, 1, 1)}
 
@@ -1026,7 +1026,7 @@ class _ClusterVisualizer:
 
         ax_ind = 0
 
-        if show_field:
+        if show_fields:
 
             ax = axes[ax_ind]
 
@@ -1113,12 +1113,12 @@ class _ClusterVisualizer:
 
         fig.supxlabel(r'Mass [$M_\odot$]')
 
-        if not show_field:
+        if not show_fields:
             # TODO yes during showfield, just need to figure out where to put it
             fig.supylabel('dN/dm')
 
-        # TODO this isn't showing up, probably due to new subfigures?
-        fig.legend()
+            # TODO this isn't showing up, probably due to new subfigures?
+            fig.legend()
 
         return fig
 
