@@ -971,31 +971,26 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_all(self, fig=None, show_obs='attempt'):
-        # TODO this still needs tweaking, in what is plotted and in ax spacing
+        '''Plots all the primary profiles (numdens, LOS, PM)
+        but *not* the mass function, pulsars, or any secondary profiles
+        (cum-mass, remnants, etc)
+        '''
 
-        fig, axes = self._setup_multi_artist(fig, (4, 2))
+        fig, axes = self._setup_multi_artist(fig, (3, 2))
+
+        axes = axes.reshape((3, 2))
 
         fig.suptitle(str(self.obs))
 
-        # kw = {'show_obs': show_obs, 'residuals': False, 'hyperparam': True}
         kw = {}
 
         self.plot_number_density(fig=fig, ax=axes[0, 0], **kw)
         self.plot_LOS(fig=fig, ax=axes[1, 0], **kw)
+        self.plot_pm_ratio(fig=fig, ax=axes[2, 0], **kw)
+
         self.plot_pm_tot(fig=fig, ax=axes[0, 1], **kw)
         self.plot_pm_T(fig=fig, ax=axes[1, 1], **kw)
         self.plot_pm_R(fig=fig, ax=axes[2, 1], **kw)
-        self.plot_pm_ratio(fig=fig, ax=axes[3, 1], **kw)
-
-        gs = axes[2, 0].get_gridspec()
-
-        for ax in axes[2:, 0]:
-            ax.remove()
-
-        # Is this what is messing up the spacing?
-        axbig = fig.add_subplot(gs[2:, 0])
-
-        self.plot_mass_func(fig=fig, ax=axbig, show_obs=show_obs,)
 
         for ax in axes.flatten():
             ax.set_xlabel('')
