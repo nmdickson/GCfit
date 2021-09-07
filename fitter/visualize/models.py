@@ -1036,7 +1036,10 @@ class _ClusterVisualizer:
 
             ax_ind += 1
 
-        for PI, bins in self.mass_func.items():
+        for PI in sorted(self.mass_func,
+                         key=lambda k: self.mass_func[k][0]['r1']):
+
+            bins = self.mass_func[PI]
 
             # Get data for this PI
 
