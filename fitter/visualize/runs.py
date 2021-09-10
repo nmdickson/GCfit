@@ -12,6 +12,7 @@ import matplotlib.colors as mpl_clr
 __all__ = ['MCMCVisualizer', 'NestedVisualizer']
 
 
+# TODO a way to plot our priors, probably for both vizs
 class _RunVisualizer:
     '''base class for all visualizers of all run types'''
 
@@ -243,6 +244,32 @@ class MCMCVisualizer(_RunVisualizer):
     # TODO method which creates a mask array for walkers based on a condition
     #   i.e. "walkers where final delta > 0.35" or something
 
+    def _reconstruct_priors(self):
+        '''based on the stored "specified_priors" get a PriorTransform object'''
+
+        if not self.has_meta:
+            raise AttributeError("No metadata stored in file")
+
+        stored_priors = self.file['metadata']['specified_priors'].attrs
+        fixed = self.file['metadata']['fixed_params'].attrs
+
+        prior_params = {}
+
+        for key in list(self.obs.initials):
+            try:
+                type_ = stored_priors[f'{key}_type'].decode('utf-8')
+                args = stored_priors[f'{key}_args']
+
+                if args.dtype.kind == 'S':
+                    args = args.astype('U')
+
+                prior_params[key] = (type_, *args)
+            except KeyError:
+                continue
+
+        prior_kwargs = {'fixed_initials': fixed, 'err_on_fail': False}
+        return priors.Priors(prior_params, **prior_kwargs)
+
     # ----------------------------------------------------------------------
     # Model Visualizers
     # ----------------------------------------------------------------------
@@ -333,6 +360,9 @@ class MCMCVisualizer(_RunVisualizer):
     def plot_params(self, params, quants=None, fig=None, *,
                     colors=None, math_labels=None, bins=None):
         # TODO handle colors in more plots, and handle iterator based colors
+
+        # TODO a way to see when points were proposed, so we can track what
+        #   points came before and after dynamic sampling started
 
         # TODO make the names of plots match more between MCMC and nested
 
