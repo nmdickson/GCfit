@@ -1030,8 +1030,11 @@ class NestedVisualizer(_RunVisualizer):
             elif fill_type in ('bound', 'samples_bound'):
                 c = self.results.samples_bound
             else:
-                c = None
+                mssg = ('Invalid fill type, must be one of '
+                        '{wts, iters, id, batch, bound}')
+                raise ValueError(mssg)
 
+            # TODO the y tick values have disappeared should be on the last axis
             ax.scatter(-self.results.logvol, prm, c=c, cmap=self._cmap, **kw)
 
             ax.set_xlim(left=0)
