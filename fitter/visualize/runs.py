@@ -361,9 +361,6 @@ class MCMCVisualizer(_RunVisualizer):
                     colors=None, math_labels=None, bins=None):
         # TODO handle colors in more plots, and handle iterator based colors
 
-        # TODO a way to see when points were proposed, so we can track what
-        #   points came before and after dynamic sampling started
-
         # TODO make the names of plots match more between MCMC and nested
 
         fig, ax = self._setup_multi_artist(fig, shape=(1, len(params)))
@@ -954,7 +951,7 @@ class NestedVisualizer(_RunVisualizer):
         return fig
 
     def plot_params(self, fig=None, posterior_color='tab:blue',
-                    show_weight=True, contouring='weights', **kw):
+                    show_weight=True, fill_type='weights', **kw):
 
         # TODO allow for only plotting a given subset of params (inds or names)
 
@@ -1020,15 +1017,15 @@ class NestedVisualizer(_RunVisualizer):
 
             # a) plot distribution of values with respect to ln(X)
 
-            if contouring in ('weights', 'weight', 'wts', 'wt', 'logwt'):
+            if fill_type in ('weights', 'weight', 'wts', 'wt', 'logwt'):
                 c = self._resampled_weights
-            elif contouring in ('iterations', 'iters', 'samples_it'):
+            elif fill_type in ('iterations', 'iters', 'samples_it'):
                 c = self.results.samples_it
-            elif contouring in ('id', 'samples_id'):
+            elif fill_type in ('id', 'samples_id'):
                 c = self.results.samples_id
-            elif contouring in ('batch', 'samples_batch'):
+            elif fill_type in ('batch', 'samples_batch'):
                 c = self.results.samples_batch
-            elif contouring in ('bound', 'samples_bound'):
+            elif fill_type in ('bound', 'samples_bound'):
                 c = self.results.samples_bound
             else:
                 c = None
