@@ -950,7 +950,8 @@ class NestedVisualizer(_RunVisualizer):
 
         return fig
 
-    def plot_params(self, fig=None, posterior_color='tab:blue',
+    def plot_params(self, fig=None, *,
+                    posterior_color='tab:blue', posterior_border=True,
                     show_weight=True, fill_type='weights', **kw):
 
         # TODO allow for only plotting a given subset of params (inds or names)
@@ -1002,13 +1003,14 @@ class NestedVisualizer(_RunVisualizer):
 
             try:
                 prm, eq_prm = chain[:, ind], eq_chain[:, ind]
+                lbl = labels[ind]
             except IndexError:
                 # If theres an odd number of (>5) params need to delete last one
                 # TODO preferably this would also resize this column of plots
                 ax.remove()
                 continue
 
-            ax.set_ylabel(labels[ind])
+            ax.set_ylabel(lbl)
 
             divider = make_axes_locatable(ax)
             post_ax = divider.append_axes('right', size="25%", pad=0, sharey=ax)
@@ -1040,6 +1042,9 @@ class NestedVisualizer(_RunVisualizer):
             y = np.linspace(eq_prm.min(), eq_prm.max(), 500)
 
             post_ax.fill_betweenx(y, 0, kde(y), color=color, fc=facecolor)
+
+            if not posterior_border:
+                post_ax.axis('off')
 
             # TODO maybe put ticks on right side as well?
             for tk in post_ax.get_yticklabels():
