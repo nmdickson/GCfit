@@ -954,7 +954,9 @@ class NestedVisualizer(_RunVisualizer):
         return fig
 
     def plot_params(self, fig=None, posterior_color='tab:blue',
-                    show_weight=True, **kw):
+                    show_weight=True, contouring='weights', **kw):
+
+        # TODO allow for only plotting a given subset of params (inds or names)
 
         from scipy.stats import gaussian_kde
         from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -962,9 +964,12 @@ class NestedVisualizer(_RunVisualizer):
         color = mpl_clr.to_rgb(posterior_color)
         facecolor = color + (0.33, )
 
+        kw.setdefault('marker', '.')
+
         labels, chain = self._get_chains()
         eq_chain = self._get_equal_weight_chains()[1]
 
+        # TODO use new _setup_multi_artist when mf plots branch is merged
         gs_kw = {}
 
         if (shape := len(labels) + show_weight) > 5 + show_weight:
@@ -1015,8 +1020,20 @@ class NestedVisualizer(_RunVisualizer):
 
             # a) plot distribution of values with respect to ln(X)
 
-            wts = self._resampled_weights
-            ax.scatter(-self.results.logvol, prm, c=wts, cmap=self._cmap, **kw)
+            if contouring in ('weights', 'weight', 'wts', 'wt', 'logwt'):
+                c = self._resampled_weights
+            elif contouring in ('iterations', 'iters', 'samples_it'):
+                c = self.results.samples_it
+            elif contouring in ('id', 'samples_id'):
+                c = self.results.samples_id
+            elif contouring in ('batch', 'samples_batch'):
+                c = self.results.samples_batch
+            elif contouring in ('bound', 'samples_bound'):
+                c = self.results.samples_bound
+            else:
+                c = None
+
+            ax.scatter(-self.results.logvol, prm, c=c, cmap=self._cmap, **kw)
 
             ax.set_xlim(left=0)
 
@@ -1032,6 +1049,8 @@ class NestedVisualizer(_RunVisualizer):
                 tk.set_visible(False)
 
             post_ax.set_xlim(left=0)
+
+        return fig
 
     # ----------------------------------------------------------------------
     # Parameter estimation
