@@ -954,8 +954,6 @@ class NestedVisualizer(_RunVisualizer):
                     posterior_color='tab:blue', posterior_border=True,
                     show_weight=True, fill_type='weights', **kw):
 
-        # TODO allow for only plotting a given subset of params (inds or names)
-
         from scipy.stats import gaussian_kde
         from mpl_toolkits.axes_grid1 import make_axes_locatable
 
@@ -993,11 +991,19 @@ class NestedVisualizer(_RunVisualizer):
             raise ValueError(mssg)
 
         # ------------------------------------------------------------------
-        # Get the sample chains (weighted and unweighted)
+        # Get the sample chains (weighted and unweighted), paring down the
+        # chains to only the desired params, if provided
         # ------------------------------------------------------------------
 
         labels, chain = self._get_chains()
         eq_chain = self._get_equal_weight_chains()[1]
+
+        # params is None or a list of string labels
+        if params is not None:
+            prm_inds = [labels.index(p) for p in params]
+
+            labels = params
+            chain, eq_chain = chain[..., prm_inds], eq_chain[..., prm_inds]
 
         # ------------------------------------------------------------------
         # Setup axes
