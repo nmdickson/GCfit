@@ -1118,14 +1118,14 @@ class _ClusterVisualizer:
         return fig
 
     @_support_units
-    def plot_MF_fields(self, fig=None, ax=None, cmap=None, radii=("rh",)):
+    def plot_MF_fields(self, fig=None, ax=None, *, radii=("rh",),
+                       cmap=None, grid=True):
         '''plot all mass function fields in this observation
         '''
         import shapely.geometry as geom
 
         fig, ax = self._setup_artist(fig, ax)
 
-        # TODO this only plots the slices, which cuts some corners of the fields
         for PI, bins in self.mass_func.items():
 
             for rbin in bins:
@@ -1137,6 +1137,30 @@ class _ClusterVisualizer:
                 PI = f'_{PI}'
 
         ax.plot(0, 0, 'kx')
+
+        # Ensure the gridlines don't affect the axes scaling
+        ax.autoscale(False)
+
+        # Plot a hacky pseudo "polar grid" at 2" intervals up to the rt
+        if grid:
+            ticks = np.arange(2, self.rt.to_value('arcmin'), 2)
+
+            rc = plt.rcParams
+
+            grid_kw = {
+                'color': rc.get('grid.color'),
+                'linestyle': rc.get('grid.linestyle'),
+                'linewidth': rc.get('grid.linewidth'),
+                'alpha': rc.get('grid.alpha'),
+                'zorder': 0.5
+            }
+
+            for gr in ticks:
+                circle = np.array(geom.Point(0, 0).buffer(gr).exterior).T
+                gr_line, = ax.plot(*circle, **grid_kw)
+
+                ax.annotate(f'{gr:.0f}"', xy=(circle[0].max(), 0),
+                            color=grid_kw['color'])
 
         # try to plot the various radii from this model
         try:
@@ -1154,6 +1178,7 @@ class _ClusterVisualizer:
         ax.set_xlabel('RA [arcmin]')
         ax.set_ylabel('DEC [arcmin]')
 
+        # TODO the grid messes up the "best" legend location
         ax.legend()
 
         return fig
