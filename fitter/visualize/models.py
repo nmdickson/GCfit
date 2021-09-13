@@ -1002,8 +1002,8 @@ class _ClusterVisualizer:
     # -----------------------------------------------------------------------
 
     @_support_units
-    def plot_mass_func(self, fig=None, show_obs=True, show_fields=False,
-                       colours=None):
+    def plot_mass_func(self, fig=None, show_obs=True, show_fields=False, *,
+                       colours=None, field_kw=None):
 
         N_rbins = sum([len(d) for d in self.mass_func.values()])
         shape = ((int(np.ceil(N_rbins / 2)), int(np.floor(N_rbins / 2))), 2)
@@ -1023,8 +1023,13 @@ class _ClusterVisualizer:
 
             ax = axes[ax_ind]
 
+            if field_kw is None:
+                field_kw = {}
+
+            field_kw.setdefault('radii', [])
+
             # TODO need to figure out a good size and how to do it, for this ax
-            self.plot_MF_fields(fig, ax, radii=[])
+            self.plot_MF_fields(fig, ax, **field_kw)
 
             ax_ind += 1
 
@@ -1165,6 +1170,7 @@ class _ClusterVisualizer:
         # try to plot the various radii from this model
         try:
             # TODO for CI this could be a CI of rh, ra, rt actually
+            # TODO very ugly/weird errors if radii isn't what we expect
 
             for r_type in radii:
                 radius = getattr(self, r_type).to_value('arcmin')
