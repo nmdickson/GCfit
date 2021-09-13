@@ -1111,13 +1111,16 @@ class _ClusterVisualizer:
 
                 ax_ind += 1
 
-        fig.supxlabel(r'Mass [$M_\odot$]')
+        # put labels on subfigs
+
+        for sf in fig.subfigs[show_fields:]:
+
+            sf.supxlabel(r'Mass [$M_\odot$]')
+
+        fig.subfigs[show_fields].supylabel('dN/dm')
 
         if not show_fields:
-            # TODO yes during showfield, just need to figure out where to put it
-            fig.supylabel('dN/dm')
-
-            # TODO this isn't showing up, probably due to new subfigures?
+            # TODO this is hidden by constrained_layout, but isn't great anyways
             fig.legend()
 
         return fig
