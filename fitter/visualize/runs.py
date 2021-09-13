@@ -1071,10 +1071,10 @@ class NestedVisualizer(_RunVisualizer):
 
         return [simulate_run(self.results) for _ in range(Nruns)]
 
-    def parameter_means(self, Nruns=250, sim_runs=None, return_err=True, **kw):
+    def parameter_means(self, Nruns=250, sim_runs=None, return_samples=True):
         '''
         return the means of each parameter, and the corresponding error on that
-        mean if desired.
+        mean
         errors come from the two main sources of error present in nested
         sampling and are computed using the standard deviation of the mean
         from `Nruns` simulated (resampled and jittered) runs of this sampling
@@ -1093,12 +1093,15 @@ class NestedVisualizer(_RunVisualizer):
         mean = np.mean(means, axis=0)
         err = np.std(means, axis=0)
 
-        return mean, err
+        if return_samples:
+            return mean, err, np.array(means)
+        else:
+            return mean, err
 
-    def parameter_vars(self, Nruns=250, sim_runs=None, return_err=True, **kw):
+    def parameter_vars(self, Nruns=250, sim_runs=None, return_samples=True):
         '''
         return the variance of each parameter, and the corresponding error on
-        that variance if desired.
+        that variance
         See `parameter_means` for more
         '''
         from dynesty.utils import mean_and_cov
@@ -1106,12 +1109,15 @@ class NestedVisualizer(_RunVisualizer):
         if sim_runs is None:
             sim_runs = self._sim_errors(Nruns)
 
-        means = []
+        vars_ = []
         for res in sim_runs:
             wt = np.exp(res.logwt - res.logz[-1])
-            means.append(mean_and_cov(res.samples, wt)[1])
+            vars_.append(mean_and_cov(res.samples, wt)[1])
 
-        mean = np.mean(means, axis=0)
-        err = np.std(means, axis=0)
+        mean = np.mean(vars_, axis=0)
+        err = np.std(vars_, axis=0)
 
-        return mean, err
+        if return_samples:
+            return mean, err, np.array(vars_)
+        else:
+            return mean, err
