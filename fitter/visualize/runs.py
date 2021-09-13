@@ -950,7 +950,7 @@ class NestedVisualizer(_RunVisualizer):
 
         return fig
 
-    def plot_params(self, fig=None, *,
+    def plot_params(self, fig=None, params=None, *,
                     posterior_color='tab:blue', posterior_border=True,
                     show_weight=True, fill_type='weights', **kw):
 
@@ -959,15 +959,51 @@ class NestedVisualizer(_RunVisualizer):
         from scipy.stats import gaussian_kde
         from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+        # ------------------------------------------------------------------
+        # Setup plotting kwarg defaults
+        # ------------------------------------------------------------------
+
         color = mpl_clr.to_rgb(posterior_color)
         facecolor = color + (0.33, )
 
         kw.setdefault('marker', '.')
 
+        # ------------------------------------------------------------------
+        # Determine which property will define the color-scale of the samples
+        # ------------------------------------------------------------------
+
+        if fill_type in ('weights', 'weight', 'wts', 'wt', 'logwt'):
+            c = self._resampled_weights
+
+        elif fill_type in ('iterations', 'iters', 'samples_it'):
+            c = self.results.samples_it
+
+        elif fill_type in ('id', 'samples_id'):
+            c = self.results.samples_id
+
+        elif fill_type in ('batch', 'samples_batch'):
+            c = self.results.samples_batch
+
+        elif fill_type in ('bound', 'samples_bound'):
+            c = self.results.samples_bound
+
+        else:
+            mssg = ('Invalid fill type, must be one of '
+                    '{weights, iters, id, batch, bound}')
+            raise ValueError(mssg)
+
+        # ------------------------------------------------------------------
+        # Get the sample chains (weighted and unweighted)
+        # ------------------------------------------------------------------
+
         labels, chain = self._get_chains()
         eq_chain = self._get_equal_weight_chains()[1]
 
+        # ------------------------------------------------------------------
+        # Setup axes
         # TODO use new _setup_multi_artist when mf plots branch is merged
+        # ------------------------------------------------------------------
+
         gs_kw = {}
 
         if (shape := len(labels) + show_weight) > 5 + show_weight:
@@ -978,6 +1014,14 @@ class NestedVisualizer(_RunVisualizer):
 
         fig, axes = self._setup_multi_artist(fig, shape, sharex=True,
                                              squeeze=False, gridspec_kw=gs_kw)
+
+        for ax in axes[-1]:
+            ax.set_xlabel(r'$-\ln(X)$')
+
+        # ------------------------------------------------------------------
+        # If showing weights explicitly, format the ax and use the
+        # `plot_weights` method
+        # ------------------------------------------------------------------
 
         if show_weight:
             for ax in axes[0]:
@@ -996,10 +1040,17 @@ class NestedVisualizer(_RunVisualizer):
                 spacer = divider.append_axes('right', size="25%", pad=0)
                 spacer.set_visible(False)
 
-        for ax in axes[-1]:
-            ax.set_xlabel(r'$-\ln(X)$')
+        # ------------------------------------------------------------------
+        # Plot each parameter
+        # ------------------------------------------------------------------
 
         for ind, ax in enumerate(axes[1:].flatten()):
+
+            # --------------------------------------------------------------
+            # Get the relevant samples.
+            # If necessary, remove any unneeded axes
+            # (should be handled by above todo)
+            # --------------------------------------------------------------
 
             try:
                 prm, eq_prm = chain[:, ind], eq_chain[:, ind]
@@ -1010,36 +1061,29 @@ class NestedVisualizer(_RunVisualizer):
                 ax.remove()
                 continue
 
-            ax.set_ylabel(lbl)
+            # --------------------------------------------------------------
+            # Divide the ax to accomodate the posterior plot on the right
+            # --------------------------------------------------------------
 
             divider = make_axes_locatable(ax)
             post_ax = divider.append_axes('right', size="25%", pad=0, sharey=ax)
 
             post_ax.set_xticks([])
 
-            # a) plot distribution of values with respect to ln(X)
-
-            if fill_type in ('weights', 'weight', 'wts', 'wt', 'logwt'):
-                c = self._resampled_weights
-            elif fill_type in ('iterations', 'iters', 'samples_it'):
-                c = self.results.samples_it
-            elif fill_type in ('id', 'samples_id'):
-                c = self.results.samples_id
-            elif fill_type in ('batch', 'samples_batch'):
-                c = self.results.samples_batch
-            elif fill_type in ('bound', 'samples_bound'):
-                c = self.results.samples_bound
-            else:
-                mssg = ('Invalid fill type, must be one of '
-                        '{wts, iters, id, batch, bound}')
-                raise ValueError(mssg)
+            # --------------------------------------------------------------
+            # Plot the samples with respect to ln(X)
+            # --------------------------------------------------------------
 
             # TODO the y tick values have disappeared should be on the last axis
             ax.scatter(-self.results.logvol, prm, c=c, cmap=self._cmap, **kw)
 
+            ax.set_ylabel(lbl)
             ax.set_xlim(left=0)
 
-            # c) plot posterior distribution (accounting for weights) on side
+            # --------------------------------------------------------------
+            # Plot the posterior distribution (accounting for weights)
+            # --------------------------------------------------------------
+
             kde = gaussian_kde(eq_prm)
 
             y = np.linspace(eq_prm.min(), eq_prm.max(), 500)
