@@ -1024,7 +1024,7 @@ class _ClusterVisualizer:
             ax = axes[ax_ind]
 
             # TODO need to figure out a good size and how to do it, for this ax
-            self.plot_MF_fields(fig, ax)
+            self.plot_MF_fields(fig, ax, radii=[])
 
             ax_ind += 1
 
