@@ -1178,8 +1178,8 @@ class _ClusterVisualizer:
         ax.set_xlabel('RA [arcmin]')
         ax.set_ylabel('DEC [arcmin]')
 
-        # TODO the grid messes up the "best" legend location
-        ax.legend()
+        # TODO figure out a better way of handling this always using best?
+        ax.legend(loc='upper left' if grid else 'best')
 
         return fig
 
