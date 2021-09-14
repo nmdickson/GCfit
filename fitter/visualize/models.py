@@ -997,13 +997,18 @@ class _ClusterVisualizer:
 
         return fig
 
-    # -----------------------------------------------------------------------
+    # ----------------------------------------------------------------------
     # Mass Function Plotting
-    # -----------------------------------------------------------------------
+    # ----------------------------------------------------------------------
 
     @_support_units
     def plot_mass_func(self, fig=None, show_obs=True, show_fields=False, *,
                        colours=None, PI_legend=False, field_kw=None):
+
+        # ------------------------------------------------------------------
+        # Setup axes, splitting into two columns if necessary and adding the
+        # extra ax for the field plot if desired
+        # ------------------------------------------------------------------
 
         N_rbins = sum([len(d) for d in self.mass_func.values()])
         shape = ((int(np.ceil(N_rbins / 2)), int(np.floor(N_rbins / 2))), 2)
@@ -1012,12 +1017,15 @@ class _ClusterVisualizer:
         if show_fields:
             shape = ((1, *shape[0]), shape[1] + 1)
 
-        fig, axes = self._setup_multi_artist(fig, shape,
-                                             sharex=True)
+        fig, axes = self._setup_multi_artist(fig, shape, sharex=True)
 
         axes = axes.T.flatten()
 
         ax_ind = 0
+
+        # ------------------------------------------------------------------
+        # If desired, use the `plot_MF_fields` method to show the fields
+        # ------------------------------------------------------------------
 
         if show_fields:
 
@@ -1032,6 +1040,10 @@ class _ClusterVisualizer:
             self.plot_MF_fields(fig, ax, **field_kw)
 
             ax_ind += 1
+
+        # ------------------------------------------------------------------
+        # Iterate over each PI, gathering data to plot
+        # ------------------------------------------------------------------
 
         for PI in sorted(self.mass_func,
                          key=lambda k: self.mass_func[k][0]['r1']):
@@ -1048,7 +1060,9 @@ class _ClusterVisualizer:
             N = mf['N'] / mbin_width
             ΔN = mf['ΔN'] / mbin_width
 
+            # --------------------------------------------------------------
             # Iterate over radial bin dicts for this PI
+            # --------------------------------------------------------------
 
             for rind, rbin in enumerate(bins):
 
@@ -1056,7 +1070,9 @@ class _ClusterVisualizer:
 
                 clr = rbin.get('colour', None)
 
-                # Get obs data corresponding to this radial bin
+                # ----------------------------------------------------------
+                # Plot observations
+                # ----------------------------------------------------------
 
                 if show_obs:
 
@@ -1073,7 +1089,11 @@ class _ClusterVisualizer:
 
                     clr = pnts[0].get_color()
 
-                # plot models
+                # ----------------------------------------------------------
+                # Plot model. Doesn't utilize the `_plot_profile` method, as
+                # this is *not* a profile, but does use similar, but simpler,
+                # logic
+                # ----------------------------------------------------------
 
                 dNdm = rbin['dNdm']
 
@@ -1097,11 +1117,14 @@ class _ClusterVisualizer:
                     alpha += alpha
 
                 ax.set_xscale("log")
-
                 ax.set_xlabel(None)
 
-                # Fake text to allow for radial bins "label" using loc='best'
+                # ----------------------------------------------------------
+                # "Label" each bin with it's radial bounds.
+                # Uses fake text to allow for using loc='best' from `legend`.
                 # Really this should be a part of plt (see matplotlib#17946)
+                # ----------------------------------------------------------
+
                 r1 = rbin['r1'].to_value('arcmin')
                 r2 = rbin['r2'].to_value('arcmin')
 
@@ -1120,7 +1143,9 @@ class _ClusterVisualizer:
 
                 ax_ind += 1
 
-        # put labels on subfigs
+        # ------------------------------------------------------------------
+        # Put labels on subfigs
+        # ------------------------------------------------------------------
 
         for sf in fig.subfigs[show_fields:]:
 
@@ -1139,32 +1164,45 @@ class _ClusterVisualizer:
 
         fig, ax = self._setup_artist(fig, ax)
 
+        # Centre dot
+        ax.plot(0, 0, 'kx')
+
+        # ------------------------------------------------------------------
+        # Iterate over each PI and it's radial bins
+        # ------------------------------------------------------------------
+
         for PI, bins in self.mass_func.items():
 
             for rbin in bins:
+
+                # ----------------------------------------------------------
+                # Plot the field using this `Field` slice's own plotting method
+                # ----------------------------------------------------------
 
                 clr = rbin.get("colour", None)
 
                 rbin['field'].plot(ax, fc=clr, alpha=0.7, ec='k', label=PI)
 
+                # make this label private so it's only added once to legend
                 PI = f'_{PI}'
 
-        ax.plot(0, 0, 'kx')
+        # ------------------------------------------------------------------
+        # If desired, add a "pseudo" grid in the polar projection, at 2
+        # arcmin intervals, up to the rt
+        # ------------------------------------------------------------------
 
         # Ensure the gridlines don't affect the axes scaling
         ax.autoscale(False)
 
-        # Plot a hacky pseudo "polar grid" at 2" intervals up to the rt
         if grid:
             ticks = np.arange(2, self.rt.to_value('arcmin'), 2)
 
-            rc = plt.rcParams
-
+            # make sure this grid matches normal grids
             grid_kw = {
-                'color': rc.get('grid.color'),
-                'linestyle': rc.get('grid.linestyle'),
-                'linewidth': rc.get('grid.linewidth'),
-                'alpha': rc.get('grid.alpha'),
+                'color': plt.rcParams.get('grid.color'),
+                'linestyle': plt.rcParams.get('grid.linestyle'),
+                'linewidth': plt.rcParams.get('grid.linewidth'),
+                'alpha': plt.rcParams.get('grid.alpha'),
                 'zorder': 0.5
             }
 
@@ -1175,8 +1213,11 @@ class _ClusterVisualizer:
                 ax.annotate(f'{gr:.0f}"', xy=(circle[0].max(), 0),
                             color=grid_kw['color'])
 
-        # try to plot the various radii from this model
-        # TODO for CI this could be a CI of rh, ra, rt actually
+        # ------------------------------------------------------------------
+        # Try to plot the various radii quantities from this model, if desired
+        # ------------------------------------------------------------------
+
+        # TODO for CI this could be a CI of rh, ra, rt actually (60)
 
         for r_type in radii:
 
@@ -1190,10 +1231,14 @@ class _ClusterVisualizer:
             ax.plot(*circle, ls='--')
             ax.text(0, circle[1].max(), r_type)
 
+        # ------------------------------------------------------------------
+        # Add plot labels and legends
+        # ------------------------------------------------------------------
+
         ax.set_xlabel('RA [arcmin]')
         ax.set_ylabel('DEC [arcmin]')
 
-        # TODO figure out a better way of handling this always using best?
+        # TODO figure out a better way of handling this always using best? (75)
         ax.legend(loc='upper left' if grid else 'best')
 
         return fig
