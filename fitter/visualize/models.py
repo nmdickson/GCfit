@@ -1003,7 +1003,8 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_mass_func(self, fig=None, show_obs=True, show_fields=False, *,
-                       colours=None, PI_legend=False, field_kw=None):
+                       colours=None, PI_legend=False, logscaled=False,
+                       field_kw=None):
 
         # ------------------------------------------------------------------
         # Setup axes, splitting into two columns if necessary and adding the
@@ -1116,7 +1117,9 @@ class _ClusterVisualizer:
 
                     alpha += alpha
 
-                ax.set_xscale("log")
+                if logscaled:
+                    ax.set_xscale('log')
+
                 ax.set_xlabel(None)
 
                 # ----------------------------------------------------------
