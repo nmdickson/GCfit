@@ -1176,18 +1176,19 @@ class _ClusterVisualizer:
                             color=grid_kw['color'])
 
         # try to plot the various radii from this model
-        try:
-            # TODO for CI this could be a CI of rh, ra, rt actually
-            # TODO very ugly/weird errors if radii isn't what we expect
+        # TODO for CI this could be a CI of rh, ra, rt actually
 
-            for r_type in radii:
-                radius = getattr(self, r_type).to_value('arcmin')
-                circle = np.array(geom.Point(0, 0).buffer(radius).exterior).T
-                ax.plot(*circle, ls='--')
-                ax.text(0, circle[1].max(), r_type)
+        for r_type in radii:
 
-        except AttributeError:
-            pass
+            # This is to explicitly avoid very ugly exceptions from geom
+            if r_type not in {'rh', 'ra', 'rt'}:
+                mssg = f'radii must be one of {{rh, ra, rt}}, not `{r_type}`'
+                raise TypeError(mssg)
+
+            radius = getattr(self, r_type).to_value('arcmin')
+            circle = np.array(geom.Point(0, 0).buffer(radius).exterior).T
+            ax.plot(*circle, ls='--')
+            ax.text(0, circle[1].max(), r_type)
 
         ax.set_xlabel('RA [arcmin]')
         ax.set_ylabel('DEC [arcmin]')
