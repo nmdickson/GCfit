@@ -49,35 +49,169 @@ class _RunVisualizer:
 
         return fig, ax
 
-    def _setup_multi_artist(self, fig, shape, *, use_name=True, **subplot_kw):
+    def _setup_multi_artist(self, fig, shape, *, allow_blank=True,
+                            use_name=True, constrained_layout=True,
+                            subfig_kw=None, **sub_kw):
         '''setup a subplot with multiple axes'''
 
-        if shape is None:
-            # If no shape is provided, just return the figure, probably empty
+        if subfig_kw is None:
+            subfig_kw = {}
 
+        def create_axes(base, shape):
+            '''create the axes of `shape` on this base (fig)'''
+
+            # make sure shape is a tuple of atleast 1d, at most 2d
+
+            if not isinstance(shape, tuple):
+                # TODO doesnt work on an int
+                shape = tuple(shape)
+
+            if len(shape) == 1:
+                shape = (shape, 1)
+
+            elif len(shape) > 2:
+                mssg = f"Invalid `shape` for subplots {shape}, must be 2D"
+                raise ValueError(mssg)
+
+            # split into dict of nrows, ncols
+
+            shape = dict(zip(("nrows", "ncols"), shape))
+
+            # if either of them is also a tuple, means we want columns or rows
+            #   of varying sizes, switch to using subfigures
+
+            # TODO what are the chances stuff like `sharex` works correctly?
+
+            if isinstance(shape['nrows'], tuple):
+
+                subfigs = base.subfigures(ncols=shape['ncols'], nrows=1,
+                                          squeeze=False, **subfig_kw)
+
+                for ind, sf in enumerate(subfigs.flatten()):
+
+                    try:
+                        nr = shape['nrows'][ind]
+                    except IndexError:
+
+                        if allow_blank:
+                            continue
+
+                        mssg = (f"Number of row entries {shape['nrows']} must "
+                                f"match number of columns ({shape['ncols']})")
+                        raise ValueError(mssg)
+
+                    sf.subplots(ncols=1, nrows=nr, **sub_kw)
+
+            elif isinstance(shape['ncols'], tuple):
+
+                subfigs = base.subfigures(nrows=shape['nrows'], ncols=1,
+                                          squeeze=False, **subfig_kw)
+
+                for ind, sf in enumerate(subfigs.flatten()):
+
+                    try:
+                        nc = shape['ncols'][ind]
+                    except IndexError:
+
+                        if allow_blank:
+                            continue
+
+                        mssg = (f"Number of col entries {shape['ncols']} must "
+                                f"match number of rows ({shape['nrows']})")
+                        raise ValueError(mssg)
+
+                    sf.subplots(nrows=1, ncols=nc, **sub_kw)
+
+            # otherwise just make a simple subplots and return that
+            else:
+                base.subplots(**shape, **sub_kw)
+
+            return base, base.axes
+
+        # ------------------------------------------------------------------
+        # Create figure, if necessary
+        # ------------------------------------------------------------------
+
+        if fig is None:
+            fig = plt.figure(constrained_layout=constrained_layout)
+
+        # ------------------------------------------------------------------
+        # If no shape is provided, just return the figure, probably empty
+        # ------------------------------------------------------------------
+
+        if shape is None:
             axarr = []
-            if fig is None:
-                fig = plt.figure()
+
+        # ------------------------------------------------------------------
+        # Otherwise attempt to first grab this figures axes, or create them
+        # ------------------------------------------------------------------
 
         else:
-            # If shape, try to either get or create a matching array of axes
 
-            if fig is None:
-                fig, axarr = plt.subplots(*shape, **subplot_kw)
-
-            elif not fig.axes:
-                axarr = fig.subplots(*shape, **subplot_kw)
-
-            else:
-                axarr = fig.axes
-
+            # this fig has axes, check that they match shape
+            if axarr := fig.axes:
+                # TODO this won't actually work, cause fig.axes is just a list
                 if axarr.shape != shape:
                     mssg = (f"figure {fig} already contains axes with "
                             f"mismatched shape ({axarr.shape} != {shape})")
                     raise ValueError(mssg)
 
+            else:
+                fig, axarr = create_axes(fig, shape)
+
+        # ------------------------------------------------------------------
+        # If desired, default to titling the figure based on it's "name"
+        # ------------------------------------------------------------------
+
         if hasattr(self, 'name') and use_name:
             fig.suptitle(self.name)
+
+        # ------------------------------------------------------------------
+        # Ensure the axes are always returned in an array
+        # ------------------------------------------------------------------
+
+        return fig, np.atleast_1d(axarr)
+
+        # ------------------------------------------------------------------
+        # Create figure, if necessary
+        # ------------------------------------------------------------------
+
+        if fig is None:
+            fig = plt.figure(constrained_layout=constrained_layout)
+
+        # ------------------------------------------------------------------
+        # If no shape is provided, just return the figure, probably empty
+        # ------------------------------------------------------------------
+
+        if shape is None:
+            axarr = []
+
+        # ------------------------------------------------------------------
+        # Otherwise attempt to first grab this figures axes, or create them
+        # ------------------------------------------------------------------
+
+        else:
+
+            # this fig has axes, check that they match shape
+            if axarr := fig.axes:
+                if axarr.shape != shape:
+                    mssg = (f"figure {fig} already contains axes with "
+                            f"mismatched shape ({axarr.shape} != {shape})")
+                    raise ValueError(mssg)
+
+            else:
+                fig, axarr = create_axes(fig, shape, **sub_kw)
+
+        # ------------------------------------------------------------------
+        # If desired, default to titling the figure based on it's "name"
+        # ------------------------------------------------------------------
+
+        if hasattr(self, 'name') and use_name:
+            fig.suptitle(self.name)
+
+        # ------------------------------------------------------------------
+        # Ensure the axes are always returned in an array
+        # ------------------------------------------------------------------
 
         return fig, np.atleast_1d(axarr)
 

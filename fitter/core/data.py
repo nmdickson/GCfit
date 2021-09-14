@@ -525,23 +525,13 @@ class Observations:
             # --------------------------------------------------------------
 
             elif fnmatch.fnmatch(key, '*mass_function*'):
-                import string
 
                 func = probabilities.likelihood_mass_func
 
                 # Field
                 cen = (self.mdata['RA'], self.mdata['DEC'])
-                unit = self[key].mdata['field_unit']
 
-                coords = []
-                for ch in string.ascii_letters:
-                    try:
-                        coords.append(self[key]['fields'].mdata[f'{ch}'])
-                    except KeyError:
-                        # once it stops working, we're done here
-                        break
-
-                field = probabilities.mass.Field(coords, cen=cen, unit=unit)
+                field = probabilities.mass.Field.from_dataset(self[key], cen)
 
                 comps.append((key, func, field))
 

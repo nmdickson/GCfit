@@ -2,9 +2,6 @@ from .. import util
 from ..probabilities import pulsars, mass
 from ..core.data import Observations, Model
 
-import string
-import fnmatch
-
 import h5py
 import numpy as np
 import astropy.units as u
@@ -59,35 +56,126 @@ class _ClusterVisualizer:
 
         return fig, ax
 
-    def _setup_multi_artist(self, fig, shape, *, use_name=True, **subplot_kw):
+    def _setup_multi_artist(self, fig, shape, *, allow_blank=True,
+                            use_name=True, constrained_layout=True,
+                            subfig_kw=None, **sub_kw):
         '''setup a subplot with multiple axes'''
 
-        if shape is None:
-            # If no shape is provided, just return the figure, probably empty
+        if subfig_kw is None:
+            subfig_kw = {}
 
+        def create_axes(base, shape):
+            '''create the axes of `shape` on this base (fig)'''
+
+            # make sure shape is a tuple of atleast 1d, at most 2d
+
+            if not isinstance(shape, tuple):
+                # TODO doesnt work on an int
+                shape = tuple(shape)
+
+            if len(shape) == 1:
+                shape = (shape, 1)
+
+            elif len(shape) > 2:
+                mssg = f"Invalid `shape` for subplots {shape}, must be 2D"
+                raise ValueError(mssg)
+
+            # split into dict of nrows, ncols
+
+            shape = dict(zip(("nrows", "ncols"), shape))
+
+            # if either of them is also a tuple, means we want columns or rows
+            #   of varying sizes, switch to using subfigures
+
+            # TODO what are the chances stuff like `sharex` works correctly?
+
+            if isinstance(shape['nrows'], tuple):
+
+                subfigs = base.subfigures(ncols=shape['ncols'], nrows=1,
+                                          squeeze=False, **subfig_kw)
+
+                for ind, sf in enumerate(subfigs.flatten()):
+
+                    try:
+                        nr = shape['nrows'][ind]
+                    except IndexError:
+
+                        if allow_blank:
+                            continue
+
+                        mssg = (f"Number of row entries {shape['nrows']} must "
+                                f"match number of columns ({shape['ncols']})")
+                        raise ValueError(mssg)
+
+                    sf.subplots(ncols=1, nrows=nr, **sub_kw)
+
+            elif isinstance(shape['ncols'], tuple):
+
+                subfigs = base.subfigures(nrows=shape['nrows'], ncols=1,
+                                          squeeze=False, **subfig_kw)
+
+                for ind, sf in enumerate(subfigs.flatten()):
+
+                    try:
+                        nc = shape['ncols'][ind]
+                    except IndexError:
+
+                        if allow_blank:
+                            continue
+
+                        mssg = (f"Number of col entries {shape['ncols']} must "
+                                f"match number of rows ({shape['nrows']})")
+                        raise ValueError(mssg)
+
+                    sf.subplots(nrows=1, ncols=nc, **sub_kw)
+
+            # otherwise just make a simple subplots and return that
+            else:
+                base.subplots(**shape, **sub_kw)
+
+            return base, base.axes
+
+        # ------------------------------------------------------------------
+        # Create figure, if necessary
+        # ------------------------------------------------------------------
+
+        if fig is None:
+            fig = plt.figure(constrained_layout=constrained_layout)
+
+        # ------------------------------------------------------------------
+        # If no shape is provided, just return the figure, probably empty
+        # ------------------------------------------------------------------
+
+        if shape is None:
             axarr = []
-            if fig is None:
-                fig = plt.figure()
+
+        # ------------------------------------------------------------------
+        # Otherwise attempt to first grab this figures axes, or create them
+        # ------------------------------------------------------------------
 
         else:
-            # If shape, try to either get or create a matching array of axes
 
-            if fig is None:
-                fig, axarr = plt.subplots(*shape, **subplot_kw)
-
-            elif not fig.axes:
-                axarr = fig.subplots(*shape, **subplot_kw)
-
-            else:
-                axarr = fig.axes
-
+            # this fig has axes, check that they match shape
+            if axarr := fig.axes:
+                # TODO this won't actually work, cause fig.axes is just a list
                 if axarr.shape != shape:
                     mssg = (f"figure {fig} already contains axes with "
                             f"mismatched shape ({axarr.shape} != {shape})")
                     raise ValueError(mssg)
 
+            else:
+                fig, axarr = create_axes(fig, shape)
+
+        # ------------------------------------------------------------------
+        # If desired, default to titling the figure based on it's "name"
+        # ------------------------------------------------------------------
+
         if hasattr(self, 'name') and use_name:
             fig.suptitle(self.name)
+
+        # ------------------------------------------------------------------
+        # Ensure the axes are always returned in an array
+        # ------------------------------------------------------------------
 
         return fig, np.atleast_1d(axarr)
 
@@ -667,86 +755,6 @@ class _ClusterVisualizer:
         return fig
 
     @_support_units
-    def plot_mass_func(self, fig=None, ax=None, show_obs=True):
-
-        fig, ax = self._setup_artist(fig, ax)
-
-        scale = 10
-
-        XTEXT = 0.81 * u.Msun
-
-        PI_list = fnmatch.filter([k[0] for k in self.obs.valid_likelihoods],
-                                 '*mass_function*')
-
-        PI_list = sorted(PI_list, key=lambda k: self.obs[k]['r1'].min())
-
-        rbin = 0
-
-        for key in PI_list:
-            mf = self.obs[key]
-
-            rbins = np.c_[mf['r1'], mf['r2']]
-
-            mbin_mean = (mf['m1'] + mf['m2']) / 2.
-            mbin_width = mf['m2'] - mf['m1']
-
-            N = mf['N'] / mbin_width
-            ΔN = mf['ΔN'] / mbin_width
-
-            for r_in, r_out in np.unique(rbins, axis=0):
-                r_mask = ((mf['r1'] == r_in)
-                          & (mf['r2'] == r_out))
-
-                N_data = N[r_mask].value
-                err_data = ΔN[r_mask].value
-
-                err = self.F * err_data
-
-                pnts = ax.errorbar(mbin_mean[r_mask], N_data * 10**scale,
-                                   fmt='o', yerr=err * 10**scale)
-
-                clr = pnts[0].get_color()
-
-                # plot contours
-
-                midpoint = self.mass_func.shape[0] // 2
-
-                m_domain = self.mj[:self.mass_func.shape[-1]]
-                median = self.mass_func[midpoint, rbin] * 10**scale
-
-                med_plot, = ax.plot(m_domain, median, '--', c=clr,
-                                    label=f"R={r_in:.1f}-{r_out:.1f}")
-
-                alpha = 0.8 / (midpoint + 1)
-                for sigma in range(1, midpoint + 1):
-
-                    ax.fill_between(
-                        m_domain,
-                        self.mass_func[midpoint + sigma, rbin] * 10**scale,
-                        self.mass_func[midpoint - sigma, rbin] * 10**scale,
-                        alpha=1 - alpha, color=clr
-                    )
-
-                    alpha += alpha
-
-                xy_pnt = (med_plot.get_xdata()[-1], med_plot.get_ydata()[-1])
-                xy_txt = (XTEXT, med_plot.get_ydata()[-1])
-                text = f"{r_in.value:.2f}'-{r_out.value:.2f}'"
-
-                ax.annotate(text, xy_pnt, xytext=xy_txt, fontsize=12, color=clr)
-
-                scale -= 1
-                rbin += 1
-
-        ax.set_yscale("log")
-        ax.set_xscale("log")
-
-        ax.set_ylabel('dN/dm')
-        ax.set_xlabel(r'Mass [$M_\odot$]')
-
-        return fig
-
-    @_support_units
     def plot_pulsar(self, fig=None, ax=None, show_obs=True):
         # TODO this is out of date with the new pulsar probability code
         # TODO I dont even think this is what we should use anymore, but the
@@ -963,95 +971,278 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_all(self, fig=None, show_obs='attempt'):
-        # TODO this still needs tweaking, in what is plotted and in ax spacing
+        '''Plots all the primary profiles (numdens, LOS, PM)
+        but *not* the mass function, pulsars, or any secondary profiles
+        (cum-mass, remnants, etc)
+        '''
 
-        fig, axes = self._setup_multi_artist(fig, (4, 2))
+        fig, axes = self._setup_multi_artist(fig, (3, 2))
+
+        axes = axes.reshape((3, 2))
 
         fig.suptitle(str(self.obs))
 
-        # kw = {'show_obs': show_obs, 'residuals': False, 'hyperparam': True}
         kw = {}
 
         self.plot_number_density(fig=fig, ax=axes[0, 0], **kw)
         self.plot_LOS(fig=fig, ax=axes[1, 0], **kw)
+        self.plot_pm_ratio(fig=fig, ax=axes[2, 0], **kw)
+
         self.plot_pm_tot(fig=fig, ax=axes[0, 1], **kw)
         self.plot_pm_T(fig=fig, ax=axes[1, 1], **kw)
         self.plot_pm_R(fig=fig, ax=axes[2, 1], **kw)
-        self.plot_pm_ratio(fig=fig, ax=axes[3, 1], **kw)
-
-        gs = axes[2, 0].get_gridspec()
-
-        for ax in axes[2:, 0]:
-            ax.remove()
-
-        # Is this what is messing up the spacing?
-        axbig = fig.add_subplot(gs[2:, 0])
-
-        self.plot_mass_func(fig=fig, ax=axbig, show_obs=show_obs,)
 
         for ax in axes.flatten():
             ax.set_xlabel('')
 
-        # fig.tight_layout()
+        return fig
+
+    # ----------------------------------------------------------------------
+    # Mass Function Plotting
+    # ----------------------------------------------------------------------
+
+    @_support_units
+    def plot_mass_func(self, fig=None, show_obs=True, show_fields=False, *,
+                       colours=None, PI_legend=False, logscaled=False,
+                       field_kw=None):
+
+        # ------------------------------------------------------------------
+        # Setup axes, splitting into two columns if necessary and adding the
+        # extra ax for the field plot if desired
+        # ------------------------------------------------------------------
+
+        N_rbins = sum([len(d) for d in self.mass_func.values()])
+        shape = ((int(np.ceil(N_rbins / 2)), int(np.floor(N_rbins / 2))), 2)
+
+        # If adding the fields, include an extra column on the left for it
+        if show_fields:
+            shape = ((1, *shape[0]), shape[1] + 1)
+
+        fig, axes = self._setup_multi_artist(fig, shape, sharex=True)
+
+        axes = axes.T.flatten()
+
+        ax_ind = 0
+
+        # ------------------------------------------------------------------
+        # If desired, use the `plot_MF_fields` method to show the fields
+        # ------------------------------------------------------------------
+
+        if show_fields:
+
+            ax = axes[ax_ind]
+
+            if field_kw is None:
+                field_kw = {}
+
+            field_kw.setdefault('radii', [])
+
+            # TODO need to figure out a good size and how to do it, for this ax
+            self.plot_MF_fields(fig, ax, **field_kw)
+
+            ax_ind += 1
+
+        # ------------------------------------------------------------------
+        # Iterate over each PI, gathering data to plot
+        # ------------------------------------------------------------------
+
+        for PI in sorted(self.mass_func,
+                         key=lambda k: self.mass_func[k][0]['r1']):
+
+            bins = self.mass_func[PI]
+
+            # Get data for this PI
+
+            mf = self.obs[PI]
+
+            mbin_mean = (mf['m1'] + mf['m2']) / 2.
+            mbin_width = mf['m2'] - mf['m1']
+
+            N = mf['N'] / mbin_width
+            ΔN = mf['ΔN'] / mbin_width
+
+            # --------------------------------------------------------------
+            # Iterate over radial bin dicts for this PI
+            # --------------------------------------------------------------
+
+            for rind, rbin in enumerate(bins):
+
+                ax = axes[ax_ind]
+
+                clr = rbin.get('colour', None)
+
+                # ----------------------------------------------------------
+                # Plot observations
+                # ----------------------------------------------------------
+
+                if show_obs:
+
+                    r_mask = ((mf['r1'] == rbin['r1'])
+                              & (mf['r2'] == rbin['r2']))
+
+                    N_data = N[r_mask].value
+                    err_data = ΔN[r_mask].value
+
+                    err = self.F * err_data
+
+                    pnts = ax.errorbar(mbin_mean[r_mask], N_data, yerr=err,
+                                       fmt='o', color=clr)
+
+                    clr = pnts[0].get_color()
+
+                # ----------------------------------------------------------
+                # Plot model. Doesn't utilize the `_plot_profile` method, as
+                # this is *not* a profile, but does use similar, but simpler,
+                # logic
+                # ----------------------------------------------------------
+
+                dNdm = rbin['dNdm']
+
+                midpoint = dNdm.shape[0] // 2
+
+                m_domain = self.mj[:dNdm.shape[-1]]
+                median = dNdm[midpoint]
+
+                med_plot, = ax.plot(m_domain, median, '--', c=clr)
+
+                alpha = 0.8 / (midpoint + 1)
+                for sigma in range(1, midpoint + 1):
+
+                    ax.fill_between(
+                        m_domain,
+                        dNdm[midpoint + sigma],
+                        dNdm[midpoint - sigma],
+                        alpha=1 - alpha, color=clr
+                    )
+
+                    alpha += alpha
+
+                if logscaled:
+                    ax.set_xscale('log')
+
+                ax.set_xlabel(None)
+
+                # ----------------------------------------------------------
+                # "Label" each bin with it's radial bounds.
+                # Uses fake text to allow for using loc='best' from `legend`.
+                # Really this should be a part of plt (see matplotlib#17946)
+                # ----------------------------------------------------------
+
+                r1 = rbin['r1'].to_value('arcmin')
+                r2 = rbin['r2'].to_value('arcmin')
+
+                fake = plt.Line2D([], [], label=f"r = {r1:.2f}'-{r2:.2f}'")
+                handles = [fake]
+
+                leg_kw = {'handlelength': 0, 'handletextpad': 0}
+
+                # If this is the first bin, also add a PI tag
+                if PI_legend and not rind and not show_fields:
+                    pi_fake = plt.Line2D([], [], label=PI)
+                    handles.append(pi_fake)
+                    leg_kw['labelcolor'] = ['k', clr]
+
+                ax.legend(handles=handles, **leg_kw)
+
+                ax_ind += 1
+
+        # ------------------------------------------------------------------
+        # Put labels on subfigs
+        # ------------------------------------------------------------------
+
+        for sf in fig.subfigs[show_fields:]:
+
+            sf.supxlabel(r'Mass [$M_\odot$]')
+
+        fig.subfigs[show_fields].supylabel('dN/dm')
 
         return fig
 
     @_support_units
-    def plot_MF_fields(self, fig=None, ax=None, cmap=None, radii=("rh",)):
+    def plot_MF_fields(self, fig=None, ax=None, *, radii=("rh",),
+                       cmap=None, grid=True):
         '''plot all mass function fields in this observation
         '''
         import shapely.geometry as geom
 
-        # TODO some of this should probably be in an init, not here
-
         fig, ax = self._setup_artist(fig, ax)
 
-        PI_list = self.obs.filter_datasets('*mass_function*')
-        PI_list = sorted(PI_list, key=lambda k: self.obs[k]['r1'].min())
-
-        cmap = cmap or plt.cm.rainbow
-        fc = iter(cmap(np.linspace(0, 1, len(PI_list))))
-
-        for key in PI_list:
-            mf = self.obs[key]
-
-            # TODO this function should go in obs or mass or something
-            #   including the new single coords check
-            cen = (self.obs.mdata['RA'], self.obs.mdata['DEC'])
-            unit = mf.mdata['field_unit']
-            coords = []
-            for ch in string.ascii_letters:
-                try:
-                    coords.append(mf['fields'].mdata[f'{ch}'])
-                except KeyError:
-                    break
-
-            if len(coords) == 1:
-                coords = coords[0]
-
-            field = mass.Field(coords, cen=cen, unit=unit)
-
-            field.plot(ax, fc=next(fc), alpha=0.7, ec='k', label=key)
-
+        # Centre dot
         ax.plot(0, 0, 'kx')
 
-        # try to plot the various radii from this model
-        try:
-            # TODO for CI this could be a CI of rh, ra, rt actually
+        # ------------------------------------------------------------------
+        # Iterate over each PI and it's radial bins
+        # ------------------------------------------------------------------
 
-            for r_type in radii:
-                radius = getattr(self, r_type).to_value('arcmin')
-                circle = np.array(geom.Point(0, 0).buffer(radius).exterior).T
-                ax.plot(*circle)
-                ax.text(0, circle[1].max(), r_type)
+        for PI, bins in self.mass_func.items():
 
-        except AttributeError:
-            pass
+            for rbin in bins:
+
+                # ----------------------------------------------------------
+                # Plot the field using this `Field` slice's own plotting method
+                # ----------------------------------------------------------
+
+                clr = rbin.get("colour", None)
+
+                rbin['field'].plot(ax, fc=clr, alpha=0.7, ec='k', label=PI)
+
+                # make this label private so it's only added once to legend
+                PI = f'_{PI}'
+
+        # ------------------------------------------------------------------
+        # If desired, add a "pseudo" grid in the polar projection, at 2
+        # arcmin intervals, up to the rt
+        # ------------------------------------------------------------------
+
+        # Ensure the gridlines don't affect the axes scaling
+        ax.autoscale(False)
+
+        if grid:
+            ticks = np.arange(2, self.rt.to_value('arcmin'), 2)
+
+            # make sure this grid matches normal grids
+            grid_kw = {
+                'color': plt.rcParams.get('grid.color'),
+                'linestyle': plt.rcParams.get('grid.linestyle'),
+                'linewidth': plt.rcParams.get('grid.linewidth'),
+                'alpha': plt.rcParams.get('grid.alpha'),
+                'zorder': 0.5
+            }
+
+            for gr in ticks:
+                circle = np.array(geom.Point(0, 0).buffer(gr).exterior).T
+                gr_line, = ax.plot(*circle, **grid_kw)
+
+                ax.annotate(f'{gr:.0f}"', xy=(circle[0].max(), 0),
+                            color=grid_kw['color'])
+
+        # ------------------------------------------------------------------
+        # Try to plot the various radii quantities from this model, if desired
+        # ------------------------------------------------------------------
+
+        # TODO for CI this could be a CI of rh, ra, rt actually (60)
+
+        for r_type in radii:
+
+            # This is to explicitly avoid very ugly exceptions from geom
+            if r_type not in {'rh', 'ra', 'rt'}:
+                mssg = f'radii must be one of {{rh, ra, rt}}, not `{r_type}`'
+                raise TypeError(mssg)
+
+            radius = getattr(self, r_type).to_value('arcmin')
+            circle = np.array(geom.Point(0, 0).buffer(radius).exterior).T
+            ax.plot(*circle, ls='--')
+            ax.text(0, circle[1].max(), r_type)
+
+        # ------------------------------------------------------------------
+        # Add plot labels and legends
+        # ------------------------------------------------------------------
 
         ax.set_xlabel('RA [arcmin]')
         ax.set_ylabel('DEC [arcmin]')
 
-        ax.legend()
+        # TODO figure out a better way of handling this always using best? (75)
+        ax.legend(loc='upper left' if grid else 'best')
 
         return fig
 
@@ -1341,54 +1532,58 @@ class ModelVisualizer(_ClusterVisualizer):
         self.numdens = nd
 
     @_ClusterVisualizer._support_units
-    def _init_massfunc(self, model, observations):
+    def _init_massfunc(self, model, observations, *, cmap=None):
+        '''
+        sets self.mass_func as a dict of PI's, where each PI has a list of
+        subdicts. Each subdict represents a single radial slice (within this PI)
+        and contains the radii, the mass func values, and the field slice
+        '''
 
-        # TODO don't treat any PI different than we would any subgroup
-        #   might need to add an offset param to plotdata, or redo this logic
+        cmap = cmap or plt.cm.rainbow
 
-        PI_list = fnmatch.filter([k[0] for k in observations.valid_likelihoods],
-                                 '*mass_function*')
+        self.mass_func = {}
 
-        PI_list = sorted(PI_list, key=lambda k: observations[k]['r1'].min())
+        cen = (observations.mdata['RA'], observations.mdata['DEC'])
 
-        N_rbins = sum([np.unique(observations[k]['r1']).size for k in PI_list])
-        N_mbins = model.nms
-        # mf_full = np.empty((N, N_rbins, N_mbins))
-        mass_func = np.empty((1, N_rbins, N_mbins))
+        PI_list = observations.filter_datasets('*mass_function*')
 
         densityj = [util.QuantitySpline(model.r, model.Sigmaj[j])
                     for j in range(model.nms)]
 
-        rbin_ind = -1
+        for i, (key, mf) in enumerate(PI_list.items()):
 
-        for key in PI_list:
-            mf = observations[key]
+            self.mass_func[key] = []
 
-            cen = (observations.mdata['RA'], observations.mdata['DEC'])
-            unit = mf.mdata['field_unit']
-            coords = []
-            for ch in string.ascii_letters:
-                try:
-                    coords.append(mf['fields'].mdata[f'{ch}'])
-                except KeyError:
-                    break
+            # TODO same colour for each PI or different for each slice?
+            clr = cmap(i / len(PI_list))
 
-            field = mass.Field(coords, cen=cen, unit=unit)
+            field = mass.Field.from_dataset(mf, cen=cen)
 
-            rbins = np.c_[mf['r1'], mf['r2']]
+            rbins = np.unique(np.c_[mf['r1'], mf['r2']], axis=0)
+            rbins.sort(axis=0)
 
-            for r_in, r_out in np.unique(rbins, axis=0):
-                rbin_ind += 1
+            for r_in, r_out in rbins:
+
+                this_slc = {'r1': r_in, 'r2': r_out}
 
                 field_slice = field.slice_radially(r_in, r_out)
+
+                this_slc['field'] = field_slice
+
+                this_slc['colour'] = clr
+
+                this_slc['dNdm'] = np.empty((1, model.nms))
+
                 sample_radii = field_slice.MC_sample(300).to(u.pc)
 
                 for j in range(model.nms):
+
                     Nj = field_slice.MC_integrate(densityj[j], sample_radii)
                     widthj = (model.mj[j] * model.mes_widths[j])
-                    mass_func[0, rbin_ind, j] = (Nj / widthj).value
 
-        self.mass_func = mass_func
+                    this_slc['dNdm'][0, j] = (Nj / widthj).value
+
+                self.mass_func[key].append(this_slc)
 
     @_ClusterVisualizer._support_units
     def _init_dens(self, model, observations):
@@ -1871,6 +2066,9 @@ class CIModelVisualizer(_ClusterVisualizer):
         return K * nd_interp(self.r)
 
     def _init_massfunc(self, model, equivs=None):
+        # TODO implement new mass funcs stuff (this is all broken now)
+
+        cen = (self.obs.mdata['RA'], self.obs.mdata['DEC'])
 
         densityj = [util.QuantitySpline(model.r, model.Sigmaj[j])
                     for j in range(model.nms)]
@@ -1891,16 +2089,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         for key in PI_list:
             mf = self.obs[key]
 
-            cen = (self.obs.mdata['RA'], self.obs.mdata['DEC'])
-            unit = mf.mdata['field_unit']
-            coords = []
-            for ch in string.ascii_letters:
-                try:
-                    coords.append(mf['fields'].mdata[f'{ch}'])
-                except KeyError:
-                    break
-
-            field = mass.Field(coords, cen=cen, unit=unit)
+            field = mass.Field.from_dataset(mf, cen=cen)
 
             rbins = np.c_[mf['r1'], mf['r2']]
 
