@@ -90,6 +90,24 @@ class Field:
 
         self.area = self.polygon.area << u.arcmin**2
 
+    @classmethod
+    def from_dataset(cls, dataset, cen):
+        import string
+
+        unit = dataset.mdata['field_unit']
+
+        coords = []
+        for ch in string.ascii_letters:
+            try:
+                coords.append(dataset['fields'].mdata[f'{ch}'])
+            except KeyError:
+                break
+
+        if len(coords) == 1:
+            coords = coords[0]
+
+        return cls(coords, cen=cen, unit=unit)
+
     def slice_radially(self, r1, r2):
         '''Return a new field which is this field and a radial slice'''
         # make sure that r1,r2 are in arcmin
