@@ -1003,7 +1003,7 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_mass_func(self, fig=None, show_obs=True, show_fields=False, *,
-                       colours=None, field_kw=None):
+                       colours=None, PI_legend=False, field_kw=None):
 
         N_rbins = sum([len(d) for d in self.mass_func.values()])
         shape = ((int(np.ceil(N_rbins / 2)), int(np.floor(N_rbins / 2))), 2)
@@ -1050,7 +1050,7 @@ class _ClusterVisualizer:
 
             # Iterate over radial bin dicts for this PI
 
-            for rbin in bins:
+            for rind, rbin in enumerate(bins):
 
                 ax = axes[ax_ind]
 
@@ -1069,11 +1069,9 @@ class _ClusterVisualizer:
                     err = self.F * err_data
 
                     pnts = ax.errorbar(mbin_mean[r_mask], N_data, yerr=err,
-                                       fmt='o', color=clr, label=PI)
+                                       fmt='o', color=clr)
 
                     clr = pnts[0].get_color()
-
-                    PI = f'_{PI}'
 
                 # plot models
 
@@ -1106,8 +1104,19 @@ class _ClusterVisualizer:
                 # Really this should be a part of plt (see matplotlib#17946)
                 r1 = rbin['r1'].to_value('arcmin')
                 r2 = rbin['r2'].to_value('arcmin')
+
                 fake = plt.Line2D([], [], label=f"r = {r1:.2f}'-{r2:.2f}'")
-                ax.legend(handles=[fake], handlelength=0, handletextpad=0)
+                handles = [fake]
+
+                leg_kw = {'handlelength': 0, 'handletextpad': 0}
+
+                # If this is the first bin, also add a PI tag
+                if PI_legend and not rind and not show_fields:
+                    pi_fake = plt.Line2D([], [], label=PI)
+                    handles.append(pi_fake)
+                    leg_kw['labelcolor'] = ['k', clr]
+
+                ax.legend(handles=handles, **leg_kw)
 
                 ax_ind += 1
 
@@ -1118,10 +1127,6 @@ class _ClusterVisualizer:
             sf.supxlabel(r'Mass [$M_\odot$]')
 
         fig.subfigs[show_fields].supylabel('dN/dm')
-
-        if not show_fields:
-            # TODO this is hidden by constrained_layout, but isn't great anyways
-            fig.legend()
 
         return fig
 
