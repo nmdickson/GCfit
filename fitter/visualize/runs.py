@@ -1104,7 +1104,9 @@ class NestedVisualizer(_RunVisualizer):
                 gs_kw = {"height_ratios": [0.5] + [1] * (shape[0] - 1)}
 
         fig, axes = self._setup_multi_artist(fig, shape, sharex=True,
-                                             squeeze=False, gridspec_kw=gs_kw)
+                                             gridspec_kw=gs_kw)
+
+        axes = axes.reshape(shape)
 
         for ax in axes[-1]:
             ax.set_xlabel(r'$-\ln(X)$')
