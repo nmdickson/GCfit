@@ -1037,7 +1037,7 @@ class NestedVisualizer(_RunVisualizer):
 
     def plot_params(self, fig=None, params=None, *,
                     posterior_color='tab:blue', posterior_border=True,
-                    show_weight=True, fill_type='weights', **kw):
+                    show_weight=True, fill_type='weights', ylims=None, **kw):
 
         from scipy.stats import gaussian_kde
         from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -1065,6 +1065,7 @@ class NestedVisualizer(_RunVisualizer):
             c = self.results.samples_id
 
         elif fill_type in ('batch', 'samples_batch'):
+            # TODO when showing batches, make the initial sample distinguishable
             c = self.results.samples_batch
 
         elif fill_type in ('bound', 'samples_bound'):
@@ -1092,8 +1093,14 @@ class NestedVisualizer(_RunVisualizer):
 
         # ------------------------------------------------------------------
         # Setup axes
-        # TODO use new _setup_multi_artist when mf plots branch is merged
         # ------------------------------------------------------------------
+
+        if ylims is None:
+            ylims = [(None, None)] * len(labels)
+
+        elif len(ylims) != len(labels):
+            mssg = "`ylims` must match number of params"
+            raise ValueError(mssg)
 
         gs_kw = {}
 
@@ -1191,6 +1198,8 @@ class NestedVisualizer(_RunVisualizer):
                 tk.set_visible(False)
 
             post_ax.set_xlim(left=0)
+
+            ax.set_ylim(ylims[ind])
 
         return fig
 
