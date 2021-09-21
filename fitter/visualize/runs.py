@@ -933,8 +933,6 @@ class NestedVisualizer(_RunVisualizer):
             color = mpl_clr.to_rgb(line.get_color())
             facecolor = color + (0.33, )
 
-            # TODO would be nice to have a color gradient somewheres here
-            #   But thats not the easiest to do
             ax.fill_between(-self.results.logvol, 0, wts,
                             color=color, fc=facecolor)
 
@@ -971,7 +969,6 @@ class NestedVisualizer(_RunVisualizer):
 
         line, = ax.plot(-logvol, logz, **kw)
 
-        # TODO this seems to be nonsensical, at this point
         if error:
             err_up = logz + self.results.logzerr[finite]
             err_down = logz - self.results.logzerr[finite]
@@ -1004,7 +1001,6 @@ class NestedVisualizer(_RunVisualizer):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        # TODO indicate where the final live points were added, by line or color
         ax.plot(-self.results.logvol, self.results.samples_n, **kw)
 
         ax.set_ylabel(r'Number of live points')
@@ -1037,7 +1033,8 @@ class NestedVisualizer(_RunVisualizer):
 
     def plot_params(self, fig=None, params=None, *,
                     posterior_color='tab:blue', posterior_border=True,
-                    show_weight=True, fill_type='weights', ylims=None, **kw):
+                    show_weight=True, fill_type='weights', ylims=None,
+                    truths=None, **kw):
 
         from scipy.stats import gaussian_kde
         from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -1090,6 +1087,18 @@ class NestedVisualizer(_RunVisualizer):
 
             labels = params
             chain, eq_chain = chain[..., prm_inds], eq_chain[..., prm_inds]
+
+        # ---
+        # setup the truths
+
+        if truths.ndim == 2:
+            # Assume confidence bounds rather than single truth value
+
+            truth_ci = truths[:, 1:]
+            truths = truths[:, 0]
+
+        else:
+            truth_ci = None
 
         # ------------------------------------------------------------------
         # Setup axes
@@ -1189,6 +1198,12 @@ class NestedVisualizer(_RunVisualizer):
             y = np.linspace(eq_prm.min(), eq_prm.max(), 500)
 
             post_ax.fill_betweenx(y, 0, kde(y), color=color, fc=facecolor)
+
+            if truths is not None:
+                post_ax.axhline(truths[ind], c='tab:red')
+
+                if truth_ci is not None:
+                    post_ax.axhspan(*truth_ci[ind], color='tab:red', alpha=0.33)
 
             if not posterior_border:
                 post_ax.axis('off')
