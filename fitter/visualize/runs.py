@@ -1088,10 +1088,11 @@ class NestedVisualizer(_RunVisualizer):
             labels = params
             chain, eq_chain = chain[..., prm_inds], eq_chain[..., prm_inds]
 
-        # ---
-        # setup the truths
+        # ------------------------------------------------------------------
+        # Setup the truth values and confidence intervals
+        # ------------------------------------------------------------------
 
-        if truths.ndim == 2:
+        if truths is not None and truths.ndim == 2:
             # Assume confidence bounds rather than single truth value
 
             truth_ci = truths[:, 1:]
