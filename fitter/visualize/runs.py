@@ -997,6 +997,24 @@ class NestedVisualizer(_RunVisualizer):
 
         return fig
 
+    def plot_HN(self, fig=None, ax=None, **kw):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        finite = self.results.information > -1e250
+
+        HN = self.results.information * self.results.samples_n
+
+        ax.plot(HN[finite], **kw)
+
+        x = np.arange(0, HN[finite].size)
+        ax.plot(x, c='k', alpha=0.15)
+
+        ax.set_ylabel(r'HN')
+        ax.set_xlabel(r'$-\ln(X)$')
+
+        return fig
+
     def plot_nlive(self, fig=None, ax=None, **kw):
 
         fig, ax = self._setup_artist(fig, ax)
