@@ -985,7 +985,7 @@ class NestedVisualizer(_RunVisualizer):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        finite = self.results.information > -1e300
+        finite = self.results.information > -1e250
 
         logvol = self.results.logvol[finite]
 
