@@ -129,6 +129,9 @@ if __name__ == '__main__':
                              help='Posterior weighting fraction f_p')
     parser_nest.add_argument('--dlogz', default=0.25, type=float,
                              help='Δln(Z) tolerance initial stopping condition')
+    parser_nest.add_argument('--eff_samples', default=5000, type=pos_int,
+                             help='Number of effective posterior samples '
+                                  'stopping condition')
     parser_nest.add_argument('--maxiter', default=None, type=pos_int,
                              help='Maximum number of iterations allowed. May '
                                   'end sampling before the stopping conditions '
