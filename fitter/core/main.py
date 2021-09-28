@@ -574,7 +574,8 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
 
 def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
-               initial_kwargs=None, batch_kwargs=None, pfrac=1.0,
+               initial_kwargs=None, batch_kwargs=None,
+               pfrac=1.0, eff_samples=5000,
                Ncpu=2, mpi=False, initials=None, param_priors=None,
                fixed_params=None, excluded_likelihoods=None, hyperparams=True,
                savedir=_here, verbose=False):
@@ -623,6 +624,12 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
     pfrac : float, optional
         Fractional weight of the posterior (versus evidence) for stop function.
         Between 0.0 and 1.0, defaults to 1.0 (i.e. 100% posterior).
+
+    eff_samples : int, optional
+        The desired number of "effective posterior samples" to determine the
+        stopping condition of dynamic nested sampling. Uses the Kish ESS
+        algorithm, see `dynesty.dynamicsampler.stopping_function`. Defaults to
+        5000.
 
     Ncpu : int, optional
         Number of CPU's to parallelize the sampling computation over. Is
@@ -785,6 +792,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         backend.store_metadata('Ncpu', Ncpu)
 
         backend.store_metadata('pfrac', pfrac)
+        backend.store_metadata('eff_samples', eff_samples)
         backend.store_metadata('bound_type', bound_type)
         backend.store_metadata('sample_type', sample_type)
 
@@ -840,7 +848,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
         t0 = time.time()
 
-        stop_kw = {'pfrac': pfrac}
+        stop_kw = {'pfrac': pfrac, 'n_mc': 0, 'target_neff': eff_samples}
 
         backend.reset_current_batch(baseline=True)
 
@@ -853,7 +861,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         logging.info("Beginning dynamic batch sampling")
 
         # run the dynamic sampler in batches, until the stop condition is met
-        while not dysamp.stopping_function(sampler.results, stop_kw,
+        while not dysamp.stopping_function(sampler.results, args=stop_kw,
                                            M=map_, rstate=sampler.rstate):
 
             backend.reset_current_batch()
