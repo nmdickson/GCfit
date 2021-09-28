@@ -792,6 +792,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         backend.store_metadata('Ncpu', Ncpu)
 
         backend.store_metadata('pfrac', pfrac)
+        backend.store_metadata('eff_samples', eff_samples)
         backend.store_metadata('bound_type', bound_type)
         backend.store_metadata('sample_type', sample_type)
 
