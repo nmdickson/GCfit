@@ -575,7 +575,7 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
 def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
                initial_kwargs=None, batch_kwargs=None,
-               pfrac=1.0, eff_samples=5000,
+               pfrac=1.0, maxfrac=0.8, eff_samples=5000,
                Ncpu=2, mpi=False, initials=None, param_priors=None,
                fixed_params=None, excluded_likelihoods=None, hyperparams=True,
                savedir=_here, verbose=False):
@@ -595,6 +595,9 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
     `Nlive_per_batch` live points, until reaching a stop condition
     defined by the fractional posterior weighting desired (`pfrac`), or until
     the maximum number of iterations is reached (`maxiter`).
+    Each batch samples between log-likelihood bounds determined by the
+    range covered by `maxfrac` percent of the importance weight peak.
+
     The sampling is parallelized over `Ncpu` or using `mpi`, with calls to
     `fitter.posterior` defined based on a uniform sampling of the
     `PriorTransforms`.
@@ -624,6 +627,11 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
     pfrac : float, optional
         Fractional weight of the posterior (versus evidence) for stop function.
         Between 0.0 and 1.0, defaults to 1.0 (i.e. 100% posterior).
+
+    maxfrac : float, optional
+        Fractional percentage threshold of importance weights peak to use for
+        determining likelihood bounds for dynamic sampling batches.
+        Between 0.0 and 1.0, defaults to 0.8 (i.e. 80% of maximum weight).
 
     eff_samples : int, optional
         The desired number of "effective posterior samples" to determine the
@@ -792,6 +800,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         backend.store_metadata('Ncpu', Ncpu)
 
         backend.store_metadata('pfrac', pfrac)
+        backend.store_metadata('maxfrac', maxfrac)
         backend.store_metadata('eff_samples', eff_samples)
         backend.store_metadata('bound_type', bound_type)
         backend.store_metadata('sample_type', sample_type)
@@ -849,6 +858,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         t0 = time.time()
 
         stop_kw = {'pfrac': pfrac, 'n_mc': 0, 'target_neff': eff_samples}
+        weight_kw = {'pfrac': pfrac, 'maxfrac': maxfrac}
 
         backend.reset_current_batch(baseline=True)
 
@@ -866,7 +876,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
             backend.reset_current_batch()
 
-            wt = dysamp.weight_function(sampler.results, stop_kw)
+            wt = dysamp.weight_function(sampler.results, args=weight_kw)
 
             logging.info(f"Sampling new batch bebtween logl bounds {wt}")
 
