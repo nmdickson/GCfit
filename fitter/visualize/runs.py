@@ -1019,7 +1019,7 @@ class NestedVisualizer(_RunVisualizer):
         ax.plot(x, c='k', alpha=0.15)
 
         ax.set_ylabel(r'HN')
-        ax.set_xlabel(r'$-\ln(X)$')
+        ax.set_xlabel('Iteration')
 
         return fig
 
