@@ -954,7 +954,7 @@ class NestedVisualizer(_RunVisualizer):
                 mssg = "No metadata stored in file, `maxfrac` defaults to 80%"
                 warnings.warn(mssg)
 
-            ax.axhline(maxfrac * max(self.weights), c='g')
+            ax.axhline(maxfrac * max(wts), c='g')
 
         ax.set_ylabel('weights')
         ax.set_xlabel(r'$-\ln(X)$')
@@ -1038,6 +1038,19 @@ class NestedVisualizer(_RunVisualizer):
         ax.plot(-self.results.logvol, self.results.samples_n, **kw)
 
         ax.set_ylabel(r'Number of live points')
+        ax.set_xlabel(r'$-\ln(X)$')
+
+        return fig
+
+    def plot_ncall(self, fig=None, ax=None, **kw):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        kw.setdefault('where', 'mid')
+
+        ax.step(-self.results.logvol, self.results.ncall, **kw)
+
+        ax.set_ylabel(r'Number of likelihood calls')
         ax.set_xlabel(r'$-\ln(X)$')
 
         return fig
