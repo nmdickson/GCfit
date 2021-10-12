@@ -937,8 +937,16 @@ class NestedVisualizer(_RunVisualizer):
                             color=color, fc=facecolor)
 
         if show_bounds:
-            # assumes maxfrac is default (0.8)
-            ax.axhline(0.8 * max(self.weights), c='g')
+            if self.has_meta:
+                maxfrac = self.file['metadata'].attrs['maxfrac']
+
+            else:
+                maxfrac = 0.8
+
+                mssg = "No metadata stored in file, `maxfrac` defaults to 80%"
+                warnings.warn(mssg)
+
+            ax.axhline(maxfrac * max(self.weights), c='g')
 
         ax.set_ylabel('weights')
         ax.set_xlabel(r'$-\ln(X)$')
