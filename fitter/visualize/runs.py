@@ -639,6 +639,14 @@ class NestedVisualizer(_RunVisualizer):
         return weight_function(self.results, stop_kw, return_weights=True)[1][2]
 
     @property
+    def ESS(self):
+        '''effective sample size'''
+        from scipy.special import logsumexp
+        logwts = self.results.logwt
+        logneff = logsumexp(logwts) * 2 - logsumexp(logwts * 2)
+        return np.exp(logneff)
+
+    @property
     def _resampled_weights(self):
         from scipy.stats import gaussian_kde
         from dynesty.utils import resample_equal
