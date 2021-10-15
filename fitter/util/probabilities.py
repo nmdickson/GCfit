@@ -113,3 +113,112 @@ def trim_peaks(az_domain, Paz):
 
     # return trimmed Paz
     return Paz
+
+# --------------------------------------------------------------------------
+# Nested Sampling helpers
+# --------------------------------------------------------------------------
+
+def plateau_weight_function(results, args=None, return_weights=False):
+    '''Weight and logl-bound function which adjusts to handle jumping weights
+
+    A new version of `dynesty.dynamicsampler.weight_function` which hopefully
+    handles more difficult-to-converge posteriors better.
+
+    In certain cases posterior distributions may possess small "plateaus" in
+    their likelihoods near the peak of their distributions. When this occurs
+    the initial sampling runs are not able to reach very low `dlogz` values
+    before reaching and saturating the live points on this plateau, and
+    entering a constant impossible search for high likerlihoods.
+
+    When this happens, although the initial sampling batch can be stopped at
+    that stage with little issue, the importance weights curve can become
+    difficult, as the final added live points cover a large volume, and cause
+    the weights to "jump" upwards, sometimes even dwarfing the typical peak
+    of the curve. The default `weight_function` cannot easily handle these
+    cases, and will cause the first dynamic batch to get stuck.
+
+    This happens due to two factors. First, the usual choice of bounds as
+    80% of the peak may, in the case of large jumps, lead to obscenely small
+    bounds at the highest likelihood. Second, even if using a small fraction,
+    the rightmost bound may initially be set to +inf. This means the stopping
+    condition used by the first dynamic batch is only the `dlogz<0.0001`
+    condition, which as mentioned before, is exceedingly difficult to reach
+    given this posterior.
+
+    To handle these problems, this new function first checks if the bounds
+    found using the given `maxfrac` are overflowing on the right, and if
+    so explicitly reduces the `maxfrac` to a quarter of it's original value and
+    tries again. Secondly, when overflowing on the right, the maximum bound
+    is not set as +inf, but rather the highest logl value. This will still
+    require the sampler to probe the space around this "plateau", while still
+    allowing for it to end before reaching extremely low `dlogz`
+    (this may not be valid if the plateau is a perfectly flat plateau, however).
+
+    '''
+    # TODO this^ explanation should be in some docs, not the docstring
+
+    def compute_bounds(bound_frac):
+        from dynesty.dynamicsampler import compute_weights
+
+        zweight, pweight = compute_weights(results)
+
+        # Compute combined weights.
+        weight = (1. - pfrac) * zweight + pfrac * pweight
+
+        # Compute logl bounds
+        bounds = np.nonzero(weight > bound_frac * np.max(weight))[0]
+
+        # we pad by lpad on each side (2*lpad total)
+        # if this brings us outside the range on on side, I add it on another
+        bounds = (bounds[0] - lpad, bounds[-1] + lpad)
+        nsamps = weight.size
+        
+        # overflow on the RHS, so we move the left side
+        if bounds[1] > nsamps - 1:
+            bounds = [bounds[0] - (bounds[1] - (nsamps - 1)), nsamps - 1]
+
+        return bounds, weight
+
+    # Initialize hyperparameters.
+    if args is None:
+        args = dict()
+
+    pfrac = args.get('pfrac', 0.8)
+    if not 0. <= pfrac <= 1.:
+        mssg = f"The provided `pfrac` {pfrac} is not between 0. and 1."
+        raise ValueError(mssg)
+
+    maxfrac = args.get('maxfrac', 0.8)
+    if not 0. < maxfrac <= 1.:
+        mssg = f"The provided `maxfrac` {maxfrac} is not between 0. and 1."
+        raise ValueError(mssg)
+
+    lpad = args.get('pad', 1)
+    if lpad < 0:
+        raise ValueError(f"`lpad` {lpad} is less than zero.")
+
+    # compute the bounding indices based on the weights
+    bounds, weight = compute_bounds(bound_frac=maxfrac)
+
+    # compute the logl values of said bounds
+    logl = results.logl
+
+    # If this is overflowing on the right, recompute with a much lower fraction
+    # Won't change the bound, but is a hacky way to hopefully get a better LHS
+    if bounds[1] == logl.size - 1:
+        bounds, weight = compute_bounds(bound_frac=0.25 * maxfrac)
+
+    # if we overflow on the leftside we set the edge to -inf and expand the RHS
+    if bounds[0] < 0:
+        logl_min = -np.inf
+        logl_max = logl[min(bounds[1] - bounds[0], logl.size - 1)]
+
+    else:
+        logl_min, logl_max = logl[bounds[0]], logl[bounds[1]]
+
+    # return bounds and weights
+    if return_weights:
+        return (logl_min, logl_max), weight
+
+    else:
+        return (logl_min, logl_max)
