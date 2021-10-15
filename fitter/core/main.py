@@ -1,5 +1,6 @@
 from .data import Observations
 from ..probabilities import posterior, priors
+from ..util.probabilities import plateau_weight_function
 
 import h5py
 import emcee
@@ -876,7 +877,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
             backend.reset_current_batch()
 
-            wt = dysamp.weight_function(sampler.results, args=weight_kw)
+            wt = plateau_weight_function(sampler.results, args=weight_kw)
 
             logging.info(f"Sampling new batch bebtween logl bounds {wt}")
 
