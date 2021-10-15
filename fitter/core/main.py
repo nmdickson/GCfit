@@ -1,6 +1,6 @@
 from .data import Observations
 from ..probabilities import posterior, priors
-from ..utils.probabilities import plateau_weight_function
+from ..util.probabilities import plateau_weight_function
 
 import h5py
 import emcee
