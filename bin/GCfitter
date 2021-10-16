@@ -74,9 +74,9 @@ if __name__ == '__main__':
                                help='Likelihood components to '
                                     'exclude from posteriors')
 
-    shared_parser.add_argument('--no-hyperparams', dest='hyperparams',
-                               action='store_false',
-                               help="Don't use Bayesian hyperparams")
+    shared_parser.add_argument('--hyperparams', dest='hyperparams',
+                               action='store_true',
+                               help="Use Bayesian hyperparams")
 
     shared_parser.add_argument('--verbose', action='store_true')
     shared_parser.add_argument('--debug', action='store_true')

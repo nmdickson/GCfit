@@ -469,7 +469,7 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
 
 @_angular_units
 def likelihood_number_density(model, ndensity, *,
-                              mass_bin=None, hyperparams=True):
+                              mass_bin=None, hyperparams=False):
     r'''Compute the log likelihood of the cluster number density profile
 
     Computes the log likelihood component of a cluster's number density profile,
@@ -560,7 +560,7 @@ def likelihood_number_density(model, ndensity, *,
 
 
 @_angular_units
-def likelihood_pm_tot(model, pm, *, mass_bin=None, hyperparams=True):
+def likelihood_pm_tot(model, pm, *, mass_bin=None, hyperparams=False):
     r'''Compute the log likelihood of the cluster total proper motion dispersion
 
     Computes the log likelihood component of a cluster's proper motion
@@ -626,7 +626,7 @@ def likelihood_pm_tot(model, pm, *, mass_bin=None, hyperparams=True):
 
 
 @_angular_units
-def likelihood_pm_ratio(model, pm, *, mass_bin=None, hyperparams=True):
+def likelihood_pm_ratio(model, pm, *, mass_bin=None, hyperparams=False):
     r'''Compute the log likelihood of the cluster proper motion dispersion ratio
 
     Computes the log likelihood component of a cluster's proper motion
@@ -691,7 +691,7 @@ def likelihood_pm_ratio(model, pm, *, mass_bin=None, hyperparams=True):
 
 
 @_angular_units
-def likelihood_pm_T(model, pm, *, mass_bin=None, hyperparams=True):
+def likelihood_pm_T(model, pm, *, mass_bin=None, hyperparams=False):
     '''Compute the log likelihood of the cluster tangential proper motion
 
     Computes the log likelihood component of a cluster's proper motion
@@ -750,7 +750,7 @@ def likelihood_pm_T(model, pm, *, mass_bin=None, hyperparams=True):
 
 
 @_angular_units
-def likelihood_pm_R(model, pm, *, mass_bin=None, hyperparams=True):
+def likelihood_pm_R(model, pm, *, mass_bin=None, hyperparams=False):
     '''Compute the log likelihood of the cluster radial proper motion
 
     Computes the log likelihood component of a cluster's proper motion
@@ -809,7 +809,7 @@ def likelihood_pm_R(model, pm, *, mass_bin=None, hyperparams=True):
 
 
 @_angular_units
-def likelihood_LOS(model, vlos, *, mass_bin=None, hyperparams=True):
+def likelihood_LOS(model, vlos, *, mass_bin=None, hyperparams=False):
     '''Compute the log likelihood of the cluster LOS velocity dispersion
 
     Computes the log likelihood component of a cluster's velocity
@@ -868,7 +868,7 @@ def likelihood_LOS(model, vlos, *, mass_bin=None, hyperparams=True):
 
 
 @_angular_units
-def likelihood_mass_func(model, mf, field, *, hyperparams=True):
+def likelihood_mass_func(model, mf, field, *, hyperparams=False):
     r'''Compute the log likelihood of the cluster's PDMF
 
     Computes the log likelihood component of a cluster's present day mass
@@ -1021,7 +1021,7 @@ def log_likelihood(theta, observations, L_components, hyperparams):
 
 def posterior(theta, observations, fixed_initials=None,
               L_components=None, prior_likelihood=None, *,
-              hyperparams=True, return_indiv=True):
+              hyperparams=False, return_indiv=True):
     '''
     Combines the likelihood with the prior
 

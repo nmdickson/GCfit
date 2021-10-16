@@ -259,7 +259,7 @@ class NestedSamplingOutput(Output):
 
 def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
              mpi=False, initials=None, param_priors=None, moves=None,
-             fixed_params=None, excluded_likelihoods=None, hyperparams=True,
+             fixed_params=None, excluded_likelihoods=None, hyperparams=False,
              cont_run=False, savedir=_here, backup=False,
              verbose=False, progress=False):
     '''Main MCMC fitting pipeline
@@ -578,7 +578,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
                initial_kwargs=None, batch_kwargs=None,
                pfrac=1.0, maxfrac=0.8, eff_samples=5000,
                Ncpu=2, mpi=False, initials=None, param_priors=None,
-               fixed_params=None, excluded_likelihoods=None, hyperparams=True,
+               fixed_params=None, excluded_likelihoods=None, hyperparams=False,
                savedir=_here, verbose=False):
     '''Main nested sampling fitting pipeline
 
