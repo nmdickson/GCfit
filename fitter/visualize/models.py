@@ -1198,7 +1198,8 @@ class _ClusterVisualizer:
         ax.autoscale(False)
 
         if grid:
-            ticks = np.arange(2, self.rt.to_value('arcmin'), 2)
+            rt = self.rt if hasattr(self, 'rt') else (20 << u.arcmin)
+            ticks = np.arange(2, rt.to_value('arcmin'), 2)
 
             # make sure this grid matches normal grids
             grid_kw = {
@@ -2248,10 +2249,55 @@ class ObservationsVisualizer(_ClusterVisualizer):
     without any models at all
     '''
 
+    @_ClusterVisualizer._support_units
+    def _init_massfunc(self, observations, *, cmap=None):
+        '''
+        sets self.mass_func as a dict of PI's, where each PI has a list of
+        subdicts. Each subdict represents a single radial slice (within this PI)
+        and contains the radii, the mass func values, and the field slice
+        '''
+
+        cmap = cmap or plt.cm.rainbow
+
+        self.mass_func = {}
+
+        cen = (observations.mdata['RA'], observations.mdata['DEC'])
+
+        PI_list = observations.filter_datasets('*mass_function*')
+
+        for i, (key, mf) in enumerate(PI_list.items()):
+
+            self.mass_func[key] = []
+
+            clr = cmap(i / len(PI_list))
+
+            field = mass.Field.from_dataset(mf, cen=cen)
+
+            rbins = np.unique(np.c_[mf['r1'], mf['r2']], axis=0)
+            rbins.sort(axis=0)
+
+            for r_in, r_out in rbins:
+
+                this_slc = {'r1': r_in, 'r2': r_out}
+
+                field_slice = field.slice_radially(r_in, r_out)
+
+                this_slc['field'] = field_slice
+
+                this_slc['colour'] = clr
+
+                # fake it till ya make it
+                this_slc['dNdm'] = np.array([[]])
+
+                self.mass_func[key].append(this_slc)
+
     def __init__(self, observations, d=None):
         self.obs = observations
 
+        self.rh = observations.initials['rh'] << u.pc
+
         self.star_bin = None
+        self.mj = [] << u.Msun
 
         self.d = (d or observations.initials['d']) << u.kpc
         self.s2 = 0.
@@ -2263,4 +2309,5 @@ class ObservationsVisualizer(_ClusterVisualizer):
         self.pm_ratio = None
         self.LOS = None
         self.numdens = None
-        self.mass_func = None
+
+        self._init_massfunc(observations)
