@@ -212,7 +212,7 @@ def plateau_weight_function(results, args=None, return_weights=False):
 
     # If this is overflowing on the right, recompute with a much lower fraction
     # Won't change the bound, but is a hacky way to hopefully get a better LHS
-    if bounds[1] == logl.size - 1:
+    if bounds[1] == (logl.size - 1) - results.samples_n.max():
         bounds, weight = compute_bounds(bound_frac=0.25 * maxfrac)
 
     # if we overflow on the leftside we set the edge to -inf and expand the RHS
