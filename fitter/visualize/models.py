@@ -2286,6 +2286,9 @@ class ObservationsVisualizer(_ClusterVisualizer):
 
                 this_slc['colour'] = clr
 
+                # fake it till ya make it
+                this_slc['dNdm'] = np.array([[]])
+
                 self.mass_func[key].append(this_slc)
 
     def __init__(self, observations, d=None):
@@ -2294,6 +2297,7 @@ class ObservationsVisualizer(_ClusterVisualizer):
         self.rh = observations.initials['rh'] << u.pc
 
         self.star_bin = None
+        self.mj = [] << u.Msun
 
         self.d = (d or observations.initials['d']) << u.kpc
         self.s2 = 0.
