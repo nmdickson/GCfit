@@ -118,6 +118,7 @@ def trim_peaks(az_domain, Paz):
 # Nested Sampling helpers
 # --------------------------------------------------------------------------
 
+
 def plateau_weight_function(results, args=None, return_weights=False):
     '''Weight and logl-bound function which adjusts to handle jumping weights
 
@@ -172,10 +173,16 @@ def plateau_weight_function(results, args=None, return_weights=False):
         # if this brings us outside the range on on side, I add it on another
         bounds = (bounds[0] - lpad, bounds[-1] + lpad)
         nsamps = weight.size
-        
+
+        # A temporary test to handle weight jumps due to plateaus
+        max_bound = (nsamps - 1) - results.samples_n.max()
+
         # overflow on the RHS, so we move the left side
         if bounds[1] > nsamps - 1:
-            bounds = [bounds[0] - (bounds[1] - (nsamps - 1)), nsamps - 1]
+            bounds = [bounds[0] - (bounds[1] - (nsamps - 1)), max_bound]
+
+        elif bounds[1] == nsamps - 1:
+            bounds[1] = max_bound
 
         return bounds, weight
 
