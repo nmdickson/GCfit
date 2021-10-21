@@ -508,7 +508,9 @@ class ClusterFile:
 
                     for varname, variable in dset.variables.items():
                         var = grp.create_dataset(varname, data=variable['data'])
-                        var.attrs['unit'] = variable['unit']
+
+                        if variable['unit'] is not None:
+                            var.attrs['unit'] = variable['unit']
 
                         for k, v in variable['metadata'].items():
                             var.attrs[k] = v
@@ -1202,8 +1204,8 @@ class Dataset:
 
             if df.empty:
                 if not empty_ok:
-                    mssg = f"{'Filtered' if filter_ else ''} Dataframe is empty"
-                    raise ValueError(mssg)
+                    mssg = f'Filtered ({expr})' if filter_ else ''
+                    raise ValueError(mssg + " Dataframe is empty")
 
             keys = keys or df.columns
 

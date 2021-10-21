@@ -77,6 +77,7 @@ class Field:
         # Set up the polygons
         # ------------------------------------------------------------------
 
+        # Combine and smooth all polygons
         if self._multi:
 
             self.polygon = ops.unary_union([geom.Polygon(c).buffer(0)
@@ -85,9 +86,17 @@ class Field:
         else:
             self.polygon = geom.Polygon(coords).buffer(0)
 
+        # Explicitly check the polygons again, as they sometimes change above
+        if isinstance(self.polygon, geom.Polygon):
+            self._multi = False
+        elif isinstance(self.polygon, geom.MultiPolygon):
+            self._multi = True
+
+        # If desired, prep the polygons
         if preprep:
             self.prep()
 
+        # Compute polygon area, in correct units
         self.area = self.polygon.area << u.arcmin**2
 
     @classmethod
