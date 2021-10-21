@@ -14,7 +14,7 @@ import time
 import shutil
 import logging
 import pathlib
-from fnmatch import fnmatch
+import datetime
 from collections import abc
 
 
@@ -869,7 +869,8 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
         backend.store_results(sampler.results)
 
-        logging.info("Beginning dynamic batch sampling")
+        tn = datetime.timedelta(seconds=time.time() - t0)
+        logging.info("Beginning dynamic batch sampling ({tn})")
 
         # run the dynamic sampler in batches, until the stop condition is met
         while not dysamp.stopping_function(sampler.results, args=stop_kw,
@@ -879,7 +880,8 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
             wt = plateau_weight_function(sampler.results, args=weight_kw)
 
-            logging.info(f"Sampling new batch bebtween logl bounds {wt}")
+            tn = datetime.timedelta(seconds=time.time() - t0)
+            logging.info(f"Sampling new batch bebtween logl bounds {wt} ({tn})")
 
             for results in sampler.sample_batch(logl_bounds=wt, **batch_kwargs):
                 backend.update_current_batch(results)
@@ -897,9 +899,10 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
     # Write extra metadata and statistics to output (backend) file
     # ----------------------------------------------------------------------
 
-    backend.store_metadata('runtime', time.time() - t0)
+    tf = datetime.timedelta(seconds=time.time() - t0)
+    backend.store_metadata('runtime', tf.total_seconds())
 
-    logging.debug(f"Final state: {sampler}")
+    logging.debug(f"Final state: {sampler} ({tf})")
 
     # ----------------------------------------------------------------------
     # Print some verbose results to stdout
