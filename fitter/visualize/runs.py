@@ -2,6 +2,7 @@ from .models import CIModelVisualizer, ModelVisualizer
 from ..probabilities import priors
 
 import sys
+import warnings
 
 import h5py
 import numpy as np
