@@ -169,14 +169,8 @@ class NestedSamplingOutput(Output):
     _current_batch_keys = ('worst', 'ustar', 'vstar', 'loglstar', 'ncall',
                            'worst_orig', 'bound_orig', 'bound_iter', 'eff')
 
-    _base_batch_keys = ('worst', 'ustar', 'vstar', 'loglstar', 'logvol',
-                        'logwt', 'logz', 'logzvar', 'h', 'ncall', 'worst_orig',
-                        'bound_orig', 'bound_iter', 'eff', 'delta_logz')
-
-    def reset_current_batch(self, baseline=False):
+    def reset_current_batch(self):
         '''empty out the current batch group, to start tracking a new batch'''
-
-        keys = self._base_batch_keys if baseline else self._current_batch_keys
 
         with self.open('a') as hdf:
 
@@ -187,32 +181,30 @@ class NestedSamplingOutput(Output):
 
             grp = base_grp.create_group(name='current_batch')
 
-            grp.attrs['baseline'] = baseline
-
             # Two-dimensional datasets
             for k in {'vstar', 'ustar'}:
                 grp.create_dataset(k, shape=(0, self.ndim),
                                    maxshape=(None, self.ndim))
 
             # One-dimensional datasets
-            for k in set(keys) - {'ustar', 'vstar'}:
+            for k in set(self._current_batch_keys) - {'ustar', 'vstar'}:
                 grp.create_dataset(k, shape=(0,), maxshape=(None,))
 
-    def _grow_current_batch(self, n_grow=1, baseline=False):
+    def _grow_current_batch(self, n_grow=1):
         '''called in the background to dynamically resize the relevant datasets
         '''
-
-        keys = self._base_batch_keys if baseline else self._current_batch_keys
 
         with self.open('r+') as hdf:
             base_grp = hdf.require_group(name=self.group)
 
             grp = base_grp['current_batch']
 
-            for k in keys:
-                grp[k].resize(grp['vstar'].shape[0] + n_grow, axis=0)
+            n_current = grp['vstar'].shape[0]
 
-    def update_current_batch(self, results, reset=False, baseline=False):
+            for k in self._current_batch_keys:
+                grp[k].resize(n_current + n_grow, axis=0)
+
+    def update_current_batch(self, results, reset=False):
         '''Append to the "current batch" the results of each sampling iteration
 
         worst : int
@@ -240,18 +232,76 @@ class NestedSamplingOutput(Output):
         '''
 
         if reset:
-            self.reset_current_batch(baseline=baseline)
+            self.reset_current_batch()
 
-        keys = self._base_batch_keys if baseline else self._current_batch_keys
-
-        results = dict(zip(keys, results))
+        results = dict(zip(self._current_batch_keys, results))
 
         n_grow = results['vstar'].shape[0]
-        self._grow_current_batch(n_grow, baseline=baseline)
+        self._grow_current_batch(n_grow)
 
         with self.open('a') as hdf:
             base_grp = hdf.require_group(name=self.group)
             grp = base_grp['current_batch']
+
+            for key, val in results.items():
+                grp[key][-n_grow:] = val
+
+    # ----------------------------------------------------------------------
+    # Tracking of initial batch sampling
+    # ----------------------------------------------------------------------
+
+    _initial_batch_keys = ('worst', 'ustar', 'vstar', 'loglstar', 'logvol',
+                           'logwt', 'logz', 'logzvar', 'h', 'ncall',
+                           'worst_orig', 'bound_orig', 'bound_iter', 'eff',
+                           'delta_logz')
+
+    def create_initial_batch(self, *, strict=False):
+        '''initialize the initial batch group'''
+
+        with self.open('a') as hdf:
+
+            base_grp = hdf.require_group(name=self.group)
+
+            if 'initial_batch' not in base_grp:
+                grp = base_grp.create_group(name='initial_batch')
+
+                # Two-dimensional datasets
+                for k in {'vstar', 'ustar'}:
+                    grp.create_dataset(k, shape=(0, self.ndim),
+                                       maxshape=(None, self.ndim))
+
+                # One-dimensional datasets
+                for k in set(self._base_batch_keys) - {'ustar', 'vstar'}:
+                    grp.create_dataset(k, shape=(0,), maxshape=(None,))
+
+            elif strict:
+                mssg = 'initial_batch already exists'
+                raise ValueError(mssg)
+
+    def _grow_initial_batch(self, n_grow=1):
+        '''called in the background to dynamically resize the relevant datasets
+        '''
+
+        with self.open('r+') as hdf:
+            base_grp = hdf.require_group(name=self.group)
+
+            grp = base_grp['initial_batch']
+
+            for k in self._initial_batch_keys:
+                grp[k].resize(grp['vstar'].shape[0] + n_grow, axis=0)
+
+    def update_intial_batch(self, results):
+        '''Append to the "initial batch" the results of each sampling iteration
+        '''
+
+        results = dict(zip(self._initial_batch_keys, results))
+
+        n_grow = results['vstar'].shape[0]
+        self._grow_initial_batch(n_grow)
+
+        with self.open('a') as hdf:
+            base_grp = hdf.require_group(name=self.group)
+            grp = base_grp['initial_batch']
 
             for key, val in results.items():
                 grp[key][-n_grow:] = val
@@ -861,11 +911,12 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         stop_kw = {'pfrac': pfrac, 'n_mc': 0, 'target_neff': eff_samples}
         weight_kw = {'pfrac': pfrac, 'maxfrac': maxfrac}
 
-        backend.reset_current_batch(baseline=True)
-
         # runs an initial set of set samples, as if using `NestedSampler`
+        # TODO I'm not sure how to handle "initial_batch" on restarted runs
+        backend.create_initial_batch()
+
         for results in sampler.sample_initial(**initial_kwargs):
-            backend.update_current_batch(results, baseline=True)
+            backend.update_intial_batch(results)
 
         backend.store_results(sampler.results)
 
