@@ -579,12 +579,12 @@ class Model(lp.limepy):
             logging.debug("No cluster FeHe stored, defaulting to -1.0")
             FeHe = -1.0
 
-        # Regulates low mass objects depletion, default -20, 0 for 47 Tuc
+        # Regulates low mass objects depletion
         try:
             Ndot = self.observations.mdata['Ndot']
         except (AttributeError, KeyError):
-            logging.debug("No cluster Ndot stored, defaulting to -20")
-            Ndot = -20
+            logging.debug("No cluster Ndot stored, defaulting to 0 /Myr")
+            Ndot = 0
 
         # Generate the mass function
         return emf3.evolve_mf(
