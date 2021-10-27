@@ -271,7 +271,7 @@ class NestedSamplingOutput(Output):
                                        maxshape=(None, self.ndim))
 
                 # One-dimensional datasets
-                for k in set(self._base_batch_keys) - {'ustar', 'vstar'}:
+                for k in set(self._initial_batch_keys) - {'ustar', 'vstar'}:
                     grp.create_dataset(k, shape=(0,), maxshape=(None,))
 
             elif strict:
