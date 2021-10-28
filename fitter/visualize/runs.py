@@ -697,7 +697,7 @@ class NestedVisualizer(_RunVisualizer):
 
         for k, d in res.items():
 
-            if k in ('current_batch', 'bound'):
+            if k in ('current_batch', 'initial_batch', 'bound'):
                 continue
 
             if d.shape and (d.shape[0] == res['logl'].shape[0]):
