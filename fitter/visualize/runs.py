@@ -846,11 +846,16 @@ class NestedVisualizer(_RunVisualizer):
     # Model Visualizers
     # ----------------------------------------------------------------------
 
-    def get_model(self, method='median'):
+    def get_model(self, method='mean'):
 
-        labels, chain = self._get_equal_weight_chains()
+        if method == 'mean':
+            theta = self.parameter_means()[0]
+            return ModelVisualizer.from_theta(theta, self.obs)
 
-        return ModelVisualizer.from_chain(chain, self.obs, method)
+        else:
+            labels, chain = self._get_equal_weight_chains()
+
+            return ModelVisualizer.from_chain(chain, self.obs, method)
 
     def get_CImodel(self, N=100, Nprocesses=1, add_errors=False):
         import multiprocessing
