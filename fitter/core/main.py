@@ -90,13 +90,14 @@ class Output:
 
 
 class MCMCOutput(emcee.backends.HDFBackend, Output):
+    '''HDF backend file for MCMC sampling runs'''
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
 
 class NestedSamplingOutput(Output):
-    # TODO this logic should be straightened out, groups existance standardized
+    '''HDF backend file for nested sampling runs'''
 
     def __init__(self, filename, group='nested', overwrite=False):
         self.filename = filename
@@ -147,7 +148,6 @@ class NestedSamplingOutput(Output):
         if not file:
             hdf.close()
 
-    # TODO be nicer if could figure out how append results rather than overwrite
     def store_results(self, results, overwrite=True):
         '''add a `dynesty.Results` dict to the file.
         if not overwrite, will fail if data already exists
@@ -206,29 +206,6 @@ class NestedSamplingOutput(Output):
 
     def update_current_batch(self, results, reset=False):
         '''Append to the "current batch" the results of each sampling iteration
-
-        worst : int
-            Index of the live point with the worst likelihood. This is our
-            new dead point sample. **Negative values indicate the index
-            of a new live point generated when initializing a new batch.**
-        ustar : `~numpy.ndarray` with shape (npdim,)
-            Position of the sample.
-        vstar : `~numpy.ndarray` with shape (ndim,)
-            Transformed position of the sample.
-        loglstar : float
-            Ln(likelihood) of the sample.
-        nc : int
-            Number of likelihood calls performed before the new
-            live point was accepted.
-        worst_it : int
-            Iteration when the live (now dead) point was originally proposed.
-        boundidx : int
-            Index of the bound the dead point was originally drawn from.
-        bounditer : int
-            Index of the bound being used at the current iteration.
-        eff : float
-            The cumulative sampling efficiency (in percent).
-
         '''
 
         if reset:
@@ -642,12 +619,13 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
     stored within this file is various statistics and metadata surrounding the
     fitter run.
 
-    The nested sampler is sampled in batches, with each batch adding
-    `Nlive_per_batch` live points, until reaching a stop condition
-    defined by the fractional posterior weighting desired (`pfrac`), or until
-    the maximum number of iterations is reached (`maxiter`).
-    Each batch samples between log-likelihood bounds determined by the
-    range covered by `maxfrac` percent of the importance weight peak.
+    The nested sampler begins by sampling an "initial_batch" over the entire
+    prior volume, up to some stopping condition defined in `initial_kwargs`,
+    before transitioning to sampling in batches, with each batch adding
+    `Nlive_per_batch` live points, until reaching a "(Kish) effective sample
+    size" of `eff_samples`. Each batch samples only between log-likelihood
+    bounds determined by the range covered by `maxfrac` percent of the
+    importance weight peak.
 
     The sampling is parallelized over `Ncpu` or using `mpi`, with calls to
     `fitter.posterior` defined based on a uniform sampling of the
