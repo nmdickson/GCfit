@@ -13,6 +13,7 @@ import logging
 __all__ = ['DEFAULT_INITIALS', 'Model', 'Observations']
 
 
+# TODO maybe change the name of this to like DEFAULT_THETA
 # The order of this is important!
 DEFAULT_INITIALS = {
     'W0': 6.0,
@@ -646,9 +647,67 @@ class Observations:
 # TODO would be cool to get this to work with limepy's `sampling`
 
 class Model(lp.limepy):
+    r'''Wrapper class around a LIMEPY model, including mass function evolution
+
+    Subclasses a `limepy.limepy` model defined by the input `theta` parameters,
+    while including support for initial mass function evolution (through
+    `ssptools`), units (through `astropy.Quantity`), tracer masses and enhanced
+    metadata and mass results.
+
+    The cluster mass function is evolved from it's initial mass function using
+    fixed integration settings alongside the cluster's age, metallicity and
+    low-mass loss rate as defined in the given `Observations`. The resulting
+    mass bins are arranged correctly, and have any required (by the
+    `Observations`) tracer masses added, before being used to solve the Limepy
+    distribution function.
+
+    Parameters
+    ----------
+    theta : dict or list
+        The model input parameters. Must either be a dict, or a full list of
+        all parameters, in the exact same order as `DEFAULT_INITIALS`.
+        See {{TODO docs}} for explanation of all possible input parameters.
+
+    observations : Observations, optional
+        The `Observations` instance corresponding to this cluster. While not
+        necessary for solving a theoretical model, the observations must be
+        provided for any models used in fitting/sampling procedures, as
+        including them has important impacts on the mass function makeup.
+
+    Attributes
+    ----------
+    {BH,NS,WD}_mj : astropy.Quantity
+        Black hole, neutron star or white dwarf component mass bin size
+
+    {BH,NS,WD}_Mj : astropy.Quantity
+        Black hole, neutron star or white dwarf total bin mass
+
+    {BH,NS,WD}_Nj : astropy.Quantity
+        Black hole, neutron star or white dwarf total bin number (Mj / mj)
+
+    Notes
+    -----
+    The IMF of the model is defined using a three-component broken power law,
+    of the familiar form:
+
+    .. math::
+        \xi(m) \propto \begin{dcases}
+            m^{-a_1} & 0.1 \M_{\odot} < m \leq 0.5 \M_{\odot}, \\
+            m^{-a_2} & 0.5 \M_{\odot} < m \leq 1.0 \M_{\odot}, \\
+            m^{-a_3} & m > 100 \M_{\odot}, \\
+        \end{dcases}
+
+    where the `a` exponents are given as input parameters in `theta`.
+
+    See Also
+    --------
+    limepy : Distribution-function model base of this class
+    '''
 
     def _init_mf(self):
+        '''Evolve the cluster mass function from it's IMF using `ssptools`'''
 
+        # TODO before comparing with Kroupa we might want to discuss these:
         m123 = [0.1, 0.5, 1.0, 100]  # Slope breakpoints for imf
         nbin12 = [5, 5, 20]
 
@@ -707,6 +766,8 @@ class Model(lp.limepy):
     #     G_scale, M_scale, R_scale = self._GS, self._MS, self._RS
 
     def _assign_units(self):
+        '''Convert most values to `astropy.Quantity` with correct units'''
+
         # TODO this needs to be much more general
         #   Right now it is only applied to those params we use in likelihoods?
         #   Also the actualy units used are being set manually
