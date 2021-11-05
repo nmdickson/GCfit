@@ -26,6 +26,7 @@ _str_types = (str, bytes)
 
 
 class Output:
+    '''Base backend file class, to be subclassed for specific sampler needs'''
 
     def store_dataset(self, key, data, group='statistics', *, file=None):
         '''currently only works for adding a full array once, will overwrite'''
@@ -49,6 +50,7 @@ class Output:
             hdf.close()
 
     def store_metadata(self, key, value, type_postfix='', *, file=None):
+        '''Store given `key``type_postfix`=`value` within `metadata` group'''
 
         hdf = file or self.open('a')
 
@@ -104,6 +106,7 @@ class NestedSamplingOutput(Output):
         self.group = group
 
     def open(self, mode="r"):
+        '''Open file and return root `h5py` group'''
         return h5py.File(self.filename, mode)
 
     def _store_bounds(self, bounds, key='bound', group=None, *, file=None):
