@@ -22,11 +22,68 @@ _OPER_MAP = {
 
 
 class Priors:
-    """Container class representing the prior (logged) likelihoods,
-    to be called on θ and (added) to the log likelihood"""
+    '''Representation of the prior likelihood functions on various parameters
+
+    Contains the individual prior likelihood functions for each parameter,
+    as a corresponding `*Prior` object, and handles all interation with them.
+
+    Calls to the prior-likelihood should be made to this class, with a given
+    `theta`, which will be distributed to the relevant parameter-specific
+    functions.
+
+    Parameters
+    ----------
+    priors: dict
+        A dictionary describing the prior function for each parameter. Each
+        value should be either one of the `_PriorBase` subclasses, or a list
+        of ["prior name", *function args]. Any missing parameters will be filled
+        in with `DEFAULT_PRIORS`
+
+    fixed_initials : dict, optional
+        A dictionary of any parameters which have fixed values, used in cases of
+        dependant priors with these values
+
+    logged : bool, optional
+        Whether to log the returned likelihoods. Defaults to True
+
+    err_on_fail : bool, optional
+        If any called `theta` parameters return "invalid" priors (i.e. L <= 0),
+        will raise an exception. If False (default), will simply log the
+        failure and continue
+    '''
 
     def __call__(self, theta, *, return_indiv=False):
-        '''return the total prior likelihood given by theta'''
+        '''Return the total prior likelihood for a given theta
+
+        Distribute `theta` to each parameter's prior function, alongside
+        relevant arguments and dependant parameters, and return the prior
+        likelihood value.
+
+        If any prior values are "invalid", that is, are less than or equal to
+        a probability of 0, or are `nan`, then the reasons for this occurance
+        will be compiled and logged (or raised, if `err_on_fail` was `True`)
+
+        Parameters
+        ----------
+        theta : numpy.ndarray or dict
+            The parameter values to pass to the prior likelihood functions
+
+        return_indiv : bool, optional
+            Whether to return the individual likelihood values of each
+            parameter, or to sum and return a single overall probability
+
+        Returns
+        -------
+        L : numpy.ndarray or float
+            The computed prior likelihood values, either individually or (if
+            `return_indiv` is `True`) summed together
+
+        Raises
+        ------
+        ValueError
+            If any priors returned "invalid" likelihoods, and the `err_on_fail`
+            flag was set on initialization
+        '''
 
         if not isinstance(theta, dict):
             theta = dict(zip(self.var_params, theta), **self.fixed_initials)
@@ -71,13 +128,6 @@ class Priors:
 
     def __init__(self, priors, fixed_initials=None, *,
                  logged=True, err_on_fail=False):
-        '''
-        priors: dict where key is a parameter, and eavh value is either a
-        `*Prior` object, or ["name of class", *args for that class]
-
-        transform : bool, use if doing nested sampling, switches to ppf
-        err_on_fail : bool, if the likelihood is <= 0 will raise an error
-        '''
 
         self._log = logged
         self._strict = err_on_fail
@@ -127,12 +177,47 @@ class Priors:
 
 
 class PriorTransforms(Priors):
+    '''Representation of the prior transform functions on various parameters
+
+    Contains the individual prior transformation functions for each parameter,
+    as a corresponding `*Prior` object, and handles all interation with them.
+
+    Calls to the prior-transforms should be made to this class, with a given
+    Unif~[0,1] value for each parameter, which will be distributed to their
+    relevant parameter-specific functions.
+
+    Based on the `Priors` object, this class differs by ensuring calls to
+    each prior distribution compute the "ppf", rather than the "pdf"
+    This class is not meant to return prior-likelihood values for a given
+    `theta`, but to transform a uniform parameter-space sample to the
+    corresponding sample of `theta`, based on the prior distribution.
+
+    This class is to be used instead of `Priors` in all nested sampling code.
+
+    Parameters
+    ----------
+    priors: dict
+        A dictionary describing the prior function for each parameter. Each
+        value should be either one of the `_PriorBase` subclasses, or a list
+        of ["prior name", *function args]. Any missing parameters will be filled
+        in with `DEFAULT_PRIORS`
+
+    fixed_initials : dict, optional
+        A dictionary of any parameters which have fixed values, used in cases of
+        dependant priors with these values
+
+    logged : bool, optional
+        Whether to log the returned likelihoods. Defaults to True
+
+    err_on_fail : bool, optional
+        If any called `theta` parameters return "invalid" priors (i.e. L <= 0),
+        will raise an exception. If False (default), will simply log the
+        failure and continue
+    '''
 
     def _compile_dependants(self, prior, U, theta=None):
-        '''Needed because the prior transforms need the passed U to be
-        transformed to a theta before it can be used as a dependant, and this
-        needs to be a recursive process
-        '''
+        '''Transform a passed U to theta recursively, so can use dependants'''
+
         # TODO potentially repeating alot of prior calls by not saving to theta?
 
         if not prior.dependants:
@@ -160,9 +245,35 @@ class PriorTransforms(Priors):
         return deps
 
     def __call__(self, U):
-        '''U is like theta, but Unif~[0,1] instead of the real values
-        calls the necessary prior tranforms to go from U to theta
-        then returns theta
+        '''Return the corresponding theta parameters for a given uniform sample
+
+        Distribute `U` to each parameter's prior transform function, alongside
+        relevant arguments and dependant parameters, and return the relevant
+        theta values.
+
+        If any prior values are "invalid", that is, return `nan` due to the
+        input `U` being outside the [0,1] unit cube, then the reasons for
+        this occurance will be compiled and logged (or raised, if `err_on_fail`
+        was `True`). This should not happen in normal circumstances, as long as
+        `U` is correctly defined.
+
+        Parameters
+        ----------
+        U : numpy.ndarray or dict
+            The parameter values to pass to the prior transform functions. Must
+            be i.i.d. within the N-dimensional unit cube (i.e. uniformly
+            distributed from 0 to 1)
+
+        Returns
+        -------
+        theta : numpy.ndarray
+            The computed theta parameter values
+
+        Raises
+        ------
+        ValueError
+            If any priors returned "invalid" likelihoods, and the `err_on_fail`
+            flag was set on initialization
         '''
 
         if not isinstance(U, dict):
@@ -248,9 +359,29 @@ class PriorTransforms(Priors):
 
 
 class _PriorBase:
+    '''Base class for all prior functions, handling some defaults
+
+    This class should not be instantiated directly, only used as a base for
+    specific functional priors.
+
+    Attributes
+    ----------
+    inv_mssg : str
+        The message explaining why this prior may have returned an invalid value
+
+    inv_value : float
+        The value to return should this prior be invalid.
+
+    dependants : list of str
+        A list of parameters that this prior depends on (i.e. a parameter whose
+        value is needed to set the bounds of the prior).
+
+    param : str
+        The name of the parameter this prior corresponds to
+    '''
 
     dependants = None
-    params = None
+    param = None
 
     def __repr__(self):
         return f'repr {self.__class__.__name__} prior'
@@ -288,12 +419,47 @@ class _PriorBase:
 
 
 class UniformPrior(_PriorBase):
+    '''Flat uniform prior function
+
+    Represents a normalized uniform prior likelihood distribution, defined by
+    N bounding pairs which must all overlap smoothly. The returned likelihood
+    value for any point between the minimum and maximum bounds is defined by
+    the size of the distribution, and normalized to 1.
+
+    Bounds are evaluated on each call, in order to support dependant parameters,
+    and the `inv_value` will be returned in the case of bound-pairs which do not
+    overlap.
+
+    Parameters
+    ----------
+    param : str
+        Name of the corresponding parameter
+
+    edges : list of 2-tuple
+        List of all bound pairs (lower, upper). Bounds can be either a float,
+        for a fixed bound, or a string name of another parameter, for a
+        dependant bound
+
+    transform : bool, optional
+        Whether this is a prior likelihood or a prior transform function.
+        Changes whether the distribution PDF or PPF is evaluated upon calling
+
+    Attributes
+    ----------
+    bounds : list of 2-tuple
+        The bounds, as defined by the `edges` parameter
+
+    See Also
+    --------
+    scipy.stats.uniform : Distribution class used for pdf/ppf evaluation
+    '''
 
     def __repr__(self):
         return (f'{self.__class__.__name__}'
                 f'("{self.param}", {self.bounds}, transform={self._transform})')
 
     def __call__(self, param_val, *args, **kwargs):
+        '''Evaluate this prior function at the value `param_val`'''
 
         # check that all dependants were supplied
         if (missing_deps := set(self.dependants) - kwargs.keys()):
@@ -331,12 +497,6 @@ class UniformPrior(_PriorBase):
         return self._caller(param_val, loc=loc, scale=scale)
 
     def __init__(self, param, edges, *, transform=False):
-        '''
-        param is the name, just for mssgs
-        edges is a list of bounds
-            eahc is either (lower bound, upper bound)
-            bounds can be either a number or a param
-        '''
 
         self._transform = transform
 
@@ -357,8 +517,10 @@ class UniformPrior(_PriorBase):
 
 # TODO needs a much better name (and implementation tbh)
 class ArbitraryPrior(_PriorBase):
-    '''Consists of a number of operation: value pairs which are evalutated.
-    operation can be anything. '''
+    '''Prior function defined by arbitrary operations. NotImplemented'''
+
+    # Consists of a number of operation: value pairs which are evalutated.
+    #   operation can be anything.
 
     def __repr__(self):
         return (f'{self.__class__.__name__}("{self.param}", {self._eval})')
@@ -413,6 +575,30 @@ class ArbitraryPrior(_PriorBase):
 
 
 class GaussianPrior(_PriorBase):
+    '''1D Gaussian normal prior function
+
+    Represents a Gaussian prior likelihood distribution, defined by a mean μ
+    and width σ.
+
+    Parameters
+    ----------
+    param : str
+        Name of the corresponding parameter
+
+    mu : float
+        Distribution mean
+
+    sigma : float
+        Distribution width/standard deviation
+
+    transform : bool, optional
+        Whether this is a prior likelihood or a prior transform function.
+        Changes whether the distribution PDF or PPF is evaluated upon calling
+
+    See Also
+    --------
+    scipy.stats.norm : Distribution class used for pdf/ppf evaluation
+    '''
 
     def __repr__(self):
         return (f'{self.__class__.__name__}'
@@ -420,6 +606,7 @@ class GaussianPrior(_PriorBase):
                 f'transform={self._transform})')
 
     def __call__(self, param_val, *args, **kw):
+        '''Evaluate this prior function at the value `param_val`'''
         return self._caller(param_val)
 
     def __init__(self, param, mu, sigma, *, transform=False):
@@ -439,11 +626,26 @@ class GaussianPrior(_PriorBase):
 
 
 class BoundedGaussianPrior(_PriorBase):
-    # Could maybe use truncnorm?
+    '''Gaussian normal prior function with truncated bounds.
+
+    Could maybe use truncnorm?
+
+    NotImplemented
+    '''
     pass
 
 
 class CromwellUniformPrior(_PriorBase):
+    '''Flat uniform prior function with slightly non-zero out-of-bounds values
+
+    Cromwell's Rule states that prior probabilities with absolute 1 or 0 values
+    should be avoided, to allow an infinitesimal chance for the most unlikely
+    of occurences. This function behaves exactly like `UniformPrior` with the
+    notable exception of an extremely small non-zero value returned outside of
+    the bounds.
+
+    NotImplemented
+    '''
     pass
 
 
