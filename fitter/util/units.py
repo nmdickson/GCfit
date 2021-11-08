@@ -10,8 +10,8 @@ __all__ = ['angular_width', 'QuantitySpline']
 
 
 def angular_width(D):
-    '''AstroPy units conversion equivalency for angular to linear widths,
-    and assorted related quantities
+    '''AstroPy units conversion equivalency for angular to linear distances
+
     See: https://docs.astropy.org/en/stable/units/equivalencies.html
     '''
 
@@ -19,30 +19,38 @@ def angular_width(D):
 
     # Angular width
     def pc_to_rad(r):
+        '''Parsecs to radians'''
         return 2 * np.arctan(r / (2 * D.value))
 
     def rad_to_pc(θ):
+        '''Radians to parsecs'''
         return np.tan(θ / 2) * (2 * D.value)
 
     # Angular area
     def pcsq_to_radsq(r):
+        '''Parsecs squared to radians squared'''
         return (1. / rad_to_pc(1)**2) * r
 
     def radsq_to_radsq(θ):
+        '''Radians squared to parsec squared'''
         return (1. / pc_to_rad(1)**2) * θ
 
     # Inverse Angular area
     def inv_pcsq_to_radsq(r):
+        '''Parsecs squared reciprocal to radians squared reciprocal'''
         return (rad_to_pc(1)**2) * r
 
     def inv_radsq_to_radsq(θ):
+        '''Radians squared reciprocal to parsecs squared reciprocal'''
         return (pc_to_rad(1)**2) * θ
 
     # Angular Speed
     def kms_to_asyr(vt):
+        '''Kilometres per second to arcseconds per year'''
         return vt / (4.74 * D.value)
 
     def asyr_to_kms(μ):
+        '''Arcseconds per year to kilometres per second'''
         return 4.74 * D.value * μ
 
     return Equivalency([
@@ -55,7 +63,18 @@ def angular_width(D):
 
 # TODO this really needs unittest, the unitless stuff made it complicated
 class QuantitySpline(scipy.interpolate.UnivariateSpline):
-    '''Subclass of SciPy's UnivariateSpline, supporting AstroPy `Quantity`s'''
+    '''Subclass of SciPy's UnivariateSpline, supporting AstroPy `Quantity`s'
+
+    1-D smoothing spline fit to a given set of data points, with support for
+    units through using `astropy.Quantity` arrays as input.
+
+    All functions will call their corresponding scipy native functions, and
+    simply add the relevant units to their outputs.
+
+    See Also
+    --------
+    scipy.interpolate.UnivariateSpline
+    '''
 
     def __init__(self, x, y, w=None, bbox=[None] * 2, k=3, s=0,
                  ext=1, check_finite=False):
@@ -84,25 +103,23 @@ class QuantitySpline(scipy.interpolate.UnivariateSpline):
         return obj
 
     def __call__(self, x, nu=0, ext=None):
-        '''
-        if no _xunit, but x has a unit, assume it matches
-        '''
 
+        # if no _xunit, but x has a unit, assume it matches
         if hasattr(x, 'unit'):
             x = x.to_value(self._xunit)
 
+        # call the original UnivariateSpline __call__
         res = super().__call__(x, nu=nu, ext=ext)
 
+        # if has yunit, apply that to the results
         if self._yunit:
             res <<= self._yunit
 
         return res
 
     def integral(self, a, b):
-        '''
-        if no xunit, but a,b does have units, assumes they match
-        '''
 
+        # if no xunit, but a,b does have units, assumes they match
         if (hasattr(a, 'unit') and hasattr(b, 'unit')):
 
             # TODO if only one has units, error is ugly
@@ -127,6 +144,7 @@ class QuantitySpline(scipy.interpolate.UnivariateSpline):
 
         res = super().roots()
 
+        # if has xunit, apply that to the results
         if self._xunit:
             res <<= self._xunit
 
