@@ -28,6 +28,7 @@ def RV_transform(domain, f_X, h, h_prime):
 
 
 def gaussian_likelihood(X_data, X_model, err):
+    '''Gaussian log-likelihood function'''
 
     chi2 = (X_data - X_model)**2 / err**2
 
@@ -42,8 +43,11 @@ def gaussian_likelihood(X_data, X_model, err):
 
 
 def hyperparam_likelihood(X_data, X_model, err):
-    '''compute the log likelihood of a Gaussian process with marginalized
-    scaling hyperparameters (see Hobson et al., 2002)'''
+    '''Gaussian log-likelihood function with marginalized hyperparameters
+
+    (see Hobson et al., 2002)
+    '''
+
     from scipy.special import gammaln
 
     n = (X_data.size / 2.) + 1
@@ -61,7 +65,9 @@ def hyperparam_likelihood(X_data, X_model, err):
 
 def hyperparam_effective(X_data, X_model, err):
     '''Compute the "effective" α_k scaling value for a given X_model
-    (see Hobson et al., 2002), eq.44'''
+
+    (see Hobson et al., 2002; eq.44)
+    '''
 
     n_k = X_data.size
     chi2 = np.sum((X_data - X_model)**2 / err**2)
@@ -75,11 +81,8 @@ def hyperparam_effective(X_data, X_model, err):
 
 
 def div_error(a, a_err, b, b_err):
-    """
-    Compute Gaussian error propagation for a÷b.
-    """
-    f = a / b
-    return abs(f) * np.sqrt((a_err / a) ** 2 + (b_err / b) ** 2)
+    '''Gaussian error propagation for division of two quantities, with errors'''
+    return abs(a / b) * np.sqrt((a_err / a) ** 2 + (b_err / b) ** 2)
 
 
 # --------------------------------------------------------------------------
@@ -88,10 +91,8 @@ def div_error(a, a_err, b, b_err):
 
 
 def trim_peaks(az_domain, Paz):
-    """
-    Iteratively remove peaks from a distrbution, either until no peaks are left
-    or the normalization drops too much.
-    """
+    '''Remove all "peaks" from a distribution while maintaining normalization'''
+
     from scipy.signal import find_peaks
     from scipy.integrate import trapz
 
