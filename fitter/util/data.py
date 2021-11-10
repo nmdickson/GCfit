@@ -242,21 +242,38 @@ COMMON_NAMES = {
 
 
 def get_std_cluster_name(name):
-    '''From a given cluster name, convert it to a standard name, which
-    can be used to find the cluster data file.
-    i.e. 47Tuc, 47_Tuc, NGC104,NGC_104, NGC 104 to NGC0104
+    '''Convert a given cluster name to a standardized version
 
-    need a naming standard for our files:
-        - if in New General Catalogue: NGC####
-            NGC, no space, 4 numbers, left padded by 0
-        - if palomar, PAL##
-            PAL, no space, 2 numbers, left padded by 0
-        - if terzan, TER##
-            TER, no space, 2 numbers, left padded by 0
+    Convert a given cluster name, in a variety of formats, to a standardized
+    format, which can be used to find and access cluster data files.
 
-        I don't think we'll be using anything else, I think it'll be mostly
-        NGC, so this is safe to go with for now.
+    A standardized format exists for three different common cluster catalogues:
+
+    - New General Catalogue: NGC####
+        NGC, no spaces, 4 numbers, left padded by 0
+    - Palomar, PAL##
+        PAL, no spaces, 2 numbers, left padded by 0
+    - Terzan, TER##
+        TER, no spaces, 2 numbers, left padded by 0
+
+    Before being standardized, all whitespace, dashes and underscores are
+    stripped from the name, and all letters are lowercased.
+    A check for common cluster aliases is also made against `COMMON_NAMES`.
+
+    If not a part of these three catalogues, no standardization will be
+    effected, and the exact same `name` will be returned.
+
+    Parameters
+    ----------
+    name : str
+        Input cluster name to be standardized
+
+    Returns
+    -------
+    std_name : str
+        Standardized cluster name
     '''
+
     import re
 
     if name == 'TEST':
@@ -272,6 +289,7 @@ def get_std_cluster_name(name):
     if name in COMMON_NAMES:
         name = COMMON_NAMES[name]
 
+    # extract all numbers in name
     digits = ''.join(filter(str.isdigit, name))
 
     # pad zeroes
@@ -292,15 +310,36 @@ def get_std_cluster_name(name):
 
 
 def get_cluster_path(name, standardize_name=True, restrict_to='local'):
-    '''based on a cluster name, try to get its clusterfile pathname, either
-    locally or in the core files,
+    '''Based on a cluster name return the path of the corresponding cluster file
 
-    name: cluster name
-    standardize_name : run it through get_std_cluster_name first. Searches
-        against core clusters will always be standardized, no matter this arg
-    restrict_to : (None, 'local', 'core') whether to only search for files in
-        the local or core clusters. By default (None) searches local first,
-        then core if no matching local found.
+    Given a cluster name, search the relevant directories for the corresponding
+    cluster data file and return the path to said file.
+
+    Cluster files can exist as 'core' clusters, standardized and constant within
+    the package itself, or as 'local' clusters, created by the user and stored
+    within the `GCFIT_DIR` directory. Searches for cluster files will begin
+    with local files, and then core files if no matching local files are found.
+    If a specific location is desired, the search can be restricted to one
+    or the other.
+
+    Parameters
+    ----------
+    name : str
+        Cluster name
+
+    standardize_name : bool, optional
+        If True (default) pass the cluster name through `get_std_cluster_name`
+        before searching for the matching file. Searches for core clusters will
+        always be standardized, no matter this parameter
+
+    restrict_to : {None, 'local', 'core'}
+        Where to restrict file searches to. By default (None) searches local
+        first, then core if no matching local files are found
+
+    Returns
+    -------
+    pathlib.Path
+        Path to corresponding cluster HDF data file
     '''
 
     if restrict_to not in (None, 'local', 'core'):
@@ -365,6 +404,51 @@ def get_cluster_path(name, standardize_name=True, restrict_to='local'):
 
 
 class ClusterFile:
+    '''Create, edit and manage hdf cluster data files
+
+    Contains all necessary methods for interacting with cluster data files,
+    the backend of all `fitter.Observations` classes. Includes functions for
+    creating, reading, writing, deleting and testing all data and metadata
+    associated with a cluster.
+
+    This class works solely in the "local" cluster regime, and creates or
+    searches for all files within the `GCFIT_DIR` directory.
+
+    The observational data must be stored in a strict format in order to be
+    read by `fitter.Observations` and used in all relevant likelihood functions.
+    As such, an extensive "testing" regime exists here, which acts to
+    ensure all data stored in these cluster files follows the standards defined
+    in the `specification.json` resource file.
+
+    This class is intimately tied to the `Dataset` class, which defines each
+    individual set of data, which must be created seperately and added to this
+    class using one of the corresponding methods.
+
+    Parameters
+    ----------
+    name : str
+        Cluster name, used in file creation or search
+
+    standardize_name : bool, optional
+        If True (default) pass the cluster name through `get_std_cluster_name`
+        before searching for or creating the matching file
+
+    force_new : bool, optional
+        If True, will force the creation of a new blank file, potentially
+        overwriting any existing file with the same name. Defaults to False
+
+    Attributes
+    ----------
+    live_datasets : dict
+        Dictionary of current `Dataset`s set to be written to file
+
+    live_metadata : dict
+        Dictionary of current metadata key-values set to be written to file
+
+    live_initials : dict
+        Dictionary of current "initials" key-values set to be written to file
+
+    '''
 
     # ----------------------------------------------------------------------
     # Initialization
@@ -434,6 +518,7 @@ class ClusterFile:
     # ----------------------------------------------------------------------
 
     def get_dataset(self, key, reset=False):
+        '''Return the `Dataset` corresponding to this `key` in the file'''
 
         # Check if this dataset is already live
         if key in self.live_datasets:
@@ -467,6 +552,7 @@ class ClusterFile:
         return dset
 
     def delete_dataset(self, key):
+        '''Set the dataset corresponding to `key` to be deleted upon save'''
 
         if key in self.file:
             self.live_datasets[key] = 'DELETE'
@@ -476,8 +562,8 @@ class ClusterFile:
             raise KeyError(mssg)
 
     def _write_datasets(self, confirm=False):
-        '''actually write it out to file, after we've tested all changes
-        '''
+        '''actually write it out to file, after we've tested all changes'''
+
         # TODO writing empty datasets will actually be tricky here I think
         #   cause we don't want size-0 arrays (like we read them as) but `Empty`
 
@@ -559,14 +645,11 @@ class ClusterFile:
         self.live_datasets = {}
 
     def add_dataset(self, dataset):
-        '''get a new or edited dataset and store it in this object until
-        tested and written
-        '''
+        '''Add `Dataset` to the live datasets, to be written to file on save'''
         self.live_datasets[dataset.name] = dataset
 
     def unadd_dataset(self, key, pop=True):
-        '''take this out of live_datasets (like a soft version of delete)
-        '''
+        '''Remove the dataset corresponding to `key` from the live datasets'''
         try:
             dset = self.live_datasets[key]
             del self.live_datasets[key]
@@ -581,6 +664,8 @@ class ClusterFile:
     # ----------------------------------------------------------------------
 
     def get_metadata(self, key, reset=False):
+        '''Return the root metadata corresponding to this `key` in the file'''
+
         if key in self.live_metadata:
             if reset:
                 del self.live_metadata[key]
@@ -591,6 +676,8 @@ class ClusterFile:
         return self.file.attrs[key]
 
     def delete_metadata(self, key):
+        '''Set the metadata corresponding to `key` to be deleted upon save'''
+
         if key in self.file.attrs:
             self.live_metadata[key] = 'DELETE'
 
@@ -599,6 +686,7 @@ class ClusterFile:
             raise KeyError(mssg)
 
     def _write_metadata(self, confirm=False):
+        '''actually write it out to file, after we've tested all changes'''
 
         check = True
 
@@ -661,11 +749,13 @@ class ClusterFile:
         self.live_metadata = {}
 
     def add_metadata(self, key, value):
-        '''cluster-level metadata'''
+        '''Add this entry to the live metadata, to be written to file on save'''
+
         # TODO still need to figure out to store metadata units
         self.live_metadata[key] = value
 
     def unadd_metadata(self, key, pop=True):
+        '''Remove the entry corresponding to `key` from the live metadata'''
 
         try:
             value = self.live_metadata[key]
@@ -681,6 +771,7 @@ class ClusterFile:
     # ----------------------------------------------------------------------
 
     def get_initials(self, key, reset=False):
+        '''Return the initial value corresponding to this `key` in the file'''
         if key in self.live_initials:
             if reset:
                 del self.live_initials[key]
@@ -690,7 +781,10 @@ class ClusterFile:
 
         return self.file['intials'].attrs[key]
 
+    # TODO forgot to add the delete_initials method? (18)
+
     def _write_initials(self, confirm=False):
+        '''actually write it out to file, after we've tested all changes'''
 
         check = True
 
@@ -753,9 +847,11 @@ class ClusterFile:
         self.live_initials = {}
 
     def add_initials(self, key, value):
+        '''Add this entry to the live initials, to be written to file on save'''
         self.live_initials[key] = value
 
     def unadd_initials(self, key, pop=True):
+        '''Remove the entry corresponding to `key` from the live initials'''
         try:
             value = self.live_initials[key]
             del self.live_initials[key]
@@ -774,6 +870,7 @@ class ClusterFile:
     # ----------------------------------------------------------------------
 
     def _check_contains(self, dataset, key):
+        '''check that `key` exists within `dataset`'''
 
         if key in dataset.variables:
             return True
@@ -782,6 +879,7 @@ class ClusterFile:
             return False
 
     def _check_contains_any(self, dataset, key_choices):
+        '''check that atleast one of `key_choices` exists within `dataset`'''
 
         if not key_choices:
             raise ValueError("key_choices must have at least one element")
@@ -794,6 +892,8 @@ class ClusterFile:
             return False
 
     def _check_for_error(self, dataset, key):
+        '''check that "Δ{key}" or "Δ{key},up;down" exists within `dataset`'''
+
         variables = dataset.variables
 
         if (f'Δ{key},up' in variables) and (f'Δ{key},down' in variables):
@@ -806,6 +906,7 @@ class ClusterFile:
             return False
 
     def _check_for_units(self, dataset, key, kind=None, *, none_ok=False):
+        '''check that `key` within `dataset` has valid units'''
 
         variable = dataset.variables[key]
 
@@ -844,9 +945,8 @@ class ClusterFile:
         return True
 
     def _check_for_size(self, dataset, key, match):
-        '''check that the shape of this variable matches that of its "sibling"
-        size might not be right, but I don't yet have a reason to use shape
-        '''
+        '''check that `key` within `dataset` is same size as `match` variable'''
+
         variable = dataset.variables[key]
 
         try:
@@ -872,8 +972,10 @@ class ClusterFile:
         return True
 
     def _check_for_field(self, dataset, key):
+        '''check that a valid massfunction field variable exists in `dataset`'''
+
         import string
-        # TODO Should also require the field is valid?
+        # TODO Should also require the field is valid (i.e. Field can work)?
 
         fields = dataset.variables[key]['metadata'].keys() - {'unit'}
 
@@ -885,7 +987,7 @@ class ClusterFile:
             return False
 
     def _check_for_all(self, dataset, varname, requirements):
-        '''parse this variables requirements and pass it out to the functions'''
+        '''parse this variable's requirements and pass it out to the checks'''
 
         valid = True
 
@@ -918,6 +1020,7 @@ class ClusterFile:
     # ----------------------------------------------------------------------
 
     def _check_required(self, dataset, varname, requirements):
+        '''check the requirements of `varname`'''
 
         valid = True
 
@@ -930,6 +1033,7 @@ class ClusterFile:
         return valid
 
     def _check_optional(self, dataset, varname, requirements):
+        '''check the optional requirements of `varname`'''
 
         valid = True
 
@@ -941,6 +1045,7 @@ class ClusterFile:
         return valid
 
     def _check_choice(self, dataset, choices):
+        '''check the choice requirements of `varname`'''
 
         valid = True
 
@@ -962,6 +1067,7 @@ class ClusterFile:
     # ----------------------------------------------------------------------
 
     def _test_dataset(self, key, dataset):
+        '''make all checks of this dataset'''
 
         with resources.path('fitter', 'resources') as datadir:
             with open(f'{datadir}/specification.json') as ofile:
@@ -997,6 +1103,7 @@ class ClusterFile:
         return valid
 
     def _test_metadata(self, metadata):
+        '''make all checks of this metadata'''
 
         with resources.path('fitter', 'resources') as datadir:
             with open(f'{datadir}/specification.json') as ofile:
@@ -1020,6 +1127,7 @@ class ClusterFile:
         return valid
 
     def _test_initials(self, initials):
+        '''make all checks of these initials'''
 
         with resources.path('fitter', 'resources') as datadir:
             with open(f'{datadir}/specification.json') as ofile:
@@ -1056,8 +1164,14 @@ class ClusterFile:
     # ----------------------------------------------------------------------
 
     def test(self):
-        '''Something along lines of the Observation complicance test in "tests"
-        test that all the "live" data is correct and valid before we write it
+        '''Test all live datasets, metadata and initials for compliance
+
+        Based on the `specification.json` standards file, passes all live
+        datasets, metadata and initials through a bevy of tests and checks, to
+        ensure they meet all requirements.
+
+        If *any* tests fail, the reasons for failure are logged in the
+        `_inv_mssg` list, and this function returns `False`.
         '''
 
         # test datasets for required variables
@@ -1076,7 +1190,20 @@ class ClusterFile:
         return valid
 
     def save(self, force=False, confirm=False):
-        '''test all the new stuff and then actually write it out, if it passes
+        '''Test all live data and, if valid, write all live data to file
+
+        Passes the live data through the `test` method, and if valid, writes
+        and saves all data to the cluster data hdf file. If some tests are
+        invalid, will log a warning containing the specific reasons for failure
+
+        Parameters
+        ----------
+        force : bool, optional
+            If True, force the save even if some tests fail. Defaults to False
+
+        confirm : bool, optional
+            If True, prompts and waits for confirmation from user for each
+            write operation. Defaults to False
         '''
 
         valid = self.test()
@@ -1101,20 +1228,34 @@ class ClusterFile:
 
 # TODO *really* don't like the potential conflict with this and `fitter.Dataset`
 class Dataset:
+    '''Read and manage representation of a complete dataset
 
-    # Methods for constructing a Dataset, to be placed into the clusterfile
+    Representing the actual data to be stored in a `ClusterFile`, this class
+    contains all relevant methods for reading data (variables) from a variety
+    of sources, in a robust manner. Intimately tied to the `ClusterFile` class,
+    all datasets should be added to a cluster file using the
+    `ClusterFile.add_dataset` method.
 
-    # Read from a ClusterFile (for editing)
-    # Created brand new (to be filled with variables and metadata)
-    # Created based on a raw data file
-    #   This has to be somewhat robust, as we will want to use these raw files
-    #   for most data additions, and might need multiple files and specific
-    #   columns / rows for it.
-    #
-    #   Might actually be best to move that logic into some functions and just
-    #   init a new Dataset here, without existing variables, and add
-    #   them using the `add_variable` in those functions, or in ClusterFile if
-    #   has existing variables/metadata
+    Dataset's must be initialized with a key/name, and have all data added in
+    the form of "variables", either manually through the `add_variable` method,
+    or from a raw data source using the `read_data` method.
+
+    Parameters
+    ----------
+    key : str
+        Dataset name. Will be used as the group path in the cluster hdf file
+
+    Attributes
+    ----------
+    variables : dict
+        Dictionary of all currently added variables. All key's represent
+        variable names, while each entry must be a dictionary of "data", "unit"
+        and "metadata"
+
+    metadata : dict
+        Dictionary of any dataset-level metadata key-value pairs
+
+    '''
 
     def __repr__(self):
         return f"Dataset('{self.name}')"
@@ -1123,15 +1264,39 @@ class Dataset:
         return str(self.name)
 
     def __init__(self, key):
-        # both new and from the ClusterFile?
-        # maybe only give name, and rely on ClusterFile to populate everything,
-        # using add_* methods
 
         self.name = key
         self.metadata = {}
         self.variables = {}
 
     def add_variable(self, varname, data, unit, metadata, error_base=None):
+        '''Manually add a variable to this dataset
+
+        Populate an entry in this datasets `variables` dictionary with the
+        given information.
+
+        Parameters
+        ----------
+        varname : str
+            Name of variable. To be used as key in the `variables` dictionary
+
+        data : numpy.ndarray
+            Array of data representing this variable
+
+        unit : str or astropy.Unit
+            Unit of this variable. Either astropy unit or corresponding valid
+            unit name
+
+        metadata : dict
+            Dictionary of all variable-level metadata
+
+        error_base : str or None
+            If this variable represents the error or uncertainties on another
+            variable, providing the name of said variable will attempt to
+            format this data into the correct representation of an error.
+
+        '''
+
         # TODO it's probably fine if we don't require units here
         #   some actually don't require them, and we test later anyways
 
@@ -1147,6 +1312,7 @@ class Dataset:
             else:
                 varname = f'Δ{error_base}'
 
+        # Store all data in the variables dict
         self.variables[varname] = {
             "data": data,
             "unit": unit,
@@ -1154,20 +1320,31 @@ class Dataset:
         }
 
     def add_metadata(self, key, value):
+        '''Manually add a dataset-level metadata entry'''
         self.metadata[key] = value
 
     def read_data(self, src, **kwargs):
-        '''
-        based on src, send this off to different smaller more specific functions
+        '''Based on a raw data source, parse any variables into this dataset
 
-        get raw data from src, put it into this dataset
+        Given an arbitrary raw `src`, parse the input and send it to any
+        number of submethods which will attempt to extract any desired variables
+        from the input, and add them to this dataset.
+
+        Currently this method supports reading data from dictionaries,
+        hdf files, dataframes, delimited text files and raw strings.
         '''
         import pandas as pd
 
         def _from_dict(src, keys=None):
-            '''
-            src: dict of multiple "varname: variable" entries
-            keys: which of the keys in src to use, defaults to all of them
+            '''Read data from a dictionary of variables
+
+            Parameters
+            ----------
+            src: dict
+                Dictionary of multiple "name: variable" entries
+
+            keys: list of str, optional
+                List of which keys within `src` to use. Defaults to using all
             '''
             keys = keys or src.keys()
 
@@ -1182,10 +1359,20 @@ class Dataset:
                     self.add_variable(varname, **variable)
 
         def _from_hdffile(src, keys=None, grp='/', get_metadata=True):
-            '''
-            src : path to an hdf5 file
-            key : name of hdf-dataset in (if None, does all datasets in)
-            grp : name of hdf-group, defaults to root group
+            '''Read data from a `h5py.File` root group
+
+            Parameters
+            ----------
+            src : pathlib.Path
+                Path to a valid hdf5 file
+
+            key : list of str, optional
+                List of all hdf datasets to read from this group into variables.
+                Defaults to all children of this group
+
+            grp : str, optional
+                Name of the desired hdf-group within the file. Defaults to the
+                root group, at "/"
             '''
 
             with h5py.File(src, 'r') as hdf:
@@ -1206,20 +1393,34 @@ class Dataset:
         def _from_dataframe(df, keys=None, filter_=None, empty_ok=False,
                             units=None, metadata=None, names=None, errors=None,
                             **kwargs):
-            '''
-            called by other methods which split up or read files and stuff and
-            then pass it here as a pandas dataframe
+            '''Read data from a `pandas.Dataframe`
 
-            df: dataframe
-            keys : name of columns to store (if None, uses all)
-            filter_, filter: constraints we should filter the dataframe on, like
-                "where column x is equal to RV" and stuff like that
-                list of valid queries, for use in df.query
-            units : dict of unit strings for each `key`. If None, all are None
-            metadata : is just a dict of metadata to pass on to the self, idk
-            names : a mapping of `keys` to variable names you want
-            errors : a mapping of one `key` to other `key`, indicating that the
-                first key is an uncertainty of the second
+            Parameters
+            ----------
+            df : pandas.Dataframe
+                Dataframe to read data from
+
+            keys : list of str, optional
+                List of columns to read from this dataframe. Dataframe must have
+                named columns. By default, uses all
+
+            filter_, filter : str or list of str, optional
+                Filtering constraints to filter the given dataframe on. Must be
+                valid string queries for the dataframe `query` method.
+
+            units : dict, optional
+                Dictionary of unit strings for each `key`. Defaults to None for
+                all variables
+
+            names : dict, optional
+                A mapping of `keys` to custom variable names. Allows for
+                changing of column names to match required standard variable
+                names
+
+            errors : dict, optional
+                A mapping of any `key` to a different `key`, indicating that the
+                first key is an error on the second. This changes what is passed
+                to the `error_base` arg of `add_variable`
             '''
 
             if units is None:
@@ -1263,6 +1464,23 @@ class Dataset:
                 self.add_variable(varname, data, unit, metadata, err)
 
         def _from_delimfile(src, delim=None, comment='#', **kwargs):
+            '''Read  data from a delimited plain-text file
+
+            Parameters
+            ----------
+            src : str, pathlib.Path or file-like object
+                File, either as path to or IO-object, from which to read data
+
+            delim : str, optional
+                Column delimiter to use
+
+            comment : str, optional
+                Character used to indicate the beginning of a comment line.
+                Defaults to '#'
+
+            **kwargs : dict, optional
+                All extra keyword arguments are pass to `_from_dataframe`
+            '''
 
             # read file into dataframe
             df = pd.read_table(src, sep=delim, comment=comment)
