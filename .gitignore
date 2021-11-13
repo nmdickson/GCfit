@@ -23,3 +23,6 @@ devnotes*
 *.cb
 *.cb2
 .*.lb
+
+# docs
+docs/build
