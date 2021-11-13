@@ -20,11 +20,8 @@ Globular Cluster data products, via a parallelized sampling suite.
 
    installation
    fitting
-      mcmc
-      nested sampling
-         plateau weights
-   data standards/requirements
+   data standards <standards>
    examples
    citing
-   common errors
+   common errors <errors>
    API <ref/api>
