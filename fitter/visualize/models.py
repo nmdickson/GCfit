@@ -1513,19 +1513,27 @@ class ModelVisualizer(_ClusterVisualizer):
     # TODO alot of these init functions could be more homogenous
     @_ClusterVisualizer._support_units
     def _init_numdens(self, model, observations):
-
-        obs_nd = observations['number_density']
-        obs_r = obs_nd['r'].to(model.r.unit)
+        # TODO make this more robust and cleaner
 
         model_nd = model.Sigmaj / model.mj[:, np.newaxis]
 
         nd = np.empty(model_nd.shape)[:, np.newaxis, :] << model_nd.unit
 
+        # If have nd obs, apply scaling factor K
         for mbin in range(model_nd.shape[0]):
-            nd_interp = util.QuantitySpline(model.r, model_nd[mbin, :])
 
-            K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_nd['Σ']**2)
-                 / np.nansum(nd_interp(obs_r)**2 / obs_nd['Σ']**2))
+            try:
+
+                obs_nd = observations['number_density']
+                obs_r = obs_nd['r'].to(model.r.unit)
+
+                nd_interp = util.QuantitySpline(model.r, model_nd[mbin, :])
+
+                K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_nd['Σ']**2)
+                     / np.nansum(nd_interp(obs_r)**2 / obs_nd['Σ']**2))
+
+            except KeyError:
+                K = 1
 
             nd[mbin, 0, :] = K * model_nd[mbin, :]
 
@@ -2053,15 +2061,20 @@ class CIModelVisualizer(_ClusterVisualizer):
 
     def _init_numdens(self, model, equivs=None):
 
-        obs_nd = self.obs['number_density']
-        obs_r = obs_nd['r'].to(model.r.unit, equivs)
-
         model_nd = model.Sigmaj[model.nms - 1] / model.mj[model.nms - 1]
 
-        nd_interp = util.QuantitySpline(model.r, model_nd)
+        try:
 
-        K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_nd['Σ']**2)
-             / np.nansum(nd_interp(obs_r)**2 / obs_nd['Σ']**2))
+            obs_nd = self.obs['number_density']
+            obs_r = obs_nd['r'].to(model.r.unit, equivs)
+
+            nd_interp = util.QuantitySpline(model.r, model_nd)
+
+            K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_nd['Σ']**2)
+                 / np.nansum(nd_interp(obs_r)**2 / obs_nd['Σ']**2))
+
+        except KeyError:
+            K = 1
 
         return K * nd_interp(self.r)
 
