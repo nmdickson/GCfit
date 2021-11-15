@@ -753,15 +753,15 @@ class NestedVisualizer(_RunVisualizer):
 
         return bnds
 
-    # TODO how we handle current_batch stuff will probably need to be sorted out
-    def _get_chains(self, current_batch=False, include_fixed=True):
+    # TODO some ways of handling and plotting initial_batch only clusters
+    def _get_chains(self, include_fixed=True):
         '''for nested sampling results (current Batch)'''
 
-        if current_batch:
-            chain = self.file[self._gname]['current_batch']['vstar'][:]
-
-        else:
+        try:
             chain = self.file[self._gname]['samples'][:]
+        except KeyError as err:
+            mssg = f'{err.args[0]}. This run may not yet have converged'
+            raise KeyError(mssg)
 
         labels = list(self.obs.initials)
 
