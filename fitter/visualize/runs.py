@@ -854,13 +854,15 @@ class NestedVisualizer(_RunVisualizer):
 
         else:
             labels, chain = self._get_equal_weight_chains()
-
             return ModelVisualizer.from_chain(chain, self.obs, method)
 
-    def get_CImodel(self, N=100, Nprocesses=1, add_errors=False):
+    def get_CImodel(self, N=100, Nprocesses=1, add_errors=False, shuffle=True):
         import multiprocessing
 
         labels, chain = self._get_equal_weight_chains(add_errors=add_errors)
+
+        if shuffle:
+            np.random.default_rng().shuffle(chain, axis=0)
 
         with multiprocessing.Pool(processes=Nprocesses) as pool:
             return CIModelVisualizer.from_chain(chain, self.obs, N, pool=pool)
