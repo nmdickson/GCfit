@@ -1736,8 +1736,8 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         huge_model = Model(chain[np.argmax(chain[:, 4])], viz.obs)
 
-        max_r = huge_model.rt
-        viz.r = np.r_[0, np.geomspace(1e-5, max_r.value, num=99)] << u.pc
+        viz.rt = huge_model.rt
+        viz.r = np.r_[0, np.geomspace(1e-5, viz.rt.value, num=99)] << u.pc
 
         viz.rlims = (9e-3, viz.r.max() + (5 << viz.r.unit))
 
