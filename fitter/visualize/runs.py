@@ -871,12 +871,16 @@ class NestedVisualizer(_RunVisualizer):
     # Plots
     # ----------------------------------------------------------------------
 
-    def plot_marginals(self, fig=None, **corner_kw):
+    def plot_marginals(self, fig=None, full_volume=False, **corner_kw):
         import corner
+        # TODO the formatting of this is still ugly, check out dyplot's version
 
         fig, ax = self._setup_multi_artist(fig, shape=None)
 
-        labels, chain = self._get_chains()
+        if full_volume:
+            labels, chain = self._get_chains()
+        else:
+            labels, chain = self._get_equal_weight_chains()
 
         chain = chain.reshape((-1, chain.shape[-1]))
 
