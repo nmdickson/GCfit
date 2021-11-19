@@ -2,6 +2,7 @@ from .models import CIModelVisualizer, ModelVisualizer
 from ..probabilities import priors
 
 import sys
+import warnings
 
 import h5py
 import numpy as np
@@ -12,6 +13,7 @@ import matplotlib.colors as mpl_clr
 __all__ = ['MCMCVisualizer', 'NestedVisualizer']
 
 
+# TODO a way to plot our priors, probably for both vizs
 class _RunVisualizer:
     '''base class for all visualizers of all run types'''
 
@@ -158,49 +160,6 @@ class _RunVisualizer:
 
             else:
                 fig, axarr = create_axes(fig, shape)
-
-        # ------------------------------------------------------------------
-        # If desired, default to titling the figure based on it's "name"
-        # ------------------------------------------------------------------
-
-        if hasattr(self, 'name') and use_name:
-            fig.suptitle(self.name)
-
-        # ------------------------------------------------------------------
-        # Ensure the axes are always returned in an array
-        # ------------------------------------------------------------------
-
-        return fig, np.atleast_1d(axarr)
-
-        # ------------------------------------------------------------------
-        # Create figure, if necessary
-        # ------------------------------------------------------------------
-
-        if fig is None:
-            fig = plt.figure(constrained_layout=constrained_layout)
-
-        # ------------------------------------------------------------------
-        # If no shape is provided, just return the figure, probably empty
-        # ------------------------------------------------------------------
-
-        if shape is None:
-            axarr = []
-
-        # ------------------------------------------------------------------
-        # Otherwise attempt to first grab this figures axes, or create them
-        # ------------------------------------------------------------------
-
-        else:
-
-            # this fig has axes, check that they match shape
-            if axarr := fig.axes:
-                if axarr.shape != shape:
-                    mssg = (f"figure {fig} already contains axes with "
-                            f"mismatched shape ({axarr.shape} != {shape})")
-                    raise ValueError(mssg)
-
-            else:
-                fig, axarr = create_axes(fig, shape, **sub_kw)
 
         # ------------------------------------------------------------------
         # If desired, default to titling the figure based on it's "name"
@@ -371,6 +330,32 @@ class MCMCVisualizer(_RunVisualizer):
     # TODO method which creates a mask array for walkers based on a condition
     #   i.e. "walkers where final delta > 0.35" or something
 
+    def _reconstruct_priors(self):
+        '''based on the stored "specified_priors" get a PriorTransform object'''
+
+        if not self.has_meta:
+            raise AttributeError("No metadata stored in file")
+
+        stored_priors = self.file['metadata']['specified_priors'].attrs
+        fixed = self.file['metadata']['fixed_params'].attrs
+
+        prior_params = {}
+
+        for key in list(self.obs.initials):
+            try:
+                type_ = stored_priors[f'{key}_type'].decode('utf-8')
+                args = stored_priors[f'{key}_args']
+
+                if args.dtype.kind == 'S':
+                    args = args.astype('U')
+
+                prior_params[key] = (type_, *args)
+            except KeyError:
+                continue
+
+        prior_kwargs = {'fixed_initials': fixed, 'err_on_fail': False}
+        return priors.Priors(prior_params, **prior_kwargs)
+
     # ----------------------------------------------------------------------
     # Model Visualizers
     # ----------------------------------------------------------------------
@@ -396,6 +381,8 @@ class MCMCVisualizer(_RunVisualizer):
     # ----------------------------------------------------------------------
 
     def plot_chains(self, fig=None):
+
+        # TODO maybe make this match Nested's `plot_params` more
 
         labels, chain = self._get_chains()
 
@@ -459,6 +446,8 @@ class MCMCVisualizer(_RunVisualizer):
     def plot_params(self, params, quants=None, fig=None, *,
                     colors=None, math_labels=None, bins=None):
         # TODO handle colors in more plots, and handle iterator based colors
+
+        # TODO make the names of plots match more between MCMC and nested
 
         fig, ax = self._setup_multi_artist(fig, shape=(1, len(params)))
 
@@ -639,7 +628,35 @@ class NestedVisualizer(_RunVisualizer):
 
     @property
     def weights(self):
-        return np.exp(self.results.logwt - self.results.logz[-1])
+
+        from dynesty.dynamicsampler import weight_function
+
+        # If maxfrac is added as arg, make sure to add here as well
+        if self.has_meta:
+            stop_kw = {'pfrac': self.file['metadata'].attrs['pfrac']}
+        else:
+            stop_kw = {}
+
+        return weight_function(self.results, stop_kw, return_weights=True)[1][2]
+
+    @property
+    def ESS(self):
+        '''effective sample size'''
+        from scipy.special import logsumexp
+        logwts = self.results.logwt
+        logneff = logsumexp(logwts) * 2 - logsumexp(logwts * 2)
+        return np.exp(logneff)
+
+    @property
+    def _resampled_weights(self):
+        from scipy.stats import gaussian_kde
+        from dynesty.utils import resample_equal
+
+        # "resample" logvols so they all have equal weights
+        eq_logvol = resample_equal(-self.results.logvol, self.weights)
+
+        # Compute the KDE of resampled logvols and evaluate on normal logvols
+        return gaussian_kde(eq_logvol)(-self.results.logvol)
 
     def __init__(self, file, observations, group='nested', name=None):
 
@@ -680,7 +697,7 @@ class NestedVisualizer(_RunVisualizer):
 
         for k, d in res.items():
 
-            if k in ('current_batch', 'bound'):
+            if k in ('current_batch', 'initial_batch', 'bound'):
                 continue
 
             if d.shape and (d.shape[0] == res['logl'].shape[0]):
@@ -732,19 +749,19 @@ class NestedVisualizer(_RunVisualizer):
                 bnds.append(bounding.SupFriends(ndim=ndim, cov=cov))
 
             else:
-                raise RuntimeError('unrecognized type ', btype)
+                raise RuntimeError('unrecognized bound type ', btype)
 
         return bnds
 
-    # TODO how we handle current_batch stuff will probably need to be sorted out
-    def _get_chains(self, current_batch=False, include_fixed=True):
+    # TODO some ways of handling and plotting initial_batch only clusters
+    def _get_chains(self, include_fixed=True):
         '''for nested sampling results (current Batch)'''
 
-        if current_batch:
-            chain = self.file[self._gname]['current_batch']['vstar'][:]
-
-        else:
+        try:
             chain = self.file[self._gname]['samples'][:]
+        except KeyError as err:
+            mssg = f'{err.args[0]}. This run may not yet have converged'
+            raise KeyError(mssg)
 
         labels = list(self.obs.initials)
 
@@ -765,6 +782,39 @@ class NestedVisualizer(_RunVisualizer):
                     del labels[i]
 
         return labels, chain
+
+    def _get_equal_weight_chains(self, include_fixed=True, add_errors=False):
+        from dynesty.utils import resample_equal
+
+        if add_errors is False:
+            chain = self.file[self._gname]['samples'][:]
+            eq_chain = resample_equal(chain, self.weights)
+
+        else:
+            from dynesty.dynamicsampler import weight_function
+            sim_run = self._sim_errors(1)[0]
+            sim_wt = weight_function(sim_run, {'pfrac': 1.}, True)[1][2]
+            eq_chain = resample_equal(sim_run.samples, sim_wt)
+
+        labels = list(self.obs.initials)
+
+        if self.has_meta:
+
+            fixed = sorted(
+                ((k, v, labels.index(k)) for k, v in
+                 self.file['metadata']['fixed_params'].attrs.items()),
+                key=lambda item: labels.index(item[0])
+            )
+
+            if include_fixed:
+                for k, v, i in fixed:
+                    labels[i] += ' (fixed)'
+                    eq_chain = np.insert(eq_chain, i, v, axis=-1)
+            else:
+                for *_, i in reversed(fixed):
+                    del labels[i]
+
+        return labels, eq_chain
 
     def _reconstruct_priors(self):
         '''based on the stored "specified_priors" get a PriorTransform object'''
@@ -796,16 +846,23 @@ class NestedVisualizer(_RunVisualizer):
     # Model Visualizers
     # ----------------------------------------------------------------------
 
-    def get_model(self, method='median'):
+    def get_model(self, method='mean'):
 
-        labels, chain = self._get_chains()
+        if method == 'mean':
+            theta = self.parameter_means()[0]
+            return ModelVisualizer.from_theta(theta, self.obs)
 
-        return ModelVisualizer.from_chain(chain, self.obs, method)
+        else:
+            labels, chain = self._get_equal_weight_chains()
+            return ModelVisualizer.from_chain(chain, self.obs, method)
 
-    def get_CImodel(self, N=100, Nprocesses=1):
+    def get_CImodel(self, N=100, Nprocesses=1, add_errors=False, shuffle=True):
         import multiprocessing
 
-        labels, chain = self._get_chains()
+        labels, chain = self._get_equal_weight_chains(add_errors=add_errors)
+
+        if shuffle:
+            np.random.default_rng().shuffle(chain, axis=0)
 
         with multiprocessing.Pool(processes=Nprocesses) as pool:
             return CIModelVisualizer.from_chain(chain, self.obs, N, pool=pool)
@@ -814,12 +871,16 @@ class NestedVisualizer(_RunVisualizer):
     # Plots
     # ----------------------------------------------------------------------
 
-    def plot_marginals(self, fig=None, **corner_kw):
+    def plot_marginals(self, fig=None, full_volume=False, **corner_kw):
         import corner
+        # TODO the formatting of this is still ugly, check out dyplot's version
 
         fig, ax = self._setup_multi_artist(fig, shape=None)
 
-        labels, chain = self._get_chains()
+        if full_volume:
+            labels, chain = self._get_chains()
+        else:
+            labels, chain = self._get_equal_weight_chains()
 
         chain = chain.reshape((-1, chain.shape[-1]))
 
@@ -839,6 +900,8 @@ class NestedVisualizer(_RunVisualizer):
 
         # TODO id rather use contours or polygons showing the bounds,
         #   rather than how dyplot does it by sampling a bunch of random points
+
+        # TODO doesnt work for some bound types (like balls)
 
         # TODO this doesn't seem to work the same way corner did
         # fig = self._setup_multi_artist(fig, shape=(10,10))
@@ -876,3 +939,406 @@ class NestedVisualizer(_RunVisualizer):
         fig[0].legend(handles=legends)
 
         return fig[0]
+
+    def plot_weights(self, fig=None, ax=None, show_bounds=False,
+                     resampled=False, filled=False, **kw):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        wts = self._resampled_weights if resampled else self.weights
+
+        line, = ax.plot(-self.results.logvol, wts, **kw)
+
+        if filled:
+            color = mpl_clr.to_rgb(line.get_color())
+            facecolor = color + (0.33, )
+
+            ax.fill_between(-self.results.logvol, 0, wts,
+                            color=color, fc=facecolor)
+
+        if show_bounds:
+            if self.has_meta:
+                maxfrac = self.file['metadata'].attrs['maxfrac']
+
+            else:
+                maxfrac = 0.8
+
+                mssg = "No metadata stored in file, `maxfrac` defaults to 80%"
+                warnings.warn(mssg)
+
+            ax.axhline(maxfrac * max(wts), c='g')
+
+        ax.set_ylabel('weights')
+        ax.set_xlabel(r'$-\ln(X)$')
+
+        return fig
+
+    def plot_probability(self, fig=None, ax=None, **kw):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        finite = self.results.logl > -1e300
+
+        ax.plot(-self.results.logvol[finite], self.results.logl[finite], **kw)
+
+        ax.set_ylabel('Total Log Likelihood')
+        ax.set_xlabel(r'$-\ln(X)$')
+
+        return fig
+
+    def plot_evidence(self, fig=None, ax=None, error=False, **kw):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        finite = self.results.logz > -1e300
+
+        logvol = self.results.logvol[finite]
+        logz = self.results.logz[finite]
+
+        line, = ax.plot(-logvol, logz, **kw)
+
+        if error:
+            err_up = logz + self.results.logzerr[finite]
+            err_down = logz - self.results.logzerr[finite]
+
+            ax.fill_between(-logvol, err_up, err_down,
+                            color=line.get_color(), alpha=0.5)
+
+        ax.set_ylabel(r'Estimated Evidence $\log(Z)$')
+        ax.set_xlabel(r'$-\ln(X)$')
+
+        return fig
+
+    def plot_H(self, fig=None, ax=None, **kw):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        finite = self.results.information > -1e250
+
+        logvol = self.results.logvol[finite]
+
+        ax.plot(-logvol, self.results.information[finite], **kw)
+
+        ax.set_ylabel(r'Information $H \equiv \int_{\Omega_{\Theta}} '
+                      r'P(\Theta)\ln\frac{P(\Theta)}{\pi(\Theta)} \,d\Theta$')
+        ax.set_xlabel(r'$-\ln(X)$')
+
+        return fig
+
+    def plot_HN(self, fig=None, ax=None, **kw):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        finite = self.results.information > -1e250
+
+        HN = self.results.information * self.results.samples_n
+
+        ax.plot(HN[finite], **kw)
+
+        x = np.arange(0, HN[finite].size)
+        ax.plot(x, c='k', alpha=0.15)
+
+        ax.set_ylabel(r'HN')
+        ax.set_xlabel('Iteration')
+
+        return fig
+
+    def plot_nlive(self, fig=None, ax=None, **kw):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        ax.plot(-self.results.logvol, self.results.samples_n, **kw)
+
+        ax.set_ylabel(r'Number of live points')
+        ax.set_xlabel(r'$-\ln(X)$')
+
+        return fig
+
+    def plot_ncall(self, fig=None, ax=None, **kw):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        kw.setdefault('where', 'mid')
+
+        ax.step(-self.results.logvol, self.results.ncall, **kw)
+
+        ax.set_ylabel(r'Number of likelihood calls')
+        ax.set_xlabel(r'$-\ln(X)$')
+
+        return fig
+
+    def plot_KL_divergence(self, fig=None, ax=None, Nruns=100,
+                           kl_kwargs=None, **kw):
+        from dynesty.utils import kld_error
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        if kl_kwargs is None:
+            kl_kwargs = {}
+
+        kw.setdefault('color', 'b')
+        kw.setdefault('alpha', 0.25)
+
+        for _ in range(Nruns):
+
+            KL = kld_error(self.results, **kl_kwargs)
+
+            ax.plot(KL, **kw)
+
+        ax.set_ylabel('KL Divergence')
+        ax.set_xlabel('Iterations')
+
+        return fig
+
+    def plot_params(self, fig=None, params=None, *,
+                    posterior_color='tab:blue', posterior_border=True,
+                    show_weight=True, fill_type='weights', ylims=None,
+                    truths=None, **kw):
+
+        from scipy.stats import gaussian_kde
+        from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+        # ------------------------------------------------------------------
+        # Setup plotting kwarg defaults
+        # ------------------------------------------------------------------
+
+        color = mpl_clr.to_rgb(posterior_color)
+        facecolor = color + (0.33, )
+
+        kw.setdefault('marker', '.')
+
+        # ------------------------------------------------------------------
+        # Determine which property will define the color-scale of the samples
+        # ------------------------------------------------------------------
+
+        if fill_type in ('weights', 'weight', 'wts', 'wt', 'logwt'):
+            c = self._resampled_weights
+
+        elif fill_type in ('iterations', 'iters', 'samples_it'):
+            c = self.results.samples_it
+
+        elif fill_type in ('id', 'samples_id'):
+            c = self.results.samples_id
+
+        elif fill_type in ('batch', 'samples_batch'):
+            # TODO when showing batches, make the initial sample distinguishable
+            c = self.results.samples_batch
+
+        elif fill_type in ('bound', 'samples_bound'):
+            c = self.results.samples_bound
+
+        else:
+            mssg = ('Invalid fill type, must be one of '
+                    '{weights, iters, id, batch, bound}')
+            raise ValueError(mssg)
+
+        # ------------------------------------------------------------------
+        # Get the sample chains (weighted and unweighted), paring down the
+        # chains to only the desired params, if provided
+        # ------------------------------------------------------------------
+
+        labels, chain = self._get_chains()
+        eq_chain = self._get_equal_weight_chains()[1]
+
+        # params is None or a list of string labels
+        if params is not None:
+            prm_inds = [labels.index(p) for p in params]
+
+            labels = params
+            chain, eq_chain = chain[..., prm_inds], eq_chain[..., prm_inds]
+
+        # ------------------------------------------------------------------
+        # Setup the truth values and confidence intervals
+        # ------------------------------------------------------------------
+
+        if truths is not None and truths.ndim == 2:
+            # Assume confidence bounds rather than single truth value
+
+            truth_ci = truths[:, 1:]
+            truths = truths[:, 0]
+
+        else:
+            truth_ci = None
+
+        # ------------------------------------------------------------------
+        # Setup axes
+        # ------------------------------------------------------------------
+
+        if ylims is None:
+            ylims = [(None, None)] * len(labels)
+
+        elif len(ylims) != len(labels):
+            mssg = "`ylims` must match number of params"
+            raise ValueError(mssg)
+
+        gs_kw = {}
+
+        if (shape := len(labels) + show_weight) > 5 + show_weight:
+            shape = (int(np.ceil(shape / 2)) + show_weight, 2)
+
+            if show_weight:
+                gs_kw = {"height_ratios": [0.5] + [1] * (shape[0] - 1)}
+
+        fig, axes = self._setup_multi_artist(fig, shape, sharex=True,
+                                             gridspec_kw=gs_kw)
+
+        axes = axes.reshape(shape)
+
+        for ax in axes[-1]:
+            ax.set_xlabel(r'$-\ln(X)$')
+
+        # ------------------------------------------------------------------
+        # If showing weights explicitly, format the ax and use the
+        # `plot_weights` method
+        # ------------------------------------------------------------------
+
+        if show_weight:
+            for ax in axes[0]:
+                # plot weights above scatter plots
+                # TODO figure out what colors to use
+                self.plot_weights(fig=fig, ax=ax, resampled=True, filled=True,
+                                  color=self._cmap(np.inf))
+
+                ax.set_xticklabels([])
+                ax.set_xlabel(None)
+                ax.set_yticklabels([])
+                ax.set_ylabel(None)
+
+                # Theres probably a cleaner way to do this
+                divider = make_axes_locatable(ax)
+                spacer = divider.append_axes('right', size="25%", pad=0)
+                spacer.set_visible(False)
+
+        # ------------------------------------------------------------------
+        # Plot each parameter
+        # ------------------------------------------------------------------
+
+        for ind, ax in enumerate(axes[1:].flatten()):
+
+            # --------------------------------------------------------------
+            # Get the relevant samples.
+            # If necessary, remove any unneeded axes
+            # (should be handled by above todo)
+            # --------------------------------------------------------------
+
+            try:
+                prm, eq_prm = chain[:, ind], eq_chain[:, ind]
+                lbl = labels[ind]
+            except IndexError:
+                # If theres an odd number of (>5) params need to delete last one
+                # TODO preferably this would also resize this column of plots
+                ax.remove()
+                continue
+
+            # --------------------------------------------------------------
+            # Divide the ax to accomodate the posterior plot on the right
+            # --------------------------------------------------------------
+
+            divider = make_axes_locatable(ax)
+            post_ax = divider.append_axes('right', size="25%", pad=0, sharey=ax)
+
+            post_ax.set_xticks([])
+
+            # --------------------------------------------------------------
+            # Plot the samples with respect to ln(X)
+            # --------------------------------------------------------------
+
+            # TODO the y tick values have disappeared should be on the last axis
+            ax.scatter(-self.results.logvol, prm, c=c, cmap=self._cmap, **kw)
+
+            ax.set_ylabel(lbl)
+            ax.set_xlim(left=0)
+
+            # --------------------------------------------------------------
+            # Plot the posterior distribution (accounting for weights)
+            # --------------------------------------------------------------
+
+            kde = gaussian_kde(eq_prm)
+
+            y = np.linspace(eq_prm.min(), eq_prm.max(), 500)
+
+            post_ax.fill_betweenx(y, 0, kde(y), color=color, fc=facecolor)
+
+            if truths is not None:
+                post_ax.axhline(truths[ind], c='tab:red')
+
+                if truth_ci is not None:
+                    post_ax.axhspan(*truth_ci[ind], color='tab:red', alpha=0.33)
+
+            if not posterior_border:
+                post_ax.axis('off')
+
+            # TODO maybe put ticks on right side as well?
+            for tk in post_ax.get_yticklabels():
+                tk.set_visible(False)
+
+            post_ax.set_xlim(left=0)
+
+            ax.set_ylim(ylims[ind])
+
+        return fig
+
+    # ----------------------------------------------------------------------
+    # Parameter estimation
+    # ----------------------------------------------------------------------
+
+    def _sim_errors(self, Nruns=250):
+        '''add the statistical and sampling errors not normally accounted for
+        by using the built-in `simulate_run` function (resamples and jitters)
+
+        returns list `Nruns` results
+        '''
+        from dynesty.utils import simulate_run
+
+        return [simulate_run(self.results) for _ in range(Nruns)]
+
+    def parameter_means(self, Nruns=250, sim_runs=None, return_samples=True):
+        '''
+        return the means of each parameter, and the corresponding error on that
+        mean
+        errors come from the two main sources of error present in nested
+        sampling and are computed using the standard deviation of the mean
+        from `Nruns` simulated (resampled and jittered) runs of this sampling
+        run. See https://dynesty.readthedocs.io/en/latest/errors.html for more
+        '''
+        from dynesty.utils import mean_and_cov
+
+        if sim_runs is None:
+            sim_runs = self._sim_errors(Nruns)
+
+        means = []
+        for res in sim_runs:
+            wt = np.exp(res.logwt - res.logz[-1])
+            means.append(mean_and_cov(res.samples, wt)[0])
+
+        mean = np.mean(means, axis=0)
+        err = np.std(means, axis=0)
+
+        if return_samples:
+            return mean, err, np.array(means)
+        else:
+            return mean, err
+
+    def parameter_vars(self, Nruns=250, sim_runs=None, return_samples=True):
+        '''
+        return the variance of each parameter, and the corresponding error on
+        that variance
+        See `parameter_means` for more
+        '''
+        from dynesty.utils import mean_and_cov
+
+        if sim_runs is None:
+            sim_runs = self._sim_errors(Nruns)
+
+        vars_ = []
+        for res in sim_runs:
+            wt = np.exp(res.logwt - res.logz[-1])
+            vars_.append(mean_and_cov(res.samples, wt)[1])
+
+        mean = np.mean(vars_, axis=0)
+        err = np.std(vars_, axis=0)
+
+        if return_samples:
+            return mean, err, np.array(vars_)
+        else:
+            return mean, err

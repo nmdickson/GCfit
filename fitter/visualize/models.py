@@ -329,6 +329,7 @@ class _ClusterVisualizer:
         kwargs.setdefault('linestyle', 'None')
         kwargs.setdefault('color', defaultcolour)
 
+        # TODO should try to cite, but if that fails just use raw bibcode?
         label = dataset.cite()
         if 'm' in dataset.mdata:
             label += fr' ($m={dataset.mdata["m"]}\ M_\odot$)'
@@ -1514,19 +1515,27 @@ class ModelVisualizer(_ClusterVisualizer):
     # TODO alot of these init functions could be more homogenous
     @_ClusterVisualizer._support_units
     def _init_numdens(self, model, observations):
-
-        obs_nd = observations['number_density']
-        obs_r = obs_nd['r'].to(model.r.unit)
+        # TODO make this more robust and cleaner
 
         model_nd = model.Sigmaj / model.mj[:, np.newaxis]
 
         nd = np.empty(model_nd.shape)[:, np.newaxis, :] << model_nd.unit
 
+        # If have nd obs, apply scaling factor K
         for mbin in range(model_nd.shape[0]):
-            nd_interp = util.QuantitySpline(model.r, model_nd[mbin, :])
 
-            K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_nd['Σ']**2)
-                 / np.nansum(nd_interp(obs_r)**2 / obs_nd['Σ']**2))
+            try:
+
+                obs_nd = observations['number_density']
+                obs_r = obs_nd['r'].to(model.r.unit)
+
+                nd_interp = util.QuantitySpline(model.r, model_nd[mbin, :])
+
+                K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_nd['Σ']**2)
+                     / np.nansum(nd_interp(obs_r)**2 / obs_nd['Σ']**2))
+
+            except KeyError:
+                K = 1
 
             nd[mbin, 0, :] = K * model_nd[mbin, :]
 
@@ -1728,8 +1737,8 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         huge_model = Model(chain[np.argmax(chain[:, 4])], viz.obs)
 
-        max_r = huge_model.rt
-        viz.r = np.r_[0, np.geomspace(1e-5, max_r.value, num=99)] << u.pc
+        viz.rt = huge_model.rt
+        viz.r = np.r_[0, np.geomspace(1e-5, viz.rt.value, num=99)] << u.pc
 
         viz.rlims = (9e-3, viz.r.max() + (5 << viz.r.unit))
 
@@ -1795,11 +1804,13 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         # mass function
 
-        PI_list = viz.obs.filter_datasets('*mass_function*')
-        N_rbins = sum([np.unique(viz.obs[k]['r1']).size for k in PI_list])
-        N_mbins = huge_model.nms
+        massfunc = viz._prep_massfunc(viz.obs)
 
-        massfunc = np.empty((N, N_rbins, N_mbins))
+        # massfunc = np.empty((N, N_rbins, huge_model.nms))
+
+        for rbins in massfunc.values():
+            for rslice in rbins:
+                rslice['dNdm'] = np.empty((N, huge_model.nms))
 
         # BH mass
 
@@ -1832,7 +1843,6 @@ class CIModelVisualizer(_ClusterVisualizer):
         # relevant parameters
         # ------------------------------------------------------------------
 
-        # TODO should be pooled
         for model_ind, model in enumerate(_map(get_model, chain)):
 
             equivs = util.angular_width(model.d)
@@ -1871,8 +1881,11 @@ class CIModelVisualizer(_ClusterVisualizer):
             numdens[slc] = viz._init_numdens(model, equivs=equivs)
 
             # Mass Functions
+            for rbins in massfunc.values():
+                for rslice in rbins:
 
-            massfunc[model_ind, ...] = viz._init_massfunc(model, equivs=equivs)
+                    mf = rslice['dNdm']
+                    mf[model_ind, ...] = viz._init_dNdm(model, rslice, equivs)
 
             # Mass Fractions
 
@@ -1917,7 +1930,13 @@ class CIModelVisualizer(_ClusterVisualizer):
         viz.cum_M_NS = np.transpose(np.percentile(cum_M_NS, q, axis=1), axes)
 
         viz.numdens = np.transpose(np.percentile(numdens, q, axis=1), axes)
-        viz.mass_func = np.percentile(massfunc, q, axis=0)
+
+        viz.mass_func = massfunc
+
+        for rbins in viz.mass_func.values():
+            for rslice in rbins:
+
+                rslice['dNdm'] = np.percentile(rslice['dNdm'], q, axis=0)
 
         viz.frac_M_MS = np.percentile(frac_M_MS, q, axis=1)
         viz.frac_M_rem = np.percentile(frac_M_rem, q, axis=1)
@@ -2054,59 +2073,76 @@ class CIModelVisualizer(_ClusterVisualizer):
 
     def _init_numdens(self, model, equivs=None):
 
-        obs_nd = self.obs['number_density']
-        obs_r = obs_nd['r'].to(model.r.unit, equivs)
-
         model_nd = model.Sigmaj[model.nms - 1] / model.mj[model.nms - 1]
 
-        nd_interp = util.QuantitySpline(model.r, model_nd)
+        try:
 
-        K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_nd['Σ']**2)
-             / np.nansum(nd_interp(obs_r)**2 / obs_nd['Σ']**2))
+            obs_nd = self.obs['number_density']
+            obs_r = obs_nd['r'].to(model.r.unit, equivs)
+
+            nd_interp = util.QuantitySpline(model.r, model_nd)
+
+            K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_nd['Σ']**2)
+                 / np.nansum(nd_interp(obs_r)**2 / obs_nd['Σ']**2))
+
+        except KeyError:
+            K = 1
 
         return K * nd_interp(self.r)
 
-    def _init_massfunc(self, model, equivs=None):
-        # TODO implement new mass funcs stuff (this is all broken now)
+    def _prep_massfunc(self, observations, *, cmap=None):
 
-        cen = (self.obs.mdata['RA'], self.obs.mdata['DEC'])
+        cmap = cmap or plt.cm.rainbow
+
+        massfunc = {}
+
+        cen = (observations.mdata['RA'], observations.mdata['DEC'])
+
+        PI_list = observations.filter_datasets('*mass_function*')
+
+        for i, (key, mf) in enumerate(PI_list.items()):
+
+            massfunc[key] = []
+
+            # TODO same colour for each PI or different for each slice?
+            clr = cmap(i / len(PI_list))
+
+            field = mass.Field.from_dataset(mf, cen=cen)
+
+            rbins = np.unique(np.c_[mf['r1'], mf['r2']], axis=0)
+            rbins.sort(axis=0)
+
+            for r_in, r_out in rbins:
+
+                this_slc = {'r1': r_in, 'r2': r_out}
+
+                field_slice = field.slice_radially(r_in, r_out)
+
+                this_slc['field'] = field_slice
+
+                this_slc['colour'] = clr
+
+                massfunc[key].append(this_slc)
+
+        return massfunc
+
+    def _init_dNdm(self, model, rslice, equivs=None):
+        '''returns dndm for this model in this slice'''
 
         densityj = [util.QuantitySpline(model.r, model.Sigmaj[j])
                     for j in range(model.nms)]
 
-        PI_list = self.obs.filter_datasets('*mass_function*')
-        PI_list = sorted(PI_list, key=lambda k: self.obs[k]['r1'].min())
+        with u.set_enabled_equivalencies(equivs):
+            sample_radii = rslice['field'].MC_sample(300).to(u.pc)
 
-        N_rbins = sum([np.unique(self.obs[k]['r1']).size for k in PI_list])
+            dNdm = np.empty(model.nms)
 
-        # In testing seems like all models have same nms, I hope thats the case
-        N_mbins = model.nms
+            for j in range(model.nms):
+                Nj = rslice['field'].MC_integrate(densityj[j], sample_radii)
+                widthj = (model.mj[j] * model.mes_widths[j])
+                dNdm[j] = (Nj / widthj).value
 
-        rbin_ind = -1
-
-        # TODO units?
-        mass_func = np.empty((N_rbins, N_mbins))
-
-        for key in PI_list:
-            mf = self.obs[key]
-
-            field = mass.Field.from_dataset(mf, cen=cen)
-
-            rbins = np.c_[mf['r1'], mf['r2']]
-
-            for r_in, r_out in np.unique(rbins, axis=0):
-                rbin_ind += 1
-
-                with u.set_enabled_equivalencies(equivs):
-                    field_slice = field.slice_radially(r_in, r_out)
-                    sample_radii = field_slice.MC_sample(300).to(u.pc)
-
-                    for j in range(model.nms):
-                        Nj = field_slice.MC_integrate(densityj[j], sample_radii)
-                        widthj = (model.mj[j] * model.mes_widths[j])
-                        mass_func[rbin_ind, j] = (Nj / widthj).value
-
-        return mass_func
+        return dNdm
 
     # ----------------------------------------------------------------------
     # Save and load confidence intervals to a file
