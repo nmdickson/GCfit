@@ -34,50 +34,103 @@ The models used in ``GCfit`` are defined by 13 free parameters.
 
 6 physical parameters defining the system structure:
 
-#. W0
+* W0
     The central potential :math:`\hat{phi}_0`. Used as a boundary condition for
     solving Poisson’s equation and defines how concentrated the model is.
-#. M
+* M
     The total mass of the system, in all mass components. In units of
     :math:`10^6 M_\odot`.
-#. rh
+* rh
     The system half-mass radius, in parsecs.
-#. ra
+* ra
     The anisotropy-radius, which determines the amount of anisotropy in the
     system (higher ra values indicate more isotropy)
-#. g
+* g
     the truncation parameter g, which controls the sharpness of the truncation
     of the model
-#. delta
+* delta
     sets the mass dependance of the velocity scale for each mass component
     Maximum value of 1/2
 
-4 parameters defining the initial mass function:
+4 parameters defining the mass function:
 
-#. a1
+* a1
     The low-mass IMF exponent (0.1 to 0.5 :math:`M_\odot`)
-#. a2
+* a2
     The intermediate-mass IMF exponent (0.5 to 1.0 :math:`M_\odot`)
-#. a3
+* a3
     The high-mass IMF exponent (1.0 to 100 :math:`M_\odot`)
-#. BHret
+* BHret
     The percentage of black holes retained after dynamical ejections
 
 and 3 remaining parameters to aid in model fitting:
 
-#. s2
+* s2
     Nuisance parameter applied as an additional unknown uncertainty to all
     number density profiles, allowing for small deviations between
     the outer parts of the model and observations
-#. F
+* F
     Nuisance parameter applied as an additional unknown uncertainty to all
     mass function profiles encapsulating possible additional sources of
     uncertainty
-#. d
+* d
     Distance to the cluster, in kiloparsecs. Mainly used for all conversions
     between observational (angular) and and model (linear) units.
 
-SSPTOOLS, IMFS
+
+Mass Function Evolution
+^^^^^^^^^^^^^^^^^^^^^^^
+
+The evolution of stars within the model from initial mass function, over
+the age of the cluster, to the present day stellar and remnant mass function
+is carried out using the `ssptools` library.
+
+The initial mass function (IMF) is defined by a broken power-law 
+distribution function:
+
+.. math::
+
+    \xi (m) \propto \begin{cases}
+        m^{-\alpha_1} & 0.1\ M_\odot < m \leq 0.5\ M_\odot \\
+        m^{-\alpha_2} & 0.5\ M_\odot < m \leq 1\ M_\odot \\
+        m^{-\alpha_3} & 1\ M_\odot < m \leq 100\ M_\odot \\
+    \end{cases}
+
+where the :math:`\alpha` parameters are defined by the parameters above, and
+:math:`\xi(m) \Delta m` is the number of stars with masses within the range
+:math:`m + \Delta m`. This function determines the initial distribution of the
+cluster total mass.
+
+To evolve to the present day population of stars, the rate of change of
+main-sequence stars in each mass bin is given by the equation:
+
+.. math::
+
+    \dot{N} (m_{to}) = - \left.\frac{dN}{dm}\right|_{m_{to}} \left|\frac{dm_{to}}{dt}\right|
+
+where the rate of change of the turn-off mass (:math:`m_{to}`) can be derived
+from an approximation of the main-sequence lifetime of stars, based on stellar
+evolution models (Dotter et al. 2007, 2008).
+
+As these stars evolve off of the main sequence, the stellar remnants they will
+form will depend (both in type and in mass) on their initial mass and the
+metallicity of the cluster. The maximum initial mass which will form a white
+dwarf and the minimum initial mass which allows for black hole formation are
+determined from stellar evolution models, and vary with metallicity.
+Initial-final mass relations (IFMRs) for both are also determined from these
+models and are similarly metallicity-dependant. All stars within this mass
+range will form neutron stars, always with a mass of :math:`1.4\ M_\odot`.
+
+The other avenue for mass loss is through the escape of stars and
+remnants past the cluster tidal radius, lost to the potential of the host
+galaxy.
+
+Stellar losses are dominated by the escape of low-mass stars in the outer edges
+of the cluster. Lacking a precise method for determining the overall losses,
+which will depend on the cluster potential and galactic orbit, we opt to
+disallow the escape of any stars.
+
+TODO Remnant losses
 
 Observations
 ============
