@@ -35,7 +35,7 @@ The models used in ``GCfit`` are defined by 13 free parameters.
 6 physical parameters defining the system structure:
 
 * W0
-    The central potential :math:`\hat{phi}_0`. Used as a boundary condition for
+    The central potential :math:`\hat{\phi}_0`. Used as a boundary condition for
     solving Poisson’s equation and defines how concentrated the model is.
 * M
     The total mass of the system, in all mass components. In units of
@@ -46,11 +46,11 @@ The models used in ``GCfit`` are defined by 13 free parameters.
     The anisotropy-radius, which determines the amount of anisotropy in the
     system (higher ra values indicate more isotropy)
 * g
-    the truncation parameter g, which controls the sharpness of the truncation
-    of the model
+    The truncation parameter, which controls the sharpness of the outer density
+    truncation of the model
 * delta
-    sets the mass dependance of the velocity scale for each mass component
-    Maximum value of 1/2
+    Sets the mass dependance of the velocity scale for each mass component.
+    Maximum value of 0.5
 
 4 parameters defining the mass function:
 
@@ -124,7 +124,6 @@ range will form neutron stars, always with a mass of :math:`1.4\ M_\odot`.
 The other avenue for mass loss is through the escape of stars and
 remnants past the cluster tidal radius, lost to the potential of the host
 galaxy.
-
 Stellar losses are dominated by the escape of low-mass stars in the outer edges
 of the cluster. Lacking a precise method for determining the overall losses,
 which will depend on the cluster potential and galactic orbit, we opt to
@@ -134,6 +133,9 @@ TODO Remnant losses
 
 Observations
 ============
+
+All cluster models are fit by comparing physical parameters against a number of
+observed datasets.
 
 Probabilities
 =============
