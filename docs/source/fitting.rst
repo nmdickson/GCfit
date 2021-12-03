@@ -134,8 +134,28 @@ TODO Remnant losses
 Observations
 ============
 
-All cluster models are fit by comparing physical parameters against a number of
-observed datasets.
+All cluster models are fit by comparing model structures against a number of
+observed datasets containing measured information on the structure and
+kinematics of a specific cluster.
+
+Currently supported observational datasets include:
+
+* Proper Motion Dispersions
+    Radial, tangential or overall proper motion velocity dispersion profiles
+
+* LOS Velocity Dispersions
+    Velocity dispersion profiles along the line-of-sight
+    
+* Number Densities
+    Radial number density profiles
+
+* Mass Functions
+    Present day stellar mass functions (counts), binned radially and in mass
+
+* Pulsars Timing Solutions
+    Millisecond-pulsar timing solutions (period and period derivative), used to
+    constrain possible acceleration from the cluster potential
+
 
 Probabilities
 =============
