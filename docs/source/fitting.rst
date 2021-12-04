@@ -150,15 +150,117 @@ Currently supported observational datasets include:
     Radial number density profiles
 
 * Mass Functions
-    Present day stellar mass functions (counts), binned radially and in mass
+    Present day stellar mass functions (counts), binned radially and in mass.
+    Each dataset corresponds to an observed field on the sky, whose boundaries
+    must also be included.
 
 * Pulsars Timing Solutions
     Millisecond-pulsar timing solutions (period and period derivative), used to
     constrain possible acceleration from the cluster potential
 
+While these are the type of observables supported, not all are required at once,
+and multiple datasets corresponding to one type are permitted.
+
 
 Probabilities
 =============
+
+The probability associated with a given set of model :math:`M` parameters
+:math:`\Theta`, subject to some number of observable datasets :math:`D` is
+given by a simple bayesian posterior:
+
+.. math::
+    
+    P(\Theta \mid D, M) = \frac{P(D \mid \Theta,M)P(\Theta \mid M)}{P(D \mid M)}
+        \equiv \frac{\mathcal{L}(\Theta) \pi(\Theta)}{\mathcal{Z}}
+
+where :math:`\mathcal{L}` is the likelihood and :math:`\pi` is the prior
+likelihood.
+
+Likelihoods
+^^^^^^^^^^^
+
+The total (log) likelihood function :math:`\ln(\mathcal{L})` is given simply by
+the summation of all component likelihood functions.
+
+.. math::
+
+    \ln(\mathcal{L}) = \sum_i \ln(\mathcal{P(D_i \mid \Theta)})
+
+Every observational dataset has it's own component likelihood function, unique
+to the type of observable it is.
+
+All velocity dispersions (LOS and PM) use a simple gaussian log-likelihood over
+a number of dispersion measurements at different radial distances:
+
+.. math::
+
+    \ln(\mathcal{L}_i) = \frac{1}{2} \sum_r \left( \frac{(\sigma_{\rm{obs}}(r) - \sigma_{\rm{model}}(r))^2}{\delta\sigma_{\rm{obs}}^2(r)} - \ln(\delta\sigma_{\rm{obs}}^2(r))\right)
+
+where :math:`\sigma(R)` corresponds to the dispersion at a distance
+:math:`R` from the cluster centre, with corresponding uncertainties
+:math:`\delta\sigma(R)`.
+
+Number density datasets use a modified gaussian likelihood.
+
+As the translation between discrete number density and surface-brightness
+observations is difficult to quantify, the model is actually only fit on
+the shape of the number density profile data.
+To accomplish this the modelled number density is scaled to have the
+same mean value as the surface brightness data.
+The scaling factor K is chosen to minimizes chi-squared:
+
+.. math::
+    
+    K = \frac{\sum \Sigma_{obs} \Sigma_{model} / \delta\Sigma^2}
+             {\sum \Sigma_{model}^2 / \delta\Sigma^2}
+
+The likelihood is then given in similar fashion to the dispersion profiles:
+
+.. math::
+
+    \ln(\mathcal{L}_i) = \frac{1}{2} \sum_r \left( \frac{(\Sigma_{\rm{obs}}(r) - K\Sigma_{\rm{model}}(r))^2}{\delta\Sigma^2(r)} - \ln(\delta\Sigma^2(r))\right)
+
+where :math:`\Sigma(R)` is the number density at distance :math:`R`.
+
+The error :math:`\delta\Sigma` in these equations includes both the
+uncertainties from the observed datasets and an added constant error over the
+entire profile, defined by the nuisance parameter ``s2`` (:math:`s^2`), which
+helps to minimize the background effects present near the outskirts of the
+cluster.
+
+.. math::
+    \delta\Sigma^2(R) = \delta\Sigma_{\rm{obs}}^2(R) + s^2
+
+To compare against the Mass function datasets, the model surface density is
+(Monte Carlo) integrated, within each dataset's corresponding field boundaries,
+over each radial bin :math:`j` (with bounds :math:`r0,\ r1`) to get the count
+:math:`N_{\rm{model},j}` of stars within this bin slice of the field:
+
+.. math::
+
+    N_{\rm{model},j} = \int_{r_0}^{r_1} \Sigma(r) dr
+
+This count can be used in the usual gaussian likelihood:
+
+.. math::
+
+    \ln(\mathcal{L}_i) = \frac{1}{2} \sum_j^{\rm{bins}}
+        \left( \frac{(N_{\rm{obs},j} - N_{\rm{model},j})^2}{\delta N_j^2}
+              - \ln(\delta N_j^2) \right)
+
+where the error :math:`\delta N` also includes the nuisance parameter ``F``
+which acts to account for unknown sources of error in the mass function counts
+by scaling upwards the uncertainties in the counts:
+
+.. math::
+
+    \delta N_j = \delta N_{\rm{model},j} \cdot F
+
+TODO pulsar likelihoods
+
+Priors
+^^^^^^
 
 MCMC
 ====
