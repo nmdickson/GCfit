@@ -172,7 +172,7 @@ given by a simple bayesian posterior:
 .. math::
     
     P(\Theta \mid D, M) = \frac{P(D \mid \Theta,M)P(\Theta \mid M)}{P(D \mid M)}
-        \equiv \frac{\mathcal{L}(\Theta) \pi(\Theta)}{\mathcal{Z}}
+                        = \frac{\mathcal{L}(\Theta) \pi(\Theta)}{\mathcal{Z}}
 
 where :math:`\mathcal{L}` is the likelihood and :math:`\pi` is the prior
 likelihood.
@@ -261,6 +261,24 @@ TODO pulsar likelihoods
 
 Priors
 ^^^^^^
+
+The prior likelihood :math:`\pi` for some set of parameters :math:`\Theta`
+is given by the product of individual priors on each parameter in
+:math:`\Theta`, designed to influence the possible values for each.
+These priors are defined, a priori, by a few arguments specific to each,
+which may also be dependant on the values of other parameters.
+
+Individual parameter priors can take a few possible forms:
+
+* Uniform (L, U)
+    A uniform (flat) distribution defined between two bounds (L, U), with a
+    value normalized to unity
+
+* Gaussian (:math:`\mu`, :math:`\sigma`)
+    A Gaussian normal distribution centred on :math:`\mu` with a width of
+    :math:`\sigma`
+
+* TODO other kinds
 
 MCMC
 ====
