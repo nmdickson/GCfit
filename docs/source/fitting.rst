@@ -140,6 +140,8 @@ kinematics of a specific cluster.
 
 Currently supported observational datasets include:
 
+TODO some example plots of each type
+
 * Proper Motion Dispersions
     Radial, tangential or overall proper motion velocity dispersion profiles
 
@@ -166,12 +168,13 @@ Probabilities
 =============
 
 The probability associated with a given set of model :math:`M` parameters
-:math:`\Theta`, subject to some number of observable datasets :math:`D` is
+:math:`\Theta`, subject to some number of observable datasets :math:`\mathcal{D}` is
 given by a simple bayesian posterior:
 
 .. math::
     
-    P(\Theta \mid D, M) = \frac{P(D \mid \Theta,M)P(\Theta \mid M)}{P(D \mid M)}
+    P(\Theta \mid \mathcal{D}, M) = \frac{P(\mathcal{D} \mid \Theta,M)
+                                    P(\Theta \mid M)}{P(\mathcal{D} \mid M)}
                         = \frac{\mathcal{L}(\Theta) \pi(\Theta)}{\mathcal{Z}}
 
 where :math:`\mathcal{L}` is the likelihood and :math:`\pi` is the prior
@@ -185,7 +188,8 @@ the summation of all component likelihood functions.
 
 .. math::
 
-    \ln(\mathcal{L}) = \sum_i \ln(\mathcal{P(D_i \mid \Theta)})
+    \ln(\mathcal{L}) = \sum_i^{\rm{datasets}} \ln(P(\mathcal{D_i} \mid \Theta))
+                     = \sum_i \ln(\mathcal{L}_i(\Theta)))
 
 Every observational dataset has it's own component likelihood function, unique
 to the type of observable it is.
@@ -195,7 +199,9 @@ a number of dispersion measurements at different radial distances:
 
 .. math::
 
-    \ln(\mathcal{L}_i) = \frac{1}{2} \sum_r \left( \frac{(\sigma_{\rm{obs}}(r) - \sigma_{\rm{model}}(r))^2}{\delta\sigma_{\rm{obs}}^2(r)} - \ln(\delta\sigma_{\rm{obs}}^2(r))\right)
+    \ln(\mathcal{L}_i) = \frac{1}{2} \sum_r \left( \frac{(\sigma_{\rm{obs}}(r)
+                    - \sigma_{\rm{model}}(r))^2}{\delta\sigma_{\rm{obs}}^2(r)}
+                    - \ln(\delta\sigma_{\rm{obs}}^2(r))\right)
 
 where :math:`\sigma(R)` corresponds to the dispersion at a distance
 :math:`R` from the cluster centre, with corresponding uncertainties
@@ -268,15 +274,30 @@ is given by the product of individual priors on each parameter in
 These priors are defined, a priori, by a few arguments specific to each,
 which may also be dependant on the values of other parameters.
 
+.. math::
+    \pi(\Theta) = \prod_i^{N_{\rm{params}}} \pi_i (\theta_i)
+
 Individual parameter priors can take a few possible forms:
 
 * Uniform (L, U)
     A uniform (flat) distribution defined between two bounds (L, U), with a
     value normalized to unity
 
+.. math::
+
+    \pi_i (\theta_i) =
+    \begin{cases}
+        \frac{1}{U-L} & {\text{for }} \theta_i \in [L,U] \\
+        0 & {\text{otherwise}}
+    \end{cases}
+
 * Gaussian (:math:`\mu`, :math:`\sigma`)
     A Gaussian normal distribution centred on :math:`\mu` with a width of
     :math:`\sigma`
+
+.. math::
+    \pi_i (\theta_i)  = \frac{1}{\sigma \sqrt{2\pi}}
+    e^{-\frac{1}{2} \left(\frac{\theta_i-\mu}{\sigma}\right)^{2}}
 
 * TODO other kinds
 
