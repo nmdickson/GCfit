@@ -304,14 +304,37 @@ Individual parameter priors can take a few possible forms:
 MCMC
 ====
 
-Specifics about MCMC
-introduce the MCMC_fit function
-how it works, what we use to do it, any specific requirements from the user
+TODO link to *_fit functions ref
+
+The probability distribution of the parameter set :math:`\Theta` must be
+determined through a statistical sampling technique. Two such set of
+algorithms are available in ``GCfit``.
+
+The first is **Markov Chain Monte Carlo (MCMC)** sampling.
+
+MCMC sampling approximates the posterior distribution by
+generating random samples within parameter space. Each sample is proposed
+randomly, dependant only on the preceeding sample in the "chain" of samples
+(resulting in a *Markov Chain*). Chains must be initialized to initial positions
+within parameter space, from which they will evolve over time towards areas of
+high probability. There are a number of algorithms available
+dictating the proposal and acceptance of new samples, which determines the
+random path taken by chains. Samplers which utilize multiple chains run in
+parallel are known as ensemble samplers.
+
+``GCfit`` utilizes the `emcee <https://emcee.readthedocs.io/en/stable/>`_
+MCMC ensemble sampler library.
+
+.. Specifics about MCMC
+.. introduce the MCMC_fit function
+.. how it works, what we use to do it, any specific requirements from the user
 
 Nested Sampling
 ===============
 
-Specifics about Nested Sampling
-the nested_fit function
-how it works, what we use to do it, any specific requirements from the user,
-prior transforms, plateau weights
+The second is nested sampling
+
+.. Specifics about Nested Sampling
+.. the nested_fit function
+.. how it works, what we use to do it, any specific requirements from the user,
+.. prior transforms, plateau weights
