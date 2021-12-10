@@ -22,6 +22,7 @@ Globular Cluster data products, via a parallelized sampling suite.
    fitting
    data standards <standards>
    examples
-   citing
    common errors <errors>
    API <ref/api>
+   references <citations>
+
