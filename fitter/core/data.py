@@ -685,6 +685,8 @@ class Model(lp.limepy):
     {BH,NS,WD}_Nj : astropy.Quantity
         Black hole, neutron star or white dwarf total bin number (Mj / mj)
 
+    # TODO none of the other important attributes were documented
+
     Notes
     -----
     The IMF of the model is defined using a three-component broken power law,
@@ -694,7 +696,7 @@ class Model(lp.limepy):
         \xi(m) \propto \begin{cases}
             m^{-a_1} & 0.1 M_{\odot} < m \leq 0.5 M_{\odot}, \\
             m^{-a_2} & 0.5 M_{\odot} < m \leq 1.0 M_{\odot}, \\
-            m^{-a_3} & m > 100 M_{\odot}, \\
+            m^{-a_3} & 1.0 M_{\odot} < m \leq 100 M_{\odot}, \\
         \end{cases}
 
     where the `a` exponents are given as input parameters in `theta`.
