@@ -6,7 +6,7 @@
 Welcome to GCfit's documentation!
 =================================
 
-:Release: |version|
+:Release: |release|
 :Date: |today|
 
 GCfit is a Python package enabling the generalized fitting of
@@ -18,11 +18,11 @@ Globular Cluster data products, via a parallelized sampling suite.
    :maxdepth: 2
    :caption: Contents:
 
-   installation
-   fitting
-   data standards <standards>
-   examples
-   common errors <errors>
+   Installation <installation>
+   Fitting <fitting>
+   Data Standards <standards>
+   Usage and Examples <usage>
+   Common Errors <errors>
    API <ref/api>
-   references <citations>
+   References <citations>
 
