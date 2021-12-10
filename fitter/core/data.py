@@ -287,7 +287,7 @@ class Dataset:
 class Observations:
     '''Read-only interface for all observational cluster data
 
-    The main interface for reading and interacting with (_not writing_) all
+    The main interface for reading and interacting with (reading) all
     observational data for the specified globular cluster.
 
     Defined based on a given cluster datafile, handles creation and access to
@@ -326,7 +326,7 @@ class Observations:
     See Also
     --------
     fitter.util.get_cluster_path : Locating of data file based on `cluster` name
-    fitter.utils.data.ClusterFile : Handling of data file creation and editing
+    fitter.util.data.ClusterFile : Handling of data file creation and editing
     '''
     # TODO interesting errors occur when trying to iterate over Observ
 
@@ -691,11 +691,11 @@ class Model(lp.limepy):
     of the familiar form:
 
     .. math::
-        \xi(m) \propto \begin{dcases}
-            m^{-a_1} & 0.1 \M_{\odot} < m \leq 0.5 \M_{\odot}, \\
-            m^{-a_2} & 0.5 \M_{\odot} < m \leq 1.0 \M_{\odot}, \\
-            m^{-a_3} & m > 100 \M_{\odot}, \\
-        \end{dcases}
+        \xi(m) \propto \begin{cases}
+            m^{-a_1} & 0.1 M_{\odot} < m \leq 0.5 M_{\odot}, \\
+            m^{-a_2} & 0.5 M_{\odot} < m \leq 1.0 M_{\odot}, \\
+            m^{-a_3} & m > 100 M_{\odot}, \\
+        \end{cases}
 
     where the `a` exponents are given as input parameters in `theta`.
 
