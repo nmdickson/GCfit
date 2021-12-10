@@ -336,7 +336,7 @@ class Observations:
         if valid_only:
             datasets = {key for (key, *_) in self.valid_likelihoods}
         else:
-            datasets = self.datasets.keys
+            datasets = self.datasets.keys()
 
         return {key: self[key] for key in fnmatch.filter(datasets, pattern)}
 
