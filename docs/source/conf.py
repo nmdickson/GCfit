@@ -32,6 +32,7 @@ release = '0.9'
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
+    'sphinx_toggleprompt',
     'numpydoc'
 ]
 
