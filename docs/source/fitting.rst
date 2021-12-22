@@ -306,7 +306,7 @@ MCMC
 
 TODO link to *_fit functions ref
 
-The probability distribution of the parameter set :math:`\Theta` must be
+The posterior distribution of the parameter set :math:`\Theta` must be
 determined through a statistical sampling technique. Two such set of
 algorithms are available in ``GCfit``.
 
@@ -322,7 +322,7 @@ dictating the proposal and acceptance of new samples, which determines the
 random path taken by chains. Samplers which utilize multiple chains run in
 parallel are known as ensemble samplers.
 
-``GCfit`` utilizes the `emcee <https://emcee.readthedocs.io/en/stable/>`_
+``GCfit`` utilizes the `emcee <https://emcee.readthedocs.io>`_
 MCMC ensemble sampler library.
 
 .. Specifics about MCMC
@@ -332,7 +332,35 @@ MCMC ensemble sampler library.
 Nested Sampling
 ===============
 
-The second is nested sampling
+The second is **Dynamic Nested Sampling**.
+
+Nested sampling
+(`Skilling 2004 <https://ui.adsabs.harvard.edu/abs/2004AIPC..735..395S>`_)
+is a Monte Carlo integration method, first proposed for estimating the Bayesian
+evidence integral :math:`\mathcal{Z}`, which works by iteratively integrating
+the posterior over the shells of prior volume contained within nested,
+increasing iso-likelihood contours.
+
+Samples are proposed randomly at each step, subject to a minimum likelihood
+constraint corresponding to the current likelihood contour. These samples, and
+their importance weights (a function of shell amplitude and volume, analogous
+to the contribution to the typical set), can be used to estimate the posterior,
+alongside the evidence integral.
+
+Nested sampling has the benefit of flexibility, as the independantly generated
+samples are able to probe complex posterior shapes, with little danger of
+falling into local minimums, or of missing distant modes. The sampling also has
+well defined stopping criterion based on the remaining evidence.
+
+Dynamic Nested Sampling is an extension of the typical nested sampling algorithm
+designed to retune the sampling to more efficiently estimate the posterior,
+by spending less time probing the "outer" sections of the prior volume which
+have little impact on the posterior. In practice this is done by allowing for
+a fine-tuning of the sample "resolution", which is increased around the typical
+set.
+
+``GCfit`` utilizes the `dynesty <https://dynesty.readthedocs.io/>`_
+Dynamic Nested Sampling package.
 
 .. Specifics about Nested Sampling
 .. the nested_fit function
