@@ -678,6 +678,9 @@ def likelihood_pm_ratio(model, pm, *, mass_bin=None, hyperparams=False):
     # Get model values
     model_ratio = np.sqrt(model.v2Tj[mass_bin] / model.v2Rj[mass_bin])
 
+    # Fix the occasional 0/0 error at the edge of the model
+    model_ratio[np.isnan(model_ratio)] = 1.0
+
     # Convert model units
     model_r = model.r.to(pm['r'].unit)
 
