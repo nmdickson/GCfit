@@ -548,11 +548,14 @@ def likelihood_number_density(model, ndensity, *,
     model_Σ = model.Sigmaj[mass_bin] / model.mj[mass_bin]
 
     # Interpolated the model data at the measurement locations
-    interpolated = np.interp(obs_r, model_r, model_Σ)
+    interpolated = np.interp(obs_r, model_r, model_Σ).to(obs_Σ.unit)
 
     # Calculate K scaling factor
     K = (np.sum(obs_Σ * interpolated / yerr**2)
          / np.sum(interpolated**2 / yerr**2))
+
+    if np.isnan(K):
+        K = 1
 
     interpolated *= K
 
@@ -677,9 +680,6 @@ def likelihood_pm_ratio(model, pm, *, mass_bin=None, hyperparams=False):
 
     # Get model values
     model_ratio = np.sqrt(model.v2Tj[mass_bin] / model.v2Rj[mass_bin])
-
-    # Fix the occasional 0/0 error at the edge of the model
-    model_ratio[np.isnan(model_ratio)] = 1.0
 
     # Convert model units
     model_r = model.r.to(pm['r'].unit)
