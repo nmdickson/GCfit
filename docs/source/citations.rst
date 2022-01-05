@@ -89,3 +89,5 @@ can be cited.
 `astropy <https://ui.adsabs.harvard.edu/abs/2018AJ....156..123A>`_
 libraries. All plotting functionality is enabled by the
 `matplotlib <https://ui.adsabs.harvard.edu/abs/2007CSE.....9...90H>`_ library.
+Parallelization pools are handled by the
+`schwimmbad <https://ui.adsabs.harvard.edu/abs/2017JOSS....2..357P>`_ library
