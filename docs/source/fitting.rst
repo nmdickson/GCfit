@@ -96,8 +96,8 @@ distribution function:
         m^{-\alpha_3} & 1\ M_\odot < m \leq 100\ M_\odot \\
     \end{cases}
 
-where the :math:`\alpha` parameters are defined by the parameters above, and
-:math:`\xi(m) \Delta m` is the number of stars with masses within the range
+where the :math:`\alpha` parameters are defined by the free parameters above,
+and :math:`\xi(m) \Delta m` is the number of stars with masses within the range
 :math:`m + \Delta m`. This function determines the initial distribution of the
 cluster total mass.
 
@@ -208,18 +208,17 @@ where :math:`\sigma(R)` corresponds to the dispersion at a distance
 :math:`\delta\sigma(R)`.
 
 Number density datasets use a modified gaussian likelihood.
-
 As the translation between discrete number density and surface-brightness
 observations is difficult to quantify, the model is actually only fit on
 the shape of the number density profile data.
 To accomplish this the modelled number density is scaled to have the
 same mean value as the surface brightness data.
-The scaling factor K is chosen to minimizes chi-squared:
+The constant scaling factor K is chosen to minimize the chi-squared distance:
 
 .. math::
     
-    K = \frac{\sum \Sigma_{obs} \Sigma_{model} / \delta\Sigma^2}
-             {\sum \Sigma_{model}^2 / \delta\Sigma^2}
+    K = \frac{\sum\limits_r \Sigma_{obs} \Sigma_{model} / \delta\Sigma^2}
+             {\sum\limits_r \Sigma_{model}^2 / \delta\Sigma^2}
 
 The likelihood is then given in similar fashion to the dispersion profiles:
 
@@ -301,21 +300,28 @@ Individual parameter priors can take a few possible forms:
 
 * TODO other kinds
 
-MCMC
-====
 
-TODO link to *_fit functions ref
+Sampling
+========
 
 The posterior distribution of the parameter set :math:`\Theta` must be
 determined through a statistical sampling technique. Two such set of
 algorithms are available in ``GCfit``.
+
+TODO link to *_fit functions ref
+TODO also link to a good "for more information" or at least a relevant paper
+
+MCMC
+^^^^
 
 The first is **Markov Chain Monte Carlo (MCMC)** sampling.
 
 MCMC sampling approximates the posterior distribution by
 generating random samples within parameter space. Each sample is proposed
 randomly, dependant only on the preceeding sample in the "chain" of samples
-(resulting in a *Markov Chain*). Chains must be initialized to initial positions
+(resulting in a *Markov Chain*).
+
+Chains must be initialized to initial positions
 within parameter space, from which they will evolve over time towards areas of
 high probability. There are a number of algorithms available
 dictating the proposal and acceptance of new samples, which determines the
@@ -330,7 +336,7 @@ MCMC ensemble sampler library.
 .. how it works, what we use to do it, any specific requirements from the user
 
 Nested Sampling
-===============
+^^^^^^^^^^^^^^^
 
 The second is **Dynamic Nested Sampling**.
 
