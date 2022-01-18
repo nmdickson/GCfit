@@ -4,7 +4,7 @@ API
 
 This page details the methods and classes provided by the ``GCfit`` module.
 
-TODO seems like the autogen is duplicating a lot of methods?
+TODO seems like the autogen is duplicating all the methods in classes
 
 .. image:: package-structure.png
 

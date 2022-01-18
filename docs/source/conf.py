@@ -50,9 +50,25 @@ exclude_patterns = []
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-#
-# html_theme = 'alabaster'
 html_theme = "pydata_sphinx_theme"
+
+html_theme_options = {
+    "use_edit_page_button": True,
+    "icon_links": [{
+        "name": "GitHub",
+        "url": "https://github.com/nmdickson/GCfit",
+        "icon": "fab fa-github-square",
+        "type": "fontawesome",  # Default is fontawesome
+    }]
+}
+
+html_context = {
+    # "github_url": "https://github.com", # or your GitHub Enterprise interprise
+    "github_user": "nmdickson",
+    "github_repo": "GCfit",
+    "github_version": "develop",
+    "doc_path": "docs/source",
+}
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,

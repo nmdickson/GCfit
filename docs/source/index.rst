@@ -19,10 +19,9 @@ Globular Cluster data products, via a parallelized sampling suite.
    :caption: Contents:
 
    Installation <installation>
-   Fitting <fitting>
-   Data Standards <standards>
+   Background <fitting>
    Usage and Examples <usage>
+   Data Standards <standards>
    Common Errors <errors>
    API <ref/api>
    References <citations>
-
