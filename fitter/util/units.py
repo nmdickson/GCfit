@@ -63,10 +63,10 @@ def angular_width(D):
 
 # TODO this really needs unittest, the unitless stuff made it complicated
 class QuantitySpline(scipy.interpolate.UnivariateSpline):
-    '''Subclass of SciPy's UnivariateSpline, supporting AstroPy `Quantity`s'
+    '''Subclass of SciPy's UnivariateSpline, supporting AstroPy ``Quantity``
 
     1-D smoothing spline fit to a given set of data points, with support for
-    units through using `astropy.Quantity` arrays as input.
+    units through using ``astropy.Quantity`` arrays as input.
 
     All functions will call their corresponding scipy native functions, and
     simply add the relevant units to their outputs.

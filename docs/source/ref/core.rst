@@ -1,8 +1,25 @@
+Core
+====
 
-This is the core stuff
+.. currentmodule:: fitter.core
 
-.. toctree::
-   :maxdepth: 2
 
-   core.main
-   core.data
+Main Fitting Functions
+----------------------
+.. autosummary::
+   :nosignatures:
+   :toctree: generated/
+
+   MCMC_fit
+   nested_fit
+
+
+Core Data Containers
+--------------------
+.. autosummary::
+   :nosignatures:
+   :toctree: generated/
+
+   Model
+   Observations
+   data.Dataset
