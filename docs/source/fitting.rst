@@ -32,50 +32,63 @@ Parameters
 
 The models used in ``GCfit`` are defined by 13 free parameters.
 
-6 physical parameters defining the system structure:
+.. list-table::
+    :header-rows: 1
+    :widths: 10 10 80
 
-* W0
-    The central potential :math:`\hat{\phi}_0`. Used as a boundary condition for
-    solving Poisson’s equation and defines how concentrated the model is.
-* M
-    The total mass of the system, in all mass components. In units of
-    :math:`10^6 M_\odot`.
-* rh
-    The system half-mass radius, in parsecs.
-* ra
-    The anisotropy-radius, which determines the amount of anisotropy in the
-    system (higher ra values indicate more isotropy)
-* g
-    The truncation parameter, which controls the sharpness of the outer density
-    truncation of the model
-* delta
-    Sets the mass dependance of the velocity scale for each mass component.
-    Maximum value of 0.5
-
-4 parameters defining the mass function:
-
-* a1
-    The low-mass IMF exponent (0.1 to 0.5 :math:`M_\odot`)
-* a2
-    The intermediate-mass IMF exponent (0.5 to 1.0 :math:`M_\odot`)
-* a3
-    The high-mass IMF exponent (1.0 to 100 :math:`M_\odot`)
-* BHret
-    The percentage of black holes retained after dynamical ejections
-
-and 3 remaining parameters to aid in model fitting:
-
-* s2
-    Nuisance parameter applied as an additional unknown uncertainty to all
-    number density profiles, allowing for small deviations between
-    the outer parts of the model and observations
-* F
-    Nuisance parameter applied as an additional unknown uncertainty to all
-    mass function profiles encapsulating possible additional sources of
-    uncertainty
-* d
-    Distance to the cluster, in kiloparsecs. Mainly used for all conversions
-    between observational (angular) and and model (linear) units.
+    * - Parameter
+      - Name
+      - Description
+    * - :math:`\hat{\phi}_0`
+      - ``W0``
+      - The central potential. Used as a boundary condition
+        for solving Poisson’s equation and defines how centrally concentrated
+        the model is.
+    * - M
+      - ``M``
+      - The total mass of the system, in all mass components. In units of
+        :math:`10^6 M_\odot`.
+    * - :math:`r_h`
+      - ``rh``
+      - The system half-mass radius, in parsecs.
+    * - :math:`r_a`
+      - ``ra``
+      - The anisotropy-radius, which determines the amount of anisotropy in the
+        system (higher ra values indicate more isotropy)
+    * - g
+      - ``g``
+      - The truncation parameter, which controls the sharpness of the outer
+        density truncation of the model
+    * - :math:`\delta`
+      - ``delta``
+      - Sets the mass dependance of the velocity scale for each mass component.
+        Maximum value of 0.5
+    * - :math:`\alpha_1`
+      - ``a1``
+      - The low-mass IMF exponent (0.1 to 0.5 :math:`M_\odot`)
+    * - :math:`\alpha_2`
+      - ``a2``
+      - The intermediate-mass IMF exponent (0.5 to 1.0 :math:`M_\odot`)
+    * - :math:`\alpha_3`
+      - ``a3``
+      - The high-mass IMF exponent (1.0 to 100 :math:`M_\odot`)
+    * - :math:`\mathrm{BH}_{ret}`
+      - ``BHret``
+      - The percentage of black holes retained after dynamical ejections
+    * - :math:`s^2`
+      - ``s2``
+      - Nuisance parameter applied as an additional unknown uncertainty to all
+        number density profiles, allowing for small deviations between
+        the outer parts of the model and observations
+    * - F
+      - ``F``
+      - Nuisance parameter applied as an additional unknown uncertainty to all
+        mass function profiles encapsulating possible additional sources of
+        uncertainty
+    * - d
+      - ``d``
+      - Distance to the cluster, in kiloparsecs. Mainly used for all conversions
+        between observational (angular) and and model (linear) units.
 
 
 Mass Function Evolution
