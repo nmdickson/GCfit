@@ -36,28 +36,43 @@
 
        \vfill
 
-       Version 1
+       Version 2
+       January 18, 2022
 \end{titlepage}
 
 \section{Introduction}
 
-in a hdf file....... etc
+All datasets are stored in a `Hierarchical Data Format' (HDF5) file.
 
-All supplementary error datasets can be either the symmetric dataset or two
-seperate down and up error datasets.
+A data group\footnote{Contrary to HDF standards, in all project documentation a
+`Dataset' does not refer to the typical HDF dataset, but is analogous to a
+specific HDF group while `Variable's are most analogous to HDF datasets. In this
+document, the standard HDF group/dataset notation will be used.} must contain
+all data representing a single observational product, that is, all
+datasets associated to a single physical process,
+from a single source, along with all relevant metadata.
 
-Everything should be within the given "key" group under the main file group.
-But if multiple "versions" of the datasets are to be used, then you can put
-everything under other groups under the key, which should be sorted out
-correctly under data.
+All data corresponding to a single data group should exist within the relevant
+`key' group (given below) under the file root group, which corresponds to a
+physical process or observable. If multiple groups exist covering the same
+observation type (Ex: Multiple different sources observing proper motion
+profiles) Then those groups must exist as further subgroups within the `key'
+group (Ex: \texttt{/proper\_motion/sourceA/} and
+\texttt{/proper\_motion/sourceB/}). However, all subgroups must exist within the
+key at the same level. No unequal nesting or shared space is allowed.
 
-But, this MUST be done for everything in that group, all parent groups of
-subgroups will not be read in data, so there can be no shared space for groups
-and datasets. All datasets must go under the lowest level of subgroup.
+Each group has a number of required datasets, which are detailed below. Each
+dataset may have required supplementary datasets as well, such as uncertainties.
+Each dataset may also require certain metadata fields, such as unit names, to
+be stored as attributes on the dataset itself.
 
 \section{Attributes}
 
-Overall cluster attributes. 
+Overall cluster attributes and metadata are stored as attributes to the
+file root group. Certain attributes are required for fitting certain
+observables. Some attributes, when required for model creation, are given
+default values, if they do not exist in the file. All attributes stored must
+correspond to the units given below as they will be assumed at runtime.
 
 \begin{center}
 \begin{table}[H]
@@ -77,7 +92,7 @@ Overall cluster attributes.
     Declination & \texttt{DEC}  &
     Required for mass function fitting & N/A & degrees \\
     \hline
-    Metallicity & \texttt{FeHe} &
+    Metallicity [Fe/He] & \texttt{FeHe} &
     Defines mass function evolution & -1.00 & dex \\
     \hline
     Age & \texttt{age} & Defines mass function evolution & 12 & Gyr \\
@@ -86,15 +101,18 @@ Overall cluster attributes.
     Required for pulsar fitting & N/A & mas/yr \\
     \hline
     Total escape rate \(\dot{N}\) & \texttt{Ndot} &
-    Defines mass function evolution & -20 & \\
+    Defines mass function evolution & 0 & \\
     \hline
 \end{tabular}
 \end{table}
 \end{center}
-% TODO document the sources of ^ somehow (and units as well)
+% TODO document the sources of ^ somehow (and units as well), within the file
+
+\newpage
 
 \input{DP_initials}
 
+\newpage
 \section{Data Products}
 
 * denotes required fields
