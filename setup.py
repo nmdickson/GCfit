@@ -32,7 +32,8 @@ REQUIRED = [
     "tqdm",
     "dynesty",
     "gala==1.3",
-    "shapely"
+    "shapely",
+    "sphinx-toggleprompt"
 ]
 
 REQUIRES_PYTHON = '>=3.8'
