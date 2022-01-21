@@ -36,8 +36,8 @@ Both functions require, to begin, the name of the cluster.
     # Nested Sampling
     fitter.nested_fit(cluster)
 
-The cluster name can be given in a few different formats. See <link to util>
-for info on valid names.
+The cluster name can be given in a few different formats. See
+:func:`fitter.util.get_std_cluster_name` for info on valid names.
 
 Both methods share a large assortment of keyword arguments, which define the
 probability functions and parallelization scheme used, as well as
@@ -98,13 +98,13 @@ distribution.
 Parallelization
 """""""""""""""
 
-In the vast majority of cases, the sampler will be resource-intensive enough
-to not be viably run on a single-core computer. The sampling, however, can be
+In the vast majority of cases, the sampler will be too resource-intensive
+to be viably run on a single-core computer. The sampling, however, can be
 easily parallelized in multiple ways.
 
 Local parallelization (through the multiprocessing module) can be triggered
 using the ``Ncpu`` argument, which simply accepts an integer number of processes
-to spawn.
+to spawn.z
 
 .. code-block:: python
 
