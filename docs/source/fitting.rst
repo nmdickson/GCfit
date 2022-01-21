@@ -153,14 +153,12 @@ kinematics of a specific cluster.
 
 Currently supported observational datasets include:
 
-TODO some example plots of each type
-
 * Proper Motion Dispersions
     Radial, tangential or overall proper motion velocity dispersion profiles
 
 * LOS Velocity Dispersions
     Velocity dispersion profiles along the line-of-sight
-    
+
 * Number Densities
     Radial number density profiles
 
@@ -207,6 +205,9 @@ the summation of all component likelihood functions.
 Every observational dataset has it's own component likelihood function, unique
 to the type of observable it is.
 
+Velocity Dispersions
+""""""""""""""""""""
+
 All velocity dispersions (LOS and PM) use a simple gaussian log-likelihood over
 a number of dispersion measurements at different radial distances:
 
@@ -219,6 +220,9 @@ a number of dispersion measurements at different radial distances:
 where :math:`\sigma(R)` corresponds to the dispersion at a distance
 :math:`R` from the cluster centre, with corresponding uncertainties
 :math:`\delta\sigma(R)`.
+
+Number Densities
+""""""""""""""""
 
 Number density datasets use a modified gaussian likelihood.
 As the translation between discrete number density and surface-brightness
@@ -250,6 +254,9 @@ cluster.
 .. math::
     \delta\Sigma^2(R) = \delta\Sigma_{\rm{obs}}^2(R) + s^2
 
+Mass Functions
+""""""""""""""
+
 To compare against the Mass function datasets, the model surface density is
 (Monte Carlo) integrated, within each dataset's corresponding field boundaries,
 over each radial bin :math:`j` (with bounds :math:`r0,\ r1`) to get the count
@@ -275,7 +282,54 @@ by scaling upwards the uncertainties in the counts:
 
     \delta N_j = \delta N_{\rm{model},j} \cdot F
 
-TODO pulsar likelihoods
+Pulsar Timings
+""""""""""""""
+
+Millisecond pulsars have been discovered, in small numbers, in dozens of
+MW globular clusters. Through extremely precise pulse measurements, the period
+and the time-derivative of the period is known for a number of these pulsars.
+
+These timing solutions, for pulsars embedded in clusters, follow a specific
+relation:
+
+.. math::
+    \left(\frac{\dot{P}}{P}\right)_{\rm{obs}}
+        = \left(\frac{\dot{P}}{P}\right)_{\rm{int}} + \frac{a_{\rm{clust}}}{c}
+        + \frac{a_{\rm{gal}}}{c} + \frac{\mu^2 D}{c}
+
+where the intrinsic spin-down of pulsars
+:math:`\left(\frac{\dot{P}}{P}\right)_{\rm{int}}`, the potential (acceleration)
+fields of the host cluster and galaxy, and the Shklovskii (proper motion) all
+combine in the observed spin-down of the pulsar timing solution. 
+
+The intrinsic spin-down of the observed pulsars is assumed to be identical to
+pulsars found in the galaxy, outside of clusters, and dependant only on their
+period. The field pulsars, as they are unaffected by the cluster potential,
+can have their intrinsic timing solutions determined directly. A gaussian
+kernel density estimator is then computed in the field :math:`P`-:math:`\dot{P}`
+space, which is slice along each cluster pulsar's period to extract a
+distribution of possible intrinsic values.
+
+The cluster acceleration component, dependant on the model, is complicated by
+the fact that the 3D position of the pulsar cannot be easily determined, and
+the line-of-sight position of the pulsar within the cluster potential well is
+unknown. Instead, a probability distribution of the acceleration can be
+computed using the relation:
+
+.. math::
+    P(a_{\hat{z}}|z) = \frac{dm}{da(z)} = \frac{dm}{dz} \frac{dz}{da(z)}
+                     = \frac{\rho(z)}{\left| \frac{da(z)}{dz} \right|}
+
+These two distributions are then convolved, alongside a gaussian error
+distribution representing the measurement uncertainties. Shifting by the
+galactic and proper motion components (which are small and constant), a final
+normalized probability distribution is obtained.
+
+The measured timing solution is then interpolated onto this distribution,
+computing a final likelihood value, for this pulsar. All pulsars in the cluster
+have their likelihoods summed in the usual manner.
+.. TODO DM stuff
+
 
 Priors
 ^^^^^^
