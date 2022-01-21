@@ -918,7 +918,7 @@ def likelihood_mass_func(model, mf, field, *, hyperparams=False):
 
     See Also
     --------
-    `fitter.probability.mass.Field.MC_integrate` :
+    probability.mass.Field.MC_integrate :
         Monte Carlo integration method used to integrate the surface density
         profile
     '''

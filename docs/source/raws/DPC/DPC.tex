@@ -1,0 +1,132 @@
+\documentclass[12pt]{article}
+
+\usepackage[
+    a4paper, headsep=1.5cm, headheight=30pt,
+    left=2.5cm,right=2.5cm,top=4cm,bottom=3cm]{geometry}
+\usepackage{fancyhdr}
+\usepackage{enumitem}
+
+\usepackage{amsmath}
+\usepackage{siunitx}
+\usepackage{graphicx}
+\usepackage[font=footnotesize]{caption}
+\usepackage{float}
+\graphicspath{ {./figures/} }
+
+
+\begin{document}
+
+\begin{titlepage}
+       \vspace*{2cm}
+
+       \LARGE
+        GCfit
+
+       \vspace{2cm}
+
+       \Huge
+       \textbf{Globular Cluster Observation Data}
+
+       \vspace{2cm}
+        
+        \LARGE
+        Data File Catalog
+
+       \vspace{1.5cm}
+
+       \vfill
+
+       Version 2
+       January 18, 2022
+\end{titlepage}
+
+\section{Introduction}
+
+All datasets are stored in a `Hierarchical Data Format' (HDF5) file.
+
+A data group\footnote{Contrary to HDF standards, in all project documentation a
+`Dataset' does not refer to the typical HDF dataset, but is analogous to a
+specific HDF group while `Variable's are most analogous to HDF datasets. In this
+document, the standard HDF group/dataset notation will be used.} must contain
+all data representing a single observational product, that is, all
+datasets associated to a single physical process,
+from a single source, along with all relevant metadata.
+
+All data corresponding to a single data group should exist within the relevant
+`key' group (given below) under the file root group, which corresponds to a
+physical process or observable. If multiple groups exist covering the same
+observation type (Ex: Multiple different sources observing proper motion
+profiles) Then those groups must exist as further subgroups within the `key'
+group (Ex: \texttt{/proper\_motion/sourceA/} and
+\texttt{/proper\_motion/sourceB/}). However, all subgroups must exist within the
+key at the same level. No unequal nesting or shared space is allowed.
+
+Each group has a number of required datasets, which are detailed below. Each
+dataset may have required supplementary datasets as well, such as uncertainties.
+Each dataset may also require certain metadata fields, such as unit names, to
+be stored as attributes on the dataset itself.
+
+\section{Attributes}
+
+Overall cluster attributes and metadata are stored as attributes to the
+file root group. Certain attributes are required for fitting certain
+observables. Some attributes, when required for model creation, are given
+default values, if they do not exist in the file. All attributes stored must
+correspond to the units given below as they will be assumed at runtime.
+
+\begin{center}
+\begin{table}[H]
+\begin{tabular}{ | c | c | c | c | c | }
+    \hline
+    Variable & Attribute Name & Notes & Default Value & Units \\
+    \hline\hline
+    Galactic Longitude & \texttt{l} &
+    Required for pulsar fitting & N/A & degrees \\
+    \hline
+    Galactic Latitude & \texttt{b}  &
+    Required for pulsar fitting & N/A & degrees \\
+    \hline
+    Right Ascension & \texttt{RA} &
+    Required for mass function fitting & N/A & degrees \\
+    \hline
+    Declination & \texttt{DEC}  &
+    Required for mass function fitting & N/A & degrees \\
+    \hline
+    Metallicity [Fe/He] & \texttt{FeHe} &
+    Defines mass function evolution & -1.00 & dex \\
+    \hline
+    Age & \texttt{age} & Defines mass function evolution & 12 & Gyr \\
+    \hline
+    Total Proper Motion & \texttt{\(\mu\)} &
+    Required for pulsar fitting & N/A & mas/yr \\
+    \hline
+    Total escape rate \(\dot{N}\) & \texttt{Ndot} &
+    Defines mass function evolution & 0 & \\
+    \hline
+\end{tabular}
+\end{table}
+\end{center}
+% TODO document the sources of ^ somehow (and units as well), within the file
+
+\newpage
+
+\input{DP_initials}
+
+\newpage
+\section{Data Products}
+
+* denotes required fields
+
+\input{DP_pulsar.tex}
+
+\input{DP_numberdensity.tex}
+
+\input{DP_propermotion.tex}
+
+\input{DP_velocitydispersion.tex}
+
+\input{DP_massfunction.tex}
+
+
+\end{document}
+

@@ -132,7 +132,7 @@ if __name__ == '__main__':
     parser_nest.add_argument('--maxfrac', default=0.8, type=float,
                              help='The fractional threshold, relative to the '
                                   'peak weight, used to determine likelihood '
-                                  'bounds for dynamic sampling. Default to 80%')
+                                  'bounds for dynamic sampling. Default to 0.8')
     parser_nest.add_argument('--eff-samples', default=5000, type=pos_int,
                              help='Number of effective posterior samples '
                                   'stopping condition')
