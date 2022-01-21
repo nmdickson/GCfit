@@ -788,6 +788,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
     # ----------------------------------------------------------------------
     # Setup param_priors transforms
     # ----------------------------------------------------------------------
+    # TODO shouldnt this function also accept Prior objects themselves?
 
     spec_prior_type = {k: v[0] for k, v in param_priors.items()}
     spec_prior_args = {k: v[1:] for k, v in param_priors.items()}
