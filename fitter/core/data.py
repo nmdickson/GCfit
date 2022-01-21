@@ -8,12 +8,12 @@ from ssptools import evolve_mf_3 as emf3
 
 import fnmatch
 import logging
-from importlib import resources
 
 
 __all__ = ['DEFAULT_INITIALS', 'Model', 'Observations']
 
 
+# TODO maybe change the name of this to like DEFAULT_THETA
 # The order of this is important!
 DEFAULT_INITIALS = {
     'W0': 6.0,
@@ -40,8 +40,7 @@ DEFAULT_INITIALS = {
 
 
 class Variable(u.Quantity):
-    '''simple readonly Quantity subclass to allow metadata on the variable
-    '''
+    '''Read-only `astropy.Quantity` subclass with metadata support'''
 
     def __repr__(self):
         prefix = f'<{self.__class__.__name__} '
@@ -139,11 +138,22 @@ class Variable(u.Quantity):
 
 
 class Dataset:
-    '''each group of observations, like mass_function, proper_motions, etc
-    init from a h5py group
-    not to be confused with h5py datasets, this is more analogous to a group
+    '''Read-only container for all variables associated with a single dataset
 
-    h5py attributes are called metadata here cause that is more descriptive
+    Contains all data representing a single observational dataset,
+    i.e. all `Variable`s associated to a single physical process, from a single
+    source, along with all relevant metadata.
+
+    Should not be initialized directly, but from an `Observations` instance,
+    using the base data file's relevant group.
+
+    Attributes
+    ----------
+    variables
+
+    mdata : dict
+        Dictionary of all "cluster-level" metadata
+
     '''
 
     def __repr__(self):
@@ -194,20 +204,40 @@ class Dataset:
 
     @property
     def variables(self):
+        '''Dictionary of all `Variables`s contained in this class'''
         return self._dict_variables
 
     def cite(self):
+        '''Return the literature source (citation) of this `Dataset`'''
         return self.__citation__()
 
-    def build_err(self, varname, model_r, model_val, strict=True):
-        '''
-        varname is the variable we want to get the error for
-        quantity is the actual model data we will be comparing this with
+    def build_err(self, varname, model_r, model_val):
+        '''Return the most relevant uncertainties associated with a variable
 
-        model_r, _val must be in equivalent units to the var already.
-        conversion will be attempted, but with no equivalencies
+        Determines and returns the uncertainty (error) variables corresponding
+        to the `varname` variable, which must also exist within this dataset.
 
-        if strict, if no error values exists, returns None instead of erroring
+        As some uncertainties are not symmetric (i.e. not equal in the positive
+        and negative directions), which side of the error bars to utilize must
+        be determined.
+        To accomplish this, the given `model_r` values are interpolated onto
+        this dataset's radial `r` profile, and for each point the closest
+        error bar to each `model_val` is chosen.
+
+        parameters
+        ----------
+        varname : str
+            Name of the variable to retrieve the errors for
+
+        model_r : astropy.Quantity
+            Quantity representing the desired radial profile to interpolate on.
+            Only used for assymetric errors. Must have equivalent units to
+            the dataset `r`.
+
+        model_val : astropy.Quantity
+            Quantity representing the desired values to interpolate on.
+            Only used for assymetric errors. Must have equivalent units to
+            the given `varname`.
         '''
 
         quantity = self[varname]
@@ -215,6 +245,8 @@ class Dataset:
         # ------------------------------------------------------------------
         # Attempt to convert model values
         # ------------------------------------------------------------------
+        # TODO maybe interpolating to model should be optional, not default
+        #   and just return Δvar or all upper or lower by default
 
         model_r = model_r.to(self['r'].unit)
         model_val = model_val.to(quantity.unit)
@@ -253,7 +285,49 @@ class Dataset:
 
 
 class Observations:
-    '''Collection of Datasets, read from a corresponding hdf file (READONLY)'''
+    '''Read-only interface for all observational cluster data
+
+    The main interface for reading and interacting with (reading) all
+    observational data for the specified globular cluster.
+
+    Defined based on a given cluster datafile, handles creation and access to
+    all contained `Dataset`s, as well as the setup and arguments for all
+    relevant likelihoods.
+
+    The relevant cluster data files will be found using the
+    `fitter.util.get_cluster_path` function, and can likewise be retricted to
+    "core" or "local" files. The data file used *must* be considered valid
+    (i.e. pass all tests within `fitter.utils.data.ClusterFile.test`).
+
+    Parameters
+    ----------
+    cluster : str
+        Name of the globular cluster. Will be used to retrieve the relevant
+        cluster data file.
+
+    standardize_name : bool, optional
+        Whether to "standardize" the given `cluster` name to match the exact
+        format of "core" cluster files or not. Searches against core clusters
+        will always be standardized, no matter this parameter. Defaults to True.
+
+    restrict_to : {None, 'local', 'core'}
+        Where to search for the cluster data file, see
+        `fitter.util.get_cluster_path` for more information.
+
+    Attributes
+    ----------
+    valid_likelihoods
+
+    datasets
+
+    mdata : dict
+        Dictionary of all "cluster-level" metadata
+
+    See Also
+    --------
+    fitter.util.get_cluster_path : Locating of data file based on `cluster` name
+    fitter.util.data.ClusterFile : Handling of data file creation and editing
+    '''
     # TODO interesting errors occur when trying to iterate over Observ
 
     _valid_likelihoods = None
@@ -294,10 +368,15 @@ class Observations:
     # TODO a filter method for finding all datasets matching a pattern
     @property
     def datasets(self):
+        '''Dictionary of all `Dataset`s contained in this class'''
         return self._dict_datasets
 
     @property
     def valid_likelihoods(self):
+        '''List of likelihoods valid for the contained datasets. Returns a list
+        of lists, with each list representing a different likelihood function,
+        of the form of [dataset name, likelihood function, *function params].
+        '''
 
         if self._valid_likelihoods is None:
             self._valid_likelihoods = self._determine_likelihoods()
@@ -330,24 +409,53 @@ class Observations:
         return groups
 
     def filter_datasets(self, pattern, valid_only=True):
+        '''Return a subset of `Observations.datasets` based on given `pattern`
+
+        Parameters
+        ----------
+        pattern : str
+            A pattern string to filter all dataset names on, using `fnmatch`
+
+        valid_only : bool, optional
+            Whether to filter on all datasets or only those considered "valid"
+            by `Observations.valid_likelihoods`
+        '''
+
         # TODO maybe `datasets` and this should only return ds list not dict?
         #   if thats the case, make `datasets._name` public
 
         if valid_only:
             datasets = {key for (key, *_) in self.valid_likelihoods}
         else:
-            datasets = self.datasets.keys
+            datasets = self.datasets.keys()
 
         return {key: self[key] for key in fnmatch.filter(datasets, pattern)}
 
     def filter_likelihoods(self, patterns, exclude=False, keys_only=False):
-        '''filter the valid likelihoods based on list of patterns, matching
-        either the dataset name or likelihood function name.
-        if exclude is true, returns everything but those matching the patterns,
-        else vice versa
-        if keys_only, only returns a list of dataset keys, no function data
-        patterns must be a list (todo)
+        '''Return subset of `Observations.valid_likelihoods` based on `patterns`
+
+        Filters the results of `Observations.valid_likelihoods` based on a
+        *list* of `patterns`. The pattern matching (for each pattern in the
+        `patterns` list) is applied to both the dataset name and the likelihood
+        function name (func.__name__).
+
+        Parameters
+        ----------
+        patterns : list of str
+            List of pattern strings to filter all likelihoods on using `fnmatch`
+
+        exclude : bool, optional
+            Whether to return all likelihoods which match the filters (False,
+            default) or to exclude them, and return all others (True)
+
+        keys_only : bool, optional
+            Whether to return only the filtered dataset names (True) or the
+            entire likelihood format as given by
+            `Observations.valid_likelihoods` (False, default). Filtering will
+            still be done on both dataset and likelihood names, no matter this
+            parameter.
         '''
+
         matches, no_matches = [], []
         for component in self.valid_likelihoods:
             key, func, *_ = component
@@ -365,10 +473,7 @@ class Observations:
         return matches if not exclude else no_matches
 
     def get_sources(self, fmt='bibtex'):
-        '''return a dict of all used sources
-
-        fmt : 'bibtex', 'bibcode', 'citep'
-        '''
+        '''Return a dict of formatted citations for each contained dataset'''
         # TODO make this use dataset __citation__'s so it doesnt pull each time
 
         res = {}
@@ -393,37 +498,34 @@ class Observations:
 
         return res
 
-    def __init__(self, cluster):
-
-        self.cluster = util.get_std_cluster_name(cluster)
+    def __init__(self, cluster, *, standardize_name=True, restrict_to=None):
 
         self.mdata = {}
         self._dict_datasets = {}
         self.initials = DEFAULT_INITIALS.copy()
 
-        with resources.path('fitter', 'resources') as datadir:
-            with h5py.File(f'{datadir}/{self.cluster}.hdf', 'r') as file:
+        filename = util.get_cluster_path(cluster, standardize_name, restrict_to)
 
-                logging.info(f"Observations read from {file.filename}")
+        self.cluster = filename.stem
 
-                for group in self._find_groups(file):
-                    self._dict_datasets[group] = Dataset(file[group])
+        with h5py.File(filename, 'r') as file:
 
-                try:
-                    # This updates defaults with data while keeping default sort
-                    self.initials = {**self.initials, **file['initials'].attrs}
-                except KeyError:
-                    logging.info("No initial state stored, using defaults")
-                    pass
+            logging.info(f"Observations read from {filename}")
 
-                # TODO need a way to read units for some mdata from file
-                self.mdata = dict(file.attrs)
+            for group in self._find_groups(file):
+                self._dict_datasets[group] = Dataset(file[group])
+
+            try:
+                # This updates defaults with data while keeping default sort
+                self.initials = {**self.initials, **file['initials'].attrs}
+            except KeyError:
+                logging.info("No initial state stored, using defaults")
+                pass
+
+            # TODO need a way to read units for some mdata from file
+            self.mdata = dict(file.attrs)
 
     def _determine_likelihoods(self):
-        '''from observations, determine which likelihood functions will be
-        computed and return a dict of the relevant obs dataset keys, and tuples
-        of the functions and any other required args
-        '''
         from .. import probabilities
 
         comps = []
@@ -524,23 +626,13 @@ class Observations:
             # --------------------------------------------------------------
 
             elif fnmatch.fnmatch(key, '*mass_function*'):
-                import string
 
                 func = probabilities.likelihood_mass_func
 
                 # Field
                 cen = (self.mdata['RA'], self.mdata['DEC'])
-                unit = self[key].mdata['field_unit']
 
-                coords = []
-                for ch in string.ascii_letters:
-                    try:
-                        coords.append(self[key]['fields'].mdata[f'{ch}'])
-                    except KeyError:
-                        # once it stops working, we're done here
-                        break
-
-                field = probabilities.mass.Field(coords, cen=cen, unit=unit)
+                field = probabilities.mass.Field.from_dataset(self[key], cen)
 
                 comps.append((key, func, field))
 
@@ -553,11 +645,71 @@ class Observations:
 
 # TODO The units are *quite* incomplete in Model (10)
 # TODO would be cool to get this to work with limepy's `sampling`
+# TODO what attributes should be documented?
 
 class Model(lp.limepy):
+    r'''Wrapper class around a LIMEPY model, including mass function evolution
+
+    Subclasses a `limepy.limepy` model defined by the input `theta` parameters,
+    while including support for initial mass function evolution (through
+    `ssptools`), units (through `astropy.Quantity`), tracer masses and enhanced
+    metadata and mass results.
+
+    The cluster mass function is evolved from it's initial mass function using
+    fixed integration settings alongside the cluster's age, metallicity and
+    low-mass loss rate as defined in the given `Observations`. The resulting
+    mass bins are arranged correctly, and have any required (by the
+    `Observations`) tracer masses added, before being used to solve the Limepy
+    distribution function.
+
+    Parameters
+    ----------
+    theta : dict or list
+        The model input parameters. Must either be a dict, or a full list of
+        all parameters, in the exact same order as `DEFAULT_INITIALS`.
+        See package background documentation for explanation of all possible
+        input parameters.
+
+    observations : Observations, optional
+        The `Observations` instance corresponding to this cluster. While not
+        necessary for solving a theoretical model, the observations must be
+        provided for any models used in fitting/sampling procedures, as
+        including them has important impacts on the mass function makeup.
+
+    Attributes
+    ----------
+    {BH,NS,WD}_mj : astropy.Quantity
+        Black hole, neutron star or white dwarf component mass bin size
+
+    {BH,NS,WD}_Mj : astropy.Quantity
+        Black hole, neutron star or white dwarf total bin mass
+
+    {BH,NS,WD}_Nj : astropy.Quantity
+        Black hole, neutron star or white dwarf total bin number (Mj / mj)
+
+    Notes
+    -----
+    The IMF of the model is defined using a three-component broken power law,
+    of the familiar form:
+
+    .. math::
+        \xi(m) \propto \begin{cases}
+            m^{-a_1} & 0.1 M_{\odot} < m \leq 0.5 M_{\odot}, \\
+            m^{-a_2} & 0.5 M_{\odot} < m \leq 1.0 M_{\odot}, \\
+            m^{-a_3} & 1.0 M_{\odot} < m \leq 100 M_{\odot}, \\
+        \end{cases}
+
+    where the `a` exponents are given as input parameters in `theta`.
+
+    See Also
+    --------
+    limepy : Distribution-function model base of this class
+    '''
 
     def _init_mf(self):
+        '''Evolve the cluster mass function from it's IMF using `ssptools`'''
 
+        # TODO before comparing with Kroupa we might want to discuss these:
         m123 = [0.1, 0.5, 1.0, 100]  # Slope breakpoints for imf
         nbin12 = [5, 5, 20]
 
@@ -588,12 +740,12 @@ class Model(lp.limepy):
             logging.debug("No cluster FeHe stored, defaulting to -1.0")
             FeHe = -1.0
 
-        # Regulates low mass objects depletion, default -20, 0 for 47 Tuc
+        # Regulates low mass objects depletion
         try:
             Ndot = self.observations.mdata['Ndot']
         except (AttributeError, KeyError):
-            logging.debug("No cluster Ndot stored, defaulting to -20")
-            Ndot = -20
+            logging.debug("No cluster Ndot stored, defaulting to 0 /Myr")
+            Ndot = 0
 
         # Generate the mass function
         return emf3.evolve_mf(
@@ -616,6 +768,8 @@ class Model(lp.limepy):
     #     G_scale, M_scale, R_scale = self._GS, self._MS, self._RS
 
     def _assign_units(self):
+        '''Convert most values to `astropy.Quantity` with correct units'''
+
         # TODO this needs to be much more general
         #   Right now it is only applied to those params we use in likelihoods?
         #   Also the actualy units used are being set manually

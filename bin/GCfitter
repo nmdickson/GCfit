@@ -74,14 +74,9 @@ if __name__ == '__main__':
                                help='Likelihood components to '
                                     'exclude from posteriors')
 
-    shared_parser.add_argument('--no-hyperparams', dest='hyperparams',
-                               action='store_false',
-                               help="Don't use Bayesian hyperparams")
-
-    shared_parser.add_argument('--strict', nargs='+',
-                               metavar=('[STRICT]', 'LIKELIHOOD'),
-                               help="A (numeric) strictness factor to be "
-                                    "applied to each specified likelihood")
+    shared_parser.add_argument('--hyperparams', dest='hyperparams',
+                               action='store_true',
+                               help="Use Bayesian hyperparams")
 
     shared_parser.add_argument('--verbose', action='store_true')
     shared_parser.add_argument('--debug', action='store_true')
@@ -134,6 +129,13 @@ if __name__ == '__main__':
                              help='Posterior weighting fraction f_p')
     parser_nest.add_argument('--dlogz', default=0.25, type=float,
                              help='Δln(Z) tolerance initial stopping condition')
+    parser_nest.add_argument('--maxfrac', default=0.8, type=float,
+                             help='The fractional threshold, relative to the '
+                                  'peak weight, used to determine likelihood '
+                                  'bounds for dynamic sampling. Default to 0.8')
+    parser_nest.add_argument('--eff-samples', default=5000, type=pos_int,
+                             help='Number of effective posterior samples '
+                                  'stopping condition')
     parser_nest.add_argument('--maxiter', default=None, type=pos_int,
                              help='Maximum number of iterations allowed. May '
                                   'end sampling before the stopping conditions '
@@ -183,16 +185,6 @@ if __name__ == '__main__':
 
         else:
             parser.error(f"Cannot access '{bnd_file}': No such file")
-
-    # TODO could also be a way here for setting `err_on_fail` in the priors
-    if args.strict is not None:
-        try:
-            args.strict[0] = float(args.strict[0])
-        except (ValueError, TypeError):
-            args.strict = [1.] + args.strict
-
-        if len(args.strict) == 1:
-            args.strict.append('*')
 
     pathlib.Path(args.savedir).mkdir(exist_ok=True)
 
