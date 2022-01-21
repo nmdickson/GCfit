@@ -17,14 +17,13 @@ AUTHOR = 'Nolan Dickson'
 CONTACT_EMAIL = 'ndickson@ap.smu.ca'
 
 # Installation information
-# TODO This is not the right way to get ssptools, currently need to dload first
 # TODO document the subrequirements like geos, gsl, etc
 REQUIRED = [
     "corner",
-    "astro-limepy",
+    "astro-limepy==0.1.1",  # TODO only until newest version is updated on pip
     "astropy",
     "emcee",
-    "ssptools",
+    "ssptools @ git+https://github.com/nmdickson/ssptools.git",
     "schwimmbad",
     "matplotlib",
     "numpy",
