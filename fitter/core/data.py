@@ -645,6 +645,7 @@ class Observations:
 
 # TODO The units are *quite* incomplete in Model (10)
 # TODO would be cool to get this to work with limepy's `sampling`
+# TODO what attributes should be documented?
 
 class Model(lp.limepy):
     r'''Wrapper class around a LIMEPY model, including mass function evolution
@@ -666,7 +667,8 @@ class Model(lp.limepy):
     theta : dict or list
         The model input parameters. Must either be a dict, or a full list of
         all parameters, in the exact same order as `DEFAULT_INITIALS`.
-        See {{TODO docs}} for explanation of all possible input parameters.
+        See package background documentation for explanation of all possible
+        input parameters.
 
     observations : Observations, optional
         The `Observations` instance corresponding to this cluster. While not
@@ -684,8 +686,6 @@ class Model(lp.limepy):
 
     {BH,NS,WD}_Nj : astropy.Quantity
         Black hole, neutron star or white dwarf total bin number (Mj / mj)
-
-    # TODO none of the other important attributes were documented
 
     Notes
     -----
