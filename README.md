@@ -8,7 +8,6 @@ various observational Globular Cluster data products, via a parallelized
 sampling suite.
 
 ## Documentation
-TODO set this up
 All documentation, including installation instructions and examples, can be
 found [here](https://GCfit.readthedocs.io).
 
