@@ -41,7 +41,9 @@ for info on valid names.
 
 Both methods share a large assortment of keyword arguments, which define the
 probability functions and parallelization scheme used, as well as
-method-specific arguments which define the samplers themselves.
+method-specific arguments which define the samplers themselves. For specific
+call signatures and full details, see :func:`fitter.core.MCMC\_fit`
+and :func:`fitter.core.nested_fit`.
 
 Probabilities
 """""""""""""
@@ -77,9 +79,10 @@ types of datasets, can be excluded from the posterior using the
 
 The posterior also includes prior probabilities on each free parameter. These
 probability funnctions may also be specified using the ``param_priors``
-argument. Priors are handled by the ``(TODO link to priors module)`` module.
-the ``param_priors`` argument accepts a dict of param-prior pairs, where each
-entry must specify the type and relevant parameters of the prior distribution.
+argument. Priors are handled by the :class:`fitter.probabilities.priors.Priors`
+class. The ``param_priors`` argument accepts a dict of param-prior pairs,
+where each entry must specify the type and relevant parameters of a prior
+distribution.
 
 .. code-block:: python
 
@@ -271,8 +274,8 @@ The visualizations/analysis is split into two categories, for analyzing the
 fitting runs and for visualizing the best-fitting models.
 
 All fitting functions return their corresponding figure, and multiple plots
-can be "stacked" onto one another. See (TODO link viz api) for more information,
-and a list of all possible plots.
+can be "stacked" onto one another. See the source API for each to find more
+information, and a list of all possible plots.
 
 .. code-block:: python
 
@@ -289,7 +292,8 @@ Fitting Results
 ^^^^^^^^^^^^^^^
 
 The run visualizers are split into specific classes once again for the MCMC
-and nested sampler results.
+(:class:`fitter.visualize.MCMCVisualizer`) and nested sampler
+(:class:`fitter.visualize.NestedVisualizer`) results.
 
 .. code-block:: python
 
@@ -317,6 +321,9 @@ corresponding confidence intervals, which in turn describe the best-fitting
 model. From there, plots of all observables, as well as a number of other
 cluster parameters and profiles, can be created.
 
+The median best-fit model can be visualized with the
+:class:`fitter.visualize.ModelVisualizer` class.
+
 .. code-block:: python
 
     mviz = nestviz.get_model(method='mean')
@@ -334,8 +341,9 @@ cluster parameters and profiles, can be created.
 
 
 All the same plots can instead be shown with confidence intervals on the
-model outputs. The computation of these intervals may be intensive, and can
-thus be parallelized (locally) using the ``Nprocesses`` keyword.
+model outputs (:class:`fitter.visualize.CIModelVisualizer`). The computation
+of these intervals may be intensive, and can thus be parallelized (locally)
+using the ``Nprocesses`` keyword.
 
 .. code-block:: python
 

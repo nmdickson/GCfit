@@ -142,7 +142,7 @@ of the cluster. Lacking a precise method for determining the overall losses,
 which will depend on the cluster potential and galactic orbit, we opt to
 disallow the escape of any stars.
 
-TODO Remnant losses
+.. TODO Remnant losses
 
 Observations
 ============
@@ -373,8 +373,7 @@ The posterior distribution of the parameter set :math:`\Theta` must be
 determined through a statistical sampling technique. Two such set of
 algorithms are available in ``GCfit``.
 
-TODO link to *_fit functions ref
-TODO also link to a good "for more information" or at least a relevant paper
+.. TODO might want to expand on these?
 
 MCMC
 ^^^^
@@ -396,9 +395,7 @@ parallel are known as ensemble samplers.
 ``GCfit`` utilizes the `emcee <https://emcee.readthedocs.io>`_
 MCMC ensemble sampler library.
 
-.. Specifics about MCMC
-.. introduce the MCMC_fit function
-.. how it works, what we use to do it, any specific requirements from the user
+
 
 Nested Sampling
 ^^^^^^^^^^^^^^^
@@ -432,8 +429,3 @@ set.
 
 ``GCfit`` utilizes the `dynesty <https://dynesty.readthedocs.io/>`_
 Dynamic Nested Sampling package.
-
-.. Specifics about Nested Sampling
-.. the nested_fit function
-.. how it works, what we use to do it, any specific requirements from the user,
-.. prior transforms, plateau weights
