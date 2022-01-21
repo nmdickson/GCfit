@@ -10,7 +10,7 @@ Observational Data
 
 Each observational dataset should come with it's own ``source`` metadata,
 typically in the form of a
-`bibcode <https://ui.adsabs.harvard.edu/help/actions/bibcode>`_ identifier.
+`bibcode <https://adsabs.harvard.edu/help/actions/bibcode>`_ identifier.
 
 While these can be accessed directly through the metadata attribute of each
 ``Dataset``:
@@ -59,7 +59,7 @@ Models
 ======
 
 The equilibrium models used should be cited from the ``limepy`` paper:
-`2015MNRAS.454..576G <https://ui.adsabs.harvard.edu/abs/2015MNRAS.454..576G>`_.
+`2015MNRAS.454..576G <https://adsabs.harvard.edu/abs/2015MNRAS.454..576G>`_.
 
 
 Samplers
@@ -67,11 +67,11 @@ Samplers
 
 If you are using the MCMC fitter (``MCMC_fit``), the sampler source software
 should be cited as the ``emcee`` paper:
-`2013PASP..125..306F <https://ui.adsabs.harvard.edu/abs/2013PASP..125..306F>`_.
+`2013PASP..125..306F <https://adsabs.harvard.edu/abs/2013PASP..125..306F>`_.
 Specific proposal algorithm citations can be found within.
 
 Nested sampling fits (``nested_fit``) should cite the ``dynesty`` paper:
-`2020MNRAS.493.3132S <https://ui.adsabs.harvard.edu/abs/2020MNRAS.493.3132S>`_.
+`2020MNRAS.493.3132S <https://adsabs.harvard.edu/abs/2020MNRAS.493.3132S>`_.
 For specific bound and sampler algorithm sources, see the
 `dynesty documentation <https://dynesty.readthedocs.io/en/latest/references.html>`_.
 
@@ -80,14 +80,14 @@ Other
 
 If Bayesian hyperparameters are used (``hyperparams=True`` in any fitting),
 the source paper
-`2002MNRAS.335..377H <https://ui.adsabs.harvard.edu/abs/2002MNRAS.335..377H>`_
+`2002MNRAS.335..377H <https://adsabs.harvard.edu/abs/2002MNRAS.335..377H>`_
 can be cited.
 
 ``GCfit`` makes extensive use of the
-`numpy <https://ui.adsabs.harvard.edu/abs/2020Natur.585..357H>`_,
-`scipy <https://ui.adsabs.harvard.edu/abs/2020NatMe..17..261V>`_ and
-`astropy <https://ui.adsabs.harvard.edu/abs/2018AJ....156..123A>`_
+`numpy <https://adsabs.harvard.edu/abs/2020Natur.585..357H>`_,
+`scipy <https://adsabs.harvard.edu/abs/2020NatMe..17..261V>`_ and
+`astropy <https://adsabs.harvard.edu/abs/2018AJ....156..123A>`_
 libraries. All plotting functionality is enabled by the
-`matplotlib <https://ui.adsabs.harvard.edu/abs/2007CSE.....9...90H>`_ library.
+`matplotlib <https://adsabs.harvard.edu/abs/2007CSE.....9...90H>`_ library.
 Parallelization pools are handled by the
-`schwimmbad <https://ui.adsabs.harvard.edu/abs/2017JOSS....2..357P>`_ library
+`schwimmbad <https://adsabs.harvard.edu/abs/2017JOSS....2..357P>`_ library

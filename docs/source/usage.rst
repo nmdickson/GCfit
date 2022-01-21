@@ -157,8 +157,9 @@ stopping conditions.
 The base nested sampling algorithm works by randomly sampling within the
 bounds defining a single iso-likleihood contour level. As such, both the random
 sampling method, and the shape of the bounds can be specified. ``dynesty``
-offers a variety of choices for both, see (TODO link paper) for more information
-on each.
+offers a variety of choices for both, see the source paper
+(`2020MNRAS.493.3132S <https://adsabs.harvard.edu/abs/2020MNRAS.493.3132S>`_)
+for more information on each.
 
 .. code-block:: python
 

@@ -365,8 +365,6 @@ Individual parameter priors can take a few possible forms:
     \pi_i (\theta_i)  = \frac{1}{\sigma \sqrt{2\pi}}
     e^{-\frac{1}{2} \left(\frac{\theta_i-\mu}{\sigma}\right)^{2}}
 
-* TODO other kinds
-
 
 Sampling
 ========
