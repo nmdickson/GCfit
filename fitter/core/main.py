@@ -226,6 +226,131 @@ class NestedSamplingOutput(Output):
             for key, val in results.items():
                 grp[key][-n_grow:] = val
 
+    # ----------------------------------------------------------------------
+    # reconstructing a sampler based on stored resutl
+    # ----------------------------------------------------------------------
+
+    def reconstruct_sampler(self, *args, **kwargs):
+
+        # TODO a check on args, kwargs, that they match whatst stored
+        sampler = dysamp.DynamicNestedSampler(*args, **kwargs)
+
+        results = self.reconstruct_results()
+
+        sampler.saved_run = self._reconstruct_runrecord()
+
+        sampler.eff = results.eff
+        sampler.it = results.niter + 1
+
+        sampler.batch = sampler.saved_run.D['batch'].max()
+
+        sampler.ncall = sampler.saved_run.D['nc'].sum()
+
+        sampler.bound = self._reconstruct_bounds()
+
+        sampler.base = results.batch_nlive.size > 0
+
+        sampler.nlive0 = sampler.saved_run.D['n'][0]
+
+        # TODO is this necessary? Would need to build with a mask on batch num
+        # self.base_run = RunRecord()
+
+        # these will be re-set when `sample_batch`
+        sampler.new_logl_min, sampler.new_logl_max = -np.inf, np.inf
+
+        return sampler
+
+    def _reconstruct_runrecord(self):
+        '''return a dynesty-style `RunRecord` class to apply as a `saved_run`'''
+
+        rec = dysamp.RunRecord()
+
+        results = self.reconstruct_results()
+
+        rec.D = dict(
+            id=results.samples_id,
+            u=results.samples_u,
+            v=results.samples,
+            logl=results.logl,
+            logvol=results.logvol,
+            logwt=results.logwt,
+            logz=results.logz,
+            logzvar=results.logzerr**2,
+            h=results.information,
+            nc=results.ncall,
+            it=results.samples_it,
+            boundidx=results.samples_bound,
+            bounditer=results.bound_iter,
+            n=results.samples_n,
+            scale=results.scale,
+            batch=results.samples_batch,
+            batch_nlive=results.batch_nlive,
+            batch_bounds=results.batch_bounds,
+        )
+
+        return rec
+
+    def reconstruct_results(self):
+        '''return a dynesty-style `Results` class'''
+        from dynesty.results import Results
+
+        with self.open('r') as hdf:
+
+            stored_res = hdf[self.group]
+
+            out_res = {}
+
+            for k, d in stored_res.items():
+
+                if k in ('current_batch', 'bound'):
+                    continue
+
+                out_res[k] = np.array(d)
+
+        out_res['bound'] = self._reconstruct_bounds()
+
+        return Results(out_res)
+
+    def _reconstruct_bounds(self):
+        '''
+        based on the bound info stored in file, get actual dynesty bound objects
+        '''
+        from dynesty import bounding
+
+        with self.open('r') as hdf:
+
+            bnd_grp = hdf[self.group]['bound']
+
+            bnds = []
+
+            for i in range(len(bnd_grp)):
+
+                ds = bnd_grp[str(i)]
+                btype = ds.attrs['type']
+
+                if btype == 'UnitCube':
+                    bnds.append(bounding.UnitCube(ds.attrs['ndim']))
+
+                elif btype == 'MultiEllipsoid':
+                    ctrs = ds['centres'][:]
+                    covs = ds['covariances'][:]
+                    bnds.append(bounding.MultiEllipsoid(ctrs=ctrs, covs=covs))
+
+                elif btype == 'RadFriends':
+                    cov = ds['covariances'][:]
+                    ndim = ds.attrs['ndim']
+                    bnds.append(bounding.RadFriends(ndim=ndim, cov=cov))
+
+                elif btype == 'SupFriends':
+                    cov = ds['covariances'][:]
+                    ndim = ds.attrs['ndim']
+                    bnds.append(bounding.SupFriends(ndim=ndim, cov=cov))
+
+                else:
+                    raise RuntimeError('unrecognized bound type ', btype)
+
+        return bnds
+
 
 def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
              mpi=False, initials=None, param_priors=None, moves=None,
