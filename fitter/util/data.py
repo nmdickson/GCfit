@@ -105,7 +105,6 @@ def core_cluster_list():
     '''Return a list of cluster names, useable by `fitter.Observations`'''
     
     with _open_resources() as datadir:
-
         return [f.stem for f in pathlib.Path(datadir).glob('[!TEST]*.hdf')]
 
 
@@ -186,7 +185,6 @@ def hdf_view(cluster, attrs=False, spacing='normal', *, outfile="stdout"):
 
     # TODO use get_std_cluster_name here
     with _open_resources() as datadir:
-
         with h5py.File(f'{datadir}/{cluster}.hdf', 'r') as file:
 
             out = f"{f' {cluster} ':=^40}\n\n"
@@ -1090,7 +1088,6 @@ class ClusterFile:
         '''make all checks of this dataset'''
 
         with _open_resources() as datadir:
-
             with open(f'{datadir}/specification.json') as ofile:
                 fullspec = json.load(ofile)
 
@@ -1152,7 +1149,6 @@ class ClusterFile:
         '''make all checks of these initials'''
 
         with _open_resources() as datadir:
-
             with open(f'{datadir}/specification.json') as ofile:
                 init_spec = json.load(ofile)['INITIALS']
 

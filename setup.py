@@ -31,7 +31,7 @@ REQUIRED = [
     "h5py",
     "tqdm",
     "dynesty",
-    "gala",
+    "gala==1.3",
     "shapely",
     "sphinx-toggleprompt"
 ]
