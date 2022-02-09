@@ -6,7 +6,6 @@ import shutil
 import pathlib
 import logging
 import fnmatch
-from importlib import resources
 
 import h5py
 import numpy as np
@@ -85,10 +84,27 @@ def bibcode2cite(bibcode):
 # Data file utilities
 # --------------------------------------------------------------------------
 
+def _open_resources():
+    '''Quick and dirty backwards-compatible solution to resources in directories
+    See github.com/python/importlib_resources/issues/58 and
+    bugs.python.org/issue44162 for more detail
+    '''
+    from importlib import resources
+
+    try:
+        # Python >= 3.9
+        return resources.files('fitter') / 'resources'
+
+    except AttributeError:
+        # Python >= 3.7
+        # we don't support lower than 3.7 (when resources was added) anyways
+        return resources.path('fitter', 'resources')
+
 
 def core_cluster_list():
     '''Return a list of cluster names, useable by `fitter.Observations`'''
-    with resources.path('fitter', 'resources') as datadir:
+    
+    with _open_resources() as datadir:
         return [f.stem for f in pathlib.Path(datadir).glob('[!TEST]*.hdf')]
 
 
@@ -168,7 +184,7 @@ def hdf_view(cluster, attrs=False, spacing='normal', *, outfile="stdout"):
     # ----------------------------------------------------------------------
 
     # TODO use get_std_cluster_name here
-    with resources.path('fitter', 'resources') as datadir:
+    with _open_resources() as datadir:
         with h5py.File(f'{datadir}/{cluster}.hdf', 'r') as file:
 
             out = f"{f' {cluster} ':=^40}\n\n"
@@ -366,7 +382,8 @@ def get_cluster_path(name, standardize_name=True, restrict_to='local'):
     # Get full paths to each file
     local_file = pathlib.Path(local_dir, filename)
 
-    with resources.path('fitter', 'resources') as core_dir:
+
+    with _open_resources() as core_dir:
         core_file = pathlib.Path(core_dir, std_filename)
 
     # ----------------------------------------------------------------------
@@ -497,7 +514,8 @@ class ClusterFile:
             logging.info(f'{name} is a core cluster, making a new local copy')
 
             # TODO Add a flag that this is a local file? or only n Observations?
-            with resources.path('fitter', 'resources') as core_dir:
+
+            with _open_resources() as core_dir:
                 core_file = pathlib.Path(core_dir, name).with_suffix('.hdf')
                 shutil.copyfile(core_file, local_file)
 
@@ -1069,7 +1087,7 @@ class ClusterFile:
     def _test_dataset(self, key, dataset):
         '''make all checks of this dataset'''
 
-        with resources.path('fitter', 'resources') as datadir:
+        with _open_resources() as datadir:
             with open(f'{datadir}/specification.json') as ofile:
                 fullspec = json.load(ofile)
 
@@ -1105,7 +1123,8 @@ class ClusterFile:
     def _test_metadata(self, metadata):
         '''make all checks of this metadata'''
 
-        with resources.path('fitter', 'resources') as datadir:
+
+        with _open_resources() as datadir:
             with open(f'{datadir}/specification.json') as ofile:
                 mdata_spec = json.load(ofile)['METADATA']
 
@@ -1129,7 +1148,7 @@ class ClusterFile:
     def _test_initials(self, initials):
         '''make all checks of these initials'''
 
-        with resources.path('fitter', 'resources') as datadir:
+        with _open_resources() as datadir:
             with open(f'{datadir}/specification.json') as ofile:
                 init_spec = json.load(ofile)['INITIALS']
 

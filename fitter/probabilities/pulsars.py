@@ -424,8 +424,11 @@ def field_Pdot_KDE(*, pulsar_db='field_msp.dat', corrected=True):
     psrcat -db_file psrcat.db -c "p0 p1 p1_i GB GL Dist" -l "p0 < 0.1 &&
         p1 > 0 && p1_i > 0 && ! assoc(GC)" -x > field_msp.dat
     '''
+    from ..util.data import _open_resources
+
     # Get field pulsars data
-    with resources.path('fitter', 'resources') as datadir:
+
+    with _open_resources() as datadir:
         pulsar_db = pathlib.Path(f"{datadir}/{pulsar_db}")
         cols = (0, 3, 6, 7, 8, 9)
         P, Pdot, Pdot_pm, lat, lon, D = np.genfromtxt(pulsar_db, usecols=cols).T
