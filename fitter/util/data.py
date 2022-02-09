@@ -103,7 +103,9 @@ def _open_resources():
 
 def core_cluster_list():
     '''Return a list of cluster names, useable by `fitter.Observations`'''
+    
     with _open_resources() as datadir:
+
         return [f.stem for f in pathlib.Path(datadir).glob('[!TEST]*.hdf')]
 
 
@@ -184,6 +186,7 @@ def hdf_view(cluster, attrs=False, spacing='normal', *, outfile="stdout"):
 
     # TODO use get_std_cluster_name here
     with _open_resources() as datadir:
+
         with h5py.File(f'{datadir}/{cluster}.hdf', 'r') as file:
 
             out = f"{f' {cluster} ':=^40}\n\n"
@@ -381,6 +384,7 @@ def get_cluster_path(name, standardize_name=True, restrict_to='local'):
     # Get full paths to each file
     local_file = pathlib.Path(local_dir, filename)
 
+
     with _open_resources() as core_dir:
         core_file = pathlib.Path(core_dir, std_filename)
 
@@ -512,6 +516,7 @@ class ClusterFile:
             logging.info(f'{name} is a core cluster, making a new local copy')
 
             # TODO Add a flag that this is a local file? or only n Observations?
+
             with _open_resources() as core_dir:
                 core_file = pathlib.Path(core_dir, name).with_suffix('.hdf')
                 shutil.copyfile(core_file, local_file)
@@ -1085,6 +1090,7 @@ class ClusterFile:
         '''make all checks of this dataset'''
 
         with _open_resources() as datadir:
+
             with open(f'{datadir}/specification.json') as ofile:
                 fullspec = json.load(ofile)
 
@@ -1120,6 +1126,7 @@ class ClusterFile:
     def _test_metadata(self, metadata):
         '''make all checks of this metadata'''
 
+
         with _open_resources() as datadir:
             with open(f'{datadir}/specification.json') as ofile:
                 mdata_spec = json.load(ofile)['METADATA']
@@ -1145,6 +1152,7 @@ class ClusterFile:
         '''make all checks of these initials'''
 
         with _open_resources() as datadir:
+
             with open(f'{datadir}/specification.json') as ofile:
                 init_spec = json.load(ofile)['INITIALS']
 
