@@ -211,7 +211,7 @@ class _ClusterVisualizer:
             return dataset[f'Δ{key}']
         except KeyError:
             try:
-                return (dataset[f'Δ{key},down'], dataset[f'Δ{key},up'])
+                return np.c_[dataset[f'Δ{key},down'], dataset[f'Δ{key},up']].T
             except KeyError:
                 return None
 
