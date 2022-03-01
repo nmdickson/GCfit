@@ -19,6 +19,12 @@ class _RunVisualizer:
 
     _cmap = plt.cm.get_cmap('viridis')
 
+    def __str__(self):
+        try:
+            return f'{self.file.filename} - Run Results'
+        except AttributeError:
+            return "Run Results"
+
     def _setup_artist(self, fig, ax, *, use_name=True):
         '''setup a plot (figure and ax) with one single ax'''
 
@@ -181,9 +187,6 @@ class MCMCVisualizer(_RunVisualizer):
 
     based on an output file I guess?
     '''
-
-    def __str__(self):
-        return f'{self.file.filename} - Run Results'
 
     def __init__(self, file, observations, group='mcmc', name=None):
 
@@ -677,6 +680,7 @@ class NestedVisualizer(_RunVisualizer):
         self.results = self._get_results()
 
         self.has_meta = 'metadata' in self.file
+        self.has_stats = 'statistics' in self.file
 
     # ----------------------------------------------------------------------
     # Helpers
@@ -1342,3 +1346,81 @@ class NestedVisualizer(_RunVisualizer):
             return mean, err, np.array(vars_)
         else:
             return mean, err
+
+    # ----------------------------------------------------------------------
+    # Summaries
+    # ----------------------------------------------------------------------
+
+    def print_summary(self, out=None, content='all', *, N_simruns=50):
+        '''write a summary of the run results, to a `out` file-like or stdout
+        content : {'all', 'results', 'metadata'}
+        '''
+        # TODO add more 2nd level results, like comments on BH masses, etc
+
+        if out is None:
+            out = sys.stdout
+
+        mssg = f'{self}'
+        mssg += f'\n{"=" * len(mssg)}\n'
+
+        # RESULTS
+
+        # organize this arg (content) more like it is in cum_mass plots
+        if content == 'all' or content == 'results':
+
+            sr = self._sim_errors(N_simruns)
+
+            mns, σ_mns = self.parameter_means(sim_runs=sr, return_samples=False)
+            vrs, σ_vrs = self.parameter_vars(sim_runs=sr, return_samples=False)
+            std, σ_std = np.sqrt(np.diag(vrs)), np.sqrt(np.diag(σ_vrs))
+
+            # median and 16, 84 percentiles of all params
+            labels, _ = self._get_chains()
+
+            mssg += f'{" " * 8}{"Mean":^14} | {"Std. Dev.":^14}\n'
+
+            for ind, param in enumerate(labels):
+
+                if 'fixed' in param:
+                    mssg += (f'{param[:-8]:>5} = {mns[ind]:.3f} '
+                             f'({"fixed":^14}) | ')
+                    mssg += f'{"-" * 14}\n'
+                else:
+                    mssg += (f'{param:>5} = {mns[ind]:.3f} '
+                             f'(±{σ_mns[ind]:.3f}) | ')
+                    mssg += (f'{std[ind]:.3f} (±{σ_std[ind]:.3f})\n')
+
+        if content == 'all' or content == 'metadata':
+
+            # INFO OF RUN
+            mssg += f'\nRun Metadata'
+            mssg += f'\n{"=" * 12}\n'
+
+            # has stats? if so ... idk
+            mssg += f'Has statistics = {self.has_stats}\n'
+
+            # has metadata? if so fixed and excluded
+            mssg += f'Has metadata = {self.has_meta}\n'
+            if self.has_meta:
+                mdata = self.file['metadata']
+
+                mssg += 'Fixed parameters:\n'
+                fixed = mdata['fixed_params'].attrs
+                if fixed:
+                    for k, v in fixed.items():
+                        mssg += f'    {k} = {v}\n'
+                else:
+                    mssg += '    None\n'
+
+                mssg += 'Excluded components:\n'
+                exc = mdata['excluded_likelihoods'].attrs
+                if exc:
+                    for i, v in exc.items():
+                        mssg += f'    ({i}) {v}\n'
+                else:
+                    mssg += '    None\n'
+
+                # TODO add specified bounds/priors
+                # mssg += 'Specified prior bounds'
+
+        out.write(mssg)
