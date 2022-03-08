@@ -103,7 +103,7 @@ def _open_resources():
 
 def core_cluster_list():
     '''Return a list of cluster names, useable by `fitter.Observations`'''
-    
+
     with _open_resources() as datadir:
         return [f.stem for f in pathlib.Path(datadir).glob('[!TEST]*.hdf')]
 
@@ -325,7 +325,7 @@ def get_std_cluster_name(name):
     return name
 
 
-def get_cluster_path(name, standardize_name=True, restrict_to='local'):
+def get_cluster_path(name, standardize_name=True, restrict_to=None):
     '''Based on a cluster name return the path of the corresponding cluster file
 
     Given a cluster name, search the relevant directories for the corresponding
@@ -1122,7 +1122,6 @@ class ClusterFile:
     def _test_metadata(self, metadata):
         '''make all checks of this metadata'''
 
-
         with _open_resources() as datadir:
             with open(f'{datadir}/specification.json') as ofile:
                 mdata_spec = json.load(ofile)['METADATA']
@@ -1191,6 +1190,7 @@ class ClusterFile:
         If *any* tests fail, the reasons for failure are logged in the
         `_inv_mssg` list, and this function returns `False`.
         '''
+        # TODO test should also include non-live objects (maybe optional?)
 
         # test datasets for required variables
 
@@ -1201,6 +1201,7 @@ class ClusterFile:
         for key, dataset in self.live_datasets.items():
             valid &= self._test_dataset(key, dataset)
 
+        # TODO only testing *live* metadata means it will fail on editted files
         valid &= self._test_metadata(self.live_metadata)
 
         valid &= self._test_initials(self.live_initials)
@@ -1239,6 +1240,7 @@ class ClusterFile:
 
         logging.info("Writing live data to file")
 
+        # TODO quitting the confirm prompts seems to remove live stuff?
         self._write_datasets(confirm=confirm)
         self._write_metadata(confirm=confirm)
         self._write_initials(confirm=confirm)
