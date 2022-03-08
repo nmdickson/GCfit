@@ -1,7 +1,10 @@
-from .models import CIModelVisualizer, ModelVisualizer
+from .. import Observations
 from ..probabilities import priors
+from .models import CIModelVisualizer, ModelVisualizer
 
 import sys
+import pathlib
+import logging
 import warnings
 
 import h5py
@@ -10,11 +13,16 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mpl_clr
 
 
-__all__ = ['MCMCVisualizer', 'NestedVisualizer']
+__all__ = ['RunCollection', 'MCMCRun', 'NestedRun']
+
+
+# --------------------------------------------------------------------------
+# Individual Run Analysis
+# --------------------------------------------------------------------------
 
 
 # TODO a way to plot our priors, probably for both vizs
-class _RunVisualizer:
+class _RunAnalysis:
     '''base class for all visualizers of all run types'''
 
     _cmap = plt.cm.get_cmap('viridis')
@@ -181,7 +189,7 @@ class _RunVisualizer:
         return fig, np.atleast_1d(axarr)
 
 
-class MCMCVisualizer(_RunVisualizer):
+class MCMCRun(_RunAnalysis):
     '''All the plots based on a model run, like the chains and likelihoods
     and marginals corner plots and etc
 
@@ -627,7 +635,7 @@ class MCMCVisualizer(_RunVisualizer):
         out.write(mssg)
 
 
-class NestedVisualizer(_RunVisualizer):
+class NestedRun(_RunAnalysis):
 
     @property
     def weights(self):
@@ -1424,3 +1432,25 @@ class NestedVisualizer(_RunVisualizer):
                 # mssg += 'Specified prior bounds'
 
         out.write(mssg)
+
+
+# --------------------------------------------------------------------------
+# Collections of Runs
+# --------------------------------------------------------------------------
+
+class RunCollection:
+    '''For analyzing a collection of runs all at once
+    '''
+
+    def _init_runs(self, directory):
+
+    def plot_all_params(self, ):
+
+    def plot_a3_FeHe(self, ):
+        '''Some special cases of plot_relation can have their own named func'''
+
+    def plot_relation(self, param1, param2):
+        '''plot correlation between two param means with all runs'''
+
+    def summary(self, ):
+

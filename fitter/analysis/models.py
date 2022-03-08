@@ -13,6 +13,11 @@ import astropy.visualization as astroviz
 __all__ = ['ModelVisualizer', 'CIModelVisualizer', 'ObservationsVisualizer']
 
 
+# --------------------------------------------------------------------------
+# Individual model visualizers
+# --------------------------------------------------------------------------
+
+
 class _ClusterVisualizer:
 
     _MARKERS = ('o', '^', 'D', '+', 'x', '*', 's', 'p', 'h', 'v', '1', '2')
