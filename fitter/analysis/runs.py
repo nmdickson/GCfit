@@ -1442,6 +1442,10 @@ class RunCollection:
     '''For analyzing a collection of runs all at once
     '''
 
+    # ----------------------------------------------------------------------
+    # Initialization
+    # ----------------------------------------------------------------------
+
     def __init__(self, runs):
         self.runs = runs
 
@@ -1463,7 +1467,7 @@ class RunCollection:
 
             try:
                 # TODO support both nested and mcmc, somehow organically
-                rv = NestedRun(file, obs, name=obs.cluster)
+                run = NestedRun(file, obs, name=obs.cluster)
 
             except KeyError as err:
 
@@ -1475,13 +1479,45 @@ class RunCollection:
                     logging.debug(mssg)
                     continue
 
-            runs.append(rv)
+            runs.append(run)
 
-        runs.sort(key=lambda rv: rv.name)
+        runs.sort(key=lambda run: run.name)
 
         return cls(runs)
 
-    # def plot_all_params(self, show='each', save=False, save_kw=None, **kwargs):
+    # ----------------------------------------------------------------------
+    # Iterative plots
+    # ----------------------------------------------------------------------
+
+    def iter_plots(self, plot_func, yield_run=False, *args, **kwargs):
+        '''calls each run's `plot_func`, yields a figure
+        all args, kwargs passed to plot func
+        '''
+        for run in self.runs:
+            fig = getattr(run, plot_func)(*args, **kwargs)
+
+            yield fig, run if yield_run else fig
+
+    def save_plots(self, plot_func, fn_pattern=None, save_kw=None,
+                   *args, **kwargs):
+        '''
+        fn_pattern is format string which will be passed the kw "cluster" name
+            (i.e. `fn_pattern.format(cluster=run.name)`)
+            if None, will be ./{cluster}_{plot_func[5:]}
+            (Include the desired dir here too)
+        '''
+
+        if fn_pattern is None:
+            fn_pattern = f'./{{cluster}}_{plot_func[5:]}'
+
+        if save_kw is None:
+            save_kw = {}
+
+        for fig, run in self.iter_plots(plot_func, True, *args, **kwargs):
+
+            save_kw['fname'] = fn_pattern.format(cluster=run.name)
+
+            fig.savefig(**save_kw)
 
     # def plot_a3_FeHe(self, ):
         '''Some special cases of plot_relation can have their own named func'''
@@ -1490,4 +1526,3 @@ class RunCollection:
         '''plot correlation between two param means with all runs'''
 
     # def summary(self, ):
-
