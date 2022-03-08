@@ -1442,15 +1442,52 @@ class RunCollection:
     '''For analyzing a collection of runs all at once
     '''
 
-    def _init_runs(self, directory):
+    def __init__(self, runs):
+        self.runs = runs
 
-    def plot_all_params(self, ):
+    @classmethod
+    def from_dir(cls, directory, pattern='NGC*', strict=False):
+        '''init by finding all run files in a directory'''
 
-    def plot_a3_FeHe(self, ):
+        directory = pathlib.Path(directory)
+
+        runs = []
+
+        for fn in directory.glob(pattern):
+
+            cluster = fn.name
+
+            file = pathlib.Path(fn.resolve(), f'{cluster}_sampler.hdf')
+
+            obs = Observations(cluster)
+
+            try:
+                # TODO support both nested and mcmc, somehow organically
+                rv = NestedRun(file, obs, name=obs.cluster)
+
+            except KeyError as err:
+
+                mssg = f'Failed to create run for {obs.cluster}: {err}'
+
+                if strict:
+                    raise RuntimeError(mssg)
+                else:
+                    logging.debug(mssg)
+                    continue
+
+            runs.append(rv)
+
+        runs.sort(key=lambda rv: rv.name)
+
+        return cls(runs)
+
+    # def plot_all_params(self, show='each', save=False, save_kw=None, **kwargs):
+
+    # def plot_a3_FeHe(self, ):
         '''Some special cases of plot_relation can have their own named func'''
 
-    def plot_relation(self, param1, param2):
+    # def plot_relation(self, param1, param2):
         '''plot correlation between two param means with all runs'''
 
-    def summary(self, ):
+    # def summary(self, ):
 
