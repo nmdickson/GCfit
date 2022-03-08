@@ -382,7 +382,6 @@ def get_cluster_path(name, standardize_name=True, restrict_to='local'):
     # Get full paths to each file
     local_file = pathlib.Path(local_dir, filename)
 
-
     with _open_resources() as core_dir:
         core_file = pathlib.Path(core_dir, std_filename)
 
@@ -516,7 +515,7 @@ class ClusterFile:
             # TODO Add a flag that this is a local file? or only n Observations?
 
             with _open_resources() as core_dir:
-                core_file = pathlib.Path(core_dir, name).with_suffix('.hdf')
+                core_file = pathlib.Path(core_dir, std_name).with_suffix('.hdf')
                 shutil.copyfile(core_file, local_file)
 
                 self.file = h5py.File(local_file, 'r+')
