@@ -1486,6 +1486,30 @@ class RunCollection:
         return cls(runs)
 
     # ----------------------------------------------------------------------
+    # Helpers
+    # ----------------------------------------------------------------------
+
+    def _get_params(self, N_simruns=100, label_fixed=True):
+
+        params = []
+
+        for run in self.runs:
+
+            lbls, _ = run._get_chains()
+
+            if label_fixed is False:
+                lbls = [k[:-8] if k.endswith(' (fixed)') else k for k in lbls]
+
+            sr = run._sim_errors(Nruns=N_simruns)
+
+            mn = run.parameter_means(sim_runs=sr)[0]
+            std = np.sqrt(np.diag(run.parameter_vars(sim_runs=sr)[0]))
+
+            params.append({k: (mn[i], std[i]) for i, k in enumerate(lbls)})
+
+        return params
+
+    # ----------------------------------------------------------------------
     # Iterative plots
     # ----------------------------------------------------------------------
 
@@ -1519,10 +1543,49 @@ class RunCollection:
 
             fig.savefig(**save_kw)
 
+    # ----------------------------------------------------------------------
+    # Comparison plots
+    # ----------------------------------------------------------------------
+
     # def plot_a3_FeHe(self, ):
         '''Some special cases of plot_relation can have their own named func'''
 
-    # def plot_relation(self, param1, param2):
-        '''plot correlation between two param means with all runs'''
+    def plot_relation(self, param1, param2, errors='bars', N_simruns=100):
+        '''plot correlation between two param means with all runs
+
+        errorbars, or 2d-ellipses
+        '''
+
+        fig, ax = plt.subplots()
+
+        # TODO also support metadata
+        params = self._get_params(N_simruns=N_simruns)
+
+        for run, prms in zip(self.runs, params):
+
+            try:
+                (x, dx) = prms[param1]
+            except KeyError as err:
+                try:
+                    x, dx = run.obs.mdata[param1], 0.
+                except KeyError:
+                    raise KeyError(f'{param1} is not a valid param') from err
+
+            try:
+                (y, dy) = prms[param2]
+            except KeyError as err:
+                try:
+                    y, dy = run.obs.mdata[param2], 0.
+                except KeyError:
+                    raise KeyError(f'{param2} is not a valid param') from err
+
+            ax.errorbar(x, y, xerr=dx, yerr=dy, marker='o', label=run.name)
+
+        ax.set_xlabel(param1)
+        ax.set_ylabel(param2)
+
+        ax.legend()
+
+        return fig
 
     # def summary(self, ):
