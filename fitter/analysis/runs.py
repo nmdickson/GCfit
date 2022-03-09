@@ -1438,9 +1438,12 @@ class NestedRun(_RunAnalysis):
 # Collections of Runs
 # --------------------------------------------------------------------------
 
-class RunCollection:
+class RunCollection(_RunAnalysis):
     '''For analyzing a collection of runs all at once
     '''
+
+    def __str__(self):
+        return "Collection of Runs"
 
     # ----------------------------------------------------------------------
     # Initialization
@@ -1547,16 +1550,38 @@ class RunCollection:
     # Comparison plots
     # ----------------------------------------------------------------------
 
-    # def plot_a3_FeHe(self, ):
+    def plot_a3_FeHe(self, fig=None, ax=None, show_kroupa=False,
+                     *args, **kwargs):
         '''Some special cases of plot_relation can have their own named func'''
 
-    def plot_relation(self, param1, param2, errors='bars', N_simruns=100):
+        fig = self.plot_relation('FeHe', 'a3', fig, ax, *args, **kwargs)
+
+        if show_kroupa:
+            # TODO this will of course stop auto-adjusting labels when zoom etc
+
+            ax = fig.gca()
+
+            yticks = list(ax.get_yticks())
+            new_ticks = yticks + [2.3]
+            new_labels = [plt.Text(0, y, str(y)) for y in yticks]
+            new_labels += [plt.Text(0, 2.3, r'Kroupa ($\alpha_3=2.3$)')]
+
+            ax.set_yticks(new_ticks, new_labels)
+
+            # TODO what colour to use? why do we need to set it here, not above?
+            ax.axhline(y=2.3, color='r')
+            ax.get_yticklabels()[-1].set_color('r')
+
+        return fig
+
+    def plot_relation(self, param1, param2, fig=None, ax=None, *,
+                      errors='bars', N_simruns=100):
         '''plot correlation between two param means with all runs
 
         errorbars, or 2d-ellipses
         '''
 
-        fig, ax = plt.subplots()
+        fig, ax = self._setup_artist(fig, ax)
 
         # TODO also support metadata
         params = self._get_params(N_simruns=N_simruns)
