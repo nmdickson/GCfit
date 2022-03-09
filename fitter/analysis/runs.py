@@ -1561,16 +1561,11 @@ class RunCollection(_RunAnalysis):
 
             ax = fig.gca()
 
-            yticks = list(ax.get_yticks())
-            new_ticks = yticks + [2.3]
-            new_labels = [plt.Text(0, y, str(y)) for y in yticks]
-            new_labels += [plt.Text(0, 2.3, r'Kroupa ($\alpha_3=2.3$)')]
-
-            ax.set_yticks(new_ticks, new_labels)
-
-            # TODO what colour to use? why do we need to set it here, not above?
             ax.axhline(y=2.3, color='r')
-            ax.get_yticklabels()[-1].set_color('r')
+
+            ax2 = ax.secondary_yaxis('right')
+
+            ax2.set_yticks([2.3], [r'Kroupa ($\alpha_3=2.3$)'], c='r')
 
         return fig
 
