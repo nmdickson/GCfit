@@ -1438,6 +1438,54 @@ class NestedRun(_RunAnalysis):
 # Collections of Runs
 # --------------------------------------------------------------------------
 
+
+class _Annotator:
+
+    arrow = {'arrowstyle': "-", "connectionstyle": "arc3", "color": "black"}
+
+    def __init__(self, fig, runs, xdata, ydata):
+        self.fig = fig
+        self.runs, self.xdata, self.ydata = runs, xdata, ydata
+
+        # TODO this size needs to be somewhat automatic, maybe based on errs
+        self.delx = ((np.nanmax(self.xdata) - np.nanmin(self.xdata)) / 10)
+        self.dely = ((np.nanmax(self.ydata) - np.nanmin(self.ydata)) / 10)
+
+        self.fig.canvas.mpl_connect('pick_event', self)
+
+        self.cur_annot = None
+        self.cur_ind = None
+
+    def __call__(self, event):
+        ind = event.ind[0]
+        ax = event.artist.axes
+
+        xy = (self.xdata[ind], self.ydata[ind])
+
+        xtext = self.xdata[ind] + self.delx
+        ytext = self.ydata[ind] + self.dely
+
+        if ytext > np.nanmax(self.ydata):
+            ytext = np.nanmax(self.ydata)
+
+        cluster = self.runs[ind]
+
+        # clear old annotation
+        if self.cur_annot is not None:
+            self.cur_annot.remove()
+
+        if ind == self.cur_ind:
+            self.cur_ind = None
+            self.cur_annot = None
+
+        else:
+            self.cur_ind = ind
+            self.cur_annot = ax.annotate(cluster, xy, (xtext, ytext),
+                                         arrowprops=self.arrow)
+
+        self.fig.canvas.draw()
+
+
 class RunCollection(_RunAnalysis):
     '''For analyzing a collection of runs all at once
     '''
@@ -1557,7 +1605,6 @@ class RunCollection(_RunAnalysis):
         fig = self.plot_relation('FeHe', 'a3', fig, ax, *args, **kwargs)
 
         if show_kroupa:
-            # TODO this will of course stop auto-adjusting labels when zoom etc
 
             ax = fig.gca()
 
@@ -1570,41 +1617,46 @@ class RunCollection(_RunAnalysis):
         return fig
 
     def plot_relation(self, param1, param2, fig=None, ax=None, *,
-                      errors='bars', N_simruns=100):
+                      errors='bars', N_simruns=100, annotate=False):
         '''plot correlation between two param means with all runs
 
         errorbars, or 2d-ellipses
         '''
+
+        def _get_data(prms, mdata, key):
+            try:
+                return prms[key]
+            except KeyError as err:
+                try:
+                    return mdata[key], 0.
+                except KeyError:
+                    raise KeyError(f'{key} is not a valid param') from err
 
         fig, ax = self._setup_artist(fig, ax)
 
         # TODO also support metadata
         params = self._get_params(N_simruns=N_simruns)
 
-        for run, prms in zip(self.runs, params):
+        clrs = self._cmap(np.linspace(0., 1., len(self.runs)))
 
-            try:
-                (x, dx) = prms[param1]
-            except KeyError as err:
-                try:
-                    x, dx = run.obs.mdata[param1], 0.
-                except KeyError:
-                    raise KeyError(f'{param1} is not a valid param') from err
+        x, dx = np.array([_get_data(prms, run.obs.mdata, param1)
+                          for run, prms in zip(self.runs, params)]).T
+        y, dy = np.array([_get_data(prms, run.obs.mdata, param2)
+                          for run, prms in zip(self.runs, params)]).T
 
-            try:
-                (y, dy) = prms[param2]
-            except KeyError as err:
-                try:
-                    y, dy = run.obs.mdata[param2], 0.
-                except KeyError:
-                    raise KeyError(f'{param2} is not a valid param') from err
+        ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', ecolor=clrs)
+        ax.scatter(x, y, color=clrs, picker=True)  # TODO pickradius?
 
-            ax.errorbar(x, y, xerr=dx, yerr=dy, marker='o', label=run.name)
-
+        # TODO mathy labels
         ax.set_xlabel(param1)
         ax.set_ylabel(param2)
 
-        ax.legend()
+        if annotate:
+            _Annotator(fig, self.runs, x, y)
+
+        else:
+            # TODO not happy with any legend
+            fig.legend(loc='upper center', ncol=10)
 
         return fig
 
