@@ -1440,6 +1440,9 @@ class NestedRun(_RunAnalysis):
 
 
 class _Annotator:
+    '''Annotate points on click with run/cluster names
+    picker=True must be set on the actual plot
+    '''
 
     arrow = {'arrowstyle': "-", "connectionstyle": "arc3", "color": "black"}
 
@@ -1542,6 +1545,9 @@ class RunCollection(_RunAnalysis):
 
     def _get_params(self, N_simruns=100, label_fixed=True):
 
+        # TODO make these into a sort of property which checks if N_simruns is
+        #   the same as last time it was computed and just returns that then
+
         params = []
 
         for run in self.runs:
@@ -1624,6 +1630,7 @@ class RunCollection(_RunAnalysis):
         '''
 
         def _get_data(prms, mdata, key):
+            '''helper func for loading data from params or from metadata'''
             try:
                 return prms[key]
             except KeyError as err:
@@ -1647,7 +1654,7 @@ class RunCollection(_RunAnalysis):
         ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', ecolor=clrs)
         ax.scatter(x, y, color=clrs, picker=True)  # TODO pickradius?
 
-        # TODO mathy labels
+        # TODO mathy labels (just need a better labels method, sep from chains)
         ax.set_xlabel(param1)
         ax.set_ylabel(param2)
 
@@ -1660,4 +1667,20 @@ class RunCollection(_RunAnalysis):
 
         return fig
 
-    # def summary(self, ):
+    def summary(self, out=sys.stdout, *, N_simruns=100):
+        '''output a table of all parameter means for each cluster'''
+
+        labels = list(self.runs[0].obs.initials)
+
+        hdr = "\t".join(f"{lbl}\tσ_{lbl}" for lbl in labels)
+
+        out.write(f'Cluster\t{hdr}\n')
+
+        params = self._get_params(N_simruns=N_simruns)
+
+        for run, prms in zip(self.runs, params):
+
+            # TODO be sure this is ordered correctly
+            line = "\t".join(f"{p[0]:.4f}\t{p[1]:.4f}" for p in prms.values())
+
+            out.write(f'{run.name}\t{line}\n')
