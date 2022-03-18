@@ -1446,10 +1446,6 @@ class _ClusterVisualizer:
 
         return fig
 
-# --------------------------------------------------------------------------
-# Visualizers
-# --------------------------------------------------------------------------
-
 
 class ModelVisualizer(_ClusterVisualizer):
     '''
@@ -2155,12 +2151,14 @@ class CIModelVisualizer(_ClusterVisualizer):
 
     def save(self, filename):
         '''save the confidence intervals to a file so we can load them more
-        quickly next time
+        quickly next time. This should, in most cases, be the run output file
         '''
 
-        with h5py.File(filename, 'x') as file:
+        with h5py.File(filename, 'a') as file:
 
-            meta_grp = file.create_group('metadata')
+            modelgrp = file.create_group('model_output')
+
+            meta_grp = modelgrp.create_group('metadata')
 
             meta_grp.create_dataset('r', data=self.r)
             meta_grp.create_dataset('star_bin', data=self.star_bin)
@@ -2172,83 +2170,85 @@ class CIModelVisualizer(_ClusterVisualizer):
             meta_grp.attrs['N'] = self.N
             meta_grp.attrs['cluster'] = self.obs.cluster
 
-            perc_grp = file.create_group('percentiles')
+            prof_grp = modelgrp.create_group('profiles')
 
-            ds = perc_grp.create_dataset('rho_MS', data=self.rho_MS)
+            ds = prof_grp.create_dataset('rho_MS', data=self.rho_MS)
             ds.attrs['unit'] = self.rho_MS.unit.to_string()
 
-            ds = perc_grp.create_dataset('rho_tot', data=self.rho_tot)
+            ds = prof_grp.create_dataset('rho_tot', data=self.rho_tot)
             ds.attrs['unit'] = self.rho_tot.unit.to_string()
 
-            ds = perc_grp.create_dataset('rho_BH', data=self.rho_BH)
+            ds = prof_grp.create_dataset('rho_BH', data=self.rho_BH)
             ds.attrs['unit'] = self.rho_BH.unit.to_string()
 
-            ds = perc_grp.create_dataset('rho_WD', data=self.rho_WD)
+            ds = prof_grp.create_dataset('rho_WD', data=self.rho_WD)
             ds.attrs['unit'] = self.rho_WD.unit.to_string()
 
-            ds = perc_grp.create_dataset('rho_NS', data=self.rho_NS)
+            ds = prof_grp.create_dataset('rho_NS', data=self.rho_NS)
             ds.attrs['unit'] = self.rho_NS.unit.to_string()
 
-            ds = perc_grp.create_dataset('pm_T', data=self.pm_T)
+            ds = prof_grp.create_dataset('pm_T', data=self.pm_T)
             ds.attrs['unit'] = self.pm_T.unit.to_string()
 
-            ds = perc_grp.create_dataset('pm_R', data=self.pm_R)
+            ds = prof_grp.create_dataset('pm_R', data=self.pm_R)
             ds.attrs['unit'] = self.pm_R.unit.to_string()
 
-            ds = perc_grp.create_dataset('pm_tot', data=self.pm_tot)
+            ds = prof_grp.create_dataset('pm_tot', data=self.pm_tot)
             ds.attrs['unit'] = self.pm_tot.unit.to_string()
 
-            ds = perc_grp.create_dataset('pm_ratio', data=self.pm_ratio)
+            ds = prof_grp.create_dataset('pm_ratio', data=self.pm_ratio)
             ds.attrs['unit'] = self.pm_ratio.unit.to_string()
 
-            ds = perc_grp.create_dataset('LOS', data=self.LOS)
+            ds = prof_grp.create_dataset('LOS', data=self.LOS)
             ds.attrs['unit'] = self.LOS.unit.to_string()
 
-            ds = perc_grp.create_dataset('Sigma_MS', data=self.Sigma_MS)
+            ds = prof_grp.create_dataset('Sigma_MS', data=self.Sigma_MS)
             ds.attrs['unit'] = self.Sigma_MS.unit.to_string()
 
-            ds = perc_grp.create_dataset('Sigma_tot', data=self.Sigma_tot)
+            ds = prof_grp.create_dataset('Sigma_tot', data=self.Sigma_tot)
             ds.attrs['unit'] = self.Sigma_tot.unit.to_string()
 
-            ds = perc_grp.create_dataset('Sigma_BH', data=self.Sigma_BH)
+            ds = prof_grp.create_dataset('Sigma_BH', data=self.Sigma_BH)
             ds.attrs['unit'] = self.Sigma_BH.unit.to_string()
 
-            ds = perc_grp.create_dataset('Sigma_WD', data=self.Sigma_WD)
+            ds = prof_grp.create_dataset('Sigma_WD', data=self.Sigma_WD)
             ds.attrs['unit'] = self.Sigma_WD.unit.to_string()
 
-            ds = perc_grp.create_dataset('Sigma_NS', data=self.Sigma_NS)
+            ds = prof_grp.create_dataset('Sigma_NS', data=self.Sigma_NS)
             ds.attrs['unit'] = self.Sigma_NS.unit.to_string()
 
-            ds = perc_grp.create_dataset('cum_M_MS', data=self.cum_M_MS)
+            ds = prof_grp.create_dataset('cum_M_MS', data=self.cum_M_MS)
             ds.attrs['unit'] = self.cum_M_MS.unit.to_string()
 
-            ds = perc_grp.create_dataset('cum_M_tot', data=self.cum_M_tot)
+            ds = prof_grp.create_dataset('cum_M_tot', data=self.cum_M_tot)
             ds.attrs['unit'] = self.cum_M_tot.unit.to_string()
 
-            ds = perc_grp.create_dataset('cum_M_BH', data=self.cum_M_BH)
+            ds = prof_grp.create_dataset('cum_M_BH', data=self.cum_M_BH)
             ds.attrs['unit'] = self.cum_M_BH.unit.to_string()
 
-            ds = perc_grp.create_dataset('cum_M_WD', data=self.cum_M_WD)
+            ds = prof_grp.create_dataset('cum_M_WD', data=self.cum_M_WD)
             ds.attrs['unit'] = self.cum_M_WD.unit.to_string()
 
-            ds = perc_grp.create_dataset('cum_M_NS', data=self.cum_M_NS)
+            ds = prof_grp.create_dataset('cum_M_NS', data=self.cum_M_NS)
             ds.attrs['unit'] = self.cum_M_NS.unit.to_string()
 
-            ds = perc_grp.create_dataset('frac_M_MS', data=self.frac_M_MS)
+            ds = prof_grp.create_dataset('frac_M_MS', data=self.frac_M_MS)
             ds.attrs['unit'] = self.frac_M_MS.unit.to_string()
 
-            ds = perc_grp.create_dataset('frac_M_rem', data=self.frac_M_rem)
+            ds = prof_grp.create_dataset('frac_M_rem', data=self.frac_M_rem)
             ds.attrs['unit'] = self.frac_M_rem.unit.to_string()
 
-            ds = perc_grp.create_dataset('numdens', data=self.numdens)
+            ds = prof_grp.create_dataset('numdens', data=self.numdens)
             ds.attrs['unit'] = self.numdens.unit.to_string()
 
-            ds = perc_grp.create_dataset('mass_func', data=self.mass_func)
+            ds = prof_grp.create_dataset('mass_func', data=self.mass_func)
 
-            ds = perc_grp.create_dataset('BH_mass', data=self.BH_mass)
+            quant_grp = modelgrp.create_group('quantities')
+
+            ds = quant_grp.create_dataset('BH_mass', data=self.BH_mass)
             ds.attrs['unit'] = self.BH_mass.unit.to_string()
 
-            ds = perc_grp.create_dataset('BH_num', data=self.BH_num)
+            ds = quant_grp.create_dataset('BH_num', data=self.BH_num)
             ds.attrs['unit'] = self.BH_num.unit.to_string()
 
     @classmethod
@@ -2261,25 +2261,32 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         with h5py.File(filename, 'r') as file:
 
-            viz.obs = Observations(file['metadata'].attrs['cluster'])
-            viz.N = file['metadata'].attrs['N']
-            viz.s2 = file['metadata'].attrs['s2']
-            viz.F = file['metadata'].attrs['F']
-            viz.d = file['metadata'].attrs['d'] << u.kpc
-            viz.rlims = file['metadata'].attrs['rlims'] << u.pc
+            modelgrp = file['model_output']
 
-            viz.r = file['metadata']['r'][:] << u.pc
-            viz.mj = file['metadata']['mj'][:] << u.Msun
+            # Get metadata
+            viz.obs = Observations(modelgrp['metadata'].attrs['cluster'])
+            viz.N = modelgrp['metadata'].attrs['N']
+            viz.s2 = modelgrp['metadata'].attrs['s2']
+            viz.F = modelgrp['metadata'].attrs['F']
+            viz.d = modelgrp['metadata'].attrs['d'] << u.kpc
+            viz.rlims = modelgrp['metadata'].attrs['rlims'] << u.pc
 
-            for key in file['percentiles']:
-                value = file['percentiles'][key][:]
+            viz.r = modelgrp['metadata']['r'][:] << u.pc
+            viz.mj = modelgrp['metadata']['mj'][:] << u.Msun
 
-                try:
-                    value *= u.Unit(file['percentiles'][key].attrs['unit'])
-                except KeyError:
-                    pass
+            # Get profile and quantity percentiles
+            for grp in ('profiles', 'quantities'):
 
-                setattr(viz, key, value)
+                for key in modelgrp[grp]:
+
+                    value = modelgrp[grp][key][:]
+
+                    try:
+                        value *= u.Unit(modelgrp[grp][key].attrs['unit'])
+                    except KeyError:
+                        pass
+
+                    setattr(viz, key, value)
 
         return viz
 
@@ -2352,3 +2359,38 @@ class ObservationsVisualizer(_ClusterVisualizer):
         self.numdens = None
 
         self._init_massfunc(observations)
+
+
+# --------------------------------------------------------------------------
+# Collection of models
+# --------------------------------------------------------------------------
+
+
+class ModelCollection:
+    '''A collection of models, allowing for overplotting multiple models
+    with one another.
+    intimately tied to RunCollection, so we'll need "posterior distributions"
+    on some things like BH mass and num, etc
+    '''
+
+    # TODO god what do you name this stuff now. cant use "Model"
+    def __init__(self, modelvizs):
+
+        self.modelvizs = modelvizs
+
+    @classmethod
+    def load(cls, filenames, validate=False):
+        '''Load the models stored in the results files'''
+
+    @classmethod
+    def from_models(cls):
+        '''init from a simple list of already computed of model(viz)s'''
+
+    @classmethod
+    def from_chains(cls):
+        '''init from an array of parameter chains for each run'''
+
+    @classmethod
+    def from_thetas(cls):
+        '''init from an array of final parameters, for each run'''
+
