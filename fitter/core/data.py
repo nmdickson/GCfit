@@ -747,6 +747,13 @@ class Model(lp.limepy):
             logging.debug("No cluster Ndot stored, defaulting to 0 /Myr")
             Ndot = 0
 
+        # Escape velocity for BH natal kicks
+        try:
+            vesc = self.observations.mdata['vesc']
+        except (AttributeError, KeyError):
+            logging.debug("No cluster vesc stored, defaulting to 90 km/s")
+            vesc = 90
+
         # Generate the mass function
         return emf3.evolve_mf(
             m123=m123,
@@ -760,7 +767,8 @@ class Model(lp.limepy):
             BH_ret_int=BH_ret_int,
             BH_ret_dyn=BH_ret_dyn,
             FeHe=FeHe,
-            natal_kicks=natal_kicks
+            natal_kicks=natal_kicks,
+            vesc=vesc
         )
 
     # def _get_scale(self):
