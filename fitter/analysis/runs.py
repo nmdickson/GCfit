@@ -1471,7 +1471,8 @@ class _Annotator:
         if ytext > np.nanmax(self.ydata):
             ytext = np.nanmax(self.ydata)
 
-        cluster = self.runs[ind]
+        # cluster = self.runs[ind]
+        cluster = self.runs[ind].name
 
         # clear old annotation
         if self.cur_annot is not None:
@@ -1489,6 +1490,7 @@ class _Annotator:
         self.fig.canvas.draw()
 
 
+# TODO maybe make this an iterator as well? instead of just using .runs
 class RunCollection(_RunAnalysis):
     '''For analyzing a collection of runs all at once
     '''
@@ -1534,6 +1536,10 @@ class RunCollection(_RunAnalysis):
                     continue
 
             runs.append(run)
+
+        if not runs:
+            mssg = f"No valid runs found in {directory}"
+            raise RuntimeError(mssg)
 
         runs.sort(key=lambda run: run.name)
 
