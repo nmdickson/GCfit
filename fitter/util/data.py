@@ -1335,7 +1335,7 @@ class Dataset:
         # Store all data in the variables dict
         self.variables[varname] = {
             "data": data,
-            "unit": unit,
+            "unit": str(unit) if unit is not None else None,
             "metadata": metadata
         }
 
