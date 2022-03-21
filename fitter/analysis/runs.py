@@ -1629,7 +1629,7 @@ class RunCollection(_RunAnalysis):
         return fig
 
     def plot_relation(self, param1, param2, fig=None, ax=None, *,
-                      errors='bars', N_simruns=100, annotate=False):
+                      errors='bars', N_simruns=100, annotate=False, **kwargs):
         '''plot correlation between two param means with all runs
 
         errorbars, or 2d-ellipses
@@ -1657,8 +1657,8 @@ class RunCollection(_RunAnalysis):
         y, dy = np.array([_get_data(prms, run.obs.mdata, param2)
                           for run, prms in zip(self.runs, params)]).T
 
-        ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', ecolor=clrs)
-        ax.scatter(x, y, color=clrs, picker=True)  # TODO pickradius?
+        ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', ecolor=clrs, **kwargs)
+        ax.scatter(x, y, color=clrs, picker=True, **kwargs)  # TODO pickradius?
 
         # TODO mathy labels (just need a better labels method, sep from chains)
         ax.set_xlabel(param1)
