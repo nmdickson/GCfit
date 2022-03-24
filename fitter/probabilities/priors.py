@@ -654,7 +654,7 @@ DEFAULT_PRIORS = {
     'M': ('uniform', [(0.01, 5)]),
     'rh': ('uniform', [(0.5, 15)]),
     'ra': ('uniform', [(0, 5)]),
-    'g': ('uniform', [(0, 2.3)]),
+    'g': ('uniform', [(0, 3.5)]),
     'delta': ('uniform', [(0.3, 0.5)]),
     's2': ('uniform', [(0, 15)]),
     'F': ('uniform', [(1, 3)]),
