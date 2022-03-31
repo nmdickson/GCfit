@@ -1296,13 +1296,13 @@ class NestedRun(_RunAnalysis):
 
     def _sim_errors(self, Nruns=250):
         '''add the statistical and sampling errors not normally accounted for
-        by using the built-in `simulate_run` function (resamples and jitters)
+        by using the built-in `resample_run` function
 
         returns list `Nruns` results
         '''
-        from dynesty.utils import simulate_run
+        from dynesty.utils import resample_run
 
-        return [simulate_run(self.results) for _ in range(Nruns)]
+        return [resample_run(self.results) for _ in range(Nruns)]
 
     def parameter_means(self, Nruns=250, sim_runs=None, return_samples=True):
         '''
