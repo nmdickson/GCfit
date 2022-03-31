@@ -1490,13 +1490,16 @@ class _Annotator:
         self.fig.canvas.draw()
 
 
-# TODO maybe make this an iterator as well? instead of just using .runs
 class RunCollection(_RunAnalysis):
     '''For analyzing a collection of runs all at once
     '''
 
     def __str__(self):
         return "Collection of Runs"
+
+    def __iter__(self):
+        '''return an iterator over the individual Runs'''
+        return iter(self.runs)
 
     # ----------------------------------------------------------------------
     # Initialization
