@@ -890,7 +890,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
         t0 = time.time()
 
-        stop_kw = {'pfrac': pfrac, 'n_mc': 0, 'target_neff': eff_samples}
+        stop_kw = {'pfrac': pfrac, 'n_mc': 0, 'target_n_effective': eff_samples}
         weight_kw = {'pfrac': pfrac, 'maxfrac': maxfrac}
 
         # runs an initial set of set samples, as if using `NestedSampler`
