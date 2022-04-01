@@ -1008,7 +1008,7 @@ class _ClusterVisualizer:
     # ----------------------------------------------------------------------
 
     @_support_units
-    def plot_mass_func(self, fig=None, show_obs=True, show_fields=False, *,
+    def plot_mass_func(self, fig=None, show_obs=True, show_fields=True, *,
                        colours=None, PI_legend=False, logscaled=False,
                        field_kw=None):
 
