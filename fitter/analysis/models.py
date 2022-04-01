@@ -2383,14 +2383,40 @@ class ModelCollection:
         '''Load the models stored in the results files'''
 
     @classmethod
-    def from_models(cls):
-        '''init from a simple list of already computed of model(viz)s'''
+    def from_models(cls, models, obs_list=None):
+        '''init from a simple list of already computed of models'''
+
+        if obs_list is None:
+            obs_list = [None, ] * len(models)
+
+        return cls([ModelVisualizer(m, o) for m, o in zip(models, obs_list)])
 
     @classmethod
-    def from_chains(cls):
+    def from_chains(cls, chains, obs_list, *args, **kwargs):
         '''init from an array of parameter chains for each run'''
+        # depending on size, ci or mv
 
-    @classmethod
-    def from_thetas(cls):
-        '''init from an array of final parameters, for each run'''
+        # chains -> (N models, N samples, N params)
 
+        # N samples is missing
+        if chains.ndim == 2:
+            # chains == chains[np.newaxis, ...]
+            viz = ModelVisualizer.from_theta
+
+        # N samples is 1
+        elif chains.shape[1] == 1:
+            chains.reshape((-1, chains.shape[2]))
+            viz = ModelVisualizer.from_theta
+
+        # N samples > 1
+        else:
+            viz = CIModelVisualizer.from_chain
+
+        if obs_list is None:
+            obs_list = [None, ] * chains.shape[0]
+
+        modelvizs = []
+        for i in range(chains.shape[0]):
+            modelvizs.append(viz(chains[i, ...], obs_list[i]))
+
+        return cls(modelvizs)
