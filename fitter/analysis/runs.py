@@ -1676,8 +1676,135 @@ class RunCollection(_RunAnalysis):
 
         return fig
 
+    def plot_lit_comp(self, param, truths, e_truths=None, src_truths='',
+                      fig=None, ax=None, *,
+                      clr_param=None, residuals=False, inset=False,
+                      N_simruns=100, annotate=False, diagonal=True, **kwargs):
+        '''plot a x-y comparison against provided literature values'''
+        from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+        def _get_data(prms, mdata, key):
+            '''helper func for loading data from params or from metadata'''
+            try:
+                return prms[key]
+            except KeyError as err:
+                try:
+                    return mdata[key], 0.
+                except KeyError:
+                    raise KeyError(f'{key} is not a valid param') from err
+
+        def add_residuals(ax, y1, y2, e1, e2, clrs=None, res_ax=None):
+            # make a res ax
+            if res_ax is None:
+                divider = make_axes_locatable(ax)
+                res_ax = divider.append_axes('bottom', size="15%", pad=0.1, sharex=ax)
+
+            res_ax.grid()
+            res_ax.set_xscale(ax.get_xscale())
+            res_ax.set_ylabel(r"% difference")
+
+            # plot residuals (in percent)
+            res = 100 * (y2 - y1) / y1
+            res_err = 100 * np.sqrt(e1**2 + e2**2) / y1
+            res_ax.errorbar(y1, res, yerr=res_err, fmt='none', ecolor=clrs)
+            res_ax.scatter(y1, res, color=clrs,)
+
+            return res_ax
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        # TODO also support metadata
+        params = self._get_params(N_simruns=N_simruns)
+
+        if clr_param is None:
+            clrs = self._cmap(np.linspace(0., 1., len(self.runs)))
+        else:
+            cvals = np.array([_get_data(prms, run.obs.mdata, clr_param)
+                              for run, prms in zip(self.runs, params)]).T[0]
+            cnorm = mpl_clr.Normalize(cvals.min(), cvals.max())
+            clrs = self._cmap(cnorm(cvals))
+
+        x, dx = np.array([_get_data(prms, run.obs.mdata, param)
+                          for run, prms in zip(self.runs, params)]).T
+
+        y, dy = truths, e_truths
+
+        ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', ecolor=clrs, **kwargs)
+        pnts = ax.scatter(x, y, color=clrs, picker=True, **kwargs)
+        # TODO pickradius?
+
+        if diagonal:
+            grid_kw = {
+                'color': plt.rcParams.get('grid.color'),
+                'linestyle': plt.rcParams.get('grid.linestyle'),
+                'linewidth': plt.rcParams.get('grid.linewidth'),
+                'alpha': plt.rcParams.get('grid.alpha'),
+                'zorder': 0.5
+            }
+            ax.axline((0, 0), (1, 1), **grid_kw)
+
+        # TODO mathy labels (just need a better labels method, sep from chains)
+        ax.set_xlabel(param)
+        ax.set_ylabel(src_truths)
+
+        ax.set_xlim(0.)
+        ax.set_ylim(0.)
+
+        divider = make_axes_locatable(ax)
+
+        if clr_param is not None:
+            # TODO all the colours stuff is all confused
+            #   highly doubt this is the best way to be marking them
+            cticks = [0, .25, .5, .75, 1.]
+            cax = divider.append_axes("right", size="3%", pad=0.05)
+            cbar = fig.colorbar(pnts, cax=cax, ticks=cticks)
+            cbar.ax.set_ylabel(clr_param)
+            cbar.ax.set_yticklabels([f'{t:.2f}' for t in cnorm.inverse(cticks)])
+
+        if residuals:
+            res_ax = divider.append_axes('bottom', size="15%", pad=0, sharex=ax)
+            res_ax = add_residuals(ax, x, y, dx, dy, clrs, res_ax=res_ax)
+            res_ax.set_xlabel(param)
+
+        if annotate:
+            _Annotator(fig, self.runs, x, y)
+        else:
+            # TODO not happy with any legend
+            fig.legend(loc='upper center', ncol=10)
+
+        # ALL THIS IS TEMPORARY BUT I ALSO KINDA LIKE IT CAUSE ω-cen IS BIG
+
+        if inset:
+            axins = ax.inset_axes([0.4, 0.03, 0.57, 0.57])
+            axins.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', ecolor=clrs, **kwargs)
+            axins.scatter(x, y, color=clrs, picker=True, **kwargs)
+            x1, x2, y1, y2 = 0, 1, 0, 1
+            axins.set_xlim(x1, x2)
+            axins.set_ylim(y1, y2)
+            axins.set_xticklabels([])
+            axins.set_yticklabels([])
+
+            if diagonal:
+                grid_kw = {
+                    'color': plt.rcParams.get('grid.color'),
+                    'linestyle': plt.rcParams.get('grid.linestyle'),
+                    'linewidth': plt.rcParams.get('grid.linewidth'),
+                    'alpha': plt.rcParams.get('grid.alpha'),
+                    'zorder': 0.5
+                }
+                axins.axline((0, 0), (1, 1), **grid_kw)
+
+            ax.indicate_inset_zoom(axins, edgecolor="black")
+
+        return fig
+
+    # ----------------------------------------------------------------------
+    # Summary plots
+    # ----------------------------------------------------------------------
+
     def summary(self, out=sys.stdout, *, N_simruns=100):
         '''output a table of all parameter means for each cluster'''
+        # TODO also a latex table version (use pandas)
 
         labels = list(self.runs[0].obs.initials)
 
