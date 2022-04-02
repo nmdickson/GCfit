@@ -2375,12 +2375,21 @@ class ModelCollection:
 
     # TODO god what do you name this stuff now. cant use "Model"
     def __init__(self, modelvizs):
-
         self.modelvizs = modelvizs
 
     @classmethod
-    def load(cls, filenames, validate=False):
+    def load(cls, filenames, ci=False, validate=False):
         '''Load the models stored in the results files'''
+        # TODO better way to get the right viz
+        viz = CIModelVisualizer if ci else ModelVisualizer
+
+        return cls([viz.load(fn, validate=validate) for fn in filenames])
+
+    def save(self, filenames):
+        '''save the models in the results files'''
+
+        for fn, mv in zip(filenames, self.modelvizs):
+            mv.save(fn)
 
     @classmethod
     def from_models(cls, models, obs_list=None):
