@@ -1736,6 +1736,8 @@ class CIModelVisualizer(_ClusterVisualizer):
         # very large rt. I'm not really sure yet how that might affect the CIs
         # or plots
 
+        # TODO sometimes this fails and I have no idea why, it shouldn't
+        #   all chains should in theory converge, if they were sampled
         huge_model = Model(chain[np.argmax(chain[:, 4])], viz.obs)
 
         viz.rt = huge_model.rt
@@ -2401,31 +2403,25 @@ class ModelCollection:
         return cls([ModelVisualizer(m, o) for m, o in zip(models, obs_list)])
 
     @classmethod
-    def from_chains(cls, chains, obs_list, *args, **kwargs):
-        '''init from an array of parameter chains for each run'''
-        # depending on size, ci or mv
+    def from_chains(cls, chains, obs_list, ci=True, *args, **kwargs):
+        '''init from an array of parameter chains for each run
 
-        # chains -> (N models, N samples, N params)
+        chains is a list of chains (N models long) with each chain being an
+        array of either (N params,) for a from_theta init or
+        (N samples, N params) for a from_chain init.
+        if ci is True, must be (N samples, N params, otherwise makes no sense)
+        '''
 
-        # N samples is missing
-        if chains.ndim == 2:
-            # chains == chains[np.newaxis, ...]
-            viz = ModelVisualizer.from_theta
-
-        # N samples is 1
-        elif chains.shape[1] == 1:
-            chains.reshape((-1, chains.shape[2]))
-            viz = ModelVisualizer.from_theta
-
-        # N samples > 1
-        else:
-            viz = CIModelVisualizer.from_chain
+        viz = CIModelVisualizer if ci else ModelVisualizer
 
         if obs_list is None:
             obs_list = [None, ] * chains.shape[0]
 
         modelvizs = []
-        for i in range(chains.shape[0]):
-            modelvizs.append(viz(chains[i, ...], obs_list[i]))
+        for ch, obs in zip(chains, obs_list):
+
+            init = viz.from_chain if ch.ndim == 2 else viz.from_theta
+
+            modelvizs.append(init(ch[...], obs, *args, **kwargs))
 
         return cls(modelvizs)

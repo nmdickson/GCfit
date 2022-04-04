@@ -1,6 +1,6 @@
 from .. import Observations
 from ..probabilities import priors
-from .models import CIModelVisualizer, ModelVisualizer
+from .models import CIModelVisualizer, ModelVisualizer, ModelCollection
 
 import sys
 import pathlib
@@ -858,14 +858,14 @@ class NestedRun(_RunAnalysis):
     # Model Visualizers
     # ----------------------------------------------------------------------
 
-    def get_model(self, method='mean'):
+    def get_model(self, method='mean', add_errors=False):
 
         if method == 'mean':
             theta = self.parameter_means()[0]
             return ModelVisualizer.from_theta(theta, self.obs)
 
         else:
-            labels, chain = self._get_equal_weight_chains()
+            labels, chain = self._get_equal_weight_chains(add_errors=add_errors)
             return ModelVisualizer.from_chain(chain, self.obs, method)
 
     def get_CImodel(self, N=100, Nprocesses=1, add_errors=False, shuffle=True):
@@ -1576,6 +1576,49 @@ class RunCollection(_RunAnalysis):
         return params
 
     # ----------------------------------------------------------------------
+    # Model Collection Visualizers
+    # ----------------------------------------------------------------------
+
+    def get_models(self, load=True):
+
+        if load:
+            filenames = [run.file.filename for run in self.runs]
+            return ModelCollection.load(filenames, ci=False)
+
+        else:
+            chains = [run.parameter_means(1)[0] for run in self.runs]
+
+            obs_list = [run.obs for run in self.runs]
+
+            return ModelCollection.from_chains(chains, obs_list, ci=False)
+
+    def get_CImodels(self, N=100, Nprocesses=1, add_errors=False, shuffle=True,
+                     load=True):
+        import multiprocessing
+
+        if load:
+            filenames = [run.file.filename for run in self.runs]
+            return ModelCollection.load(filenames, ci=True)
+
+        else:
+            chains = []
+            obs_list = []
+
+            for run in self.runs:
+                _, ch = run._get_equal_weight_chains(add_errors=add_errors)
+
+                if shuffle:
+                    np.random.default_rng().shuffle(ch, axis=0)
+
+                chains.append(ch)
+                obs_list.append(run.obs)
+
+            with multiprocessing.Pool(processes=Nprocesses) as pool:
+
+                return ModelCollection.from_chains(chains, obs_list, ci=True,
+                                                   N=N, pool=pool)
+
+    # ----------------------------------------------------------------------
     # Iterative plots
     # ----------------------------------------------------------------------
 
@@ -1586,7 +1629,7 @@ class RunCollection(_RunAnalysis):
         for run in self.runs:
             fig = getattr(run, plot_func)(*args, **kwargs)
 
-            yield fig, run if yield_run else fig
+            yield (fig, run) if yield_run else fig
 
     def save_plots(self, plot_func, fn_pattern=None, save_kw=None,
                    *args, **kwargs):
