@@ -34,13 +34,15 @@ def pos_int(arg):
     return int(arg)
 
 
+# TODO doesn't really work great in parallel but that's to be expected given
+#   that logging in parallel to one file isn't even really supported
 class RepeatedCallHandler(logging.FileHandler):
     '''logging Handler which stops repetition of the same log messages'''
 
     _current_record = None
     _repetition_count = 0
 
-    # TODO big issue here is we can't catch logging shutdown and emit
+    # TODO a big issue here is we can't catch logging shutdown and emit
     #   the current repeated records. Would be better to constantly emit
     #   and use carriage return each time probably
     def emit(self, record):
