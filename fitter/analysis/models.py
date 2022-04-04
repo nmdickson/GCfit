@@ -2263,7 +2263,11 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         with h5py.File(filename, 'r') as file:
 
-            modelgrp = file['model_output']
+            try:
+                modelgrp = file['model_output']
+            except KeyError as err:
+                mssg = f'No saved model outputs in {filename}'
+                raise RuntimeError(mssg) from err
 
             # Get metadata
             viz.obs = Observations(modelgrp['metadata'].attrs['cluster'])
@@ -2383,6 +2387,8 @@ class ModelCollection:
     def load(cls, filenames, ci=False, validate=False):
         '''Load the models stored in the results files'''
         # TODO better way to get the right viz
+        # TODO save/load only supported for ci. Not really needed otherwise?
+
         viz = CIModelVisualizer if ci else ModelVisualizer
 
         return cls([viz.load(fn, validate=validate) for fn in filenames])
