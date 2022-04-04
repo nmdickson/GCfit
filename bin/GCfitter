@@ -34,6 +34,38 @@ def pos_int(arg):
     return int(arg)
 
 
+class RepeatedCallHandler(logging.FileHandler):
+    '''logging Handler which stops repetition of the same log messages'''
+
+    _current_record = None
+    _repetition_count = 0
+
+    # TODO big issue here is we can't catch logging shutdown and emit
+    #   the current repeated records. Would be better to constantly emit
+    #   and use carriage return each time probably
+    def emit(self, record):
+
+        # first time, don't bother checking
+        if self._current_record is None:
+            super().emit(record)
+
+        # repeated record, don't emit just count
+        elif record.getMessage() == self._current_record.getMessage():
+            self._repetition_count += 1
+
+        # new record, emit then restart
+        else:
+
+            if (N := self._repetition_count) > 0:
+                self._current_record.msg += f' (repeated {N-1} times)'
+                super().emit(self._current_record)
+
+            self._repetition_count = 0
+            super().emit(record)
+
+        self._current_record = record
+
+
 if __name__ == '__main__':
 
     # ----------------------------------------------------------------------
@@ -239,7 +271,8 @@ if __name__ == '__main__':
     }
 
     if args.verbose:
-        config['filename'] = f"{args.savedir}/fitter_{args.cluster}.log"
+        log_filename = f"{args.savedir}/fitter_{args.cluster}.log"
+        config['handlers'] = [RepeatedCallHandler(log_filename)]
     else:
         config['handlers'] = [logging.NullHandler()]
 
