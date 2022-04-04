@@ -42,8 +42,7 @@ class RepeatedCallHandler(logging.FileHandler):
     replaced by a single message.
 
     Currently only well-supported in serial cases (but will somewhat work in
-    parallel). Be aware that a logging shutdown will not be caught and may
-    result in some (small) information loss.
+    parallel).
     '''
 
     _current_record = None
