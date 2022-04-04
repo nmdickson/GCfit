@@ -34,10 +34,17 @@ def pos_int(arg):
     return int(arg)
 
 
-# TODO doesn't really work great in parallel but that's to be expected given
-#   that logging in parallel to one file isn't even really supported
 class RepeatedCallHandler(logging.FileHandler):
-    '''logging Handler which stops repetition of the same log messages'''
+    '''logging Handler which stops repetition of the same log messages
+
+    A handler class which writes formatted logging records to disk files,
+    with a very rough check for often repeated messages, which are noted and
+    replaced by a single message.
+
+    Currently only well-supported in serial cases (but will somewhat work in
+    parallel). Be aware that a logging shutdown will not be caught and may
+    result in some (small) information loss.
+    '''
 
     _current_record = None
     _repetition_count = 0
