@@ -49,9 +49,6 @@ class RepeatedCallHandler(logging.FileHandler):
     _current_record = None
     _repetition_count = 0
 
-    # TODO a big issue here is we can't catch logging shutdown and emit
-    #   the current repeated records. Would be better to constantly emit
-    #   and use carriage return each time probably
     def emit(self, record):
 
         # first time, don't bother checking
@@ -73,6 +70,16 @@ class RepeatedCallHandler(logging.FileHandler):
             super().emit(record)
 
         self._current_record = record
+
+    def close(self):
+        '''On close, attempt to write out the currently repeating record first
+        '''
+        if (N := self._repetition_count) > 0:
+            self._current_record.msg += f' (repeated {N-1} times)'
+            super().emit(self._current_record)
+
+        # Usual close method
+        super().close()
 
 
 if __name__ == '__main__':
