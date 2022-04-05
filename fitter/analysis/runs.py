@@ -1102,6 +1102,55 @@ class NestedRun(_RunAnalysis):
 
         return fig
 
+    def plot_posterior(self, param, fig=None, ax=None, chain=None,
+                       flipped=True, truth=None, truth_ci=None, border=True,
+                       *args, **kwargs):
+        '''Plot the posterior distribution of a single parameter
+
+        to be used on the (flipped) right side of the full param plot
+
+        param : str name
+        chain : chain to create the posterior from. by default will compute the
+                equal weighted chain
+        flipped : bool, whether to plot horizontal (True, default) or vertical
+        '''
+        from scipy.stats import gaussian_kde
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        # TODO desperately need a separate labels method
+        labels, _ = self._get_chains()
+
+        if param not in labels:
+            mssg = f'Invalid param "{param}". Must be one of {labels}'
+            raise ValueError(mssg)
+
+        if chain is None:
+
+            prm_ind = labels.index(param)
+            chain = self._get_equal_weight_chains()[1][..., prm_ind]
+
+        kde = gaussian_kde(chain)
+
+        y = np.linspace(chain.min(), chain.max(), 500)
+
+        ax.fill_betweenx(y, 0, kde(y), *args, **kwargs)
+
+        if truth is not None:
+            ax.axhline(truth, c='tab:red')
+
+            if truth_ci is not None:
+                ax.axhspan(*truth_ci, color='tab:red', alpha=0.33)
+
+        if not border:
+            ax.axis('off')
+
+        # TODO maybe put ticks on right side as well?
+        for tk in ax.get_yticklabels():
+            tk.set_visible(False)
+
+        ax.set_xlim(left=0)
+
     def plot_params(self, fig=None, params=None, *,
                     posterior_color='tab:blue', posterior_border=True,
                     show_weight=True, fill_type='weights', ylims=None,
@@ -1265,26 +1314,17 @@ class NestedRun(_RunAnalysis):
             # Plot the posterior distribution (accounting for weights)
             # --------------------------------------------------------------
 
-            kde = gaussian_kde(eq_prm)
+            post_kw = {
+                'chain': eq_prm,
+                'flipped': True,
+                'truth': truths if truths is None else truths[ind],
+                'truth_ci': truth_ci if truth_ci is None else truth_ci[ind],
+                'border': posterior_border,
+                'color': color,
+                'fc': facecolor
+            }
 
-            y = np.linspace(eq_prm.min(), eq_prm.max(), 500)
-
-            post_ax.fill_betweenx(y, 0, kde(y), color=color, fc=facecolor)
-
-            if truths is not None:
-                post_ax.axhline(truths[ind], c='tab:red')
-
-                if truth_ci is not None:
-                    post_ax.axhspan(*truth_ci[ind], color='tab:red', alpha=0.33)
-
-            if not posterior_border:
-                post_ax.axis('off')
-
-            # TODO maybe put ticks on right side as well?
-            for tk in post_ax.get_yticklabels():
-                tk.set_visible(False)
-
-            post_ax.set_xlim(left=0)
+            self.plot_posterior(lbl, fig=fig, ax=post_ax, **post_kw)
 
             ax.set_ylim(ylims[ind])
 
