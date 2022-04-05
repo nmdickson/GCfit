@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mpl_clr
 import astropy.visualization as astroviz
 
+import logging
+
 
 __all__ = ['ModelVisualizer', 'CIModelVisualizer', 'ObservationsVisualizer']
 
@@ -1490,7 +1492,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
         self.r = model.r
 
-        self.rlims = (9e-3, self.r.max() + (5 << self.r.unit))
+        self.rlims = (9e-3, self.r.max().value + 5) << self.r.unit
 
         self._2πr = 2 * np.pi * model.r
 
@@ -1743,7 +1745,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         viz.rt = huge_model.rt
         viz.r = np.r_[0, np.geomspace(1e-5, viz.rt.value, num=99)] << u.pc
 
-        viz.rlims = (9e-3, viz.r.max() + (5 << viz.r.unit))
+        viz.rlims = (9e-3, viz.r.max().value + 5) << viz.r.unit
 
         # Assume that this example model has same nms, mj[:nms] as all models
         # This approximation isn't exactly correct, but close enough for plots
@@ -2151,12 +2153,22 @@ class CIModelVisualizer(_ClusterVisualizer):
     # Save and load confidence intervals to a file
     # ----------------------------------------------------------------------
 
-    def save(self, filename):
+    def save(self, filename, overwrite=False):
         '''save the confidence intervals to a file so we can load them more
         quickly next time. This should, in most cases, be the run output file
         '''
 
         with h5py.File(filename, 'a') as file:
+
+            if 'model_output' in file:
+                mssg = f'Model output already exists in {filename}.'
+
+                if overwrite is True:
+                    logging.info(mssg + ' Overwriting.')
+                    del file['model_output']
+                else:
+                    mssg += ' Set `overwrite=True` to overwrite.'
+                    raise ValueError(mssg)
 
             modelgrp = file.create_group('model_output')
 
@@ -2165,10 +2177,10 @@ class CIModelVisualizer(_ClusterVisualizer):
             meta_grp.create_dataset('r', data=self.r)
             meta_grp.create_dataset('star_bin', data=self.star_bin)
             meta_grp.create_dataset('mj', data=self.mj)
-            meta_grp.attrs['rlims'] = self.rlims
+            meta_grp.attrs['rlims'] = self.rlims.to_value('pc')
             meta_grp.attrs['s2'] = self.s2
             meta_grp.attrs['F'] = self.F
-            meta_grp.attrs['d'] = self.d
+            meta_grp.attrs['d'] = self.d.to_value('kpc')
             meta_grp.attrs['N'] = self.N
             meta_grp.attrs['cluster'] = self.obs.cluster
 
@@ -2243,8 +2255,6 @@ class CIModelVisualizer(_ClusterVisualizer):
             ds = prof_grp.create_dataset('numdens', data=self.numdens)
             ds.attrs['unit'] = self.numdens.unit.to_string()
 
-            ds = prof_grp.create_dataset('mass_func', data=self.mass_func)
-
             quant_grp = modelgrp.create_group('quantities')
 
             ds = quant_grp.create_dataset('BH_mass', data=self.BH_mass)
@@ -2252,6 +2262,28 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             ds = quant_grp.create_dataset('BH_num', data=self.BH_num)
             ds.attrs['unit'] = self.BH_num.unit.to_string()
+
+            mf_grp = modelgrp.create_group('mass_func')
+
+            for PI in self.mass_func:
+
+                # remove the 'mass_function' tag, as the slash messes up h5py
+                PI_grp = mf_grp.create_group(PI.split('/')[-1])
+
+                for rind, rbin in enumerate(self.mass_func[PI]):
+                    # can't save the field object here, must compute in load
+
+                    slc_grp = PI_grp.create_group(str(rind))
+
+                    ds = slc_grp.create_dataset('r1', data=rbin['r1'])
+                    ds.attrs['unit'] = rbin['r1'].unit.to_string()
+
+                    ds = slc_grp.create_dataset('r2', data=rbin['r2'])
+                    ds.attrs['unit'] = rbin['r2'].unit.to_string()
+
+                    slc_grp.create_dataset('colour', data=rbin['colour'])
+
+                    slc_grp.create_dataset('dNdm', data=rbin['dNdm'])
 
     @classmethod
     def load(cls, filename, validate=False):
@@ -2278,6 +2310,7 @@ class CIModelVisualizer(_ClusterVisualizer):
             viz.rlims = modelgrp['metadata'].attrs['rlims'] << u.pc
 
             viz.r = modelgrp['metadata']['r'][:] << u.pc
+            viz.star_bin = modelgrp['metadata']['star_bin'][()]
             viz.mj = modelgrp['metadata']['mj'][:] << u.Msun
 
             # Get profile and quantity percentiles
@@ -2293,6 +2326,35 @@ class CIModelVisualizer(_ClusterVisualizer):
                         pass
 
                     setattr(viz, key, value)
+
+            # get mass func percentiles and generate the fields
+
+            viz.mass_func = {}
+
+            cen = (viz.obs.mdata['RA'], viz.obs.mdata['DEC'])
+
+            for PI in modelgrp['mass_func']:
+
+                # add the mass_function tag back in
+                viz.mass_func[f'mass_function/{PI}'] = []
+
+                field = mass.Field.from_dataset(viz.obs[f'mass_function/{PI}'],
+                                                cen=cen)
+
+                for rind in modelgrp['mass_func'][PI]:
+
+                    rbin = modelgrp['mass_func'][PI][rind]
+
+                    slc = {
+                        'r1': rbin['r1'][()] * u.Unit(rbin['r1'].attrs['unit']),
+                        'r2': rbin['r2'][()] * u.Unit(rbin['r2'].attrs['unit']),
+                        'colour': rbin['colour'][:],
+                        'dNdm': rbin['dNdm'][:],
+                    }
+
+                    slc['field'] = field.slice_radially(slc['r1'], slc['r2'])
+
+                    viz.mass_func[f'mass_function/{PI}'].append(slc)
 
         return viz
 
