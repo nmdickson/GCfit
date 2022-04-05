@@ -11,6 +11,8 @@ import h5py
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mpl_clr
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
 
 
 __all__ = ['RunCollection', 'MCMCRun', 'NestedRun']
@@ -187,6 +189,27 @@ class _RunAnalysis:
         # ------------------------------------------------------------------
 
         return fig, np.atleast_1d(axarr)
+
+    def add_residuals(self, ax, y1, y2, e1, e2, clrs=None,
+                      res_ax=None, loc='bottom', size='15%', pad=0.1):
+        '''add an axis showing the residuals of two quantities'''
+
+        # make a newres ax if needed
+        if res_ax is None:
+            divider = make_axes_locatable(ax)
+            res_ax = divider.append_axes(loc, size=size, pad=pad, sharex=ax)
+
+        res_ax.grid()
+        res_ax.set_xscale(ax.get_xscale())
+        res_ax.set_ylabel(r"% difference")
+
+        # plot residuals (in percent)
+        res = 100 * (y2 - y1) / y1
+        res_err = 100 * np.sqrt(e1**2 + e2**2) / y1
+        res_ax.errorbar(y1, res, yerr=res_err, fmt='none', ecolor=clrs)
+        res_ax.scatter(y1, res, color=clrs,)
+
+        return res_ax
 
 
 class MCMCRun(_RunAnalysis):
@@ -1165,8 +1188,6 @@ class NestedRun(_RunAnalysis):
                     show_weight=True, fill_type='weights', ylims=None,
                     truths=None, **kw):
 
-        from mpl_toolkits.axes_grid1 import make_axes_locatable
-
         # ------------------------------------------------------------------
         # Setup plotting kwarg defaults
         # ------------------------------------------------------------------
@@ -1779,8 +1800,7 @@ class RunCollection(_RunAnalysis):
                       fig=None, ax=None, *,
                       clr_param=None, residuals=False, inset=False,
                       N_simruns=100, annotate=False, diagonal=True, **kwargs):
-        '''plot a x-y comparison against provided literature values'''
-        from mpl_toolkits.axes_grid1 import make_axes_locatable
+        '''plot a x-y comparison against provided literature values''
 
         def _get_data(prms, mdata, key):
             '''helper func for loading data from params or from metadata'''
@@ -1791,24 +1811,6 @@ class RunCollection(_RunAnalysis):
                     return mdata[key], 0.
                 except KeyError:
                     raise KeyError(f'{key} is not a valid param') from err
-
-        def add_residuals(ax, y1, y2, e1, e2, clrs=None, res_ax=None):
-            # make a res ax
-            if res_ax is None:
-                divider = make_axes_locatable(ax)
-                res_ax = divider.append_axes('bottom', size="15%", pad=0.1, sharex=ax)
-
-            res_ax.grid()
-            res_ax.set_xscale(ax.get_xscale())
-            res_ax.set_ylabel(r"% difference")
-
-            # plot residuals (in percent)
-            res = 100 * (y2 - y1) / y1
-            res_err = 100 * np.sqrt(e1**2 + e2**2) / y1
-            res_ax.errorbar(y1, res, yerr=res_err, fmt='none', ecolor=clrs)
-            res_ax.scatter(y1, res, color=clrs,)
-
-            return res_ax
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -1861,8 +1863,7 @@ class RunCollection(_RunAnalysis):
             cbar.ax.set_yticklabels([f'{t:.2f}' for t in cnorm.inverse(cticks)])
 
         if residuals:
-            res_ax = divider.append_axes('bottom', size="15%", pad=0, sharex=ax)
-            res_ax = add_residuals(ax, x, y, dx, dy, clrs, res_ax=res_ax)
+            res_ax = self.add_residuals(ax, x, y, dx, dy, clrs, pad=0)
             res_ax.set_xlabel(param)
 
         if annotate:
@@ -1870,30 +1871,6 @@ class RunCollection(_RunAnalysis):
         else:
             # TODO not happy with any legend
             fig.legend(loc='upper center', ncol=10)
-
-        # ALL THIS IS TEMPORARY BUT I ALSO KINDA LIKE IT CAUSE ω-cen IS BIG
-
-        if inset:
-            axins = ax.inset_axes([0.4, 0.03, 0.57, 0.57])
-            axins.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', ecolor=clrs, **kwargs)
-            axins.scatter(x, y, color=clrs, picker=True, **kwargs)
-            x1, x2, y1, y2 = 0, 1, 0, 1
-            axins.set_xlim(x1, x2)
-            axins.set_ylim(y1, y2)
-            axins.set_xticklabels([])
-            axins.set_yticklabels([])
-
-            if diagonal:
-                grid_kw = {
-                    'color': plt.rcParams.get('grid.color'),
-                    'linestyle': plt.rcParams.get('grid.linestyle'),
-                    'linewidth': plt.rcParams.get('grid.linewidth'),
-                    'alpha': plt.rcParams.get('grid.alpha'),
-                    'zorder': 0.5
-                }
-                axins.axline((0, 0), (1, 1), **grid_kw)
-
-            ax.indicate_inset_zoom(axins, edgecolor="black")
 
         return fig
 
