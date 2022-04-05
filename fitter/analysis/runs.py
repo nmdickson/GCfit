@@ -1103,7 +1103,7 @@ class NestedRun(_RunAnalysis):
         return fig
 
     def plot_posterior(self, param, fig=None, ax=None, chain=None,
-                       flipped=True, truth=None, truth_ci=None, border=True,
+                       flipped=True, truth=None, truth_ci=None,
                        *args, **kwargs):
         '''Plot the posterior distribution of a single parameter
 
@@ -1132,31 +1132,39 @@ class NestedRun(_RunAnalysis):
 
         kde = gaussian_kde(chain)
 
-        y = np.linspace(chain.min(), chain.max(), 500)
+        domain = np.linspace(chain.min(), chain.max(), 500)
 
-        ax.fill_betweenx(y, 0, kde(y), *args, **kwargs)
+        if flipped:
 
-        if truth is not None:
-            ax.axhline(truth, c='tab:red')
+            ax.fill_betweenx(domain, 0, kde(domain), *args, **kwargs)
 
-            if truth_ci is not None:
-                ax.axhspan(*truth_ci, color='tab:red', alpha=0.33)
+            if truth is not None:
+                ax.axhline(truth, c='tab:red')
 
-        if not border:
-            ax.axis('off')
+                if truth_ci is not None:
+                    ax.axhspan(*truth_ci, color='tab:red', alpha=0.33)
 
-        # TODO maybe put ticks on right side as well?
-        for tk in ax.get_yticklabels():
-            tk.set_visible(False)
+            ax.set_xlim(left=0)
 
-        ax.set_xlim(left=0)
+        else:
+
+            ax.fill_between(domain, 0, kde(domain), *args, **kwargs)
+
+            if truth is not None:
+                ax.axvline(truth, c='tab:red')
+
+                if truth_ci is not None:
+                    ax.axvspan(*truth_ci, color='tab:red', alpha=0.33)
+
+            ax.set_ylim(bottom=0)
+
+        return fig
 
     def plot_params(self, fig=None, params=None, *,
                     posterior_color='tab:blue', posterior_border=True,
                     show_weight=True, fill_type='weights', ylims=None,
                     truths=None, **kw):
 
-        from scipy.stats import gaussian_kde
         from mpl_toolkits.axes_grid1 import make_axes_locatable
 
         # ------------------------------------------------------------------
@@ -1319,12 +1327,18 @@ class NestedRun(_RunAnalysis):
                 'flipped': True,
                 'truth': truths if truths is None else truths[ind],
                 'truth_ci': truth_ci if truth_ci is None else truth_ci[ind],
-                'border': posterior_border,
                 'color': color,
                 'fc': facecolor
             }
 
             self.plot_posterior(lbl, fig=fig, ax=post_ax, **post_kw)
+
+            if not posterior_border:
+                post_ax.axis('off')
+
+            # TODO maybe put ticks on right side as well?
+            for tk in post_ax.get_yticklabels():
+                tk.set_visible(False)
 
             ax.set_ylim(ylims[ind])
 
