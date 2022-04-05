@@ -1652,6 +1652,16 @@ class RunCollection(_RunAnalysis):
 
         return params
 
+    def _get_prm_or_mdata(self, prms, mdata, key):
+        '''small helper func for loading data from params or from metadata'''
+        try:
+            return prms[key]
+        except KeyError as err:
+            try:
+                return mdata[key], 0.
+            except KeyError:
+                raise KeyError(f'{key} is not a valid param') from err
+
     # ----------------------------------------------------------------------
     # Model Collection Visualizers
     # ----------------------------------------------------------------------
@@ -1758,16 +1768,6 @@ class RunCollection(_RunAnalysis):
         errorbars, or 2d-ellipses
         '''
 
-        def _get_data(prms, mdata, key):
-            '''helper func for loading data from params or from metadata'''
-            try:
-                return prms[key]
-            except KeyError as err:
-                try:
-                    return mdata[key], 0.
-                except KeyError:
-                    raise KeyError(f'{key} is not a valid param') from err
-
         fig, ax = self._setup_artist(fig, ax)
 
         # TODO also support metadata
@@ -1775,9 +1775,9 @@ class RunCollection(_RunAnalysis):
 
         clrs = self._cmap(np.linspace(0., 1., len(self.runs)))
 
-        x, dx = np.array([_get_data(prms, run.obs.mdata, param1)
+        x, dx = np.array([self._get_prm_or_mdata(prms, run.obs.mdata, param1)
                           for run, prms in zip(self.runs, params)]).T
-        y, dy = np.array([_get_data(prms, run.obs.mdata, param2)
+        y, dy = np.array([self._get_prm_or_mdata(prms, run.obs.mdata, param2)
                           for run, prms in zip(self.runs, params)]).T
 
         ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', ecolor=clrs, **kwargs)
@@ -1800,17 +1800,7 @@ class RunCollection(_RunAnalysis):
                       fig=None, ax=None, *,
                       clr_param=None, residuals=False, inset=False,
                       N_simruns=100, annotate=False, diagonal=True, **kwargs):
-        '''plot a x-y comparison against provided literature values''
-
-        def _get_data(prms, mdata, key):
-            '''helper func for loading data from params or from metadata'''
-            try:
-                return prms[key]
-            except KeyError as err:
-                try:
-                    return mdata[key], 0.
-                except KeyError:
-                    raise KeyError(f'{key} is not a valid param') from err
+        '''plot a x-y comparison against provided literature values'''
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -1820,12 +1810,15 @@ class RunCollection(_RunAnalysis):
         if clr_param is None:
             clrs = self._cmap(np.linspace(0., 1., len(self.runs)))
         else:
-            cvals = np.array([_get_data(prms, run.obs.mdata, clr_param)
-                              for run, prms in zip(self.runs, params)]).T[0]
+            cvals = np.array([
+                self._get_prm_or_mdata(prms, run.obs.mdata, clr_param)
+                for run, prms in zip(self.runs, params)
+            ]).T[0]
+
             cnorm = mpl_clr.Normalize(cvals.min(), cvals.max())
             clrs = self._cmap(cnorm(cvals))
 
-        x, dx = np.array([_get_data(prms, run.obs.mdata, param)
+        x, dx = np.array([self._get_prm_or_mdata(prms, run.obs.mdata, param)
                           for run, prms in zip(self.runs, params)]).T
 
         y, dy = truths, e_truths
