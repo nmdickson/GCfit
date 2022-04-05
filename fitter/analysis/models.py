@@ -2441,6 +2441,13 @@ class ModelCollection:
     on some things like BH mass and num, etc
     '''
 
+    def __str__(self):
+        return f"Collection of Models"
+
+    def __iter__(self):
+        '''return an iterator over the individual model vizs'''
+        return iter(self.modelvizs)
+
     # TODO god what do you name this stuff now. cant use "Model"
     def __init__(self, modelvizs):
         self.modelvizs = modelvizs

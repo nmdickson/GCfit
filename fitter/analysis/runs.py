@@ -1495,7 +1495,7 @@ class RunCollection(_RunAnalysis):
     '''
 
     def __str__(self):
-        return "Collection of Runs"
+        return f"Collection of Runs from {self._src}"
 
     def __iter__(self):
         '''return an iterator over the individual Runs'''
@@ -1511,6 +1511,8 @@ class RunCollection(_RunAnalysis):
     @classmethod
     def from_dir(cls, directory, pattern='NGC*', strict=False):
         '''init by finding all run files in a directory'''
+
+        cls._src = f'{directory}/{pattern}'
 
         directory = pathlib.Path(directory)
 
