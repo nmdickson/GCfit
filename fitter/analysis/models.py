@@ -377,7 +377,8 @@ class _ClusterVisualizer:
         datasets = self.obs.filter_datasets(ds_pattern)
 
         if strict and ds_pattern and not datasets:
-            mssg = f"Dataset matching '{ds_pattern}' do not exist in {self.obs}"
+            mssg = (f"No datasets matching '{ds_pattern}' exist in {self.obs}."
+                    f"To plot models without data, set `show_obs=False`")
             # raise DataError
             raise KeyError(mssg)
 
@@ -1104,20 +1105,23 @@ class _ClusterVisualizer:
                 # logic
                 # ----------------------------------------------------------
 
+                # The mass domain is provided explicitly, to support visualizers
+                # which don't store the entire mass range (e.g. CImodels)
+                mj = rbin['mj']
+
                 dNdm = rbin['dNdm']
 
                 midpoint = dNdm.shape[0] // 2
 
-                m_domain = self.mj[:dNdm.shape[-1]]
                 median = dNdm[midpoint]
 
-                med_plot, = ax.plot(m_domain, median, '--', c=clr)
+                med_plot, = ax.plot(mj, median, '--', c=clr)
 
                 alpha = 0.8 / (midpoint + 1)
                 for sigma in range(1, midpoint + 1):
 
                     ax.fill_between(
-                        m_domain,
+                        mj,
                         dNdm[midpoint + sigma],
                         dNdm[midpoint - sigma],
                         alpha=1 - alpha, color=clr
@@ -1206,6 +1210,7 @@ class _ClusterVisualizer:
         ax.autoscale(False)
 
         if grid:
+            # TODO this should probably use distance to furthest field
             rt = self.rt if hasattr(self, 'rt') else (20 << u.arcmin)
             ticks = np.arange(2, rt.to_value('arcmin'), 2)
 
@@ -1587,6 +1592,8 @@ class ModelVisualizer(_ClusterVisualizer):
 
                 this_slc['dNdm'] = np.empty((1, model.nms))
 
+                this_slc['mj'] = model.mj[:model.nms]
+
                 sample_radii = field_slice.MC_sample(300).to(u.pc)
 
                 for j in range(model.nms):
@@ -1747,12 +1754,13 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         viz.rlims = (9e-3, viz.r.max().value + 5) << viz.r.unit
 
-        # Assume that this example model has same nms, mj[:nms] as all models
-        # This approximation isn't exactly correct, but close enough for plots
-        # viz.star_bin = huge_model.nms - 1
+        # Assume that this example model has same nms bin as all models
+        # This approximation isn't exactly correct (especially when Ndot != 0),
+        # but close enough for plots
         viz.star_bin = 0
 
-        mj_MS = huge_model.mj[:huge_model.nms]
+        # mj only contains nms and tracer bins (the only ones we plot anyways)
+        mj_MS = huge_model.mj[huge_model._star_bins][-1]
         mj_tracer = huge_model.mj[huge_model._tracer_bins]
 
         viz.mj = np.r_[mj_MS, mj_tracer]
@@ -1815,6 +1823,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         for rbins in massfunc.values():
             for rslice in rbins:
+                rslice['mj'] = huge_model.mj[:huge_model.nms]
                 rslice['dNdm'] = np.empty((N, huge_model.nms))
 
         # BH mass
@@ -2186,6 +2195,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             prof_grp = modelgrp.create_group('profiles')
 
+            # TODO make this a loop
             ds = prof_grp.create_dataset('rho_MS', data=self.rho_MS)
             ds.attrs['unit'] = self.rho_MS.unit.to_string()
 
@@ -2281,6 +2291,9 @@ class CIModelVisualizer(_ClusterVisualizer):
                     ds = slc_grp.create_dataset('r2', data=rbin['r2'])
                     ds.attrs['unit'] = rbin['r2'].unit.to_string()
 
+                    ds = slc_grp.create_dataset('mj', data=rbin['mj'])
+                    ds.attrs['unit'] = rbin['mj'].unit.to_string()
+
                     slc_grp.create_dataset('colour', data=rbin['colour'])
 
                     slc_grp.create_dataset('dNdm', data=rbin['dNdm'])
@@ -2348,6 +2361,7 @@ class CIModelVisualizer(_ClusterVisualizer):
                     slc = {
                         'r1': rbin['r1'][()] * u.Unit(rbin['r1'].attrs['unit']),
                         'r2': rbin['r2'][()] * u.Unit(rbin['r2'].attrs['unit']),
+                        'mj': rbin['mj'][()] * u.Unit(rbin['mj'].attrs['unit']),
                         'colour': rbin['colour'][:],
                         'dNdm': rbin['dNdm'][:],
                     }
