@@ -1572,9 +1572,23 @@ class RunCollection(_RunAnalysis):
     def __str__(self):
         return f"Collection of Runs from {self._src}"
 
+    # ----------------------------------------------------------------------
+    # Interacting with Runs
+    # ----------------------------------------------------------------------
+
     def __iter__(self):
         '''return an iterator over the individual Runs'''
         return iter(self.runs)
+
+    def get_run(self, name):
+        '''Return the run with a name `name`'''
+        for run in self.runs:
+            if run.name == name:
+                return run
+
+        else:
+            mssg = f"No Run found with name {name}"
+            raise ValueError(mssg)
 
     # ----------------------------------------------------------------------
     # Initialization
