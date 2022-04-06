@@ -1871,6 +1871,45 @@ class RunCollection(_RunAnalysis):
     # Summary plots
     # ----------------------------------------------------------------------
 
+    # TODO the way this class is structured to get params and data and etc is terrible and repetitive and N_simruns is slowing everything down alot
+
+    def plot_param_violins(self, param, fig=None, ax=None,
+                           color=None, edgecolor=None, alpha=0.3,
+                           *args, **kwargs):
+        '''plot violins for each run of the given param'''
+        fig, ax = self._setup_artist(fig, ax)
+
+        labels, _ = self.runs[0]._get_chains()
+
+        prm_ind = labels.index(param)
+
+        chains = [run._get_equal_weight_chains()[1][..., prm_ind]
+                  for run in self.runs]
+
+        xticks = np.arange(len(self.runs))
+
+        artists = ax.violinplot(chains, positions=xticks, *args, **kwargs)
+
+        # TODO add similar clr_param stuff as above
+
+        for part in artists['bodies']:
+            part.set_facecolor(color)
+            part.set_edgecolor(edgecolor)
+            part.set_alpha(alpha)
+
+        for linetype in (set(artists) - {'bodies'}):
+            for part in artists[linetype]:
+                part.set_color(color)
+
+        ax.set_xticks(xticks, labels=[run.name for run in self.runs],
+                      rotation=45)
+
+        ax.grid(axis='x')
+
+        ax.set_ylabel(param)
+
+        return fig
+
     def summary(self, out=sys.stdout, *, N_simruns=100):
         '''output a table of all parameter means for each cluster'''
         # TODO also a latex table version (use pandas)
