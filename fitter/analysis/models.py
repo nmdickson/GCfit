@@ -2563,3 +2563,29 @@ class ModelCollection:
             save_kw['fname'] = fn_pattern.format(cluster=mv.name)
 
             fig.savefig(**save_kw)
+
+    # ----------------------------------------------------------------------
+    # Collection Attributes
+    # ----------------------------------------------------------------------
+
+    @property
+    def BH_mass(self):
+
+        if not self._ci:
+            mssg = ("'ModelCollection' object has no attribute 'BH_mass'. "
+                    "Must be constructed with CIModelVisualizer objects.")
+            raise AttributeError(mssg)
+
+        # TODO if we are okay with assuming all CI have same N, can make array
+        return [mv.BH_mass for mv in self.modelvizs]
+
+    @property
+    def BH_num(self):
+
+        if not self._ci:
+            mssg = ("'ModelCollection' object has no attribute 'BH_num'. "
+                    "Must be constructed with CIModelVisualizer objects.")
+            raise AttributeError(mssg)
+
+        # TODO if we are okay with assuming all CI have same N, can make array
+        return [mv.BH_num for mv in self.modelvizs]
