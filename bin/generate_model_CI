@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+
+from fitter import analysis
+
+import argparse
+
+
+def pos_int(arg):
+    '''ensure arg is a positive integer, for use as `type` in ArgumentParser'''
+
+    if not arg.isdigit():
+        mssg = f"invalid positive int value: '{arg}'"
+        raise argparse.ArgumentTypeError(mssg)
+
+    return int(arg)
+
+
+if __name__ == '__main__':
+
+    # ----------------------------------------------------------------------
+    # Command line argument parsing
+    # ----------------------------------------------------------------------
+
+    parser = argparse.ArgumentParser(
+        description='Generate and save confidence intervals for models based '
+                    'on given run output file(s). Parallelized and designed to '
+                    'be run on a computing cluster, to fill in any files which '
+                    'did not have their CIs created at runtime.'
+    )
+
+    parser.add_argument('filenames', help='Name of the run output file')
+
+    parser.add_argument('-N', default=1000, type=pos_int,
+                        help='Number of models used to compute CIs')
+
+    parser.add_argument('-Ncpu', default=1, type=pos_int,
+                        help='Number of processes used in parallelization')
+
+    args = parser.parse_args()
+
+    # ----------------------------------------------------------------------
+    # Generate Models
+    # ----------------------------------------------------------------------
+
+    rc = analysis.RunCollection.from_files(args.filenames)
+
+    mc = rc.get_CImodels(N=args.N, Nprocesses=args.Ncpu, load=False)
+
+    mc.save(args.filenames)
