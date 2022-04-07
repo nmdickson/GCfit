@@ -14,7 +14,6 @@ import matplotlib.colors as mpl_clr
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 
-
 __all__ = ['RunCollection', 'MCMCRun', 'NestedRun']
 
 
@@ -1724,6 +1723,7 @@ class RunCollection(_RunAnalysis):
 
     def get_models(self, load=True):
 
+        # TODO load isnt currently and may never be supported by non-CI modelviz
         if load:
             filenames = [run.file.filename for run in self.runs]
             return ModelCollection.load(filenames, ci=False)

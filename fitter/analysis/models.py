@@ -1487,6 +1487,7 @@ class ModelVisualizer(_ClusterVisualizer):
     def __init__(self, model, observations=None):
         self.model = model
         self.obs = observations if observations else model.observations
+        self.name = observations.cluster
 
         self.rh = model.rh
         self.ra = model.ra
@@ -1712,14 +1713,17 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         return fig
 
+    def __init__(self, observations):
+        self.obs = observations
+        self.name = observations.cluster
+
     @classmethod
     def from_chain(cls, chain, observations, N=100, *, verbose=True, pool=None):
         import functools
 
-        viz = cls()
+        viz = cls(observations)
 
         viz.N = N
-        viz.obs = observations
 
         # ------------------------------------------------------------------
         # Get info about the chain and set of models
@@ -2423,6 +2427,7 @@ class ObservationsVisualizer(_ClusterVisualizer):
 
     def __init__(self, observations, d=None):
         self.obs = observations
+        self.name = observations.cluster
 
         self.rh = observations.initials['rh'] << u.pc
 
@@ -2514,3 +2519,37 @@ class ModelCollection:
             modelvizs.append(init(ch[...], obs, *args, **kwargs))
 
         return cls(modelvizs)
+
+    # ----------------------------------------------------------------------
+    # Iterative plots
+    # ----------------------------------------------------------------------
+
+    def iter_plots(self, plot_func, yield_model=False, *args, **kwargs):
+        '''calls each models's `plot_func`, yields a figure
+        all args, kwargs passed to plot func
+        '''
+        for mv in self.modelvizs:
+            fig = getattr(mv, plot_func)(*args, **kwargs)
+
+            yield (fig, mv) if yield_model else fig
+
+    def save_plots(self, plot_func, fn_pattern=None, save_kw=None,
+                   *args, **kwargs):
+        '''
+        fn_pattern is format string which will be passed the kw "cluster" name
+            (i.e. `fn_pattern.format(cluster=run.name)`)
+            if None, will be ./{cluster}_{plot_func[5:]}
+            (Include the desired dir here too)
+        '''
+
+        if fn_pattern is None:
+            fn_pattern = f'./{{cluster}}_{plot_func[5:]}'
+
+        if save_kw is None:
+            save_kw = {}
+
+        for fig, mv in self.iter_plots(plot_func, True, *args, **kwargs):
+
+            save_kw['fname'] = fn_pattern.format(cluster=mv.name)
+
+            fig.savefig(**save_kw)
