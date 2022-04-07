@@ -1433,7 +1433,19 @@ class NestedRun(_RunAnalysis):
     # Summaries
     # ----------------------------------------------------------------------
 
-    def print_summary(self, out=None, content='all', *, N_simruns=50):
+    def parameter_summary(self, *, N_simruns=100, label_fixed=False):
+        '''return a dictionary with mean & std for each parameter'''
+
+        labels, _ = self._get_chains(include_fixed=label_fixed)
+
+        sr = self._sim_errors(N_simruns)
+        mns, σ_mns = self.parameter_means(sim_runs=sr, return_samples=False)
+        vrs, σ_vrs = self.parameter_vars(sim_runs=sr, return_samples=False)
+        std, σ_std = np.sqrt(np.diag(vrs)), np.sqrt(np.diag(σ_vrs))
+
+        return {lbl: (mns[ind], std[ind]) for ind, lbl in enumerate(labels)}
+
+    def print_summary(self, out=None, content='all', *, N_simruns=100):
         '''write a summary of the run results, to a `out` file-like or stdout
         content : {'all', 'results', 'metadata'}
         '''
@@ -1575,7 +1587,7 @@ class RunCollection(_RunAnalysis):
         mssg = f"Collection of Runs"
 
         if self._src:
-            mssg += " from {self._src}"
+            mssg += f" from {self._src}"
 
         return mssg
 
@@ -1585,6 +1597,7 @@ class RunCollection(_RunAnalysis):
 
     def __iter__(self):
         '''return an iterator over the individual Runs'''
+        # Important that the order of self.runs (and thus this iter) is constant
         return iter(self.runs)
 
     def get_run(self, name):
@@ -1601,11 +1614,16 @@ class RunCollection(_RunAnalysis):
     # Initialization
     # ----------------------------------------------------------------------
 
-    def __init__(self, runs):
+    def __init__(self, runs, *, N_simruns=100):
         self.runs = runs
 
+        self._params = [r.parameter_summary(N_simruns=N_simruns) for r in runs]
+        self._mdata = [{k: (v, 0) for k, v in r.obs.mdata.items()}
+                       for r in runs]
+
     @classmethod
-    def from_dir(cls, directory, pattern='**/*hdf', strict=False):
+    def from_dir(cls, directory, pattern='**/*hdf', strict=False,
+                 *args, **kwargs):
         '''init by finding all run files in a directory'''
 
         cls._src = f'{directory}/{pattern}'
@@ -1643,10 +1661,10 @@ class RunCollection(_RunAnalysis):
 
         runs.sort(key=lambda run: run.name)
 
-        return cls(runs)
+        return cls(runs, *args, **kwargs)
 
     @classmethod
-    def from_files(cls, file_list, strict=False):
+    def from_files(cls, file_list, strict=False, *args, **kwargs):
         '''init by finding all run files in a directory'''
 
         if not file_list:
@@ -1679,16 +1697,17 @@ class RunCollection(_RunAnalysis):
 
         runs.sort(key=lambda run: run.name)
 
-        return cls(runs)
+        return cls(runs, *args, **kwargs)
 
     # ----------------------------------------------------------------------
     # Helpers
     # ----------------------------------------------------------------------
 
-    def _get_from_model(self, param, *, statistic=False, **kwargs):
+    def _get_from_model(self, param, *, statistic=False, with_units=True,
+                        **kwargs):
         '''get one of the "integrated" attributes from models (like BH mass)
-        if statistic, return only the mean/std for each, otherwise return full
-        array for each modelviz
+        if statistic, return only the mean/std for each (used in params),
+        otherwise return full array for each modelviz (used explicitly)
 
         if havent generated models already (using the get_*models function),
         then they will be computed here, with all **kwargs pass to it.
@@ -1704,6 +1723,12 @@ class RunCollection(_RunAnalysis):
 
         data = getattr(self.models, param)
 
+        if not with_units:
+            try:
+                data = [ds.value for ds in data]
+            except AttributeError:
+                pass
+
         if statistic:
             # Compute average and std for each run
             return [(np.median(ds), np.std(ds)) for ds in data]
@@ -1712,43 +1737,35 @@ class RunCollection(_RunAnalysis):
             # return the full dataset for each run
             return data
 
-    def _get_params(self, N_simruns=100, label_fixed=True):
+    def _get_param(self, param, *, from_model=True, **kwargs):
+        '''return the mean & std for a θ, metadata or model quntity "param"
+        for all runs
 
-        # TODO make these into a sort of property which checks if N_simruns is
-        #   the same as last time it was computed and just returns that then
+        from_model=False if you want to really avoid model params (i.e. dont
+        want to compute the models) all kwargs are passed to get_model otherwise
+        '''
 
-        params = []
-
-        for run in self.runs:
-
-            lbls, _ = run._get_chains()
-
-            if label_fixed is False:
-                lbls = [k[:-8] if k.endswith(' (fixed)') else k for k in lbls]
-
-            sr = run._sim_errors(Nruns=N_simruns)
-
-            mn = run.parameter_means(sim_runs=sr)[0]
-            std = np.sqrt(np.diag(run.parameter_vars(sim_runs=sr)[0]))
-
-            params.append({k: (mn[i], std[i]) for i, k in enumerate(lbls)})
-
-        return params
-
-    def _get_prm_or_mdata(self, prms, mdata, key):
-        '''small helper func for loading data from params or from metadata'''
+        # try to get it from the best-fit params or metadata
         try:
-            return prms[key]
-        except KeyError as err:
-            try:
-                return mdata[key], 0.
-            except KeyError:
 
-                try:
-                    NOT GONNA WORK, AS THIS IS ONLY FOR ONE RUN
-                    return self._get_from_model(key, statistic=True)
-                except KeyError:
-                    raise KeyError(f'{key} is not a valid param') from err
+            # join the param and metadata dicts (union in 3.9)
+            out = [
+                {**self._params[ind], **self._mdata[ind]}[param]
+                for ind, run in enumerate(self.runs)
+            ]
+
+        # otherwise try to get from model properties
+        # this is only worst case because may take a long time to gen models
+        except KeyError as err:
+
+            if from_model:
+                out = self._get_from_model(param, statistic=True,
+                                           with_units=False, **kwargs)
+
+            else:
+                raise err
+
+        return out
 
     # ----------------------------------------------------------------------
     # Model Collection Visualizers
@@ -1869,15 +1886,10 @@ class RunCollection(_RunAnalysis):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        # TODO also support metadata
-        params = self._get_params(N_simruns=N_simruns)
-
         clrs = self._cmap(np.linspace(0., 1., len(self.runs)))
 
-        x, dx = np.array([self._get_prm_or_mdata(prms, run.obs.mdata, param1)
-                          for run, prms in zip(self.runs, params)]).T
-        y, dy = np.array([self._get_prm_or_mdata(prms, run.obs.mdata, param2)
-                          for run, prms in zip(self.runs, params)]).T
+        x, dx = zip(*self._get_param(param1))
+        y, dy = zip(*self._get_param(param2))
 
         ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', ecolor=clrs, **kwargs)
         ax.scatter(x, y, color=clrs, picker=True, **kwargs)  # TODO pickradius?
