@@ -1569,8 +1569,15 @@ class RunCollection(_RunAnalysis):
     '''For analyzing a collection of runs all at once
     '''
 
+    _src = None
+
     def __str__(self):
-        return f"Collection of Runs from {self._src}"
+        mssg = f"Collection of Runs"
+
+        if self._src:
+            mssg += " from {self._src}"
+
+        return mssg
 
     # ----------------------------------------------------------------------
     # Interacting with Runs
@@ -1633,6 +1640,42 @@ class RunCollection(_RunAnalysis):
         if not runs:
             mssg = f"No valid runs found in {directory}"
             raise RuntimeError(mssg)
+
+        runs.sort(key=lambda run: run.name)
+
+        return cls(runs)
+
+    @classmethod
+    def from_files(cls, file_list, strict=False):
+        '''init by finding all run files in a directory'''
+
+        if not file_list:
+            mssg = f"`file_list` must not be empty"
+            raise ValueError(mssg)
+
+        runs = []
+
+        for file in file_list:
+
+            cluster = file.stem[:-8]
+
+            obs = Observations(cluster)
+
+            try:
+                # TODO support both nested and mcmc, somehow organically
+                run = NestedRun(file, obs, name=obs.cluster)
+
+            except KeyError as err:
+
+                mssg = f'Failed to create run for {obs.cluster}: {err}'
+
+                if strict:
+                    raise RuntimeError(mssg)
+                else:
+                    logging.debug(mssg)
+                    continue
+
+            runs.append(run)
 
         runs.sort(key=lambda run: run.name)
 
