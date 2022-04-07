@@ -1598,7 +1598,7 @@ class RunCollection(_RunAnalysis):
         self.runs = runs
 
     @classmethod
-    def from_dir(cls, directory, pattern='NGC*', strict=False):
+    def from_dir(cls, directory, pattern='**/*hdf', strict=False):
         '''init by finding all run files in a directory'''
 
         cls._src = f'{directory}/{pattern}'
@@ -1609,15 +1609,14 @@ class RunCollection(_RunAnalysis):
 
         for fn in directory.glob(pattern):
 
-            cluster = fn.name
-
-            file = pathlib.Path(fn.resolve(), f'{cluster}_sampler.hdf')
+            # TODO maybe shouldn't assume its "{cluster}_sampler.hdf" here
+            cluster = fn.stem[:-8]
 
             obs = Observations(cluster)
 
             try:
                 # TODO support both nested and mcmc, somehow organically
-                run = NestedRun(file, obs, name=obs.cluster)
+                run = NestedRun(fn, obs, name=obs.cluster)
 
             except KeyError as err:
 
