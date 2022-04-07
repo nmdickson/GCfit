@@ -1569,6 +1569,7 @@ class RunCollection(_RunAnalysis):
     '''
 
     _src = None
+    models = None
 
     def __str__(self):
         mssg = f"Collection of Runs"
@@ -1684,6 +1685,33 @@ class RunCollection(_RunAnalysis):
     # Helpers
     # ----------------------------------------------------------------------
 
+    def _get_from_model(self, param, *, statistic=False, **kwargs):
+        '''get one of the "integrated" attributes from models (like BH mass)
+        if statistic, return only the mean/std for each, otherwise return full
+        array for each modelviz
+
+        if havent generated models already (using the get_*models function),
+        then they will be computed here, with all **kwargs pass to it.
+        if N is passed, will gen CI models, otherwise normal mean models
+        '''
+
+        # Compute models now
+        if self.models is None:
+            if 'N' in kwargs:
+                self.get_CImodels(**kwargs)
+            else:
+                self.get_models(**kwargs)
+
+        data = getattr(self.models, param)
+
+        if statistic:
+            # Compute average and std for each run
+            return [(np.median(ds), np.std(ds)) for ds in data]
+
+        else:
+            # return the full dataset for each run
+            return data
+
     def _get_params(self, N_simruns=100, label_fixed=True):
 
         # TODO make these into a sort of property which checks if N_simruns is
@@ -1715,7 +1743,12 @@ class RunCollection(_RunAnalysis):
             try:
                 return mdata[key], 0.
             except KeyError:
-                raise KeyError(f'{key} is not a valid param') from err
+
+                try:
+                    NOT GONNA WORK, AS THIS IS ONLY FOR ONE RUN
+                    return self._get_from_model(key, statistic=True)
+                except KeyError:
+                    raise KeyError(f'{key} is not a valid param') from err
 
     # ----------------------------------------------------------------------
     # Model Collection Visualizers
@@ -1726,14 +1759,19 @@ class RunCollection(_RunAnalysis):
         # TODO load isnt currently and may never be supported by non-CI modelviz
         if load:
             filenames = [run.file.filename for run in self.runs]
-            return ModelCollection.load(filenames, ci=False)
+            mc = ModelCollection.load(filenames, ci=False)
 
         else:
             chains = [run.parameter_means(1)[0] for run in self.runs]
 
             obs_list = [run.obs for run in self.runs]
 
-            return ModelCollection.from_chains(chains, obs_list, ci=False)
+            mc = ModelCollection.from_chains(chains, obs_list, ci=False)
+
+        # save a copy of models here
+        self.models = mc
+
+        return mc
 
     def get_CImodels(self, N=100, Nprocesses=1, add_errors=False, shuffle=True,
                      load=True):
@@ -1741,7 +1779,7 @@ class RunCollection(_RunAnalysis):
 
         if load:
             filenames = [run.file.filename for run in self.runs]
-            return ModelCollection.load(filenames, ci=True)
+            mc = ModelCollection.load(filenames, ci=True)
 
         else:
             chains = []
@@ -1758,8 +1796,13 @@ class RunCollection(_RunAnalysis):
 
             with multiprocessing.Pool(processes=Nprocesses) as pool:
 
-                return ModelCollection.from_chains(chains, obs_list, ci=True,
-                                                   N=N, pool=pool)
+                mc = ModelCollection.from_chains(chains, obs_list, ci=True,
+                                                 N=N, pool=pool)
+
+                # save a copy of models here
+        self.models = mc
+
+        return mc
 
     # ----------------------------------------------------------------------
     # Iterative plots
