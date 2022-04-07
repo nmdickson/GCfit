@@ -2308,8 +2308,6 @@ class CIModelVisualizer(_ClusterVisualizer):
         validate: check while loading that all datasets are there, error if not
         '''
 
-        viz = cls()
-
         with h5py.File(filename, 'r') as file:
 
             try:
@@ -2318,8 +2316,11 @@ class CIModelVisualizer(_ClusterVisualizer):
                 mssg = f'No saved model outputs in {filename}'
                 raise RuntimeError(mssg) from err
 
+            # init class
+            obs = Observations(modelgrp['metadata'].attrs['cluster'])
+            viz = cls(obs)
+
             # Get metadata
-            viz.obs = Observations(modelgrp['metadata'].attrs['cluster'])
             viz.N = modelgrp['metadata'].attrs['N']
             viz.s2 = modelgrp['metadata'].attrs['s2']
             viz.F = modelgrp['metadata'].attrs['F']
@@ -2470,6 +2471,15 @@ class ModelCollection:
     # TODO god what do you name this stuff now. cant use "Model"
     def __init__(self, modelvizs):
         self.modelvizs = modelvizs
+
+        if all(isinstance(mv, ModelVisualizer) for mv in modelvizs):
+            self._ci = False
+        elif all(isinstance(mv, CIModelVisualizer) for mv in modelvizs):
+            self._ci = True
+        else:
+            mssg = ('Invalid modelviz type. All modelvizs must be either '
+                    'ModelVisualizer or CIModelVisualizer')
+            raise TypeError(mssg)
 
     @classmethod
     def load(cls, filenames, ci=False, validate=False):
