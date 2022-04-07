@@ -1915,24 +1915,16 @@ class RunCollection(_RunAnalysis):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        # TODO also support metadata
-        params = self._get_params(N_simruns=N_simruns)
+        x, dx = zip(*self._get_param(param))
+        y, dy = truths, e_truths
 
         if clr_param is None:
             clrs = self._cmap(np.linspace(0., 1., len(self.runs)))
         else:
-            cvals = np.array([
-                self._get_prm_or_mdata(prms, run.obs.mdata, clr_param)
-                for run, prms in zip(self.runs, params)
-            ]).T[0]
+            cvals = zip(*self._get_param(clr_param))[0]
 
             cnorm = mpl_clr.Normalize(cvals.min(), cvals.max())
             clrs = self._cmap(cnorm(cvals))
-
-        x, dx = np.array([self._get_prm_or_mdata(prms, run.obs.mdata, param)
-                          for run, prms in zip(self.runs, params)]).T
-
-        y, dy = truths, e_truths
 
         ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', ecolor=clrs, **kwargs)
         pnts = ax.scatter(x, y, color=clrs, picker=True, **kwargs)
@@ -2031,6 +2023,7 @@ class RunCollection(_RunAnalysis):
 
         out.write(f'Cluster\t{hdr}\n')
 
+        # TODO out of date!
         params = self._get_params(N_simruns=N_simruns)
 
         for run, prms in zip(self.runs, params):
