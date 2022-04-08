@@ -1974,8 +1974,6 @@ class RunCollection(_RunAnalysis):
     # Summary plots
     # ----------------------------------------------------------------------
 
-    # TODO the way this class is structured to get params and data and etc is terrible and repetitive and N_simruns is slowing everything down alot
-
     def plot_param_violins(self, param, fig=None, ax=None,
                            color=None, edgecolor=None, alpha=0.3,
                            *args, **kwargs):

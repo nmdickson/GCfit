@@ -465,7 +465,7 @@ class _ClusterVisualizer:
     # Plot extras
     # -----------------------------------------------------------------------
 
-    def _add_residuals(self, ax, ymodel, errorbars, *,
+    def _add_residuals(self, ax, ymodel, errorbars, *, show_chi2=True,
                        xmodel=None, y_unit=None, res_ax=None, **kwargs):
         '''
         errorbars : a list of outputs from calls to plt.errorbars
@@ -513,6 +513,8 @@ class _ClusterVisualizer:
         # ------------------------------------------------------------------
         # Get data from the plotted errorbars
         # ------------------------------------------------------------------
+
+        chi2 = 0.
 
         for errbar in errorbars:
 
@@ -564,6 +566,17 @@ class _ClusterVisualizer:
 
             res_ax.errorbar(xdata, res, xerr=xerr, yerr=yerr,
                             color=clr, marker=mrk, linestyle='none')
+
+            # --------------------------------------------------------------
+            # Optionally compute chi-squared statistic
+            # --------------------------------------------------------------
+
+            if show_chi2:
+                chi2 += np.sum((res / yerr)**2)
+
+        if show_chi2:
+            fake = plt.Line2D([], [], label=fr"$\chi^2={chi2:.2f}$")
+            res_ax.legend(handles=[fake], handlelength=0, handletextpad=0)
 
         return res_ax
 
@@ -1014,6 +1027,7 @@ class _ClusterVisualizer:
     def plot_mass_func(self, fig=None, show_obs=True, show_fields=True, *,
                        colours=None, PI_legend=False, logscaled=False,
                        field_kw=None):
+        # TODO support residuals
 
         # ------------------------------------------------------------------
         # Setup axes, splitting into two columns if necessary and adding the
@@ -1452,6 +1466,176 @@ class _ClusterVisualizer:
         ax.legend()
 
         return fig
+
+    # -----------------------------------------------------------------------
+    # Goodness of fit statistics
+    # -----------------------------------------------------------------------
+
+    @_support_units
+    def _compute_profile_chi2(self, ds_pattern, y_key, model_data, *,
+                              x_key='r', err_transform=None, reduced=True):
+        '''compute chi2 for this dataset (pattern)'''
+        # TODO how does chi2 work with uncertainties on both model and data?
+
+        chi2 = 0.
+
+        # ensure that the data is (mass bin, intervals, r domain)
+        if len(model_data.shape) != 3:
+            raise ValueError("invalid model data shape")
+
+        # ------------------------------------------------------------------
+        # Determine the relevant datasets to the given pattern
+        # ------------------------------------------------------------------
+
+        ds_pattern = ds_pattern or ''
+
+        datasets = self.obs.filter_datasets(ds_pattern)
+
+        # ------------------------------------------------------------------
+        # Iterate over the datasets, computing chi2 for each
+        # ------------------------------------------------------------------
+
+        for dset in datasets.values():
+
+            # --------------------------------------------------------------
+            # get mass bin of this dataset
+            # --------------------------------------------------------------
+
+            if 'm' in dset.mdata:
+                m = dset.mdata['m'] * u.Msun
+                mass_bin = np.where(self.mj == m)[0][0]
+            else:
+                mass_bin = self.star_bin
+
+            # --------------------------------------------------------------
+            # get data values
+            # --------------------------------------------------------------
+
+            try:
+                xdata = dset[x_key]  # x_key='r'
+                ydata = dset[y_key]
+
+            except KeyError:
+                continue
+
+            yerr = self._get_err(dset, y_key)
+
+            if err_transform is not None:
+                yerr = err_transform(yerr)
+
+            yerr = yerr.to(ydata.unit)
+
+            # --------------------------------------------------------------
+            # get model values
+            # --------------------------------------------------------------
+
+            xmodel = self.r.to(xdata.unit)
+
+            ymedian = self._get_median(model_data[mass_bin, :, :])
+
+            # TEMPORRAY FIX FOR RATIO
+            ymedian[np.isnan(ymedian)] = 1.0 << ymedian.unit
+
+            ymodel = util.QuantitySpline(xmodel, ymedian)(xdata).to(ydata.unit)
+
+            # --------------------------------------------------------------
+            # compute chi2
+            # --------------------------------------------------------------
+
+            denom = (ydata.size - 13) if reduced else 1.
+
+            chi2 += np.sum(((ymodel - ydata) / yerr)**2) / denom
+
+        return chi2
+
+    @_support_units
+    def _compute_massfunc_chi2(self, *, reduced=True):
+
+        chi2 = 0.
+
+        # ------------------------------------------------------------------
+        # Iterate over each PI, gathering data
+        # ------------------------------------------------------------------
+
+        for PI in sorted(self.mass_func,
+                         key=lambda k: self.mass_func[k][0]['r1']):
+
+            bins = self.mass_func[PI]
+
+            # Get data for this PI
+
+            mf = self.obs[PI]
+
+            mbin_mean = (mf['m1'] + mf['m2']) / 2.
+            mbin_width = mf['m2'] - mf['m1']
+
+            N = mf['N'] / mbin_width
+            ΔN = mf['ΔN'] / mbin_width
+
+            # --------------------------------------------------------------
+            # Iterate over radial bin dicts for this PI
+            # --------------------------------------------------------------
+
+            for rind, rbin in enumerate(bins):
+
+                # ----------------------------------------------------------
+                # Get data
+                # ----------------------------------------------------------
+
+                r_mask = ((mf['r1'] == rbin['r1']) & (mf['r2'] == rbin['r2']))
+
+                xdata = mbin_mean[r_mask]
+
+                ydata = N[r_mask].value
+
+                yerr = self.F * ΔN[r_mask].value
+
+                # ----------------------------------------------------------
+                # Get model
+                # ----------------------------------------------------------
+
+                xmodel = rbin['mj']
+
+                ymedian = self._get_median(rbin['dNdm'])
+
+                ymodel = util.QuantitySpline(xmodel, ymedian)(xdata)
+
+                # TODO really should get this Nparam dynamically, if some fixed
+                denom = (ydata.size - 13) if reduced else 1.
+
+                chi2 += np.sum(((ymodel - ydata) / yerr)**2) / denom
+
+        return chi2
+
+    @property
+    def chi2(self):
+
+        def numdens_nuisance(err):
+            return np.sqrt(err**2 + (self.s2 << err.unit**2))
+
+        all_components = [
+            {'ds_pattern': '*velocity_dispersion*', 'y_key': 'σ',
+             'model_data': self.LOS},
+            {'ds_pattern': '*proper_motion*', 'y_key': 'PM_tot',
+             'model_data': self.pm_tot},
+            {'ds_pattern': '*proper_motion*', 'y_key': 'PM_ratio',
+             'model_data': self.pm_ratio},
+            {'ds_pattern': '*proper_motion*', 'y_key': 'PM_T',
+             'model_data': self.pm_T},
+            {'ds_pattern': '*proper_motion*', 'y_key': 'PM_R',
+             'model_data': self.pm_R},
+            {'ds_pattern': '*number_density*', 'y_key': 'Σ',
+             'model_data': self.numdens, 'err_transform': numdens_nuisance},
+        ]
+
+        chi2 = 0.
+
+        for comp in all_components:
+            chi2 += self._compute_profile_chi2(**comp)
+
+        chi2 += self._compute_massfunc_chi2()
+
+        return chi2
 
 
 class ModelVisualizer(_ClusterVisualizer):
@@ -2589,3 +2773,7 @@ class ModelCollection:
 
         # TODO if we are okay with assuming all CI have same N, can make array
         return [mv.BH_num for mv in self.modelvizs]
+
+    @property
+    def chi2(self):
+        return [mv.chi2 for mv in self.modelvizs]
