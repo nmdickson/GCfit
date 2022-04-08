@@ -1767,6 +1767,44 @@ class RunCollection(_RunAnalysis):
 
         return out
 
+    def _get_param_chains(self, param, *, from_model=True, **kwargs):
+        '''return the full chain for a θ, metadata or model quntity "param"
+        for all runs
+
+        from_model=False if you want to really avoid model params (i.e. dont
+        want to compute the models) all kwargs are passed to get_model otherwise
+        '''
+
+        # try to get it from the best-fit params or metadata
+        try:
+
+            labels, _ = self.runs[0]._get_chains()
+
+            theta = [dict(zip(labels, r._get_equal_weight_chains()[1].T))
+                     for r in self.runs]
+
+            mdata = [{k: [v, ] for k, v in r.obs.mdata.items()}
+                     for r in self.runs]
+
+            # join the param and metadata dicts (union in 3.9)
+            out = [
+                {**theta[ind], **mdata[ind]}[param]
+                for ind, run in enumerate(self.runs)
+            ]
+
+        # otherwise try to get from model properties
+        # this is only worst case because may take a long time to gen models
+        except KeyError as err:
+
+            if from_model:
+                out = self._get_from_model(param, statistic=False,
+                                           with_units=False, **kwargs)
+
+            else:
+                raise err
+
+        return out
+
     # ----------------------------------------------------------------------
     # Model Collection Visualizers
     # ----------------------------------------------------------------------
@@ -1974,18 +2012,57 @@ class RunCollection(_RunAnalysis):
     # Summary plots
     # ----------------------------------------------------------------------
 
+    # TODO some way to sort these not by cluster name but by quantity
+
+    def plot_param_means(self, param, fig=None, ax=None,
+                         color=None, *args, **kwargs):
+        '''plot mean and std errorbars for each run of the given param'''
+        fig, ax = self._setup_artist(fig, ax)
+
+        mean, std = zip(*self._get_param(param))
+
+        xticks = np.arange(len(self.runs))
+
+        kwargs.setdefault('fmt', 'o')
+
+        ax.errorbar(x=xticks, y=mean, yerr=std, *args, **kwargs)
+
+        ax.set_xticks(xticks, labels=[run.name for run in self.runs],
+                      rotation=45)
+
+        ax.grid(axis='x')
+
+        ax.set_ylabel(param)
+
+        return fig
+
+    def plot_param_bar(self, param, fig=None, ax=None,
+                       color=None, edgecolor=None, alpha=0.3,
+                       *args, **kwargs):
+        '''plot mean and std bar chart for each run of the given param'''
+        fig, ax = self._setup_artist(fig, ax)
+
+        mean, std = zip(*self._get_param(param))
+
+        xticks = np.arange(len(self.runs))
+
+        # TODO change ecolor to be based on color but visible
+        ax.bar(x=xticks, height=mean, yerr=std, *args, **kwargs)
+
+        ax.set_xticks(xticks, labels=[run.name for run in self.runs],
+                      rotation=45)
+
+        ax.set_ylabel(param)
+
+        return fig
+
     def plot_param_violins(self, param, fig=None, ax=None,
                            color=None, edgecolor=None, alpha=0.3,
                            *args, **kwargs):
         '''plot violins for each run of the given param'''
         fig, ax = self._setup_artist(fig, ax)
 
-        labels, _ = self.runs[0]._get_chains()
-
-        prm_ind = labels.index(param)
-
-        chains = [run._get_equal_weight_chains()[1][..., prm_ind]
-                  for run in self.runs]
+        chains = self._get_param_chains(param)
 
         xticks = np.arange(len(self.runs))
 
@@ -1999,8 +2076,7 @@ class RunCollection(_RunAnalysis):
             part.set_alpha(alpha)
 
         for linetype in (set(artists) - {'bodies'}):
-            for part in artists[linetype]:
-                part.set_color(color)
+            artists[linetype].set_color(color)
 
         ax.set_xticks(xticks, labels=[run.name for run in self.runs],
                       rotation=45)
