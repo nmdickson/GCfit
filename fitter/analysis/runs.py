@@ -2087,22 +2087,63 @@ class RunCollection(_RunAnalysis):
 
         return fig
 
-    def summary(self, out=sys.stdout, *, N_simruns=100):
-        '''output a table of all parameter means for each cluster'''
-        # TODO also a latex table version (use pandas)
+    def summary_dataframe(self, *, include_FeHe=True, include_BH=False):
+        import pandas as pd
+
+        # Get name of all desired parameters
 
         labels = list(self.runs[0].obs.initials)
 
-        hdr = "\t".join(f"{lbl}\tσ_{lbl}" for lbl in labels)
+        if include_FeHe:
+            labels = ['FeHe'] + labels
 
-        out.write(f'Cluster\t{hdr}\n')
+        if include_BH:
+            labels += ['BH_mass', 'BH_num']
 
-        # TODO out of date!
-        params = self._get_params(N_simruns=N_simruns)
+        # Fill in a dictionary of column data
 
-        for run, prms in zip(self.runs, params):
+        data = {}
 
-            # TODO be sure this is ordered correctly
-            line = "\t".join(f"{p[0]:.4f}\t{p[1]:.4f}" for p in prms.values())
+        data['Cluster'] = [run.name for run in self.runs]
 
-            out.write(f'{run.name}\t{line}\n')
+        for param in labels:
+            data[param], data[f'σ_{param}'] = zip(*self._get_param(param))
+
+        # Create dataframe
+
+        return pd.DataFrame.from_dict(data)
+
+    def output_summary(self, outfile=sys.stdout, style='latex', *,
+                       include_FeHe=True, include_BH=False, **kwargs):
+        '''output a table of all parameter means for each cluster'''
+
+        # get dataframe
+
+        df = self.summary_dataframe(include_FeHe=include_FeHe,
+                                    include_BH=include_BH)
+
+        # output in desired format
+
+        kwargs.setdefault('index', False)
+
+        if style in ('table' or 'dat'):
+            df.to_string(buf=outfile, **kwargs)
+
+        elif style == 'latex':
+            df.to_latex(buf=outfile, **kwargs)
+
+        elif style == 'hdf':
+            df.to_hdf(outfile, **kwargs)
+
+        elif style == 'csv':
+            df.to_csv(outfile, **kwargs)
+
+        elif style == 'html':
+            df.to_html(buf=outfile, **kwargs)
+
+        else:
+            mssg = ("Invalid style. Must be one of "
+                    "{'table', 'latex', 'hdf', 'csv', 'html'}")
+            raise ValueError(mssg)
+
+        return df
