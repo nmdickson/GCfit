@@ -1364,6 +1364,64 @@ class NestedRun(_RunAnalysis):
 
         return fig
 
+    def plot_IMF(self, fig=None, ax=None, show_canonical='all'):
+        '''Plot the IMF, based on the alpha exponents'''
+        def salpeter(m):
+            return m**-2.35
+
+        def chabrier(m):
+            k = 0.158 * np.exp(-(-np.log10(0.08))**2 / (2 * 0.69**2))
+            imf = k * m**-2.3
+            imf[m <= 1] = (0.158 * (1. / m[m <= 1])
+                           * np.exp(-(np.log10(m[m <= 1]) - np.log10(0.08))**2
+                                    / (2 * 0.69**2)))
+            return imf
+
+        def kroupa(m):
+            imf = 0.08**-0.3 * (0.5 / 0.08)**-1.3 * (m / 0.5)**-2.3
+            imf[m < 0.5] = 0.08**-0.3 * (m[m < 0.5] / 0.08)**-1.3
+            imf[m < 0.08] = m[m < 0.08]**-0.3
+            return imf
+
+        def this_imf(m):
+            # TODO confidence intervals
+            a1, a2, a3 = self._get_equal_weight_chains()[1][:, 8:11].T
+            a1, a2, a3 = np.median(a1), np.median(a2), np.median(a3)
+            print(a1, a2, a3)
+            imf = 0.5**-a1 * (1 / 0.5)**-a2 * (m / 1)**-a3
+            imf[m < 1] = 0.5**-a1 * (m[m < 1] / 0.5)**-a2
+            imf[m < 0.5] = m[m < 0.5]**-a1
+            return imf
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        m0 = np.array([1])
+        m_domain = np.logspace(-2, 2, 400)
+
+        if show_canonical is True or show_canonical == 'all':
+            show_canonical = {'salpeter', 'chabrier', 'kroupa'}
+
+        if 'salpeter' in show_canonical:
+            norm = salpeter(m0)
+            ax.loglog(m_domain, salpeter(m_domain) / norm, label='Salpeter')
+
+        if 'chabrier' in show_canonical:
+            norm = chabrier(m0)
+            ax.loglog(m_domain, chabrier(m_domain) / norm, label='Chabrier')
+
+        if 'kroupa' in show_canonical:
+            norm = kroupa(m0)
+            ax.loglog(m_domain, kroupa(m_domain) / norm, label='Kroupa')
+
+        ax.loglog(m_domain, this_imf(m_domain), this_imf(m0))
+
+        ax.set_xlabel(r'Mass $[M_{\odot}]$')
+        ax.set_ylabel(r'Mass Function $\xi(m)\Delta m$')
+
+        ax.legend()
+
+        return fig
+
     # ----------------------------------------------------------------------
     # Parameter estimation
     # ----------------------------------------------------------------------
