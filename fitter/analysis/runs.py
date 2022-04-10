@@ -1364,7 +1364,7 @@ class NestedRun(_RunAnalysis):
 
         return fig
 
-    def plot_IMF(self, fig=None, ax=None, show_canonical='all'):
+    def plot_IMF(self, fig=None, ax=None, show_canonical='all', ci=True):
         '''Plot the IMF, based on the alpha exponents'''
         def salpeter(m):
             return m**-2.35
@@ -1383,11 +1383,13 @@ class NestedRun(_RunAnalysis):
             imf[m < 0.08] = m[m < 0.08]**-0.3
             return imf
 
-        def this_imf(m):
+        def this_imf(m, perc=50):
+            '''perc is percentile of alpha chain to use'''
             # TODO confidence intervals
-            a1, a2, a3 = self._get_equal_weight_chains()[1][:, 8:11].T
-            a1, a2, a3 = np.median(a1), np.median(a2), np.median(a3)
-            print(a1, a2, a3)
+
+            ch = self._get_equal_weight_chains()[1]
+            a1, a2, a3 = np.percentile(ch[:, 8:11], perc, axis=0)
+
             imf = 0.5**-a1 * (1 / 0.5)**-a2 * (m / 1)**-a3
             imf[m < 1] = 0.5**-a1 * (m[m < 1] / 0.5)**-a2
             imf[m < 0.5] = m[m < 0.5]**-a1
@@ -1413,7 +1415,18 @@ class NestedRun(_RunAnalysis):
             norm = kroupa(m0)
             ax.loglog(m_domain, kroupa(m_domain) / norm, label='Kroupa')
 
-        ax.loglog(m_domain, this_imf(m_domain), this_imf(m0))
+        # plot median
+        med_plot, = ax.loglog(m_domain, this_imf(m_domain) / this_imf(m0))
+
+        # if ci, plot confidence interval
+        if ci:
+            lower = this_imf(m_domain, perc=15.87) / this_imf(m0, perc=15.87)
+            upper = this_imf(m_domain, perc=84.13) / this_imf(m0, perc=84.13)
+
+            # TODO better label?
+            ax.fill_between(m_domain, upper, lower,
+                            alpha=0.3, color=med_plot.get_color(),
+                            label=getattr(self, 'name', None))
 
         ax.set_xlabel(r'Mass $[M_{\odot}]$')
         ax.set_ylabel(r'Mass Function $\xi(m)\Delta m$')
