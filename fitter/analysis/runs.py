@@ -1778,6 +1778,12 @@ class RunCollection(_RunAnalysis):
 
         for file in file_list:
 
+            file = pathlib.Path(file)
+
+            if not file.exists():
+                mssg = f"No such file: '{file}'"
+                raise FileNotFoundError(mssg)
+
             cluster = file.stem[:-8]
 
             obs = Observations(cluster)
