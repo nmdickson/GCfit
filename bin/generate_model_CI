@@ -28,7 +28,8 @@ if __name__ == '__main__':
                     'did not have their CIs created at runtime.'
     )
 
-    parser.add_argument('filenames', help='Name of the run output file')
+    parser.add_argument('filenames', nargs='+',
+                        help='Name of the run output file')
 
     parser.add_argument('-N', default=1000, type=pos_int,
                         help='Number of models used to compute CIs')

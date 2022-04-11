@@ -943,6 +943,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
     if verbose:
         from .. import analysis
+        # TODO would be nice to create/save CI here but may be trouble with mpi
         analysis.NestedRun(backend_fn, observations).print_summary()
 
     logging.info("FINISHED")
