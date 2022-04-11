@@ -1,5 +1,5 @@
 from .. import util
-from ..probabilities import pulsars, mass
+from ..probabilities import mass
 from ..core.data import Observations, Model
 
 import h5py
