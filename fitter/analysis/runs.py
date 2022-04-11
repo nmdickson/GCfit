@@ -683,7 +683,8 @@ class NestedRun(_RunAnalysis):
     @property
     def AIC(self):
 
-        exc = list(self.file['metadata/excluded_likelihoods'].attrs.values())
+        exc = [L.decode() for L in
+               self.file['metadata/excluded_likelihoods'].attrs.values()]
 
         N = sum([self.obs[comp[0]].size for comp in
                  self.obs.filter_likelihoods(exc, True)])
@@ -698,7 +699,8 @@ class NestedRun(_RunAnalysis):
     @property
     def BIC(self):
 
-        exc = list(self.file['metadata/excluded_likelihoods'].attrs.values())
+        exc = [L.decode() for L in
+               self.file['metadata/excluded_likelihoods'].attrs.values()]
 
         N = sum([self.obs[comp[0]].size for comp in
                  self.obs.filter_likelihoods(exc, True)])
@@ -1804,6 +1806,10 @@ class RunCollection(_RunAnalysis):
     # Helpers
     # ----------------------------------------------------------------------
 
+    def _get_from_run(self, param):
+        '''get a property from each run (BIC, AIC, ESS, etc)'''
+        return [(getattr(run, param), 0) for run in self.runs]
+
     def _get_from_model(self, param, *, statistic=False, with_units=True,
                         **kwargs):
         '''get one of the "integrated" attributes from models (like BH mass)
@@ -1859,12 +1865,15 @@ class RunCollection(_RunAnalysis):
         # this is only worst case because may take a long time to gen models
         except KeyError as err:
 
-            if from_model:
-                out = self._get_from_model(param, statistic=True,
-                                           with_units=False, **kwargs)
+            try:
+                out = self._get_from_run(param)
+            except KeyError:
 
-            else:
-                raise err
+                if from_model:
+                    out = self._get_from_model(param, statistic=True,
+                                               with_units=False, **kwargs)
+                else:
+                    raise err
 
         return out
 
