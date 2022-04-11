@@ -2440,11 +2440,11 @@ class ModelCollection:
 
         return cls([viz.load(fn, validate=validate) for fn in filenames])
 
-    def save(self, filenames):
+    def save(self, filenames, overwrite=False):
         '''save the models in the results files'''
 
         for fn, mv in zip(filenames, self.modelvizs):
-            mv.save(fn)
+            mv.save(fn, overwrite=overwrite)
 
     @classmethod
     def from_models(cls, models, obs_list=None):

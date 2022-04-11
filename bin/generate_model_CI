@@ -37,6 +37,9 @@ if __name__ == '__main__':
     parser.add_argument('--Ncpu', default=1, type=pos_int,
                         help='Number of processes used in parallelization')
 
+    parser.add_argument('--overwrite', action='store_true',
+                        help='Overwrite saved CIs if already exist. Be careful')
+
     args = parser.parse_args()
 
     # ----------------------------------------------------------------------
@@ -47,4 +50,4 @@ if __name__ == '__main__':
 
     mc = rc.get_CImodels(N=args.N, Nprocesses=args.Ncpu, load=False)
 
-    mc.save(args.filenames)
+    mc.save(args.filenames, overwrite=args.overwrite)
