@@ -88,7 +88,7 @@ class Field:
     def prep(self):
         '''Prepare the polygons for quicker containment searches'''
         if self._multi:
-            self._prepped = [prepgeom.prep(p) for p in self.polygon]
+            self._prepped = [prepgeom.prep(p) for p in self.polygon.geoms]
         else:
             self._prepped = prepgeom.prep(self.polygon)
 
@@ -105,6 +105,7 @@ class Field:
             self._multi = False
         elif isinstance(coords, geom.MultiPolygon):
             self._multi = True
+            coords = coords.geoms
 
         # is a single polygon of coordinates
         elif isinstance(coords, np.ndarray) and coords.ndim == 2:
@@ -232,7 +233,7 @@ class Field:
             points = []
             tot_area = self.polygon.area
 
-            for poly, prep_poly in zip(self.polygon, self._prepped):
+            for poly, prep_poly in zip(self.polygon.geoms, self._prepped):
                 M_i = round(M * poly.area / tot_area)
                 points += rejection_sample(poly, prep_poly, M_i)
 
@@ -312,7 +313,7 @@ class Field:
 
         coords, codes = [], []
 
-        for poly in (self.polygon if self._multi else [self.polygon]):
+        for poly in (self.polygon.geoms if self._multi else [self.polygon]):
 
             for line in [poly.exterior, *poly.interiors]:
                 coords += line.coords

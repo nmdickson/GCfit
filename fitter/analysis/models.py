@@ -1238,7 +1238,7 @@ class _ClusterVisualizer:
             }
 
             for gr in ticks:
-                circle = np.array(geom.Point(0, 0).buffer(gr).exterior).T
+                circle = np.array(geom.Point(0, 0).buffer(gr).exterior.coords).T
                 gr_line, = ax.plot(*circle, **grid_kw)
 
                 ax.annotate(f'{gr:.0f}"', xy=(circle[0].max(), 0),
@@ -1258,7 +1258,7 @@ class _ClusterVisualizer:
                 raise TypeError(mssg)
 
             radius = getattr(self, r_type).to_value('arcmin')
-            circle = np.array(geom.Point(0, 0).buffer(radius).exterior).T
+            circle = np.array(geom.Point(0, 0).buffer(radius).exterior.coords).T
             ax.plot(*circle, ls='--')
             ax.text(0, circle[1].max(), r_type)
 
