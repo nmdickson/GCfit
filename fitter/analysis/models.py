@@ -336,7 +336,6 @@ class _ClusterVisualizer:
         kwargs.setdefault('linestyle', 'None')
         kwargs.setdefault('color', defaultcolour)
 
-        # TODO should try to cite, but if that fails just use raw bibcode?
         label = dataset.cite()
         if 'm' in dataset.mdata:
             label += fr' ($m={dataset.mdata["m"]}\ M_\odot$)'
@@ -845,7 +844,6 @@ class _ClusterVisualizer:
 
             field_kw.setdefault('radii', [])
 
-            # TODO need to figure out a good size and how to do it, for this ax
             self.plot_MF_fields(fig, ax, **field_kw)
 
             ax_ind += 1
@@ -1260,7 +1258,6 @@ class _ClusterVisualizer:
     def _compute_profile_chi2(self, ds_pattern, y_key, model_data, *,
                               x_key='r', err_transform=None, reduced=True):
         '''compute chi2 for this dataset (pattern)'''
-        # TODO how does chi2 work with uncertainties on both model and data?
 
         chi2 = 0.
 
@@ -1394,6 +1391,10 @@ class _ClusterVisualizer:
 
     @property
     def chi2(self):
+        '''compute chi2 between median model and all datasets
+        Be cognizant that this is only the median model chi2, and not
+        necessarily useful for actual statistics
+        '''
 
         def numdens_nuisance(err):
             return np.sqrt(err**2 + (self.s2 << err.unit**2))
@@ -1549,7 +1550,6 @@ class ModelVisualizer(_ClusterVisualizer):
 
             self.mass_func[key] = []
 
-            # TODO same colour for each PI or different for each slice?
             clr = cmap(i / len(PI_list))
 
             field = mass.Field.from_dataset(mf, cen=cen)
@@ -1895,7 +1895,6 @@ class CIModelVisualizer(_ClusterVisualizer):
         # compute and store the percentiles and medians
         # ------------------------------------------------------------------
 
-        # TODO get sigmas dynamically ased on an arg
         q = [97.72, 84.13, 50., 15.87, 2.28]
 
         axes = (1, 0, 2)  # `np.percentile` messes up the dimensions
@@ -2107,7 +2106,6 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             massfunc[key] = []
 
-            # TODO same colour for each PI or different for each slice?
             clr = cmap(i / len(PI_list))
 
             field = mass.Field.from_dataset(mf, cen=cen)
@@ -2522,7 +2520,6 @@ class ModelCollection:
                     "Must be constructed with CIModelVisualizer objects.")
             raise AttributeError(mssg)
 
-        # TODO if we are okay with assuming all CI have same N, can make array
         return [mv.BH_mass for mv in self.modelvizs]
 
     @property
@@ -2533,7 +2530,6 @@ class ModelCollection:
                     "Must be constructed with CIModelVisualizer objects.")
             raise AttributeError(mssg)
 
-        # TODO if we are okay with assuming all CI have same N, can make array
         return [mv.BH_num for mv in self.modelvizs]
 
     @property
