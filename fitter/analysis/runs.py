@@ -224,7 +224,7 @@ class MCMCRun(_RunAnalysis):
         if isinstance(file, h5py.File):
             self.file = file
         else:
-            self.file = h5py.File(file, 'r')
+            self.file = h5py.File(file, 'r+')
 
         self._gname = group
 
@@ -729,7 +729,7 @@ class NestedRun(_RunAnalysis):
         if isinstance(file, h5py.File):
             self.file = file
         else:
-            self.file = h5py.File(file, 'r')
+            self.file = h5py.File(file, 'r+')
 
         self._gname = group
 
