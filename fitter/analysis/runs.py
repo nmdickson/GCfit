@@ -1925,19 +1925,13 @@ class RunCollection(_RunAnalysis):
     # Model Collection Visualizers
     # ----------------------------------------------------------------------
 
-    def get_models(self, load=True):
+    def get_models(self):
 
-        # TODO load isnt currently and may never be supported by non-CI modelviz
-        if load:
-            filenames = [run.file.filename for run in self.runs]
-            mc = ModelCollection.load(filenames, ci=False)
+        chains = [run.parameter_means(1)[0] for run in self.runs]
 
-        else:
-            chains = [run.parameter_means(1)[0] for run in self.runs]
+        obs_list = [run.obs for run in self.runs]
 
-            obs_list = [run.obs for run in self.runs]
-
-            mc = ModelCollection.from_chains(chains, obs_list, ci=False)
+        mc = ModelCollection.from_chains(chains, obs_list, ci=False)
 
         # save a copy of models here
         self.models = mc

@@ -2431,14 +2431,11 @@ class ModelCollection:
             raise TypeError(mssg)
 
     @classmethod
-    def load(cls, filenames, ci=False, validate=False):
+    def load(cls, filenames, validate=False):
         '''Load the models stored in the results files'''
-        # TODO better way to get the right viz
-        # TODO save/load only supported for ci. Not really needed otherwise?
 
-        viz = CIModelVisualizer if ci else ModelVisualizer
-
-        return cls([viz.load(fn, validate=validate) for fn in filenames])
+        return cls([CIModelVisualizer.load(fn, validate=validate)
+                    for fn in filenames])
 
     def save(self, filenames, overwrite=False):
         '''save the models in the results files'''
