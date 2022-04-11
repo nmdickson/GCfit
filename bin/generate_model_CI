@@ -33,7 +33,7 @@ if __name__ == '__main__':
     parser.add_argument('-N', default=1000, type=pos_int,
                         help='Number of models used to compute CIs')
 
-    parser.add_argument('-Ncpu', default=1, type=pos_int,
+    parser.add_argument('--Ncpu', default=1, type=pos_int,
                         help='Number of processes used in parallelization')
 
     args = parser.parse_args()
