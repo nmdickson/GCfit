@@ -2158,6 +2158,10 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         with h5py.File(filename, 'a') as file:
 
+            # --------------------------------------------------------------
+            # Prep file
+            # --------------------------------------------------------------
+
             if 'model_output' in file:
                 mssg = f'Model output already exists in {filename}.'
 
@@ -2169,6 +2173,10 @@ class CIModelVisualizer(_ClusterVisualizer):
                     raise ValueError(mssg)
 
             modelgrp = file.create_group('model_output')
+
+            # --------------------------------------------------------------
+            # Store metadata
+            # --------------------------------------------------------------
 
             meta_grp = modelgrp.create_group('metadata')
 
@@ -2182,77 +2190,29 @@ class CIModelVisualizer(_ClusterVisualizer):
             meta_grp.attrs['N'] = self.N
             meta_grp.attrs['cluster'] = self.obs.cluster
 
+            # --------------------------------------------------------------
+            # Store profiles
+            # --------------------------------------------------------------
+
             prof_grp = modelgrp.create_group('profiles')
 
-            # TODO make this a loop
-            ds = prof_grp.create_dataset('rho_MS', data=self.rho_MS)
-            ds.attrs['unit'] = self.rho_MS.unit.to_string()
+            profile_keys = (
+                'rho_MS', 'rho_tot', 'rho_BH', 'rho_WD', 'rho_NS',
+                'pm_T', 'pm_R', 'pm_tot', 'pm_ratio', 'LOS',
+                'Sigma_MS', 'Sigma_tot', 'Sigma_BH', 'Sigma_WD',
+                'Sigma_NS', 'cum_M_MS', 'cum_M_tot', 'cum_M_BH', 'cum_M_WD',
+                'cum_M_NS', 'frac_M_MS', 'frac_M_rem', 'numdens'
+            )
 
-            ds = prof_grp.create_dataset('rho_tot', data=self.rho_tot)
-            ds.attrs['unit'] = self.rho_tot.unit.to_string()
+            for key in profile_keys:
 
-            ds = prof_grp.create_dataset('rho_BH', data=self.rho_BH)
-            ds.attrs['unit'] = self.rho_BH.unit.to_string()
+                data = getattr(self, key)
+                ds = prof_grp.create_dataset(key, data=data)
+                ds.attrs['unit'] = data.unit.to_string()
 
-            ds = prof_grp.create_dataset('rho_WD', data=self.rho_WD)
-            ds.attrs['unit'] = self.rho_WD.unit.to_string()
-
-            ds = prof_grp.create_dataset('rho_NS', data=self.rho_NS)
-            ds.attrs['unit'] = self.rho_NS.unit.to_string()
-
-            ds = prof_grp.create_dataset('pm_T', data=self.pm_T)
-            ds.attrs['unit'] = self.pm_T.unit.to_string()
-
-            ds = prof_grp.create_dataset('pm_R', data=self.pm_R)
-            ds.attrs['unit'] = self.pm_R.unit.to_string()
-
-            ds = prof_grp.create_dataset('pm_tot', data=self.pm_tot)
-            ds.attrs['unit'] = self.pm_tot.unit.to_string()
-
-            ds = prof_grp.create_dataset('pm_ratio', data=self.pm_ratio)
-            ds.attrs['unit'] = self.pm_ratio.unit.to_string()
-
-            ds = prof_grp.create_dataset('LOS', data=self.LOS)
-            ds.attrs['unit'] = self.LOS.unit.to_string()
-
-            ds = prof_grp.create_dataset('Sigma_MS', data=self.Sigma_MS)
-            ds.attrs['unit'] = self.Sigma_MS.unit.to_string()
-
-            ds = prof_grp.create_dataset('Sigma_tot', data=self.Sigma_tot)
-            ds.attrs['unit'] = self.Sigma_tot.unit.to_string()
-
-            ds = prof_grp.create_dataset('Sigma_BH', data=self.Sigma_BH)
-            ds.attrs['unit'] = self.Sigma_BH.unit.to_string()
-
-            ds = prof_grp.create_dataset('Sigma_WD', data=self.Sigma_WD)
-            ds.attrs['unit'] = self.Sigma_WD.unit.to_string()
-
-            ds = prof_grp.create_dataset('Sigma_NS', data=self.Sigma_NS)
-            ds.attrs['unit'] = self.Sigma_NS.unit.to_string()
-
-            ds = prof_grp.create_dataset('cum_M_MS', data=self.cum_M_MS)
-            ds.attrs['unit'] = self.cum_M_MS.unit.to_string()
-
-            ds = prof_grp.create_dataset('cum_M_tot', data=self.cum_M_tot)
-            ds.attrs['unit'] = self.cum_M_tot.unit.to_string()
-
-            ds = prof_grp.create_dataset('cum_M_BH', data=self.cum_M_BH)
-            ds.attrs['unit'] = self.cum_M_BH.unit.to_string()
-
-            ds = prof_grp.create_dataset('cum_M_WD', data=self.cum_M_WD)
-            ds.attrs['unit'] = self.cum_M_WD.unit.to_string()
-
-            ds = prof_grp.create_dataset('cum_M_NS', data=self.cum_M_NS)
-            ds.attrs['unit'] = self.cum_M_NS.unit.to_string()
-
-            ds = prof_grp.create_dataset('frac_M_MS', data=self.frac_M_MS)
-            ds.attrs['unit'] = self.frac_M_MS.unit.to_string()
-
-            ds = prof_grp.create_dataset('frac_M_rem', data=self.frac_M_rem)
-            ds.attrs['unit'] = self.frac_M_rem.unit.to_string()
-
-            ds = prof_grp.create_dataset('numdens', data=self.numdens)
-            ds.attrs['unit'] = self.numdens.unit.to_string()
+            # --------------------------------------------------------------
+            # Store quantities
+            # --------------------------------------------------------------
 
             quant_grp = modelgrp.create_group('quantities')
 
@@ -2261,6 +2221,10 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             ds = quant_grp.create_dataset('BH_num', data=self.BH_num)
             ds.attrs['unit'] = self.BH_num.unit.to_string()
+
+            # --------------------------------------------------------------
+            # Store mass function
+            # --------------------------------------------------------------
 
             mf_grp = modelgrp.create_group('mass_func')
 
