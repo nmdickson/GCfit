@@ -203,6 +203,16 @@ class Dataset:
         self._name = group.name
 
     @property
+    def size(self):
+        '''Number of datapoints in this dataset'''
+        try:
+            return list(self._dict_variables.values())[0].size
+        except IndexError:
+            mssg = f"No variables stored in {self}, can't retrieve size"
+            logging.warning(mssg)
+            return None
+
+    @property
     def variables(self):
         '''Dictionary of all `Variables`s contained in this class'''
         return self._dict_variables

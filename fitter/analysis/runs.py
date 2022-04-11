@@ -681,6 +681,36 @@ class NestedRun(_RunAnalysis):
         return np.exp(logneff)
 
     @property
+    def AIC(self):
+
+        exc = list(self.file['metadata/excluded_likelihoods'].attrs.values())
+
+        N = sum([self.obs[comp[0]].size for comp in
+                 self.obs.filter_likelihoods(exc, True)])
+
+        k = len(self._get_chains(include_fixed=False)[1])
+        lnL0 = np.max(self.file[self._gname]['logl'][:])
+
+        AIC = -2 * lnL0 + (2 * k) + ((2 * k * (k + 1)) / (N - k - 1))
+
+        return AIC
+
+    @property
+    def BIC(self):
+
+        exc = list(self.file['metadata/excluded_likelihoods'].attrs.values())
+
+        N = sum([self.obs[comp[0]].size for comp in
+                 self.obs.filter_likelihoods(exc, True)])
+
+        k = len(self._get_chains(include_fixed=False)[1])
+        lnL0 = np.max(self.file[self._gname]['logl'][:])
+
+        BIC = -2 * lnL0 + (k * np.log(N))
+
+        return BIC
+
+    @property
     def _resampled_weights(self):
         from scipy.stats import gaussian_kde
         from dynesty.utils import resample_equal
