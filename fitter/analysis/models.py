@@ -1493,29 +1493,36 @@ class ModelVisualizer(_ClusterVisualizer):
     # TODO alot of these init functions could be more homogenous
     @_ClusterVisualizer._support_units
     def _init_numdens(self, model, observations):
-        # TODO make this more robust and cleaner
 
         model_nd = model.Sigmaj / model.mj[:, np.newaxis]
 
         nd = np.empty(model_nd.shape)[:, np.newaxis, :] << model_nd.unit
 
-        # If have nd obs, apply scaling factor K
-        for mbin in range(model_nd.shape[0]):
+        # Check for observational numdens profiles, to compute scaling factor K
+        if obs_nd := observations.filter_datasets('*number_density'):
 
-            try:
+            if len(obs_nd) > 1:
+                mssg = ('Too many number density datasets, '
+                        'computing scaling factor using only final dataset')
+                logging.warning(mssg)
 
-                obs_nd = observations['number_density']
-                obs_r = obs_nd['r'].to(model.r.unit)
+            obs_nd = list(obs_nd.values())[-1]
+            obs_r = obs_nd['r'].to(model.r.unit)
+
+            for mbin in range(model_nd.shape[0]):
 
                 nd_interp = util.QuantitySpline(model.r, model_nd[mbin, :])
 
                 K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_nd['Σ']**2)
                      / np.nansum(nd_interp(obs_r)**2 / obs_nd['Σ']**2))
 
-            except KeyError:
-                K = 1
+                nd[mbin, 0, :] = K * model_nd[mbin, :]
 
-            nd[mbin, 0, :] = K * model_nd[mbin, :]
+        else:
+            mssg = 'No number density datasets found, setting K=1'
+            logging.info(mssg)
+
+            nd[:, 0, :] = model_nd[:, :]
 
         self.numdens = nd
 
@@ -2062,9 +2069,14 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         model_nd = model.Sigmaj[model.nms - 1] / model.mj[model.nms - 1]
 
-        try:
+        if obs_nd := self.obs.filter_datasets('*number_density'):
 
-            obs_nd = self.obs['number_density']
+            if len(obs_nd) > 1:
+                mssg = ('Too many number density datasets, '
+                        'computing scaling factor using only final dataset')
+                logging.warning(mssg)
+
+            obs_nd = list(obs_nd.values())[-1]
             obs_r = obs_nd['r'].to(model.r.unit, equivs)
 
             nd_interp = util.QuantitySpline(model.r, model_nd)
@@ -2072,7 +2084,10 @@ class CIModelVisualizer(_ClusterVisualizer):
             K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_nd['Σ']**2)
                  / np.nansum(nd_interp(obs_r)**2 / obs_nd['Σ']**2))
 
-        except KeyError:
+        else:
+            mssg = 'No number density datasets found, setting K=1'
+            logging.info(mssg)
+
             K = 1
 
         return K * nd_interp(self.r)
