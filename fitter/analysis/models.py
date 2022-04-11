@@ -1694,7 +1694,8 @@ class CIModelVisualizer(_ClusterVisualizer):
         self.name = observations.cluster
 
     @classmethod
-    def from_chain(cls, chain, observations, N=100, *, verbose=True, pool=None):
+    def from_chain(cls, chain, observations, N=100, *,
+                   verbose=False, pool=None):
         import functools
 
         viz = cls(observations)
@@ -1815,13 +1816,6 @@ class CIModelVisualizer(_ClusterVisualizer):
         # Setup iteration and pooling
         # ------------------------------------------------------------------
 
-        # TODO currently does nothing
-        # if verbose:
-        #     import tqdm
-        #     chain_loader = tqdm.tqdm(chain)
-        # else:
-        #     chain_loader = chain
-
         # TODO assuming that chain always converges, might err if not the case
         get_model = functools.partial(Model, observations=viz.obs)
 
@@ -1832,12 +1826,19 @@ class CIModelVisualizer(_ClusterVisualizer):
                     "`imap_unordered` method")
             raise ValueError(mssg)
 
+        if verbose:
+            import tqdm
+            loader = tqdm.tqdm(enumerate(_map(get_model, chain)), total=N)
+
+        else:
+            loader = enumerate(_map(get_model, chain))
+
         # ------------------------------------------------------------------
         # iterate over all models in the sample and compute/store their
         # relevant parameters
         # ------------------------------------------------------------------
 
-        for model_ind, model in enumerate(_map(get_model, chain)):
+        for model_ind, model in loader:
 
             equivs = util.angular_width(model.d)
 
