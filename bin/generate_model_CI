@@ -2,7 +2,9 @@
 
 from fitter import analysis
 
+import logging
 import argparse
+import datetime
 
 
 def pos_int(arg):
@@ -40,7 +42,19 @@ if __name__ == '__main__':
     parser.add_argument('--overwrite', action='store_true',
                         help='Overwrite saved CIs if already exist. Be careful')
 
+    parser.add_argument('--debug', action='store_true')
+
     args = parser.parse_args()
+
+    config = {
+        'level': logging.DEBUG if args.debug else logging.INFO,
+        'format': ('%(process)s|%(asctime)s|'
+                   '%(name)s:%(module)s:%(funcName)s:%(message)s'),
+        'datefmt': '%H:%M:%S',
+        'filename': f'gen_model_CI_{datetime.datetime.now().isoformat()}.log'
+    }
+
+    logging.basicConfig(**config)
 
     # ----------------------------------------------------------------------
     # Generate Models
