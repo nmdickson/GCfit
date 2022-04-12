@@ -2468,6 +2468,8 @@ class ModelCollection:
         modelvizs = []
         for ch, obs in zip(chains, obs_list):
 
+            logging.info(f'Initializing {obs.cluster} for ModelCollection')
+
             init = viz.from_chain if ch.ndim == 2 else viz.from_theta
 
             modelvizs.append(init(ch[...], obs, *args, **kwargs))
@@ -2505,6 +2507,8 @@ class ModelCollection:
         for fig, mv in self.iter_plots(plot_func, True, *args, **kwargs):
 
             save_kw['fname'] = fn_pattern.format(cluster=mv.name)
+
+            logging.info(f'Saving {mv} to {save_kw["fname"]}')
 
             fig.savefig(**save_kw)
 
