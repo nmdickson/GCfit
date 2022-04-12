@@ -1742,8 +1742,8 @@ class NestedRun(_RunAnalysis):
         labels = self._get_labels(label_fixed=label_fixed)
 
         sr = self._sim_errors(N_simruns)
-        mns = self.parameter_means(sim_runs=sr, return_samples=False)
-        vrs = self.parameter_vars(sim_runs=sr, return_samples=False)
+        mns, _ = self.parameter_means(sim_runs=sr, return_samples=False)
+        vrs, _ = self.parameter_vars(sim_runs=sr, return_samples=False)
         std = np.sqrt(np.diag(vrs))
 
         return {lbl: (mns[ind], std[ind]) for ind, lbl in enumerate(labels)}
