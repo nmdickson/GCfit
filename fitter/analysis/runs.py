@@ -218,7 +218,7 @@ class MCMCRun(_RunAnalysis):
     based on an output file I guess?
     '''
 
-    def __init__(self, file, observations, group='mcmc', name=None):
+    def __init__(self, file, observations=None, group='mcmc', name=None):
 
         # TODO this needs to be closed properly, probably
         if isinstance(file, h5py.File):
@@ -231,7 +231,15 @@ class MCMCRun(_RunAnalysis):
         if name is not None:
             self.name = name
 
-        self.obs = observations
+        if observations is not None:
+            self.obs = observations
+        else:
+            try:
+                cluster = self.file['metadata'].attrs['cluster']
+                self.obs = Observations(cluster)
+            except KeyError as err:
+                mssg = "No cluster name in run metadata, must supply obs"
+                raise err(mssg)
 
         self.has_indiv = 'blobs' in self.file[self._gname]
         self.has_stats = 'statistics' in self.file
@@ -412,8 +420,6 @@ class MCMCRun(_RunAnalysis):
 
     def plot_chains(self, fig=None):
 
-        # TODO maybe make this match Nested's `plot_params` more
-
         labels, chain = self._get_chains()
 
         fig, axes = self._setup_multi_artist(fig, (len(labels), ), sharex=True)
@@ -505,7 +511,6 @@ class MCMCRun(_RunAnalysis):
             # --------------------------------------------------------------
             # Get the relevant samples.
             # If necessary, remove any unneeded axes
-            # (should be handled by above todo)
             # --------------------------------------------------------------
 
             try:
@@ -839,7 +844,7 @@ class NestedRun(_RunAnalysis):
         # Compute the KDE of resampled logvols and evaluate on normal logvols
         return gaussian_kde(eq_logvol)(-self.results.logvol)
 
-    def __init__(self, file, observations, group='nested', name=None):
+    def __init__(self, file, observations=None, group='nested', name=None):
 
         # TODO this needs to be closed properly, probably
         if isinstance(file, h5py.File):
@@ -852,8 +857,15 @@ class NestedRun(_RunAnalysis):
         if name is not None:
             self.name = name
 
-        # TODO could also try to get obs automatically from cluster name
-        self.obs = observations
+        if observations is not None:
+            self.obs = observations
+        else:
+            try:
+                cluster = self.file['metadata'].attrs['cluster']
+                self.obs = Observations(cluster)
+            except KeyError as err:
+                mssg = "No cluster name in run metadata, must supply obs"
+                raise err(mssg)
 
         self.results = self._get_results()
 
