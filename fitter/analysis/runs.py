@@ -2073,7 +2073,7 @@ class RunCollection(_RunAnalysis):
 
             try:
                 out = self._get_from_run(param)
-            except KeyError:
+            except AttributeError:
 
                 if from_model:
                     out = self._get_from_model(param, statistic=True,
