@@ -46,15 +46,17 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    config = {
-        'level': logging.DEBUG if args.debug else logging.INFO,
-        'format': ('%(process)s|%(asctime)s|'
-                   '%(name)s:%(module)s:%(funcName)s:%(message)s'),
-        'datefmt': '%H:%M:%S',
-        'filename': f'gen_model_CI_{datetime.datetime.now().isoformat()}.log'
-    }
+    if args.debug:
+        now = datetime.datetime.now()
+        config = {
+            'level': logging.DEBUG if args.debug else logging.INFO,
+            'format': ('%(process)s|%(asctime)s|'
+                       '%(name)s:%(module)s:%(funcName)s:%(message)s'),
+            'datefmt': '%H:%M:%S',
+            'filename': f'gen_model_CI_{now.isoformat()}.log'
+        }
 
-    logging.basicConfig(**config)
+        logging.basicConfig(**config)
 
     # ----------------------------------------------------------------------
     # Generate Models
