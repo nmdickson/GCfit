@@ -2069,6 +2069,8 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         model_nd = model.Sigmaj[model.nms - 1] / model.mj[model.nms - 1]
 
+        nd_interp = util.QuantitySpline(model.r, model_nd)
+
         if obs_nd := self.obs.filter_datasets('*number_density'):
 
             if len(obs_nd) > 1:
@@ -2078,8 +2080,6 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             obs_nd = list(obs_nd.values())[-1]
             obs_r = obs_nd['r'].to(model.r.unit, equivs)
-
-            nd_interp = util.QuantitySpline(model.r, model_nd)
 
             K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_nd['Σ']**2)
                  / np.nansum(nd_interp(obs_r)**2 / obs_nd['Σ']**2))
