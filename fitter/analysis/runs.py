@@ -309,7 +309,6 @@ class MCMCRun(_RunAnalysis):
 
     @iterations.setter
     def iterations(self, value):
-        # TODO if using an `iterations` keyword, these checks aren't done
         if not isinstance(value, slice):
             mssg = f"`iteration` must be a slice, not {type(value)}"
             raise TypeError(mssg)
@@ -337,7 +336,7 @@ class MCMCRun(_RunAnalysis):
     # Helpers
     # ----------------------------------------------------------------------
 
-    def _get_chains(self):
+    def _get_chains(self, flatten=False):
         '''get the chains, properly using the iterations and walkers set,
         and accounting for fixed params'''
 
@@ -358,10 +357,10 @@ class MCMCRun(_RunAnalysis):
                 labels[i] += ' (fixed)'
                 chain = np.insert(chain, i, v, axis=-1)
 
-        return labels, chain
+        if flatten:
+            chain = chain.reshape((-1, chain.shape[-1]))
 
-    # TODO method which creates a mask array for walkers based on a condition
-    #   i.e. "walkers where final delta > 0.35" or something
+        return labels, chain
 
     def _reconstruct_priors(self):
         '''based on the stored "specified_priors" get a PriorTransform object'''
@@ -394,8 +393,6 @@ class MCMCRun(_RunAnalysis):
     # ----------------------------------------------------------------------
 
     def get_model(self, method='median'):
-        # TODO there should be a method for comparing models w/ diff chain inds
-        #   i.e. seeing how a model progresses over iterations
 
         labels, chain = self._get_chains()
 
@@ -432,6 +429,135 @@ class MCMCRun(_RunAnalysis):
             ax.set_ylabel(labels[ind])
 
         axes[-1].set_xlabel('Iterations')
+
+        return fig
+
+    def plot_params(self, fig=None, params=None, *,
+                    posterior_color='tab:blue', posterior_border=True,
+                    ylims=None, truths=None, **kw):
+
+        # ------------------------------------------------------------------
+        # Setup plotting kwarg defaults
+        # ------------------------------------------------------------------
+
+        color = mpl_clr.to_rgb(posterior_color)
+        facecolor = color + (0.33, )
+
+        kw.setdefault('marker', '.')
+
+        # ------------------------------------------------------------------
+        # Get the sample chains (weighted and unweighted), paring down the
+        # chains to only the desired params, if provided
+        # ------------------------------------------------------------------
+
+        labels, chain = self._get_chains(flatten=True)
+
+        # params is None or a list of string labels
+        if params is not None:
+            prm_inds = [labels.index(p) for p in params]
+
+            labels = params
+            chain = chain[..., prm_inds]
+
+        # ------------------------------------------------------------------
+        # Setup the truth values and confidence intervals
+        # ------------------------------------------------------------------
+
+        if truths is not None and truths.ndim == 2:
+            # Assume confidence bounds rather than single truth value
+
+            truth_ci = truths[:, 1:]
+            truths = truths[:, 0]
+
+        else:
+            truth_ci = None
+
+        # ------------------------------------------------------------------
+        # Setup axes
+        # ------------------------------------------------------------------
+
+        if ylims is None:
+            ylims = [(None, None)] * len(labels)
+
+        elif len(ylims) != len(labels):
+            mssg = "`ylims` must match number of params"
+            raise ValueError(mssg)
+
+        gs_kw = {}
+
+        if shape := len(labels) > 5:
+            shape = int(np.ceil(shape / 2), 2)
+
+        fig, axes = self._setup_multi_artist(fig, shape, sharex=True,
+                                             gridspec_kw=gs_kw)
+
+        axes = axes.reshape(shape)
+
+        for ax in axes[-1]:
+            ax.set_xlabel(r'$-\ln(X)$')
+
+        # ------------------------------------------------------------------
+        # Plot each parameter
+        # ------------------------------------------------------------------
+
+        for ind, ax in enumerate(axes[1:].flatten()):
+
+            # --------------------------------------------------------------
+            # Get the relevant samples.
+            # If necessary, remove any unneeded axes
+            # (should be handled by above todo)
+            # --------------------------------------------------------------
+
+            try:
+                lbl, prm = labels[ind], chain[:, ind]
+            except IndexError:
+                # If theres an odd number of (>5) params need to delete last one
+                # TODO preferably this would also resize this column of plots
+                ax.remove()
+                continue
+
+            # --------------------------------------------------------------
+            # Divide the ax to accomodate the posterior plot on the right
+            # --------------------------------------------------------------
+
+            divider = make_axes_locatable(ax)
+            post_ax = divider.append_axes('right', size="25%", pad=0, sharey=ax)
+
+            post_ax.set_xticks([])
+
+            # --------------------------------------------------------------
+            # Plot the samples with respect to ln(X)
+            # --------------------------------------------------------------
+
+            # TODO the y tick values have disappeared should be on the last axis
+            ax.scatter(self._iteration_domain, prm, cmap=self._cmap, **kw)
+
+            ax.set_ylabel(lbl)
+            ax.set_xlim(left=0)
+
+            # --------------------------------------------------------------
+            # Plot the posterior distribution (accounting for weights)
+            # --------------------------------------------------------------
+
+            post_kw = {
+                'chain': prm,
+                'flipped': True,
+                'truth': truths if truths is None else truths[ind],
+                'truth_ci': truth_ci if truth_ci is None else truth_ci[ind],
+                'color': color,
+                'fc': facecolor
+            }
+
+            self.plot_posterior(lbl, fig=fig, ax=post_ax, **post_kw)
+
+            if not posterior_border:
+                post_ax.axis('off')
+
+            # TODO maybe put ticks on right side as well?
+            for tk in post_ax.get_yticklabels():
+                tk.set_visible(False)
+
+            ax.set_ylim(ylims[ind])
 
         return fig
 
@@ -476,41 +602,60 @@ class MCMCRun(_RunAnalysis):
         return corner.corner(chain, labels=labels, fig=fig,
                              range=ranges, plot_datapoints=False, **corner_kw)
 
-    def plot_params(self, params, quants=None, fig=None, *,
-                    colors=None, math_labels=None, bins=None):
-        # TODO handle colors in more plots, and handle iterator based colors
+    def plot_posterior(self, param, fig=None, ax=None, chain=None,
+                       flipped=True, truth=None, truth_ci=None,
+                       *args, **kwargs):
+        '''Plot the posterior distribution of a single parameter
 
-        # TODO make the names of plots match more between MCMC and nested
+        to be used on the (flipped) right side of the full param plot
 
-        fig, ax = self._setup_multi_artist(fig, shape=(1, len(params)))
+        param : str name
+        chain : chain to create the posterior from. by default will get the
+                usual full chain
+        flipped : bool, whether to plot horizontal (True, default) or vertical
+        '''
+        from scipy.stats import gaussian_kde
 
-        # this shouldn't be necessary
-        if len(params) == 1:
-            ax = [ax]
+        fig, ax = self._setup_artist(fig, ax)
 
-        labels, chain = self._get_chains()
+        labels, _ = self._get_chains()
 
-        chain = chain.reshape((-1, chain.shape[-1]))
+        if param not in labels:
+            mssg = f'Invalid param "{param}". Must be one of {labels}'
+            raise ValueError(mssg)
 
-        if colors is None:
-            colors = ['b'] * len(params)
+        if chain is None:
 
-        for ind, key in enumerate(params):
-            vals = chain[..., labels.index(key)]
+            prm_ind = labels.index(param)
+            chain = self._get_chains(flatten=True)[1][..., prm_ind]
 
-            edgecolor = mpl_clr.to_rgb(colors[ind])
-            facecolor = edgecolor + (0.33, )
+        kde = gaussian_kde(chain)
 
-            ax[ind].hist(vals, histtype='stepfilled', density=True,
-                         bins=bins, ec=edgecolor, fc=facecolor, lw=2)
+        domain = np.linspace(chain.min(), chain.max(), 500)
 
-            if quants is not None:
-                for q in np.percentile(vals, quants):
-                    ax[ind].axvline(q, color=colors[ind], ls='--')
-                # TODO annotate the quants on the top axis (c. mpl_ticker)
-                # ax.set_xticks(np.r_[ax[ind].get_xticks()), q])
+        if flipped:
 
-            ax[ind].set_xlabel(key if math_labels is None else math_labels[ind])
+            ax.fill_betweenx(domain, 0, kde(domain), *args, **kwargs)
+
+            if truth is not None:
+                ax.axhline(truth, c='tab:red')
+
+                if truth_ci is not None:
+                    ax.axhspan(*truth_ci, color='tab:red', alpha=0.33)
+
+            ax.set_xlim(left=0)
+
+        else:
+
+            ax.fill_between(domain, 0, kde(domain), *args, **kwargs)
+
+            if truth is not None:
+                ax.axvline(truth, c='tab:red')
+
+                if truth_ci is not None:
+                    ax.axvspan(*truth_ci, color='tab:red', alpha=0.33)
+
+            ax.set_ylim(bottom=0)
 
         return fig
 
@@ -546,35 +691,6 @@ class MCMCRun(_RunAnalysis):
     # ----------------------------------------------------------------------
     # Summaries
     # ----------------------------------------------------------------------
-
-    # TODO this is missing alot of formatting needs
-    def plot_summary(self, fig=None, *, box=True, violin=True):
-
-        if not (box or violin):
-            raise ValueError("Must plot atleast one of `box` or `violin`")
-
-        labels, chain = self._get_chains()
-
-        chain = chain.reshape((-1, chain.shape[-1]))
-
-        fig, axes = self._setup_multi_artist(fig, shape=(1, chain.shape[-1]))
-
-        # gridspec to hspace, wspace = 0
-        # subplot spacing to use more of grid
-        # Maybe set ylims ased on prior bounds? if they're not too large
-
-        for i in range(chain.shape[-1]):
-
-            if box:
-                axes[i].boxplot(chain[..., i])
-
-            if violin:
-                axes[i].violinplot(chain[..., i])
-
-            axes[i].set_xlabel(labels[i])
-
-            axes[i].tick_params(axis='y', direction='in', right=True)
-            # pad=-18, labelrotation=90??
 
     def print_summary(self, out=None, content='all'):
         '''write a summary of the run results, to a `out` file-like or stdout
