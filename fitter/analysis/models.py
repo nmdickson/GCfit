@@ -1794,7 +1794,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         # number density
 
-        numdens = np.empty((1, N, viz.r.size)) << u.arcmin**-2
+        numdens = np.empty((1, N, viz.r.size)) << u.pc**-2
 
         # mass function
 
@@ -2090,7 +2090,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             K = 1
 
-        return K * nd_interp(self.r)
+        return (K * nd_interp(self.r)).to('pc-2', equivs)
 
     def _prep_massfunc(self, observations, *, cmap=None):
 
