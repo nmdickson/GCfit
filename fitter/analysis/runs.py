@@ -344,6 +344,43 @@ class MCMCRun(_RunAnalysis):
     # Helpers
     # ----------------------------------------------------------------------
 
+    def _get_labels(self, label_fixed=True, math_labels=False):
+
+        labels = list(self.obs.initials)
+
+        if math_labels:
+
+            math_mapping = {
+                'W0': r'$\phi_0$',
+                'M': r'$M$',
+                'rh': r'$r_h$',
+                'ra': r'$r_a$',
+                'g': r'$g$',
+                'delta': r'$\delta$',
+                's2': r'$s^2$',
+                'F': r'$F$',
+                'a1': r'$\alpha_1$',
+                'a2': r'$\alpha_2$',
+                'a3': r'$\alpha_3$',
+                'BHret': r'$\mathrm{BH}_{ret}$',
+                'd': r'$d$',
+            }
+
+            labels = [math_mapping[lbl] for lbl in labels]
+
+        if label_fixed:
+
+            fixed = sorted(
+                ((k, labels.index(k)) for k in
+                 self.file['metadata']['fixed_params'].attrs),
+                key=lambda item: labels.index(item[0])
+            )
+
+            for k, i in fixed:
+                labels[i] += ' (fixed)'
+
+        return labels
+
     def _get_chains(self, flatten=False):
         '''get the chains, properly using the iterations and walkers set,
         and accounting for fixed params'''
@@ -623,7 +660,7 @@ class MCMCRun(_RunAnalysis):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        labels, _ = self._get_chains()
+        labels = self._get_labels()
 
         if param not in labels:
             mssg = f'Invalid param "{param}". Must be one of {labels}'
@@ -947,6 +984,43 @@ class NestedRun(_RunAnalysis):
 
         return bnds
 
+    def _get_labels(self, label_fixed=True, math_labels=False):
+
+        labels = list(self.obs.initials)
+
+        if math_labels:
+
+            math_mapping = {
+                'W0': r'$\phi_0$',
+                'M': r'$M$',
+                'rh': r'$r_h$',
+                'ra': r'$r_a$',
+                'g': r'$g$',
+                'delta': r'$\delta$',
+                's2': r'$s^2$',
+                'F': r'$F$',
+                'a1': r'$\alpha_1$',
+                'a2': r'$\alpha_2$',
+                'a3': r'$\alpha_3$',
+                'BHret': r'$\mathrm{BH}_{ret}$',
+                'd': r'$d$',
+            }
+
+            labels = [math_mapping[lbl] for lbl in labels]
+
+        if label_fixed:
+
+            fixed = sorted(
+                ((k, labels.index(k)) for k in
+                 self.file['metadata']['fixed_params'].attrs),
+                key=lambda item: labels.index(item[0])
+            )
+
+            for k, i in fixed:
+                labels[i] += ' (fixed)'
+
+        return labels
+
     # TODO some ways of handling and plotting initial_batch only clusters
     def _get_chains(self, include_fixed=True):
         '''for nested sampling results (current Batch)'''
@@ -1067,7 +1141,6 @@ class NestedRun(_RunAnalysis):
 
     def plot_marginals(self, fig=None, full_volume=False, **corner_kw):
         import corner
-        # TODO the formatting of this is still ugly, check out dyplot's version
 
         fig, ax = self._setup_multi_artist(fig, shape=None)
 
@@ -1300,8 +1373,7 @@ class NestedRun(_RunAnalysis):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        # TODO desperately need a separate labels method
-        labels, _ = self._get_chains()
+        labels = self._get_labels()
 
         if param not in labels:
             mssg = f'Invalid param "{param}". Must be one of {labels}'
@@ -1667,12 +1739,12 @@ class NestedRun(_RunAnalysis):
     def parameter_summary(self, *, N_simruns=100, label_fixed=False):
         '''return a dictionary with mean & std for each parameter'''
 
-        labels, _ = self._get_chains(include_fixed=label_fixed)
+        labels = self._get_labels(label_fixed=label_fixed)
 
         sr = self._sim_errors(N_simruns)
-        mns, σ_mns = self.parameter_means(sim_runs=sr, return_samples=False)
-        vrs, σ_vrs = self.parameter_vars(sim_runs=sr, return_samples=False)
-        std, σ_std = np.sqrt(np.diag(vrs)), np.sqrt(np.diag(σ_vrs))
+        mns = self.parameter_means(sim_runs=sr, return_samples=False)
+        vrs = self.parameter_vars(sim_runs=sr, return_samples=False)
+        std = np.sqrt(np.diag(vrs))
 
         return {lbl: (mns[ind], std[ind]) for ind, lbl in enumerate(labels)}
 
@@ -1700,7 +1772,7 @@ class NestedRun(_RunAnalysis):
             std, σ_std = np.sqrt(np.diag(vrs)), np.sqrt(np.diag(σ_vrs))
 
             # median and 16, 84 percentiles of all params
-            labels, _ = self._get_chains()
+            labels = self._get_labels()
 
             mssg += f'{" " * 8}{"Mean":^14} | {"Std. Dev.":^14}\n'
 
@@ -2022,7 +2094,7 @@ class RunCollection(_RunAnalysis):
         # try to get it from the best-fit params or metadata
         try:
 
-            labels, _ = self.runs[0]._get_chains()
+            labels = self.runs[0]._get_labels()
 
             theta = [dict(zip(labels, r._get_equal_weight_chains()[1].T))
                      for r in self.runs]
