@@ -1733,8 +1733,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         # very large rt. I'm not really sure yet how that might affect the CIs
         # or plots
 
-        # TODO sometimes this fails and I have no idea why, it shouldn't
-        #   all chains should in theory converge, if they were sampled
+        # TODO https://github.com/nmdickson/GCfit/issues/100
         huge_model = Model(chain[np.argmax(chain[:, 4])], viz.obs)
 
         viz.rt = huge_model.rt
