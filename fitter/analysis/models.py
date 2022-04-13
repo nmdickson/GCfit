@@ -15,6 +15,13 @@ import logging
 __all__ = ['ModelVisualizer', 'CIModelVisualizer', 'ObservationsVisualizer']
 
 
+def _get_model(theta, observations):
+    try:
+        return Model(theta, observations=observations)
+    except ValueError:
+        logging.warning(f"Model did not converge with {theta=}")
+        return None
+
 # --------------------------------------------------------------------------
 # Individual model visualizers
 # --------------------------------------------------------------------------
@@ -1752,22 +1759,24 @@ class CIModelVisualizer(_ClusterVisualizer):
         # all "profile" datasets
         # ------------------------------------------------------------------
 
+        Nr = viz.r.size
+
         # velocities
 
         vel_unit = np.sqrt(huge_model.v2Tj).unit
 
         Nm = 1 + len(mj_tracer)
 
-        vpj = np.empty((Nm, N, viz.r.size)) << vel_unit
+        vpj = np.full((Nm, N, Nr), np.nan) << vel_unit
         vTj, vRj, vtotj = vpj.copy(), vpj.copy(), vpj.copy()
 
-        vaj = np.empty((Nm, N, viz.r.size)) << u.dimensionless_unscaled
+        vaj = np.full((Nm, N, Nr), np.nan) << u.dimensionless_unscaled
 
         # mass density
 
         rho_unit = huge_model.rhoj.unit
 
-        rho_tot = np.empty((1, N, viz.r.size)) << rho_unit
+        rho_tot = np.full((1, N, Nr), np.nan) << rho_unit
         rho_MS, rho_BH = rho_tot.copy(), rho_tot.copy()
         rho_WD, rho_NS = rho_tot.copy(), rho_tot.copy()
 
@@ -1775,7 +1784,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         Sigma_unit = huge_model.Sigmaj.unit
 
-        Sigma_tot = np.empty((1, N, viz.r.size)) << Sigma_unit
+        Sigma_tot = np.full((1, N, Nr), np.nan) << Sigma_unit
         Sigma_MS, Sigma_BH = Sigma_tot.copy(), Sigma_tot.copy()
         Sigma_WD, Sigma_NS = Sigma_tot.copy(), Sigma_tot.copy()
 
@@ -1783,18 +1792,18 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         mass_unit = huge_model.M.unit
 
-        cum_M_tot = np.empty((1, N, viz.r.size)) << mass_unit
+        cum_M_tot = np.full((1, N, Nr), np.nan) << mass_unit
         cum_M_MS, cum_M_BH = cum_M_tot.copy(), cum_M_tot.copy()
         cum_M_WD, cum_M_NS = cum_M_tot.copy(), cum_M_tot.copy()
 
         # Mass Fraction
 
-        frac_M_MS = np.empty((1, N, viz.r.size)) << u.dimensionless_unscaled
+        frac_M_MS = np.full((1, N, Nr), np.nan) << u.dimensionless_unscaled
         frac_M_rem = frac_M_MS.copy()
 
         # number density
 
-        numdens = np.empty((1, N, viz.r.size)) << u.pc**-2
+        numdens = np.full((1, N, Nr), np.nan) << u.pc**-2
 
         # mass function
 
@@ -1805,19 +1814,18 @@ class CIModelVisualizer(_ClusterVisualizer):
         for rbins in massfunc.values():
             for rslice in rbins:
                 rslice['mj'] = huge_model.mj[:huge_model.nms]
-                rslice['dNdm'] = np.empty((N, huge_model.nms))
+                rslice['dNdm'] = np.full((N, huge_model.nms), np.nan)
 
         # BH mass
 
-        BH_mass = np.empty(N) << u.Msun
-        BH_num = np.empty(N) << u.dimensionless_unscaled
+        BH_mass = np.full(N, np.nan) << u.Msun
+        BH_num = np.full(N, np.nan) << u.dimensionless_unscaled
 
         # ------------------------------------------------------------------
         # Setup iteration and pooling
         # ------------------------------------------------------------------
 
-        # TODO assuming that chain always converges, might err if not the case
-        get_model = functools.partial(Model, observations=viz.obs)
+        get_model = functools.partial(_get_model, observations=viz.obs)
 
         try:
             _map = map if pool is None else pool.imap_unordered
@@ -1839,6 +1847,11 @@ class CIModelVisualizer(_ClusterVisualizer):
         # ------------------------------------------------------------------
 
         for model_ind, model in loader:
+
+            if model is None:
+                # TODO would be better to extend chain so N are still computed
+                # for now this ind will be filled with nan
+                continue
 
             equivs = util.angular_width(model.d)
 
@@ -1899,41 +1912,43 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         axes = (1, 0, 2)  # `np.percentile` messes up the dimensions
 
-        viz.pm_T = np.transpose(np.percentile(vTj, q, axis=1), axes)
-        viz.pm_R = np.transpose(np.percentile(vRj, q, axis=1), axes)
-        viz.pm_tot = np.transpose(np.percentile(vtotj, q, axis=1), axes)
-        viz.pm_ratio = np.transpose(np.nanpercentile(vaj, q, axis=1), axes)
-        viz.LOS = np.transpose(np.percentile(vpj, q, axis=1), axes)
+        perc = np.nanpercentile
 
-        viz.rho_MS = np.transpose(np.percentile(rho_MS, q, axis=1), axes)
-        viz.rho_tot = np.transpose(np.percentile(rho_tot, q, axis=1), axes)
-        viz.rho_BH = np.transpose(np.percentile(rho_BH, q, axis=1), axes)
-        viz.rho_WD = np.transpose(np.percentile(rho_WD, q, axis=1), axes)
-        viz.rho_NS = np.transpose(np.percentile(rho_NS, q, axis=1), axes)
+        viz.pm_T = np.transpose(perc(vTj, q, axis=1), axes)
+        viz.pm_R = np.transpose(perc(vRj, q, axis=1), axes)
+        viz.pm_tot = np.transpose(perc(vtotj, q, axis=1), axes)
+        viz.pm_ratio = np.transpose(perc(vaj, q, axis=1), axes)
+        viz.LOS = np.transpose(perc(vpj, q, axis=1), axes)
 
-        viz.Sigma_MS = np.transpose(np.percentile(Sigma_MS, q, axis=1), axes)
-        viz.Sigma_tot = np.transpose(np.percentile(Sigma_tot, q, axis=1), axes)
-        viz.Sigma_BH = np.transpose(np.percentile(Sigma_BH, q, axis=1), axes)
-        viz.Sigma_WD = np.transpose(np.percentile(Sigma_WD, q, axis=1), axes)
-        viz.Sigma_NS = np.transpose(np.percentile(Sigma_NS, q, axis=1), axes)
+        viz.rho_MS = np.transpose(perc(rho_MS, q, axis=1), axes)
+        viz.rho_tot = np.transpose(perc(rho_tot, q, axis=1), axes)
+        viz.rho_BH = np.transpose(perc(rho_BH, q, axis=1), axes)
+        viz.rho_WD = np.transpose(perc(rho_WD, q, axis=1), axes)
+        viz.rho_NS = np.transpose(perc(rho_NS, q, axis=1), axes)
 
-        viz.cum_M_MS = np.transpose(np.percentile(cum_M_MS, q, axis=1), axes)
-        viz.cum_M_tot = np.transpose(np.percentile(cum_M_tot, q, axis=1), axes)
-        viz.cum_M_BH = np.transpose(np.percentile(cum_M_BH, q, axis=1), axes)
-        viz.cum_M_WD = np.transpose(np.percentile(cum_M_WD, q, axis=1), axes)
-        viz.cum_M_NS = np.transpose(np.percentile(cum_M_NS, q, axis=1), axes)
+        viz.Sigma_MS = np.transpose(perc(Sigma_MS, q, axis=1), axes)
+        viz.Sigma_tot = np.transpose(perc(Sigma_tot, q, axis=1), axes)
+        viz.Sigma_BH = np.transpose(perc(Sigma_BH, q, axis=1), axes)
+        viz.Sigma_WD = np.transpose(perc(Sigma_WD, q, axis=1), axes)
+        viz.Sigma_NS = np.transpose(perc(Sigma_NS, q, axis=1), axes)
 
-        viz.numdens = np.transpose(np.percentile(numdens, q, axis=1), axes)
+        viz.cum_M_MS = np.transpose(perc(cum_M_MS, q, axis=1), axes)
+        viz.cum_M_tot = np.transpose(perc(cum_M_tot, q, axis=1), axes)
+        viz.cum_M_BH = np.transpose(perc(cum_M_BH, q, axis=1), axes)
+        viz.cum_M_WD = np.transpose(perc(cum_M_WD, q, axis=1), axes)
+        viz.cum_M_NS = np.transpose(perc(cum_M_NS, q, axis=1), axes)
+
+        viz.numdens = np.transpose(perc(numdens, q, axis=1), axes)
 
         viz.mass_func = massfunc
 
         for rbins in viz.mass_func.values():
             for rslice in rbins:
 
-                rslice['dNdm'] = np.percentile(rslice['dNdm'], q, axis=0)
+                rslice['dNdm'] = perc(rslice['dNdm'], q, axis=0)
 
-        viz.frac_M_MS = np.percentile(frac_M_MS, q, axis=1)
-        viz.frac_M_rem = np.percentile(frac_M_rem, q, axis=1)
+        viz.frac_M_MS = perc(frac_M_MS, q, axis=1)
+        viz.frac_M_rem = perc(frac_M_rem, q, axis=1)
 
         viz.BH_mass = BH_mass
         viz.BH_num = BH_num
