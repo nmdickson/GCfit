@@ -2157,7 +2157,7 @@ class RunCollection(_RunAnalysis):
 
         if load:
             filenames = [run.file.filename for run in self.runs]
-            mc = ModelCollection.load(filenames, ci=True)
+            mc = ModelCollection.load(filenames)
 
         else:
             chains = []
