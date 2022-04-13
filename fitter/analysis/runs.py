@@ -1898,6 +1898,10 @@ class RunCollection(_RunAnalysis):
     # Interacting with Runs
     # ----------------------------------------------------------------------
 
+    @property
+    def names(self):
+        return [r.name for r in self.runs]
+
     def __iter__(self):
         '''return an iterator over the individual Runs'''
         # Important that the order of self.runs (and thus this iter) is constant
@@ -1913,12 +1917,21 @@ class RunCollection(_RunAnalysis):
             mssg = f"No Run found with name {name}"
             raise ValueError(mssg)
 
+    def filter_runs(self, pattern):
+        '''filter runs based on name and return a new runcollection with them'''
+        import fnmatch
+
+        runs = [self.get_run(n) for n in fnmatch.filter(self.names, pattern)]
+
+        return RunCollection(runs, N_simruns=self._N_simruns)
+
     # ----------------------------------------------------------------------
     # Initialization
     # ----------------------------------------------------------------------
 
     def __init__(self, runs, *, N_simruns=100):
         self.runs = runs
+        self._N_simruns = N_simruns
 
         self._params = [r.parameter_summary(N_simruns=N_simruns) for r in runs]
         self._mdata = [{k: (v, 0) for k, v in r.obs.mdata.items()}
