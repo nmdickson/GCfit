@@ -1956,7 +1956,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         va = np.sqrt(model.v2Tj[mass_bin] / model.v2Rj[mass_bin])
         finite = np.isnan(va)
-        va_interp = util.QuantitySpline(model.r[~finite], va[~finite])
+        va_interp = util.QuantitySpline(model.r[~finite], va[~finite], ext=3)
         va = va_interp(self.r)
 
         vp = np.sqrt(model.v2pj[mass_bin])
