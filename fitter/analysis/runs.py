@@ -2282,7 +2282,7 @@ class RunCollection(_RunAnalysis):
         if clr_param is None:
             clrs = self._cmap(np.linspace(0., 1., len(self.runs)))
         else:
-            cvals = zip(*self._get_param(clr_param))[0]
+            cvals = np.array(self._get_param(clr_param))[:, 0]
 
             cnorm = mpl_clr.Normalize(cvals.min(), cvals.max())
             clrs = self._cmap(cnorm(cvals))
