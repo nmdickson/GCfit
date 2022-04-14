@@ -2421,20 +2421,25 @@ class RunCollection(_RunAnalysis):
     # TODO some way to sort these not by cluster name but by quantity
 
     def plot_param_means(self, param, fig=None, ax=None,
-                         color=None, *args, **kwargs):
+                         color=None, sort=False, *args, **kwargs):
         '''plot mean and std errorbars for each run of the given param'''
         fig, ax = self._setup_artist(fig, ax)
 
-        mean, std = zip(*self._get_param(param))
+        mean, std = np.array(self._get_param(param)).T
 
         xticks = np.arange(len(self.runs))
 
+        labels = self.names
+
         kwargs.setdefault('fmt', 'o')
+
+        if sort:
+            s_ind = np.argsort(mean)
+            mean, std, labels = mean[s_ind], std[s_ind], np.array(labels)[s_ind]
 
         ax.errorbar(x=xticks, y=mean, yerr=std, *args, **kwargs)
 
-        ax.set_xticks(xticks, labels=[run.name for run in self.runs],
-                      rotation=45)
+        ax.set_xticks(xticks, labels=labels, rotation=45)
 
         ax.grid(axis='x')
 
@@ -2443,27 +2448,32 @@ class RunCollection(_RunAnalysis):
         return fig
 
     def plot_param_bar(self, param, fig=None, ax=None,
-                       color=None, edgecolor=None, alpha=0.3,
+                       color=None, edgecolor=None, alpha=0.3, sort=False,
                        *args, **kwargs):
         '''plot mean and std bar chart for each run of the given param'''
         fig, ax = self._setup_artist(fig, ax)
 
-        mean, std = zip(*self._get_param(param))
+        mean, std = np.array(self._get_param(param)).T
 
         xticks = np.arange(len(self.runs))
+
+        labels = self.names
+
+        if sort:
+            s_ind = np.argsort(mean)
+            mean, std, labels = mean[s_ind], std[s_ind], np.array(labels)[s_ind]
 
         # TODO change ecolor to be based on color but visible
         ax.bar(x=xticks, height=mean, yerr=std, *args, **kwargs)
 
-        ax.set_xticks(xticks, labels=[run.name for run in self.runs],
-                      rotation=45)
+        ax.set_xticks(xticks, labels=labels, rotation=45)
 
         ax.set_ylabel(param)
 
         return fig
 
     def plot_param_violins(self, param, fig=None, ax=None,
-                           color=None, edgecolor=None, alpha=0.3,
+                           color=None, edgecolor=None, alpha=0.3, sort=False,
                            *args, **kwargs):
         '''plot violins for each run of the given param'''
         fig, ax = self._setup_artist(fig, ax)
@@ -2471,6 +2481,12 @@ class RunCollection(_RunAnalysis):
         chains = self._get_param_chains(param)
 
         xticks = np.arange(len(self.runs))
+
+        labels = self.names
+
+        if sort:
+            mean = np.array(self._get_param(param))[:, 0]
+            _, chains, labels = zip(*sorted(zip(mean, chains, labels)))
 
         artists = ax.violinplot(chains, positions=xticks, *args, **kwargs)
 
@@ -2484,8 +2500,7 @@ class RunCollection(_RunAnalysis):
         for linetype in (set(artists) - {'bodies'}):
             artists[linetype].set_color(color)
 
-        ax.set_xticks(xticks, labels=[run.name for run in self.runs],
-                      rotation=45)
+        ax.set_xticks(xticks, labels=labels, rotation=45)
 
         ax.grid(axis='x')
 
