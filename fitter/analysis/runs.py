@@ -2239,7 +2239,7 @@ class RunCollection(_RunAnalysis):
         return fig
 
     def plot_relation(self, param1, param2, fig=None, ax=None, *,
-                      errors='bars', N_simruns=100, annotate=False, **kwargs):
+                      errors='bars', annotate=False, **kwargs):
         '''plot correlation between two param means with all runs
 
         errorbars, or 2d-ellipses
@@ -2271,8 +2271,11 @@ class RunCollection(_RunAnalysis):
     def plot_lit_comp(self, param, truths, e_truths=None, src_truths='',
                       fig=None, ax=None, *,
                       clr_param=None, residuals=False, inset=False,
-                      N_simruns=100, annotate=False, diagonal=True, **kwargs):
-        '''plot a x-y comparison against provided literature values'''
+                      annotate=False, diagonal=True, **kwargs):
+        '''plot a x-y comparison against provided literature values
+
+        Meant to compare 1-1 the same parameter (i.e. mass vs mass, etc)
+        '''
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -2307,6 +2310,68 @@ class RunCollection(_RunAnalysis):
 
         ax.set_xlim(0.)
         ax.set_ylim(0.)
+
+        divider = make_axes_locatable(ax)
+
+        if clr_param is not None:
+            # TODO all the colours stuff is all confused
+            #   highly doubt this is the best way to be marking them
+            cticks = [0, .25, .5, .75, 1.]
+            cax = divider.append_axes("right", size="3%", pad=0.05)
+            cbar = fig.colorbar(pnts, cax=cax, ticks=cticks)
+            cbar.ax.set_ylabel(clr_param)
+            cbar.ax.set_yticklabels([f'{t:.2f}' for t in cnorm.inverse(cticks)])
+
+        if residuals:
+            res_ax = self.add_residuals(ax, x, y, dx, dy, clrs, pad=0)
+            res_ax.set_xlabel(param)
+
+        if annotate:
+            _Annotator(fig, self.runs, x, y)
+        else:
+            # TODO not happy with any legend
+            fig.legend(loc='upper center', ncol=10)
+
+        return fig
+
+    def plot_lit_relation(self, param, lit, e_lit=None, src_lit='',
+                          fig=None, ax=None, *, lit_on_x=False,
+                          clr_param=None, residuals=False,
+                          annotate=False, **kwargs):
+        '''plot a relation plot against provided literature values
+
+        Meant to compare two different parameters, with one from outside source
+        '''
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        x, dx = zip(*self._get_param(param))
+        y, dy = lit, e_lit
+
+        if lit_on_x:
+            # flip the x and y
+            x, y = y, x
+            dx, dy = dy, dx
+
+        if clr_param is None:
+            clrs = self._cmap(np.linspace(0., 1., len(self.runs)))
+        else:
+            cvals = np.array(self._get_param(clr_param))[:, 0]
+
+            cnorm = mpl_clr.Normalize(cvals.min(), cvals.max())
+            clrs = self._cmap(cnorm(cvals))
+
+        ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', ecolor=clrs, **kwargs)
+        pnts = ax.scatter(x, y, color=clrs, picker=True, **kwargs)
+        # TODO pickradius?
+
+        # TODO mathy labels
+        if lit_on_x:
+            ax.set_xlabel(src_lit)
+            ax.set_ylabel(param)
+        else:
+            ax.set_xlabel(param)
+            ax.set_ylabel(src_lit)
 
         divider = make_axes_locatable(ax)
 
