@@ -1924,7 +1924,22 @@ class RunCollection(_RunAnalysis):
         '''filter runs based on name and return a new runcollection with them'''
         import fnmatch
 
-        runs = [self.get_run(n) for n in fnmatch.filter(self.names, pattern)]
+        try:
+            runs = [self.get_run(n)
+                    for n in fnmatch.filter(self.names, pattern)]
+
+        except TypeError:
+
+            try:
+                runs = [self.get_run(n)
+                        for n in (set(self.names) & set(pattern))]
+
+            except TypeError:
+
+                mssg = (f'expected str pattern or list of names, '
+                        f'not {type(pattern)}')
+
+                raise TypeError(mssg)
 
         return RunCollection(runs, N_simruns=self._N_simruns)
 
