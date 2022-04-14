@@ -1835,13 +1835,22 @@ class _Annotator:
 
     arrow = {'arrowstyle': "-", "connectionstyle": "arc3", "color": "black"}
 
-    def __init__(self, fig, runs, xdata, ydata):
+    def __init__(self, fig, runs, xdata, ydata, loc='upper right'):
         self.fig = fig
         self.runs, self.xdata, self.ydata = runs, xdata, ydata
 
-        # TODO this size needs to be somewhat automatic, maybe based on errs
-        self.delx = ((np.nanmax(self.xdata) - np.nanmin(self.xdata)) / 10)
-        self.dely = ((np.nanmax(self.ydata) - np.nanmin(self.ydata)) / 10)
+        if loc == 'lower right':
+            self.loc = (0.95, 0.05)
+        elif loc == 'upper right':
+            self.loc = (0.95, 0.95)
+        elif loc == 'lower left':
+            self.loc = (0.05, 0.05)
+        elif loc == 'upper left':
+            self.loc = (0.05, 0.95)
+        else:
+            mssg = (f"{loc} is not a valid value for loc; supported values are"
+                    f" 'lower right','upper right','lower left','upper left'")
+            raise ValueError(mssg)
 
         self.fig.canvas.mpl_connect('pick_event', self)
 
@@ -1853,12 +1862,6 @@ class _Annotator:
         ax = event.artist.axes
 
         xy = (self.xdata[ind], self.ydata[ind])
-
-        xtext = self.xdata[ind] + self.delx
-        ytext = self.ydata[ind] + self.dely
-
-        if ytext > np.nanmax(self.ydata):
-            ytext = np.nanmax(self.ydata)
 
         # cluster = self.runs[ind]
         cluster = self.runs[ind].name
@@ -1873,7 +1876,11 @@ class _Annotator:
 
         else:
             self.cur_ind = ind
-            self.cur_annot = ax.annotate(cluster, xy, (xtext, ytext),
+            # self.cur_annot = ax.annotate(cluster, xy, (xtext, ytext),
+            #                              arrowprops=self.arrow)
+
+            self.cur_annot = ax.annotate(cluster, xy, self.loc,
+                                         textcoords='axes fraction',
                                          arrowprops=self.arrow)
 
         self.fig.canvas.draw()
@@ -2417,8 +2424,6 @@ class RunCollection(_RunAnalysis):
     # ----------------------------------------------------------------------
     # Summary plots
     # ----------------------------------------------------------------------
-
-    # TODO some way to sort these not by cluster name but by quantity
 
     def plot_param_means(self, param, fig=None, ax=None,
                          color=None, sort=False, *args, **kwargs):
