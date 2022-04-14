@@ -1894,6 +1894,9 @@ class RunCollection(_RunAnalysis):
 
         return mssg
 
+    def __len__(self):
+        return self.runs.__len__()
+
     # ----------------------------------------------------------------------
     # Interacting with Runs
     # ----------------------------------------------------------------------
