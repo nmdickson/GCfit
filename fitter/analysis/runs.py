@@ -1947,7 +1947,11 @@ class RunCollection(_RunAnalysis):
     # Initialization
     # ----------------------------------------------------------------------
 
-    def __init__(self, runs, *, N_simruns=100):
+    def __init__(self, runs, *, N_simruns=100, sort=True):
+
+        if sort:
+            runs.sort(key=lambda run: run.name)
+
         self.runs = runs
         self._N_simruns = N_simruns
 
@@ -1993,8 +1997,6 @@ class RunCollection(_RunAnalysis):
             mssg = f"No valid runs found in {directory}"
             raise RuntimeError(mssg)
 
-        runs.sort(key=lambda run: run.name)
-
         return cls(runs, *args, **kwargs)
 
     @classmethod
@@ -2034,8 +2036,6 @@ class RunCollection(_RunAnalysis):
                     continue
 
             runs.append(run)
-
-        runs.sort(key=lambda run: run.name)
 
         return cls(runs, *args, **kwargs)
 
