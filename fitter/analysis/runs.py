@@ -1539,7 +1539,6 @@ class NestedRun(_RunAnalysis):
             # --------------------------------------------------------------
             # Get the relevant samples.
             # If necessary, remove any unneeded axes
-            # (should be handled by above todo)
             # --------------------------------------------------------------
 
             try:

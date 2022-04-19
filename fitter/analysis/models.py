@@ -818,7 +818,6 @@ class _ClusterVisualizer:
     def plot_mass_func(self, fig=None, show_obs=True, show_fields=True, *,
                        colours=None, PI_legend=False, logscaled=False,
                        field_kw=None):
-        # TODO support residuals
 
         # ------------------------------------------------------------------
         # Setup axes, splitting into two columns if necessary and adding the
@@ -2430,7 +2429,6 @@ class ModelCollection:
         '''return an iterator over the individual model vizs'''
         return iter(self.visualizers)
 
-    # TODO god what do you name this stuff now. cant use "Model"
     def __init__(self, visualizers):
         self.visualizers = visualizers
 
