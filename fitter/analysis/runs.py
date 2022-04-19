@@ -2074,10 +2074,15 @@ class RunCollection(_RunAnalysis):
 
         # Compute models now
         if self.models is None:
-            if 'N' in kwargs:
+            if 'N' in kwargs or 'load' in kwargs:
                 self.get_CImodels(**kwargs)
             else:
-                self.get_models(**kwargs)
+                # try to load a CI first, then revert to a single model
+                try:
+                    self.get_CImodels(load=True, **kwargs)
+
+                except RuntimeError:
+                    self.get_models(**kwargs)
 
         data = getattr(self.models, param)
 
