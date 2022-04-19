@@ -1979,18 +1979,14 @@ class RunCollection(_RunAnalysis):
 
         for fn in directory.glob(pattern):
 
-            # TODO maybe shouldn't assume its "{cluster}_sampler.hdf" here
-            cluster = fn.stem[:-8]
-
-            obs = Observations(cluster)
-
             try:
                 # TODO support both nested and mcmc, somehow organically
-                run = NestedRun(fn, obs, name=obs.cluster)
+                run = NestedRun(fn)
+                run.name = run.obs.cluster
 
             except KeyError as err:
 
-                mssg = f'Failed to create run for {obs.cluster}: {err}'
+                mssg = f'Failed to create run for {fn}: {err}'
 
                 if strict:
                     raise RuntimeError(mssg)
@@ -2024,17 +2020,14 @@ class RunCollection(_RunAnalysis):
                 mssg = f"No such file: '{file}'"
                 raise FileNotFoundError(mssg)
 
-            cluster = file.stem[:-8]
-
-            obs = Observations(cluster)
-
             try:
                 # TODO support both nested and mcmc, somehow organically
-                run = NestedRun(file, obs, name=obs.cluster)
+                run = NestedRun(file)
+                run.name = run.obs.cluster
 
             except KeyError as err:
 
-                mssg = f'Failed to create run for {obs.cluster}: {err}'
+                mssg = f'Failed to create run for {file}: {err}'
 
                 if strict:
                     raise RuntimeError(mssg)
