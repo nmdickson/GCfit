@@ -1617,7 +1617,6 @@ class NestedRun(_RunAnalysis):
 
         def this_imf(m, perc=50):
             '''perc is percentile of alpha chain to use'''
-            # TODO confidence intervals
 
             ch = self._get_equal_weight_chains()[1]
             a1, a2, a3 = np.percentile(ch[:, 8:11], perc, axis=0)
@@ -2140,7 +2139,7 @@ class RunCollection(_RunAnalysis):
         # try to get it from the best-fit params or metadata
         try:
 
-            labels = self.runs[0]._get_labels()
+            labels = self.runs[0]._get_labels(label_fixed=False)
 
             theta = [dict(zip(labels, r._get_equal_weight_chains()[1].T))
                      for r in self.runs]
@@ -2166,6 +2165,34 @@ class RunCollection(_RunAnalysis):
                 raise err
 
         return out
+
+    def _get_latex_labels(self, param):
+        '''return the param names in math mode, for plotting'''
+
+        math_mapping = {
+            'W0': r'$\phi_0$',
+            'M': r'$M\ [10^6 M_\odot]$',
+            'rh': r'$r_h\ [\mathrm{pc}]$',
+            'ra': r'$r_a\ [\mathrm{pc}]$',
+            'g': r'$g$',
+            'delta': r'$\delta$',
+            's2': r'$s^2$',
+            'F': r'$F$',
+            'a1': r'$\alpha_1$',
+            'a2': r'$\alpha_2$',
+            'a3': r'$\alpha_3$',
+            'BHret': r'$\mathrm{BH}_{ret}$',
+            'd': r'$d$',
+            'FeHe': r'$[\mathrm{Fe}/\mathrm{He}]$',
+            'Ndot': r'$\dot{N}$',
+            'RA': r'RA $[\deg]$',
+            'DEC': r'DEC $[\deg]$',
+            'chi2': r'$\chi^2$',
+            'BH_mass': r'$\mathrm{M}_{BH}\ [M_\odot]$',
+            'BH_num': r'$\mathrm{N}_{BH}$',
+        }
+
+        return math_mapping.get(param, param)
 
     # ----------------------------------------------------------------------
     # Model Collection Visualizers
@@ -2210,7 +2237,7 @@ class RunCollection(_RunAnalysis):
                 mc = ModelCollection.from_chains(chains, obs_list, ci=True,
                                                  N=N, pool=pool)
 
-                # save a copy of models here
+        # save a copy of models here
         self.models = mc
 
         return mc
@@ -2288,9 +2315,8 @@ class RunCollection(_RunAnalysis):
         ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', ecolor=clrs, **kwargs)
         ax.scatter(x, y, color=clrs, picker=True, **kwargs)  # TODO pickradius?
 
-        # TODO mathy labels (just need a better labels method, sep from chains)
-        ax.set_xlabel(param1)
-        ax.set_ylabel(param2)
+        ax.set_xlabel(self._get_latex_labels(param1))
+        ax.set_ylabel(self._get_latex_labels(param2))
 
         if annotate:
             _Annotator(fig, self.runs, x, y)
@@ -2337,9 +2363,10 @@ class RunCollection(_RunAnalysis):
             }
             ax.axline((0, 0), (1, 1), **grid_kw)
 
-        # TODO mathy labels (just need a better labels method, sep from chains)
-        ax.set_xlabel(param)
-        ax.set_ylabel(src_truths)
+        prm_lbl = self._get_latex_labels(param)
+
+        ax.set_xlabel(prm_lbl)
+        ax.set_ylabel(prm_lbl + (f' ({src_truths})' if src_truths else ''))
 
         ax.set_xlim(0.)
         ax.set_ylim(0.)
@@ -2367,7 +2394,8 @@ class RunCollection(_RunAnalysis):
 
         return fig
 
-    def plot_lit_relation(self, param, lit, e_lit=None, src_lit='',
+    def plot_lit_relation(self, param,
+                          lit, e_lit=None, param_lit='', src_lit='',
                           fig=None, ax=None, *, lit_on_x=False,
                           clr_param=None, residuals=False,
                           annotate=False, **kwargs):
@@ -2381,10 +2409,15 @@ class RunCollection(_RunAnalysis):
         x, dx = zip(*self._get_param(param))
         y, dy = lit, e_lit
 
+        xlabel = self._get_latex_labels(param)
+        ylabel = (self._get_latex_labels(param_lit)
+                  + (f' ({src_lit})' if src_lit else ''))
+
+        # optionally flip the x and y
         if lit_on_x:
-            # flip the x and y
             x, y = y, x
             dx, dy = dy, dx
+            xlabel, ylabel = ylabel, xlabel
 
         if clr_param is None:
             clrs = self._cmap(np.linspace(0., 1., len(self.runs)))
@@ -2398,13 +2431,8 @@ class RunCollection(_RunAnalysis):
         pnts = ax.scatter(x, y, color=clrs, picker=True, **kwargs)
         # TODO pickradius?
 
-        # TODO mathy labels
-        if lit_on_x:
-            ax.set_xlabel(src_lit)
-            ax.set_ylabel(param)
-        else:
-            ax.set_xlabel(param)
-            ax.set_ylabel(src_lit)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
 
         divider = make_axes_locatable(ax)
 
@@ -2456,7 +2484,7 @@ class RunCollection(_RunAnalysis):
 
         ax.grid(axis='x')
 
-        ax.set_ylabel(param)
+        ax.set_ylabel(self._get_latex_labels(param))
 
         return fig
 
@@ -2481,7 +2509,7 @@ class RunCollection(_RunAnalysis):
 
         ax.set_xticks(xticks, labels=labels, rotation=45)
 
-        ax.set_ylabel(param)
+        ax.set_ylabel(self._get_latex_labels(param))
 
         return fig
 
@@ -2517,7 +2545,7 @@ class RunCollection(_RunAnalysis):
 
         ax.grid(axis='x')
 
-        ax.set_ylabel(param)
+        ax.set_ylabel(self._get_latex_labels(param))
 
         return fig
 
@@ -2526,7 +2554,7 @@ class RunCollection(_RunAnalysis):
 
         # Get name of all desired parameters
 
-        labels = list(self.runs[0].obs.initials)
+        labels = self.runs[0]._get_labels(label_fixed=False)
 
         if include_FeHe:
             labels = ['FeHe'] + labels
