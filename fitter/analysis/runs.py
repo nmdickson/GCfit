@@ -2146,6 +2146,8 @@ class RunCollection(_RunAnalysis):
         want to compute the models) all kwargs are passed to get_model otherwise
         '''
 
+        err_mssg = f'No such parameter "{param}" was found'
+
         # try to get it from the best-fit params or metadata
         try:
 
@@ -2167,12 +2169,19 @@ class RunCollection(_RunAnalysis):
         # this is only worst case because may take a long time to gen models
         except KeyError as err:
 
-            if from_model:
-                out = self._get_from_model(param, statistic=False,
-                                           with_units=False, **kwargs)
+            try:
+                out = [[v, ] for v, e in self._get_from_run(param)]
+            except AttributeError:
 
-            else:
-                raise err
+                if from_model:
+                    try:
+                        out = self._get_from_model(param, statistic=False,
+                                                   with_units=False, **kwargs)
+
+                    except AttributeError:
+                        raise ValueError(err_mssg)
+                else:
+                    raise ValueError(err_mssg) from err
 
         return out
 
