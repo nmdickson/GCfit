@@ -1402,6 +1402,7 @@ class _ClusterVisualizer:
         Be cognizant that this is only the median model chi2, and not
         necessarily useful for actual statistics
         '''
+        # TODO seems to produce alot of infs?
 
         def numdens_nuisance(err):
             return np.sqrt(err**2 + (self.s2 << err.unit**2))
@@ -2427,18 +2428,18 @@ class ModelCollection:
 
     def __iter__(self):
         '''return an iterator over the individual model vizs'''
-        return iter(self.modelvizs)
+        return iter(self.visualizers)
 
     # TODO god what do you name this stuff now. cant use "Model"
-    def __init__(self, modelvizs):
-        self.modelvizs = modelvizs
+    def __init__(self, visualizers):
+        self.visualizers = visualizers
 
-        if all(isinstance(mv, ModelVisualizer) for mv in modelvizs):
+        if all(isinstance(mv, ModelVisualizer) for mv in visualizers):
             self._ci = False
-        elif all(isinstance(mv, CIModelVisualizer) for mv in modelvizs):
+        elif all(isinstance(mv, CIModelVisualizer) for mv in visualizers):
             self._ci = True
         else:
-            mssg = ('Invalid modelviz type. All modelvizs must be either '
+            mssg = ('Invalid modelviz type. All visualizers must be either '
                     'ModelVisualizer or CIModelVisualizer')
             raise TypeError(mssg)
 
@@ -2452,7 +2453,7 @@ class ModelCollection:
     def save(self, filenames, overwrite=False):
         '''save the models in the results files'''
 
-        for fn, mv in zip(filenames, self.modelvizs):
+        for fn, mv in zip(filenames, self.visualizers):
             mv.save(fn, overwrite=overwrite)
 
     @classmethod
@@ -2479,16 +2480,16 @@ class ModelCollection:
         if obs_list is None:
             obs_list = [None, ] * chains.shape[0]
 
-        modelvizs = []
+        visualizers = []
         for ch, obs in zip(chains, obs_list):
 
             logging.info(f'Initializing {obs.cluster} for ModelCollection')
 
             init = viz.from_chain if ch.ndim == 2 else viz.from_theta
 
-            modelvizs.append(init(ch[...], obs, *args, **kwargs))
+            visualizers.append(init(ch[...], obs, *args, **kwargs))
 
-        return cls(modelvizs)
+        return cls(visualizers)
 
     # ----------------------------------------------------------------------
     # Iterative plots
@@ -2498,7 +2499,7 @@ class ModelCollection:
         '''calls each models's `plot_func`, yields a figure
         all args, kwargs passed to plot func
         '''
-        for mv in self.modelvizs:
+        for mv in self.visualizers:
             fig = getattr(mv, plot_func)(*args, **kwargs)
 
             yield (fig, mv) if yield_model else fig
@@ -2538,7 +2539,7 @@ class ModelCollection:
                     "Must be constructed with CIModelVisualizer objects.")
             raise AttributeError(mssg)
 
-        return [mv.BH_mass for mv in self.modelvizs]
+        return [mv.BH_mass for mv in self.visualizers]
 
     @property
     def BH_num(self):
@@ -2548,8 +2549,8 @@ class ModelCollection:
                     "Must be constructed with CIModelVisualizer objects.")
             raise AttributeError(mssg)
 
-        return [mv.BH_num for mv in self.modelvizs]
+        return [mv.BH_num for mv in self.visualizers]
 
     @property
     def chi2(self):
-        return [mv.chi2 for mv in self.modelvizs]
+        return [mv.chi2 for mv in self.visualizers]
