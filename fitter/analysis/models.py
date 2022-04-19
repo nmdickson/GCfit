@@ -358,7 +358,7 @@ class _ClusterVisualizer:
 
     def _plot_profile(self, ax, ds_pattern, y_key, model_data, *,
                       residuals=False, err_transform=None,
-                      **kwargs):
+                      res_kwargs=None, **kwargs):
         '''figure out what needs to be plotted and call model/data plotters
         all **kwargs passed to both _plot_model and _plot_data
         model_data dimensions *must* be (mass bins, intervals, r axis)
@@ -375,6 +375,9 @@ class _ClusterVisualizer:
 
         # TODO need to figure out how we handle passed kwargs better
         default_clr = kwargs.pop('color', None)
+
+        if res_kwargs is None:
+            res_kwargs = {}
 
         # ------------------------------------------------------------------
         # Determine the relevant datasets to the given pattern
@@ -462,7 +465,7 @@ class _ClusterVisualizer:
 
                 if residuals:
                     res_ax = self._add_residuals(ax, ymodel, errbars,
-                                                 res_ax=res_ax, **kwargs)
+                                                 res_ax=res_ax, **res_kwargs)
 
         if self.rlims is not None:
             ax.set_xlim(*self.rlims)
@@ -611,7 +614,7 @@ class _ClusterVisualizer:
     @_support_units
     def plot_LOS(self, fig=None, ax=None,
                  show_obs=True, residuals=False, *,
-                 x_unit='pc', y_unit='km/s'):
+                 x_unit='pc', y_unit='km/s', res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -629,7 +632,8 @@ class _ClusterVisualizer:
 
         self._plot_profile(ax, pattern, var, self.LOS,
                            strict=strict, residuals=residuals,
-                           x_unit=x_unit, y_unit=y_unit)
+                           x_unit=x_unit, y_unit=y_unit,
+                           res_kwargs=res_kwargs, **kwargs)
 
         ax.legend()
 
@@ -638,7 +642,7 @@ class _ClusterVisualizer:
     @_support_units
     def plot_pm_tot(self, fig=None, ax=None,
                     show_obs=True, residuals=False, *,
-                    x_unit='pc', y_unit='mas/yr'):
+                    x_unit='pc', y_unit='mas/yr', res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -656,7 +660,8 @@ class _ClusterVisualizer:
 
         self._plot_profile(ax, pattern, var, self.pm_tot,
                            strict=strict, residuals=residuals,
-                           x_unit=x_unit, y_unit=y_unit)
+                           x_unit=x_unit, y_unit=y_unit,
+                           res_kwargs=res_kwargs, **kwargs)
 
         ax.legend()
 
@@ -665,7 +670,7 @@ class _ClusterVisualizer:
     @_support_units
     def plot_pm_ratio(self, fig=None, ax=None,
                       show_obs=True, residuals=False, *,
-                      x_unit='pc'):
+                      x_unit='pc', res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -683,7 +688,8 @@ class _ClusterVisualizer:
 
         self._plot_profile(ax, pattern, var, self.pm_ratio,
                            strict=strict, residuals=residuals,
-                           x_unit=x_unit)
+                           x_unit=x_unit,
+                           res_kwargs=res_kwargs, **kwargs)
 
         ax.legend()
 
@@ -692,7 +698,7 @@ class _ClusterVisualizer:
     @_support_units
     def plot_pm_T(self, fig=None, ax=None,
                   show_obs=True, residuals=False, *,
-                  x_unit='pc', y_unit='mas/yr'):
+                  x_unit='pc', y_unit='mas/yr', res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -712,7 +718,8 @@ class _ClusterVisualizer:
 
         self._plot_profile(ax, pattern, var, self.pm_T,
                            strict=strict, residuals=residuals,
-                           x_unit=x_unit, y_unit=y_unit)
+                           x_unit=x_unit, y_unit=y_unit,
+                           res_kwargs=res_kwargs, **kwargs)
 
         ax.legend()
 
@@ -721,7 +728,7 @@ class _ClusterVisualizer:
     @_support_units
     def plot_pm_R(self, fig=None, ax=None,
                   show_obs=True, residuals=False, *,
-                  x_unit='pc', y_unit='mas/yr'):
+                  x_unit='pc', y_unit='mas/yr', res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -741,7 +748,8 @@ class _ClusterVisualizer:
 
         self._plot_profile(ax, pattern, var, self.pm_R,
                            strict=strict, residuals=residuals,
-                           x_unit=x_unit, y_unit=y_unit)
+                           x_unit=x_unit, y_unit=y_unit,
+                           res_kwargs=res_kwargs, **kwargs)
 
         ax.legend()
 
@@ -750,7 +758,7 @@ class _ClusterVisualizer:
     @_support_units
     def plot_number_density(self, fig=None, ax=None,
                             show_obs=True, residuals=False, *,
-                            x_unit='pc'):
+                            x_unit='pc', res_kwargs=None, **kwargs):
 
         def quad_nuisance(err):
             return np.sqrt(err**2 + (self.s2 << err.unit**2))
@@ -764,16 +772,16 @@ class _ClusterVisualizer:
         if show_obs:
             pattern, var = '*number_density*', 'Σ'
             strict = show_obs == 'strict'
-            kwargs = {'err_transform': quad_nuisance}
+            kwargs.setdefault('err_transform', quad_nuisance)
 
         else:
             pattern = var = None
             strict = False
-            kwargs = {}
 
         self._plot_profile(ax, pattern, var, self.numdens,
                            strict=strict, residuals=residuals,
-                           x_unit=x_unit, **kwargs)
+                           x_unit=x_unit,
+                           res_kwargs=res_kwargs, **kwargs)
 
         # bit arbitrary, but probably fine for the most part
         ax.set_ylim(bottom=1e-4)
@@ -783,7 +791,7 @@ class _ClusterVisualizer:
         return fig
 
     @_support_units
-    def plot_all(self, fig=None, show_obs='attempt'):
+    def plot_all(self, fig=None, **kwargs):
         '''Plots all the primary profiles (numdens, LOS, PM)
         but *not* the mass function, pulsars, or any secondary profiles
         (cum-mass, remnants, etc)
@@ -793,17 +801,13 @@ class _ClusterVisualizer:
 
         axes = axes.reshape((3, 2))
 
-        fig.suptitle(str(self.obs))
+        self.plot_number_density(fig=fig, ax=axes[0, 0], **kwargs)
+        self.plot_LOS(fig=fig, ax=axes[1, 0], **kwargs)
+        self.plot_pm_ratio(fig=fig, ax=axes[2, 0], **kwargs)
 
-        kw = {}
-
-        self.plot_number_density(fig=fig, ax=axes[0, 0], **kw)
-        self.plot_LOS(fig=fig, ax=axes[1, 0], **kw)
-        self.plot_pm_ratio(fig=fig, ax=axes[2, 0], **kw)
-
-        self.plot_pm_tot(fig=fig, ax=axes[0, 1], **kw)
-        self.plot_pm_T(fig=fig, ax=axes[1, 1], **kw)
-        self.plot_pm_R(fig=fig, ax=axes[2, 1], **kw)
+        self.plot_pm_tot(fig=fig, ax=axes[0, 1], **kwargs)
+        self.plot_pm_T(fig=fig, ax=axes[1, 1], **kwargs)
+        self.plot_pm_R(fig=fig, ax=axes[2, 1], **kwargs)
 
         for ax in axes.flatten():
             ax.set_xlabel('')
