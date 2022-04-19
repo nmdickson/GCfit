@@ -54,7 +54,7 @@ setuptools.setup(
 
     packages=setuptools.find_packages(),
     scripts=[
-        'bin/GCfitter', 'bin/view_chain', 'bin/cluster_dump', 'bin/run_summary'
+        'bin/GCfitter', 'bin/generate_model_CI'
     ],
 
     include_package_data=True,

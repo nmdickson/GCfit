@@ -1,5 +1,5 @@
 from .. import util
-from ..probabilities import pulsars, mass
+from ..probabilities import mass
 from ..core.data import Observations, Model
 
 import h5py
@@ -9,8 +9,22 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mpl_clr
 import astropy.visualization as astroviz
 
+import logging
+
 
 __all__ = ['ModelVisualizer', 'CIModelVisualizer', 'ObservationsVisualizer']
+
+
+def _get_model(theta, observations):
+    try:
+        return Model(theta, observations=observations)
+    except ValueError:
+        logging.warning(f"Model did not converge with {theta=}")
+        return None
+
+# --------------------------------------------------------------------------
+# Individual model visualizers
+# --------------------------------------------------------------------------
 
 
 class _ClusterVisualizer:
@@ -329,7 +343,6 @@ class _ClusterVisualizer:
         kwargs.setdefault('linestyle', 'None')
         kwargs.setdefault('color', defaultcolour)
 
-        # TODO should try to cite, but if that fails just use raw bibcode?
         label = dataset.cite()
         if 'm' in dataset.mdata:
             label += fr' ($m={dataset.mdata["m"]}\ M_\odot$)'
@@ -370,7 +383,8 @@ class _ClusterVisualizer:
         datasets = self.obs.filter_datasets(ds_pattern)
 
         if strict and ds_pattern and not datasets:
-            mssg = f"Dataset matching '{ds_pattern}' do not exist in {self.obs}"
+            mssg = (f"No datasets matching '{ds_pattern}' exist in {self.obs}."
+                    f"To plot models without data, set `show_obs=False`")
             # raise DataError
             raise KeyError(mssg)
 
@@ -457,7 +471,7 @@ class _ClusterVisualizer:
     # Plot extras
     # -----------------------------------------------------------------------
 
-    def _add_residuals(self, ax, ymodel, errorbars, *,
+    def _add_residuals(self, ax, ymodel, errorbars, *, show_chi2=True,
                        xmodel=None, y_unit=None, res_ax=None, **kwargs):
         '''
         errorbars : a list of outputs from calls to plt.errorbars
@@ -505,6 +519,8 @@ class _ClusterVisualizer:
         # ------------------------------------------------------------------
         # Get data from the plotted errorbars
         # ------------------------------------------------------------------
+
+        chi2 = 0.
 
         for errbar in errorbars:
 
@@ -556,6 +572,17 @@ class _ClusterVisualizer:
 
             res_ax.errorbar(xdata, res, xerr=xerr, yerr=yerr,
                             color=clr, marker=mrk, linestyle='none')
+
+            # --------------------------------------------------------------
+            # Optionally compute chi-squared statistic
+            # --------------------------------------------------------------
+
+            if show_chi2:
+                chi2 += np.sum((res / yerr)**2)
+
+        if show_chi2:
+            fake = plt.Line2D([], [], label=fr"$\chi^2={chi2:.2f}$")
+            res_ax.legend(handles=[fake], handlelength=0, handletextpad=0)
 
         return res_ax
 
@@ -756,221 +783,6 @@ class _ClusterVisualizer:
         return fig
 
     @_support_units
-    def plot_pulsar(self, fig=None, ax=None, show_obs=True):
-        # TODO this is out of date with the new pulsar probability code
-        # TODO I dont even think this is what we should use anymore, but the
-        #   new convolved distributions peak
-
-        fig, ax = self._setup_artist(fig, ax)
-
-        ax.set_title('Pulsar LOS Acceleration')
-        ax.set_xlabel('R')
-        ax.set_ylabel(r'$a_{los}$')
-
-        maz = u.Quantity(np.empty(self.model.nstep - 1), '1/s')
-        for i in range(self.model.nstep - 1):
-            a_domain, Paz = pulsars.cluster_component(self.model, self.model.r[i], -1)
-            maz[i] = a_domain[Paz.argmax()] << maz.unit
-
-        maz = (self.obs['pulsar/P'] * maz).decompose()
-
-        if show_obs:
-            try:
-                obs_pulsar = self.obs['pulsar']
-
-                ax.errorbar(obs_pulsar['r'],
-                            self.obs['pulsar/Pdot'],
-                            yerr=self.obs['pulsar/ΔPdot'],
-                            fmt='k.')
-
-            except KeyError as err:
-                if show_obs != 'attempt':
-                    raise err
-
-        model_r = self.model.r.to(u.arcmin, util.angular_width(self.model.d))
-
-        upper_az, = ax.plot(model_r[:-1], maz)
-        ax.plot(model_r[:-1], -maz, c=upper_az.get_color())
-
-        return fig
-
-    @_support_units
-    def plot_pulsar_spin_dist(self, fig=None, ax=None, pulsar_ind=0,
-                              show_obs=True, show_conv=False):
-
-        import scipy.interpolate as interp
-
-        fig, ax = self._setup_artist(fig, ax)
-
-        # pulsars = self.obs['pulsar']
-        puls_obs = self.obs['pulsar/spin']
-
-        id_ = puls_obs['id'][pulsar_ind].value.decode()
-        ax.set_title(f'Pulsar "{id_}" Period Derivative Likelihood')
-
-        ax.set_ylabel('Probability')
-        ax.set_xlabel(r'$\dot{P}/P$ $\left[s^{-1}\right]$')
-
-        mass_bin = -1
-
-        kde = pulsars.field_Pdot_KDE()
-        Pdot_min, Pdot_max = kde.dataset[1].min(), kde.dataset[1].max()
-
-        R = puls_obs['r'][pulsar_ind].to(u.pc)
-
-        P = puls_obs['P'][pulsar_ind].to('s')
-
-        Pdot_meas = puls_obs['Pdot'][pulsar_ind]
-        ΔPdot_meas = np.abs(puls_obs['ΔPdot'][pulsar_ind])
-
-        PdotP_domain, PdotP_c_prob = pulsars.cluster_component(self.model,
-                                                               R, mass_bin)
-        Pdot_domain = (P * PdotP_domain).decompose()
-
-        # linear to avoid effects around asymptote
-        Pdot_c_spl = interp.UnivariateSpline(
-            Pdot_domain, PdotP_c_prob, k=1, s=0, ext=1
-        )
-
-        err = util.gaussian(x=Pdot_domain, sigma=ΔPdot_meas, mu=0)
-
-        err_spl = interp.UnivariateSpline(Pdot_domain, err, k=3, s=0, ext=1)
-
-        lg_P = np.log10(P / P.unit)
-
-        P_grid, Pdot_int_domain = np.mgrid[lg_P:lg_P:1j, Pdot_min:Pdot_max:200j]
-
-        P_grid, Pdot_int_domain = P_grid.ravel(), Pdot_int_domain.ravel()
-
-        Pdot_int_prob = kde(np.vstack([P_grid, Pdot_int_domain]))
-
-        Pdot_int_spl = interp.UnivariateSpline(
-            Pdot_int_domain, Pdot_int_prob, k=3, s=0, ext=1
-        )
-
-        Pdot_int_prob = util.RV_transform(
-            domain=10**Pdot_int_domain, f_X=Pdot_int_spl,
-            h=np.log10, h_prime=lambda y: (1 / (np.log(10) * y))
-        )
-
-        Pdot_int_spl = interp.UnivariateSpline(
-            10**Pdot_int_domain, Pdot_int_prob, k=3, s=0, ext=1
-        )
-
-        lin_domain = np.linspace(0., 1e-18, 5_000 // 2)
-        lin_domain = np.concatenate((np.flip(-lin_domain[1:]), lin_domain))
-
-        conv1 = np.convolve(err_spl(lin_domain), Pdot_c_spl(lin_domain), 'same')
-
-        conv2 = np.convolve(conv1, Pdot_int_spl(lin_domain), 'same')
-
-        # Normalize
-        conv2 /= interp.UnivariateSpline(
-            lin_domain, conv2, k=3, s=0, ext=1
-        ).integral(-np.inf, np.inf)
-
-        cluster_μ = self.obs.mdata['μ'] << u.Unit("mas/yr")
-        PdotP_pm = pulsars.shklovskii_component(cluster_μ, self.model.d)
-
-        cluster_coords = (self.obs.mdata['b'], self.obs.mdata['l']) * u.deg
-        PdotP_gal = pulsars.galactic_component(*cluster_coords, D=self.model.d)
-
-        x_total = (lin_domain / P) + PdotP_pm + PdotP_gal
-        ax.plot(x_total, conv2)
-
-        if show_conv:
-            # Will really mess the scaling up, usually
-            ax.plot(x_total, Pdot_c_spl(lin_domain))
-            ax.plot(x_total, conv1)
-
-        if show_obs:
-            ax.axvline((Pdot_meas / P).decompose(), c='r', ls=':')
-
-        prob_dist = interp.interp1d(
-            (lin_domain / P) + PdotP_pm + PdotP_gal, conv2,
-            assume_sorted=True, bounds_error=False, fill_value=0.0
-        )
-
-        print('prob=', prob_dist((Pdot_meas / P).decompose()))
-
-        return fig
-
-    @_support_units
-    def plot_pulsar_orbital_dist(self, fig=None, ax=None, pulsar_ind=0,
-                                 show_obs=True, show_conv=False):
-
-        import scipy.interpolate as interp
-
-        fig, ax = self._setup_artist(fig, ax)
-
-        # pulsars = self.obs['pulsar']
-        puls_obs = self.obs['pulsar/orbital']
-
-        id_ = puls_obs['id'][pulsar_ind].value.decode()
-        ax.set_title(f'Pulsar "{id_}" Period Derivative Likelihood')
-
-        ax.set_ylabel('Probability')
-        ax.set_xlabel(r'$\dot{P}/P$ $\left[s^{-1}\right]$')
-
-        mass_bin = -1
-
-        R = puls_obs['r'][pulsar_ind].to(u.pc)
-
-        P = puls_obs['Pb'][pulsar_ind].to('s')
-
-        Pdot_meas = puls_obs['Pbdot'][pulsar_ind]
-        ΔPdot_meas = np.abs(puls_obs['ΔPbdot'][pulsar_ind])
-
-        PdotP_domain, PdotP_c_prob = pulsars.cluster_component(self.model,
-                                                               R, mass_bin)
-        Pdot_domain = (P * PdotP_domain).decompose()
-
-        Pdot_c_spl = interp.UnivariateSpline(
-            Pdot_domain, PdotP_c_prob, k=1, s=0, ext=1
-        )
-
-        err = util.gaussian(x=Pdot_domain, sigma=ΔPdot_meas, mu=0)
-
-        err_spl = interp.UnivariateSpline(Pdot_domain, err, k=3, s=0, ext=1)
-
-        lin_domain = np.linspace(0., 1e-11, 5_000 // 2)
-        lin_domain = np.concatenate((np.flip(-lin_domain[1:]), lin_domain))
-
-        conv = np.convolve(err_spl(lin_domain), Pdot_c_spl(lin_domain), 'same')
-        # conv = np.convolve(err, PdotP_c_prob, 'same')
-
-        # Normalize
-        conv /= interp.UnivariateSpline(
-            lin_domain, conv, k=3, s=0, ext=1
-        ).integral(-np.inf, np.inf)
-
-        cluster_μ = self.obs.mdata['μ'] << u.Unit("mas/yr")
-        PdotP_pm = pulsars.shklovskii_component(cluster_μ, self.model.d)
-
-        cluster_coords = (self.obs.mdata['b'], self.obs.mdata['l']) * u.deg
-        PdotP_gal = pulsars.galactic_component(*cluster_coords, D=self.model.d)
-
-        x_total = (lin_domain / P) + PdotP_pm + PdotP_gal
-        ax.plot(x_total, conv)
-
-        if show_conv:
-            # Will really mess the scaling up, usually
-            ax.plot(x_total, PdotP_c_prob)
-            ax.plot(x_total, conv)
-
-        if show_obs:
-            ax.axvline((Pdot_meas / P).decompose(), c='r', ls=':')
-
-        prob_dist = interp.interp1d(
-            x_total, conv,
-            assume_sorted=True, bounds_error=False, fill_value=0.0
-        )
-
-        print('prob=', prob_dist((Pdot_meas / P).decompose()))
-
-        return fig
-
-    @_support_units
     def plot_all(self, fig=None, show_obs='attempt'):
         '''Plots all the primary profiles (numdens, LOS, PM)
         but *not* the mass function, pulsars, or any secondary profiles
@@ -1003,7 +815,7 @@ class _ClusterVisualizer:
     # ----------------------------------------------------------------------
 
     @_support_units
-    def plot_mass_func(self, fig=None, show_obs=True, show_fields=False, *,
+    def plot_mass_func(self, fig=None, show_obs=True, show_fields=True, *,
                        colours=None, PI_legend=False, logscaled=False,
                        field_kw=None):
 
@@ -1038,7 +850,6 @@ class _ClusterVisualizer:
 
             field_kw.setdefault('radii', [])
 
-            # TODO need to figure out a good size and how to do it, for this ax
             self.plot_MF_fields(fig, ax, **field_kw)
 
             ax_ind += 1
@@ -1097,20 +908,23 @@ class _ClusterVisualizer:
                 # logic
                 # ----------------------------------------------------------
 
+                # The mass domain is provided explicitly, to support visualizers
+                # which don't store the entire mass range (e.g. CImodels)
+                mj = rbin['mj']
+
                 dNdm = rbin['dNdm']
 
                 midpoint = dNdm.shape[0] // 2
 
-                m_domain = self.mj[:dNdm.shape[-1]]
                 median = dNdm[midpoint]
 
-                med_plot, = ax.plot(m_domain, median, '--', c=clr)
+                med_plot, = ax.plot(mj, median, '--', c=clr)
 
                 alpha = 0.8 / (midpoint + 1)
                 for sigma in range(1, midpoint + 1):
 
                     ax.fill_between(
-                        m_domain,
+                        mj,
                         dNdm[midpoint + sigma],
                         dNdm[midpoint - sigma],
                         alpha=1 - alpha, color=clr
@@ -1199,6 +1013,7 @@ class _ClusterVisualizer:
         ax.autoscale(False)
 
         if grid:
+            # TODO this should probably use distance to furthest field
             rt = self.rt if hasattr(self, 'rt') else (20 << u.arcmin)
             ticks = np.arange(2, rt.to_value('arcmin'), 2)
 
@@ -1212,7 +1027,7 @@ class _ClusterVisualizer:
             }
 
             for gr in ticks:
-                circle = np.array(geom.Point(0, 0).buffer(gr).exterior).T
+                circle = np.array(geom.Point(0, 0).buffer(gr).exterior.coords).T
                 gr_line, = ax.plot(*circle, **grid_kw)
 
                 ax.annotate(f'{gr:.0f}"', xy=(circle[0].max(), 0),
@@ -1232,7 +1047,7 @@ class _ClusterVisualizer:
                 raise TypeError(mssg)
 
             radius = getattr(self, r_type).to_value('arcmin')
-            circle = np.array(geom.Point(0, 0).buffer(radius).exterior).T
+            circle = np.array(geom.Point(0, 0).buffer(radius).exterior.coords).T
             ax.plot(*circle, ls='--')
             ax.text(0, circle[1].max(), r_type)
 
@@ -1441,9 +1256,179 @@ class _ClusterVisualizer:
 
         return fig
 
-# --------------------------------------------------------------------------
-# Visualizers
-# --------------------------------------------------------------------------
+    # -----------------------------------------------------------------------
+    # Goodness of fit statistics
+    # -----------------------------------------------------------------------
+
+    @_support_units
+    def _compute_profile_chi2(self, ds_pattern, y_key, model_data, *,
+                              x_key='r', err_transform=None, reduced=True):
+        '''compute chi2 for this dataset (pattern)'''
+
+        chi2 = 0.
+
+        # ensure that the data is (mass bin, intervals, r domain)
+        if len(model_data.shape) != 3:
+            raise ValueError("invalid model data shape")
+
+        # ------------------------------------------------------------------
+        # Determine the relevant datasets to the given pattern
+        # ------------------------------------------------------------------
+
+        ds_pattern = ds_pattern or ''
+
+        datasets = self.obs.filter_datasets(ds_pattern)
+
+        # ------------------------------------------------------------------
+        # Iterate over the datasets, computing chi2 for each
+        # ------------------------------------------------------------------
+
+        for dset in datasets.values():
+
+            # --------------------------------------------------------------
+            # get mass bin of this dataset
+            # --------------------------------------------------------------
+
+            if 'm' in dset.mdata:
+                m = dset.mdata['m'] * u.Msun
+                mass_bin = np.where(self.mj == m)[0][0]
+            else:
+                mass_bin = self.star_bin
+
+            # --------------------------------------------------------------
+            # get data values
+            # --------------------------------------------------------------
+
+            try:
+                xdata = dset[x_key]  # x_key='r'
+                ydata = dset[y_key]
+
+            except KeyError:
+                continue
+
+            yerr = self._get_err(dset, y_key)
+
+            if err_transform is not None:
+                yerr = err_transform(yerr)
+
+            yerr = yerr.to(ydata.unit)
+
+            # --------------------------------------------------------------
+            # get model values
+            # --------------------------------------------------------------
+
+            xmodel = self.r.to(xdata.unit)
+
+            ymedian = self._get_median(model_data[mass_bin, :, :])
+
+            # TEMPORRAY FIX FOR RATIO
+            # ymedian[np.isnan(ymedian)] = 1.0 << ymedian.unit
+
+            ymodel = util.QuantitySpline(xmodel, ymedian)(xdata).to(ydata.unit)
+
+            # --------------------------------------------------------------
+            # compute chi2
+            # --------------------------------------------------------------
+
+            denom = (ydata.size - 13) if reduced else 1.
+
+            chi2 += np.nansum(((ymodel - ydata) / yerr)**2) / denom
+
+        return chi2
+
+    @_support_units
+    def _compute_massfunc_chi2(self, *, reduced=True):
+
+        chi2 = 0.
+
+        # ------------------------------------------------------------------
+        # Iterate over each PI, gathering data
+        # ------------------------------------------------------------------
+
+        for PI in sorted(self.mass_func,
+                         key=lambda k: self.mass_func[k][0]['r1']):
+
+            bins = self.mass_func[PI]
+
+            # Get data for this PI
+
+            mf = self.obs[PI]
+
+            mbin_mean = (mf['m1'] + mf['m2']) / 2.
+            mbin_width = mf['m2'] - mf['m1']
+
+            N = mf['N'] / mbin_width
+            ΔN = mf['ΔN'] / mbin_width
+
+            # --------------------------------------------------------------
+            # Iterate over radial bin dicts for this PI
+            # --------------------------------------------------------------
+
+            for rind, rbin in enumerate(bins):
+
+                # ----------------------------------------------------------
+                # Get data
+                # ----------------------------------------------------------
+
+                r_mask = ((mf['r1'] == rbin['r1']) & (mf['r2'] == rbin['r2']))
+
+                xdata = mbin_mean[r_mask]
+
+                ydata = N[r_mask].value
+
+                yerr = self.F * ΔN[r_mask].value
+
+                # ----------------------------------------------------------
+                # Get model
+                # ----------------------------------------------------------
+
+                xmodel = rbin['mj']
+
+                ymedian = self._get_median(rbin['dNdm'])
+
+                ymodel = util.QuantitySpline(xmodel, ymedian)(xdata)
+
+                # TODO really should get this Nparam dynamically, if some fixed
+                denom = (ydata.size - 13) if reduced else 1.
+
+                chi2 += np.sum(((ymodel - ydata) / yerr)**2) / denom
+
+        return chi2
+
+    @property
+    def chi2(self):
+        '''compute chi2 between median model and all datasets
+        Be cognizant that this is only the median model chi2, and not
+        necessarily useful for actual statistics
+        '''
+        # TODO seems to produce alot of infs?
+
+        def numdens_nuisance(err):
+            return np.sqrt(err**2 + (self.s2 << err.unit**2))
+
+        all_components = [
+            {'ds_pattern': '*velocity_dispersion*', 'y_key': 'σ',
+             'model_data': self.LOS},
+            {'ds_pattern': '*proper_motion*', 'y_key': 'PM_tot',
+             'model_data': self.pm_tot},
+            {'ds_pattern': '*proper_motion*', 'y_key': 'PM_ratio',
+             'model_data': self.pm_ratio},
+            {'ds_pattern': '*proper_motion*', 'y_key': 'PM_T',
+             'model_data': self.pm_T},
+            {'ds_pattern': '*proper_motion*', 'y_key': 'PM_R',
+             'model_data': self.pm_R},
+            {'ds_pattern': '*number_density*', 'y_key': 'Σ',
+             'model_data': self.numdens, 'err_transform': numdens_nuisance},
+        ]
+
+        chi2 = 0.
+
+        for comp in all_components:
+            chi2 += self._compute_profile_chi2(**comp)
+
+        chi2 += self._compute_massfunc_chi2()
+
+        return chi2
 
 
 class ModelVisualizer(_ClusterVisualizer):
@@ -1479,6 +1464,7 @@ class ModelVisualizer(_ClusterVisualizer):
     def __init__(self, model, observations=None):
         self.model = model
         self.obs = observations if observations else model.observations
+        self.name = observations.cluster
 
         self.rh = model.rh
         self.ra = model.ra
@@ -1489,7 +1475,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
         self.r = model.r
 
-        self.rlims = (9e-3, self.r.max() + (5 << self.r.unit))
+        self.rlims = (9e-3, self.r.max().value + 5) << self.r.unit
 
         self._2πr = 2 * np.pi * model.r
 
@@ -1515,29 +1501,36 @@ class ModelVisualizer(_ClusterVisualizer):
     # TODO alot of these init functions could be more homogenous
     @_ClusterVisualizer._support_units
     def _init_numdens(self, model, observations):
-        # TODO make this more robust and cleaner
 
         model_nd = model.Sigmaj / model.mj[:, np.newaxis]
 
         nd = np.empty(model_nd.shape)[:, np.newaxis, :] << model_nd.unit
 
-        # If have nd obs, apply scaling factor K
-        for mbin in range(model_nd.shape[0]):
+        # Check for observational numdens profiles, to compute scaling factor K
+        if obs_nd := observations.filter_datasets('*number_density'):
 
-            try:
+            if len(obs_nd) > 1:
+                mssg = ('Too many number density datasets, '
+                        'computing scaling factor using only final dataset')
+                logging.warning(mssg)
 
-                obs_nd = observations['number_density']
-                obs_r = obs_nd['r'].to(model.r.unit)
+            obs_nd = list(obs_nd.values())[-1]
+            obs_r = obs_nd['r'].to(model.r.unit)
+
+            for mbin in range(model_nd.shape[0]):
 
                 nd_interp = util.QuantitySpline(model.r, model_nd[mbin, :])
 
                 K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_nd['Σ']**2)
                      / np.nansum(nd_interp(obs_r)**2 / obs_nd['Σ']**2))
 
-            except KeyError:
-                K = 1
+                nd[mbin, 0, :] = K * model_nd[mbin, :]
 
-            nd[mbin, 0, :] = K * model_nd[mbin, :]
+        else:
+            mssg = 'No number density datasets found, setting K=1'
+            logging.info(mssg)
+
+            nd[:, 0, :] = model_nd[:, :]
 
         self.numdens = nd
 
@@ -1564,7 +1557,6 @@ class ModelVisualizer(_ClusterVisualizer):
 
             self.mass_func[key] = []
 
-            # TODO same colour for each PI or different for each slice?
             clr = cmap(i / len(PI_list))
 
             field = mass.Field.from_dataset(mf, cen=cen)
@@ -1583,6 +1575,8 @@ class ModelVisualizer(_ClusterVisualizer):
                 this_slc['colour'] = clr
 
                 this_slc['dNdm'] = np.empty((1, model.nms))
+
+                this_slc['mj'] = model.mj[:model.nms]
 
                 sample_radii = field_slice.MC_sample(300).to(u.pc)
 
@@ -1702,14 +1696,18 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         return fig
 
+    def __init__(self, observations):
+        self.obs = observations
+        self.name = observations.cluster
+
     @classmethod
-    def from_chain(cls, chain, observations, N=100, *, verbose=True, pool=None):
+    def from_chain(cls, chain, observations, N=100, *,
+                   verbose=False, pool=None):
         import functools
 
-        viz = cls()
+        viz = cls(observations)
 
         viz.N = N
-        viz.obs = observations
 
         # ------------------------------------------------------------------
         # Get info about the chain and set of models
@@ -1735,19 +1733,21 @@ class CIModelVisualizer(_ClusterVisualizer):
         # very large rt. I'm not really sure yet how that might affect the CIs
         # or plots
 
+        # TODO https://github.com/nmdickson/GCfit/issues/100
         huge_model = Model(chain[np.argmax(chain[:, 4])], viz.obs)
 
         viz.rt = huge_model.rt
         viz.r = np.r_[0, np.geomspace(1e-5, viz.rt.value, num=99)] << u.pc
 
-        viz.rlims = (9e-3, viz.r.max() + (5 << viz.r.unit))
+        viz.rlims = (9e-3, viz.r.max().value + 5) << viz.r.unit
 
-        # Assume that this example model has same nms, mj[:nms] as all models
-        # This approximation isn't exactly correct, but close enough for plots
-        # viz.star_bin = huge_model.nms - 1
+        # Assume that this example model has same nms bin as all models
+        # This approximation isn't exactly correct (especially when Ndot != 0),
+        # but close enough for plots
         viz.star_bin = 0
 
-        mj_MS = huge_model.mj[:huge_model.nms]
+        # mj only contains nms and tracer bins (the only ones we plot anyways)
+        mj_MS = huge_model.mj[huge_model._star_bins][-1]
         mj_tracer = huge_model.mj[huge_model._tracer_bins]
 
         viz.mj = np.r_[mj_MS, mj_tracer]
@@ -1758,22 +1758,24 @@ class CIModelVisualizer(_ClusterVisualizer):
         # all "profile" datasets
         # ------------------------------------------------------------------
 
+        Nr = viz.r.size
+
         # velocities
 
         vel_unit = np.sqrt(huge_model.v2Tj).unit
 
         Nm = 1 + len(mj_tracer)
 
-        vpj = np.empty((Nm, N, viz.r.size)) << vel_unit
+        vpj = np.full((Nm, N, Nr), np.nan) << vel_unit
         vTj, vRj, vtotj = vpj.copy(), vpj.copy(), vpj.copy()
 
-        vaj = np.empty((Nm, N, viz.r.size)) << u.dimensionless_unscaled
+        vaj = np.full((Nm, N, Nr), np.nan) << u.dimensionless_unscaled
 
         # mass density
 
         rho_unit = huge_model.rhoj.unit
 
-        rho_tot = np.empty((1, N, viz.r.size)) << rho_unit
+        rho_tot = np.full((1, N, Nr), np.nan) << rho_unit
         rho_MS, rho_BH = rho_tot.copy(), rho_tot.copy()
         rho_WD, rho_NS = rho_tot.copy(), rho_tot.copy()
 
@@ -1781,7 +1783,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         Sigma_unit = huge_model.Sigmaj.unit
 
-        Sigma_tot = np.empty((1, N, viz.r.size)) << Sigma_unit
+        Sigma_tot = np.full((1, N, Nr), np.nan) << Sigma_unit
         Sigma_MS, Sigma_BH = Sigma_tot.copy(), Sigma_tot.copy()
         Sigma_WD, Sigma_NS = Sigma_tot.copy(), Sigma_tot.copy()
 
@@ -1789,18 +1791,18 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         mass_unit = huge_model.M.unit
 
-        cum_M_tot = np.empty((1, N, viz.r.size)) << mass_unit
+        cum_M_tot = np.full((1, N, Nr), np.nan) << mass_unit
         cum_M_MS, cum_M_BH = cum_M_tot.copy(), cum_M_tot.copy()
         cum_M_WD, cum_M_NS = cum_M_tot.copy(), cum_M_tot.copy()
 
         # Mass Fraction
 
-        frac_M_MS = np.empty((1, N, viz.r.size)) << u.dimensionless_unscaled
+        frac_M_MS = np.full((1, N, Nr), np.nan) << u.dimensionless_unscaled
         frac_M_rem = frac_M_MS.copy()
 
         # number density
 
-        numdens = np.empty((1, N, viz.r.size)) << u.arcmin**-2
+        numdens = np.full((1, N, Nr), np.nan) << u.pc**-2
 
         # mass function
 
@@ -1810,26 +1812,19 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         for rbins in massfunc.values():
             for rslice in rbins:
-                rslice['dNdm'] = np.empty((N, huge_model.nms))
+                rslice['mj'] = huge_model.mj[:huge_model.nms]
+                rslice['dNdm'] = np.full((N, huge_model.nms), np.nan)
 
         # BH mass
 
-        BH_mass = np.empty(N) << u.Msun
-        BH_num = np.empty(N) << u.dimensionless_unscaled
+        BH_mass = np.full(N, np.nan) << u.Msun
+        BH_num = np.full(N, np.nan) << u.dimensionless_unscaled
 
         # ------------------------------------------------------------------
         # Setup iteration and pooling
         # ------------------------------------------------------------------
 
-        # TODO currently does nothing
-        # if verbose:
-        #     import tqdm
-        #     chain_loader = tqdm.tqdm(chain)
-        # else:
-        #     chain_loader = chain
-
-        # TODO assuming that chain always converges, might err if not the case
-        get_model = functools.partial(Model, observations=viz.obs)
+        get_model = functools.partial(_get_model, observations=viz.obs)
 
         try:
             _map = map if pool is None else pool.imap_unordered
@@ -1838,12 +1833,24 @@ class CIModelVisualizer(_ClusterVisualizer):
                     "`imap_unordered` method")
             raise ValueError(mssg)
 
+        if verbose:
+            import tqdm
+            loader = tqdm.tqdm(enumerate(_map(get_model, chain)), total=N)
+
+        else:
+            loader = enumerate(_map(get_model, chain))
+
         # ------------------------------------------------------------------
         # iterate over all models in the sample and compute/store their
         # relevant parameters
         # ------------------------------------------------------------------
 
-        for model_ind, model in enumerate(_map(get_model, chain)):
+        for model_ind, model in loader:
+
+            if model is None:
+                # TODO would be better to extend chain so N are still computed
+                # for now this ind will be filled with nan
+                continue
 
             equivs = util.angular_width(model.d)
 
@@ -1900,46 +1907,47 @@ class CIModelVisualizer(_ClusterVisualizer):
         # compute and store the percentiles and medians
         # ------------------------------------------------------------------
 
-        # TODO get sigmas dynamically ased on an arg
         q = [97.72, 84.13, 50., 15.87, 2.28]
 
         axes = (1, 0, 2)  # `np.percentile` messes up the dimensions
 
-        viz.pm_T = np.transpose(np.percentile(vTj, q, axis=1), axes)
-        viz.pm_R = np.transpose(np.percentile(vRj, q, axis=1), axes)
-        viz.pm_tot = np.transpose(np.percentile(vtotj, q, axis=1), axes)
-        viz.pm_ratio = np.transpose(np.nanpercentile(vaj, q, axis=1), axes)
-        viz.LOS = np.transpose(np.percentile(vpj, q, axis=1), axes)
+        perc = np.nanpercentile
 
-        viz.rho_MS = np.transpose(np.percentile(rho_MS, q, axis=1), axes)
-        viz.rho_tot = np.transpose(np.percentile(rho_tot, q, axis=1), axes)
-        viz.rho_BH = np.transpose(np.percentile(rho_BH, q, axis=1), axes)
-        viz.rho_WD = np.transpose(np.percentile(rho_WD, q, axis=1), axes)
-        viz.rho_NS = np.transpose(np.percentile(rho_NS, q, axis=1), axes)
+        viz.pm_T = np.transpose(perc(vTj, q, axis=1), axes)
+        viz.pm_R = np.transpose(perc(vRj, q, axis=1), axes)
+        viz.pm_tot = np.transpose(perc(vtotj, q, axis=1), axes)
+        viz.pm_ratio = np.transpose(perc(vaj, q, axis=1), axes)
+        viz.LOS = np.transpose(perc(vpj, q, axis=1), axes)
 
-        viz.Sigma_MS = np.transpose(np.percentile(Sigma_MS, q, axis=1), axes)
-        viz.Sigma_tot = np.transpose(np.percentile(Sigma_tot, q, axis=1), axes)
-        viz.Sigma_BH = np.transpose(np.percentile(Sigma_BH, q, axis=1), axes)
-        viz.Sigma_WD = np.transpose(np.percentile(Sigma_WD, q, axis=1), axes)
-        viz.Sigma_NS = np.transpose(np.percentile(Sigma_NS, q, axis=1), axes)
+        viz.rho_MS = np.transpose(perc(rho_MS, q, axis=1), axes)
+        viz.rho_tot = np.transpose(perc(rho_tot, q, axis=1), axes)
+        viz.rho_BH = np.transpose(perc(rho_BH, q, axis=1), axes)
+        viz.rho_WD = np.transpose(perc(rho_WD, q, axis=1), axes)
+        viz.rho_NS = np.transpose(perc(rho_NS, q, axis=1), axes)
 
-        viz.cum_M_MS = np.transpose(np.percentile(cum_M_MS, q, axis=1), axes)
-        viz.cum_M_tot = np.transpose(np.percentile(cum_M_tot, q, axis=1), axes)
-        viz.cum_M_BH = np.transpose(np.percentile(cum_M_BH, q, axis=1), axes)
-        viz.cum_M_WD = np.transpose(np.percentile(cum_M_WD, q, axis=1), axes)
-        viz.cum_M_NS = np.transpose(np.percentile(cum_M_NS, q, axis=1), axes)
+        viz.Sigma_MS = np.transpose(perc(Sigma_MS, q, axis=1), axes)
+        viz.Sigma_tot = np.transpose(perc(Sigma_tot, q, axis=1), axes)
+        viz.Sigma_BH = np.transpose(perc(Sigma_BH, q, axis=1), axes)
+        viz.Sigma_WD = np.transpose(perc(Sigma_WD, q, axis=1), axes)
+        viz.Sigma_NS = np.transpose(perc(Sigma_NS, q, axis=1), axes)
 
-        viz.numdens = np.transpose(np.percentile(numdens, q, axis=1), axes)
+        viz.cum_M_MS = np.transpose(perc(cum_M_MS, q, axis=1), axes)
+        viz.cum_M_tot = np.transpose(perc(cum_M_tot, q, axis=1), axes)
+        viz.cum_M_BH = np.transpose(perc(cum_M_BH, q, axis=1), axes)
+        viz.cum_M_WD = np.transpose(perc(cum_M_WD, q, axis=1), axes)
+        viz.cum_M_NS = np.transpose(perc(cum_M_NS, q, axis=1), axes)
+
+        viz.numdens = np.transpose(perc(numdens, q, axis=1), axes)
 
         viz.mass_func = massfunc
 
         for rbins in viz.mass_func.values():
             for rslice in rbins:
 
-                rslice['dNdm'] = np.percentile(rslice['dNdm'], q, axis=0)
+                rslice['dNdm'] = perc(rslice['dNdm'], q, axis=0)
 
-        viz.frac_M_MS = np.percentile(frac_M_MS, q, axis=1)
-        viz.frac_M_rem = np.percentile(frac_M_rem, q, axis=1)
+        viz.frac_M_MS = perc(frac_M_MS, q, axis=1)
+        viz.frac_M_rem = perc(frac_M_rem, q, axis=1)
 
         viz.BH_mass = BH_mass
         viz.BH_num = BH_num
@@ -1962,7 +1970,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         va = np.sqrt(model.v2Tj[mass_bin] / model.v2Rj[mass_bin])
         finite = np.isnan(va)
-        va_interp = util.QuantitySpline(model.r[~finite], va[~finite])
+        va_interp = util.QuantitySpline(model.r[~finite], va[~finite], ext=3)
         va = va_interp(self.r)
 
         vp = np.sqrt(model.v2pj[mass_bin])
@@ -2075,20 +2083,28 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         model_nd = model.Sigmaj[model.nms - 1] / model.mj[model.nms - 1]
 
-        try:
+        nd_interp = util.QuantitySpline(model.r, model_nd)
 
-            obs_nd = self.obs['number_density']
+        if obs_nd := self.obs.filter_datasets('*number_density'):
+
+            if len(obs_nd) > 1:
+                mssg = ('Too many number density datasets, '
+                        'computing scaling factor using only final dataset')
+                logging.warning(mssg)
+
+            obs_nd = list(obs_nd.values())[-1]
             obs_r = obs_nd['r'].to(model.r.unit, equivs)
-
-            nd_interp = util.QuantitySpline(model.r, model_nd)
 
             K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_nd['Σ']**2)
                  / np.nansum(nd_interp(obs_r)**2 / obs_nd['Σ']**2))
 
-        except KeyError:
+        else:
+            mssg = 'No number density datasets found, setting K=1'
+            logging.info(mssg)
+
             K = 1
 
-        return K * nd_interp(self.r)
+        return (K * nd_interp(self.r)).to('pc-2', equivs)
 
     def _prep_massfunc(self, observations, *, cmap=None):
 
@@ -2104,7 +2120,6 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             massfunc[key] = []
 
-            # TODO same colour for each PI or different for each slice?
             clr = cmap(i / len(PI_list))
 
             field = mass.Field.from_dataset(mf, cen=cen)
@@ -2148,103 +2163,105 @@ class CIModelVisualizer(_ClusterVisualizer):
     # Save and load confidence intervals to a file
     # ----------------------------------------------------------------------
 
-    def save(self, filename):
+    def save(self, filename, overwrite=False):
         '''save the confidence intervals to a file so we can load them more
-        quickly next time
+        quickly next time. This should, in most cases, be the run output file
         '''
 
-        with h5py.File(filename, 'x') as file:
+        with h5py.File(filename, 'a') as file:
 
-            meta_grp = file.create_group('metadata')
+            # --------------------------------------------------------------
+            # Prep file
+            # --------------------------------------------------------------
+
+            if 'model_output' in file:
+                mssg = f'Model output already exists in {filename}.'
+
+                if overwrite is True:
+                    logging.info(mssg + ' Overwriting.')
+                    del file['model_output']
+                else:
+                    mssg += ' Set `overwrite=True` to overwrite.'
+                    raise ValueError(mssg)
+
+            modelgrp = file.create_group('model_output')
+
+            # --------------------------------------------------------------
+            # Store metadata
+            # --------------------------------------------------------------
+
+            meta_grp = modelgrp.create_group('metadata')
 
             meta_grp.create_dataset('r', data=self.r)
             meta_grp.create_dataset('star_bin', data=self.star_bin)
             meta_grp.create_dataset('mj', data=self.mj)
-            meta_grp.attrs['rlims'] = self.rlims
+            meta_grp.attrs['rlims'] = self.rlims.to_value('pc')
             meta_grp.attrs['s2'] = self.s2
             meta_grp.attrs['F'] = self.F
-            meta_grp.attrs['d'] = self.d
+            meta_grp.attrs['d'] = self.d.to_value('kpc')
             meta_grp.attrs['N'] = self.N
             meta_grp.attrs['cluster'] = self.obs.cluster
 
-            perc_grp = file.create_group('percentiles')
+            # --------------------------------------------------------------
+            # Store profiles
+            # --------------------------------------------------------------
 
-            ds = perc_grp.create_dataset('rho_MS', data=self.rho_MS)
-            ds.attrs['unit'] = self.rho_MS.unit.to_string()
+            prof_grp = modelgrp.create_group('profiles')
 
-            ds = perc_grp.create_dataset('rho_tot', data=self.rho_tot)
-            ds.attrs['unit'] = self.rho_tot.unit.to_string()
+            profile_keys = (
+                'rho_MS', 'rho_tot', 'rho_BH', 'rho_WD', 'rho_NS',
+                'pm_T', 'pm_R', 'pm_tot', 'pm_ratio', 'LOS',
+                'Sigma_MS', 'Sigma_tot', 'Sigma_BH', 'Sigma_WD',
+                'Sigma_NS', 'cum_M_MS', 'cum_M_tot', 'cum_M_BH', 'cum_M_WD',
+                'cum_M_NS', 'frac_M_MS', 'frac_M_rem', 'numdens'
+            )
 
-            ds = perc_grp.create_dataset('rho_BH', data=self.rho_BH)
-            ds.attrs['unit'] = self.rho_BH.unit.to_string()
+            for key in profile_keys:
 
-            ds = perc_grp.create_dataset('rho_WD', data=self.rho_WD)
-            ds.attrs['unit'] = self.rho_WD.unit.to_string()
+                data = getattr(self, key)
+                ds = prof_grp.create_dataset(key, data=data)
+                ds.attrs['unit'] = data.unit.to_string()
 
-            ds = perc_grp.create_dataset('rho_NS', data=self.rho_NS)
-            ds.attrs['unit'] = self.rho_NS.unit.to_string()
+            # --------------------------------------------------------------
+            # Store quantities
+            # --------------------------------------------------------------
 
-            ds = perc_grp.create_dataset('pm_T', data=self.pm_T)
-            ds.attrs['unit'] = self.pm_T.unit.to_string()
+            quant_grp = modelgrp.create_group('quantities')
 
-            ds = perc_grp.create_dataset('pm_R', data=self.pm_R)
-            ds.attrs['unit'] = self.pm_R.unit.to_string()
-
-            ds = perc_grp.create_dataset('pm_tot', data=self.pm_tot)
-            ds.attrs['unit'] = self.pm_tot.unit.to_string()
-
-            ds = perc_grp.create_dataset('pm_ratio', data=self.pm_ratio)
-            ds.attrs['unit'] = self.pm_ratio.unit.to_string()
-
-            ds = perc_grp.create_dataset('LOS', data=self.LOS)
-            ds.attrs['unit'] = self.LOS.unit.to_string()
-
-            ds = perc_grp.create_dataset('Sigma_MS', data=self.Sigma_MS)
-            ds.attrs['unit'] = self.Sigma_MS.unit.to_string()
-
-            ds = perc_grp.create_dataset('Sigma_tot', data=self.Sigma_tot)
-            ds.attrs['unit'] = self.Sigma_tot.unit.to_string()
-
-            ds = perc_grp.create_dataset('Sigma_BH', data=self.Sigma_BH)
-            ds.attrs['unit'] = self.Sigma_BH.unit.to_string()
-
-            ds = perc_grp.create_dataset('Sigma_WD', data=self.Sigma_WD)
-            ds.attrs['unit'] = self.Sigma_WD.unit.to_string()
-
-            ds = perc_grp.create_dataset('Sigma_NS', data=self.Sigma_NS)
-            ds.attrs['unit'] = self.Sigma_NS.unit.to_string()
-
-            ds = perc_grp.create_dataset('cum_M_MS', data=self.cum_M_MS)
-            ds.attrs['unit'] = self.cum_M_MS.unit.to_string()
-
-            ds = perc_grp.create_dataset('cum_M_tot', data=self.cum_M_tot)
-            ds.attrs['unit'] = self.cum_M_tot.unit.to_string()
-
-            ds = perc_grp.create_dataset('cum_M_BH', data=self.cum_M_BH)
-            ds.attrs['unit'] = self.cum_M_BH.unit.to_string()
-
-            ds = perc_grp.create_dataset('cum_M_WD', data=self.cum_M_WD)
-            ds.attrs['unit'] = self.cum_M_WD.unit.to_string()
-
-            ds = perc_grp.create_dataset('cum_M_NS', data=self.cum_M_NS)
-            ds.attrs['unit'] = self.cum_M_NS.unit.to_string()
-
-            ds = perc_grp.create_dataset('frac_M_MS', data=self.frac_M_MS)
-            ds.attrs['unit'] = self.frac_M_MS.unit.to_string()
-
-            ds = perc_grp.create_dataset('frac_M_rem', data=self.frac_M_rem)
-            ds.attrs['unit'] = self.frac_M_rem.unit.to_string()
-
-            ds = perc_grp.create_dataset('numdens', data=self.numdens)
-            ds.attrs['unit'] = self.numdens.unit.to_string()
-
-            ds = perc_grp.create_dataset('mass_func', data=self.mass_func)
-
-            ds = perc_grp.create_dataset('BH_mass', data=self.BH_mass)
+            ds = quant_grp.create_dataset('BH_mass', data=self.BH_mass)
             ds.attrs['unit'] = self.BH_mass.unit.to_string()
 
-            ds = perc_grp.create_dataset('BH_num', data=self.BH_num)
+            ds = quant_grp.create_dataset('BH_num', data=self.BH_num)
             ds.attrs['unit'] = self.BH_num.unit.to_string()
+
+            # --------------------------------------------------------------
+            # Store mass function
+            # --------------------------------------------------------------
+
+            mf_grp = modelgrp.create_group('mass_func')
+
+            for PI in self.mass_func:
+
+                # remove the 'mass_function' tag, as the slash messes up h5py
+                PI_grp = mf_grp.create_group(PI.split('/')[-1])
+
+                for rind, rbin in enumerate(self.mass_func[PI]):
+                    # can't save the field object here, must compute in load
+
+                    slc_grp = PI_grp.create_group(str(rind))
+
+                    ds = slc_grp.create_dataset('r1', data=rbin['r1'])
+                    ds.attrs['unit'] = rbin['r1'].unit.to_string()
+
+                    ds = slc_grp.create_dataset('r2', data=rbin['r2'])
+                    ds.attrs['unit'] = rbin['r2'].unit.to_string()
+
+                    ds = slc_grp.create_dataset('mj', data=rbin['mj'])
+                    ds.attrs['unit'] = rbin['mj'].unit.to_string()
+
+                    slc_grp.create_dataset('colour', data=rbin['colour'])
+
+                    slc_grp.create_dataset('dNdm', data=rbin['dNdm'])
 
     @classmethod
     def load(cls, filename, validate=False):
@@ -2252,29 +2269,72 @@ class CIModelVisualizer(_ClusterVisualizer):
         validate: check while loading that all datasets are there, error if not
         '''
 
-        viz = cls()
-
         with h5py.File(filename, 'r') as file:
 
-            viz.obs = Observations(file['metadata'].attrs['cluster'])
-            viz.N = file['metadata'].attrs['N']
-            viz.s2 = file['metadata'].attrs['s2']
-            viz.F = file['metadata'].attrs['F']
-            viz.d = file['metadata'].attrs['d'] << u.kpc
-            viz.rlims = file['metadata'].attrs['rlims'] << u.pc
+            try:
+                modelgrp = file['model_output']
+            except KeyError as err:
+                mssg = f'No saved model outputs in {filename}'
+                raise RuntimeError(mssg) from err
 
-            viz.r = file['metadata']['r'][:] << u.pc
-            viz.mj = file['metadata']['mj'][:] << u.Msun
+            # init class
+            obs = Observations(modelgrp['metadata'].attrs['cluster'])
+            viz = cls(obs)
 
-            for key in file['percentiles']:
-                value = file['percentiles'][key][:]
+            # Get metadata
+            viz.N = modelgrp['metadata'].attrs['N']
+            viz.s2 = modelgrp['metadata'].attrs['s2']
+            viz.F = modelgrp['metadata'].attrs['F']
+            viz.d = modelgrp['metadata'].attrs['d'] << u.kpc
+            viz.rlims = modelgrp['metadata'].attrs['rlims'] << u.pc
 
-                try:
-                    value *= u.Unit(file['percentiles'][key].attrs['unit'])
-                except KeyError:
-                    pass
+            viz.r = modelgrp['metadata']['r'][:] << u.pc
+            viz.star_bin = modelgrp['metadata']['star_bin'][()]
+            viz.mj = modelgrp['metadata']['mj'][:] << u.Msun
 
-                setattr(viz, key, value)
+            # Get profile and quantity percentiles
+            for grp in ('profiles', 'quantities'):
+
+                for key in modelgrp[grp]:
+
+                    value = modelgrp[grp][key][:]
+
+                    try:
+                        value *= u.Unit(modelgrp[grp][key].attrs['unit'])
+                    except KeyError:
+                        pass
+
+                    setattr(viz, key, value)
+
+            # get mass func percentiles and generate the fields
+
+            viz.mass_func = {}
+
+            cen = (viz.obs.mdata['RA'], viz.obs.mdata['DEC'])
+
+            for PI in modelgrp['mass_func']:
+
+                # add the mass_function tag back in
+                viz.mass_func[f'mass_function/{PI}'] = []
+
+                field = mass.Field.from_dataset(viz.obs[f'mass_function/{PI}'],
+                                                cen=cen)
+
+                for rind in modelgrp['mass_func'][PI]:
+
+                    rbin = modelgrp['mass_func'][PI][rind]
+
+                    slc = {
+                        'r1': rbin['r1'][()] * u.Unit(rbin['r1'].attrs['unit']),
+                        'r2': rbin['r2'][()] * u.Unit(rbin['r2'].attrs['unit']),
+                        'mj': rbin['mj'][()] * u.Unit(rbin['mj'].attrs['unit']),
+                        'colour': rbin['colour'][:],
+                        'dNdm': rbin['dNdm'][:],
+                    }
+
+                    slc['field'] = field.slice_radially(slc['r1'], slc['r2'])
+
+                    viz.mass_func[f'mass_function/{PI}'].append(slc)
 
         return viz
 
@@ -2329,6 +2389,7 @@ class ObservationsVisualizer(_ClusterVisualizer):
 
     def __init__(self, observations, d=None):
         self.obs = observations
+        self.name = observations.cluster
 
         self.rh = observations.initials['rh'] << u.pc
 
@@ -2347,3 +2408,147 @@ class ObservationsVisualizer(_ClusterVisualizer):
         self.numdens = None
 
         self._init_massfunc(observations)
+
+
+# --------------------------------------------------------------------------
+# Collection of models
+# --------------------------------------------------------------------------
+
+
+class ModelCollection:
+    '''A collection of models, allowing for overplotting multiple models
+    with one another.
+    intimately tied to RunCollection, so we'll need "posterior distributions"
+    on some things like BH mass and num, etc
+    '''
+
+    def __str__(self):
+        return f"Collection of Models"
+
+    def __iter__(self):
+        '''return an iterator over the individual model vizs'''
+        return iter(self.visualizers)
+
+    def __init__(self, visualizers):
+        self.visualizers = visualizers
+
+        if all(isinstance(mv, ModelVisualizer) for mv in visualizers):
+            self._ci = False
+        elif all(isinstance(mv, CIModelVisualizer) for mv in visualizers):
+            self._ci = True
+        else:
+            mssg = ('Invalid modelviz type. All visualizers must be either '
+                    'ModelVisualizer or CIModelVisualizer')
+            raise TypeError(mssg)
+
+    @classmethod
+    def load(cls, filenames, validate=False):
+        '''Load the models stored in the results files'''
+
+        return cls([CIModelVisualizer.load(fn, validate=validate)
+                    for fn in filenames])
+
+    def save(self, filenames, overwrite=False):
+        '''save the models in the results files'''
+
+        for fn, mv in zip(filenames, self.visualizers):
+            mv.save(fn, overwrite=overwrite)
+
+    @classmethod
+    def from_models(cls, models, obs_list=None):
+        '''init from a simple list of already computed of models'''
+
+        if obs_list is None:
+            obs_list = [None, ] * len(models)
+
+        return cls([ModelVisualizer(m, o) for m, o in zip(models, obs_list)])
+
+    @classmethod
+    def from_chains(cls, chains, obs_list, ci=True, *args, **kwargs):
+        '''init from an array of parameter chains for each run
+
+        chains is a list of chains (N models long) with each chain being an
+        array of either (N params,) for a from_theta init or
+        (N samples, N params) for a from_chain init.
+        if ci is True, must be (N samples, N params, otherwise makes no sense)
+        '''
+
+        viz = CIModelVisualizer if ci else ModelVisualizer
+
+        if obs_list is None:
+            obs_list = [None, ] * chains.shape[0]
+
+        visualizers = []
+        for ch, obs in zip(chains, obs_list):
+
+            logging.info(f'Initializing {obs.cluster} for ModelCollection')
+
+            init = viz.from_chain if ch.ndim == 2 else viz.from_theta
+
+            visualizers.append(init(ch[...], obs, *args, **kwargs))
+
+        return cls(visualizers)
+
+    # ----------------------------------------------------------------------
+    # Iterative plots
+    # ----------------------------------------------------------------------
+
+    def iter_plots(self, plot_func, yield_model=False, *args, **kwargs):
+        '''calls each models's `plot_func`, yields a figure
+        all args, kwargs passed to plot func
+        '''
+        for mv in self.visualizers:
+            fig = getattr(mv, plot_func)(*args, **kwargs)
+
+            yield (fig, mv) if yield_model else fig
+
+    def save_plots(self, plot_func, fn_pattern=None, save_kw=None,
+                   *args, **kwargs):
+        '''
+        fn_pattern is format string which will be passed the kw "cluster" name
+            (i.e. `fn_pattern.format(cluster=run.name)`)
+            if None, will be ./{cluster}_{plot_func[5:]}
+            (Include the desired dir here too)
+        '''
+
+        if fn_pattern is None:
+            fn_pattern = f'./{{cluster}}_{plot_func[5:]}'
+
+        if save_kw is None:
+            save_kw = {}
+
+        for fig, mv in self.iter_plots(plot_func, True, *args, **kwargs):
+
+            save_kw['fname'] = fn_pattern.format(cluster=mv.name)
+
+            logging.info(f'Saving {mv} to {save_kw["fname"]}')
+
+            fig.savefig(**save_kw)
+
+    # ----------------------------------------------------------------------
+    # Collection Attributes
+    # ----------------------------------------------------------------------
+
+    @property
+    def BH_mass(self):
+
+        if not self._ci:
+            mssg = ("'ModelCollection' object has no attribute 'BH_mass'. "
+                    "Must be constructed with CIModelVisualizer objects.")
+            raise AttributeError(mssg)
+
+        return [mv.BH_mass for mv in self.visualizers]
+
+    @property
+    def BH_num(self):
+
+        if not self._ci:
+            mssg = ("'ModelCollection' object has no attribute 'BH_num'. "
+                    "Must be constructed with CIModelVisualizer objects.")
+            raise AttributeError(mssg)
+
+        return [mv.BH_num for mv in self.visualizers]
+
+    @property
+    def chi2(self):
+        return [mv.chi2 for mv in self.visualizers]

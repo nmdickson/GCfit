@@ -598,8 +598,8 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     # ----------------------------------------------------------------------
 
     if verbose:
-        from .. import visualize as viz
-        viz.MCMCVisualizer(backend_fn, observations).print_summary()
+        from .. import analysis
+        analysis.MCMCRun(backend_fn, observations).print_summary()
 
     logging.info("FINISHED")
 
@@ -942,7 +942,8 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
     # ----------------------------------------------------------------------
 
     if verbose:
-        from .. import visualize as viz
-        viz.NestedVisualizer(backend_fn, observations).print_summary()
+        from .. import analysis
+        # TODO would be nice to create/save CI here but may be trouble with mpi
+        analysis.NestedRun(backend_fn, observations).print_summary()
 
     logging.info("FINISHED")
