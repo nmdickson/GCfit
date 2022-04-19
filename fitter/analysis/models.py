@@ -474,8 +474,9 @@ class _ClusterVisualizer:
     # Plot extras
     # -----------------------------------------------------------------------
 
-    def _add_residuals(self, ax, ymodel, errorbars, *, show_chi2=True,
-                       xmodel=None, y_unit=None, res_ax=None, **kwargs):
+    def _add_residuals(self, ax, ymodel, errorbars, *, show_chi2=False,
+                       xmodel=None, y_unit=None, size="15%", res_ax=None,
+                       **kwargs):
         '''
         errorbars : a list of outputs from calls to plt.errorbars
         '''
@@ -507,7 +508,7 @@ class _ClusterVisualizer:
         if res_ax is None:
 
             divider = make_axes_locatable(ax)
-            res_ax = divider.append_axes('bottom', size="15%", pad=0, sharex=ax)
+            res_ax = divider.append_axes('bottom', size=size, pad=0, sharex=ax)
 
             res_ax.grid()
 
