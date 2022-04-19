@@ -1323,7 +1323,7 @@ class _ClusterVisualizer:
             ymedian = self._get_median(model_data[mass_bin, :, :])
 
             # TEMPORRAY FIX FOR RATIO
-            ymedian[np.isnan(ymedian)] = 1.0 << ymedian.unit
+            # ymedian[np.isnan(ymedian)] = 1.0 << ymedian.unit
 
             ymodel = util.QuantitySpline(xmodel, ymedian)(xdata).to(ydata.unit)
 
@@ -1333,7 +1333,7 @@ class _ClusterVisualizer:
 
             denom = (ydata.size - 13) if reduced else 1.
 
-            chi2 += np.sum(((ymodel - ydata) / yerr)**2) / denom
+            chi2 += np.nansum(((ymodel - ydata) / yerr)**2) / denom
 
         return chi2
 
