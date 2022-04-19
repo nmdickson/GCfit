@@ -1968,20 +1968,27 @@ class RunCollection(_RunAnalysis):
 
     @classmethod
     def from_dir(cls, directory, pattern='**/*hdf', strict=False,
-                 *args, **kwargs):
+                 *args, sampler='nested', **kwargs):
         '''init by finding all run files in a directory'''
 
         cls._src = f'{directory}/{pattern}'
 
         directory = pathlib.Path(directory)
 
+        if sampler == 'nested':
+            run_cls = NestedRun
+        elif sampler == 'mcmc':
+            run_cls = MCMCRun
+        else:
+            mssg = "Invalid sampler. Must be one of {'nested', 'mcmc'}"
+            raise ValueError(mssg)
+
         runs = []
 
         for fn in directory.glob(pattern):
 
             try:
-                # TODO support both nested and mcmc, somehow organically
-                run = NestedRun(fn)
+                run = run_cls(fn)
                 run.name = run.obs.cluster
 
             except KeyError as err:
@@ -2003,11 +2010,20 @@ class RunCollection(_RunAnalysis):
         return cls(runs, *args, **kwargs)
 
     @classmethod
-    def from_files(cls, file_list, strict=False, *args, **kwargs):
+    def from_files(cls, file_list, strict=False,
+                   *args, sampler='nested', **kwargs):
         '''init by finding all run files in a directory'''
 
         if not file_list:
             mssg = f"`file_list` must not be empty"
+            raise ValueError(mssg)
+
+        if sampler == 'nested':
+            run_cls = NestedRun
+        elif sampler == 'mcmc':
+            run_cls = MCMCRun
+        else:
+            mssg = "Invalid sampler. Must be one of {'nested', 'mcmc'}"
             raise ValueError(mssg)
 
         runs = []
@@ -2021,8 +2037,7 @@ class RunCollection(_RunAnalysis):
                 raise FileNotFoundError(mssg)
 
             try:
-                # TODO support both nested and mcmc, somehow organically
-                run = NestedRun(file)
+                run = run_cls(file)
                 run.name = run.obs.cluster
 
             except KeyError as err:
