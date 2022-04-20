@@ -474,9 +474,9 @@ class _ClusterVisualizer:
     # Plot extras
     # -----------------------------------------------------------------------
 
-    def _add_residuals(self, ax, ymodel, errorbars, *, show_chi2=False,
-                       xmodel=None, y_unit=None, size="15%", res_ax=None,
-                       **kwargs):
+    def _add_residuals(self, ax, ymodel, errorbars, percentage=False, *,
+                       show_chi2=False, xmodel=None, y_unit=None, size="15%",
+                       res_ax=None, **kwargs):
         '''
         errorbars : a list of outputs from calls to plt.errorbars
         '''
@@ -518,7 +518,12 @@ class _ClusterVisualizer:
         # Plot the model line, hopefully centred on zero
         # ------------------------------------------------------------------
 
-        self._plot_model(res_ax, ymodel - ymedian, color='k')
+        if percentage:
+            baseline = 100 * (ymodel - ymedian) / ymodel
+        else:
+            baseline = ymodel - ymedian
+
+        self._plot_model(res_ax, baseline, color='k')
 
         # ------------------------------------------------------------------
         # Get data from the plotted errorbars
@@ -557,25 +562,40 @@ class _ClusterVisualizer:
                 xerr_lines = yerr_lines = None
 
             if xerr_lines:
-                xerr = np.array([(np.diff(seg, axis=0) / 2)[..., -1]
-                                 for seg in xerr_lines.get_segments()]).T[0]
 
-                xerr <<= xdata.unit
+                xerr_segs = xerr_lines.get_segments() << xdata.unit
+
+                xerr = u.Quantity([np.abs(seg[:, 0] - xdata[i])
+                                   for i, seg in enumerate(xerr_segs)]).T
 
             if yerr_lines:
-                yerr = np.array([(np.diff(seg, axis=0) / 2)[..., -1]
-                                 for seg in yerr_lines.get_segments()]).T[0]
 
-                yerr <<= ydata.unit
+                yerr_segs = yerr_lines.get_segments() << ydata.unit
+
+                if percentage:
+                    yerr = 100 * np.array([
+                        np.abs(seg[:, 1] - ydata[i]) / ydata[i]
+                        for i, seg in enumerate(yerr_segs)
+                    ]).T
+
+                else:
+                    yerr = u.Quantity([np.abs(seg[:, 1] - ydata[i])
+                                       for i, seg in enumerate(yerr_segs)]).T
 
             # --------------------------------------------------------------
             # Compute the residuals and plot them
             # --------------------------------------------------------------
 
-            res = yspline(xdata) - ydata
+            if percentage:
+                res = 100 * (ydata - yspline(xdata)) / yspline(xdata)
+            else:
+                res = ydata - yspline(xdata)
 
             res_ax.errorbar(xdata, res, xerr=xerr, yerr=yerr,
                             color=clr, marker=mrk, linestyle='none')
+
+            if percentage:
+                res_ax.set_ylabel(r'% diff.')
 
             # --------------------------------------------------------------
             # Optionally compute chi-squared statistic
