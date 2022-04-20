@@ -357,7 +357,7 @@ class _ClusterVisualizer:
                            label=label, **kwargs)
 
     def _plot_profile(self, ax, ds_pattern, y_key, model_data, *,
-                      residuals=False, err_transform=None,
+                      y_unit=None, residuals=False, err_transform=None,
                       res_kwargs=None, **kwargs):
         '''figure out what needs to be plotted and call model/data plotters
         all **kwargs passed to both _plot_model and _plot_data
@@ -378,6 +378,8 @@ class _ClusterVisualizer:
 
         if res_kwargs is None:
             res_kwargs = {}
+
+        res_kwargs.setdefault('y_unit', y_unit)
 
         # ------------------------------------------------------------------
         # Determine the relevant datasets to the given pattern
@@ -417,7 +419,8 @@ class _ClusterVisualizer:
             # plot the data
             try:
                 line = self._plot_data(ax, dset, y_key, marker=mrk, color=clr,
-                                       err_transform=err_transform, **kwargs)
+                                       err_transform=err_transform,
+                                       y_unit=y_unit, **kwargs)
 
             except KeyError as err:
                 if strict:
@@ -461,7 +464,7 @@ class _ClusterVisualizer:
                 else:
                     clr = default_clr
 
-                self._plot_model(ax, ymodel, color=clr, **kwargs)
+                self._plot_model(ax, ymodel, color=clr, y_unit=y_unit, **kwargs)
 
                 if residuals:
                     res_ax = self._add_residuals(ax, ymodel, errbars,
