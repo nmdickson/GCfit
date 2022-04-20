@@ -467,8 +467,15 @@ class _ClusterVisualizer:
                     res_ax = self._add_residuals(ax, ymodel, errbars,
                                                  res_ax=res_ax, **res_kwargs)
 
+        # Adjust x limits
         if self.rlims is not None:
             ax.set_xlim(*self.rlims)
+
+        # label x axis
+        if residuals:
+            res_ax.set_xlabel(f'Distance from centre [{ax.get_xlabel()}]')
+        else:
+            ax.set_xlabel(f'Distance from centre [{ax.get_xlabel()}]')
 
     # -----------------------------------------------------------------------
     # Plot extras
