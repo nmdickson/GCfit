@@ -487,7 +487,7 @@ class _ClusterVisualizer:
 
     def _add_residuals(self, ax, ymodel, errorbars, percentage=False, *,
                        show_chi2=False, xmodel=None, y_unit=None, size="15%",
-                       res_ax=None, **kwargs):
+                       res_ax=None, divider_kwargs=None, **kwargs):
         '''
         errorbars : a list of outputs from calls to plt.errorbars
         '''
@@ -496,6 +496,9 @@ class _ClusterVisualizer:
         if not errorbars:
             mssg = "Cannot compute residuals, no observables data provided"
             raise ValueError(mssg)
+
+        if divider_kwargs is None:
+            divider_kwargs = {}
 
         # ------------------------------------------------------------------
         # Get model data and spline
@@ -524,6 +527,8 @@ class _ClusterVisualizer:
             res_ax.grid()
 
             res_ax.set_xscale(ax.get_xscale())
+
+            res_ax.spines['top'].set(**divider_kwargs)
 
         # ------------------------------------------------------------------
         # Plot the model line, hopefully centred on zero
@@ -615,6 +620,10 @@ class _ClusterVisualizer:
         if show_chi2:
             fake = plt.Line2D([], [], label=fr"$\chi^2={chi2:.2f}$")
             res_ax.legend(handles=[fake], handlelength=0, handletextpad=0)
+
+        # ------------------------------------------------------------------
+        # Label axes
+        # ------------------------------------------------------------------
 
         if percentage:
             res_ax.set_ylabel(r'Residuals')
