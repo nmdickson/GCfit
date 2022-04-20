@@ -7,6 +7,7 @@ import numpy as np
 import astropy.units as u
 import matplotlib.pyplot as plt
 import matplotlib.colors as mpl_clr
+import matplotlib.ticker as mpl_tick
 import astropy.visualization as astroviz
 
 import logging
@@ -616,7 +617,8 @@ class _ClusterVisualizer:
             res_ax.legend(handles=[fake], handlelength=0, handletextpad=0)
 
         if percentage:
-            res_ax.set_ylabel(r'Residuals [%]')
+            res_ax.set_ylabel(r'Residuals')
+            res_ax.yaxis.set_major_formatter(mpl_tick.PercentFormatter())
         else:
             res_ax.set_ylabel(f'Residuals [{res_ax.get_ylabel()}]')
 
