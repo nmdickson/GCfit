@@ -835,13 +835,13 @@ class _ClusterVisualizer:
         return fig
 
     @_support_units
-    def plot_all(self, fig=None, **kwargs):
+    def plot_all(self, fig=None, sharex=True, **kwargs):
         '''Plots all the primary profiles (numdens, LOS, PM)
         but *not* the mass function, pulsars, or any secondary profiles
         (cum-mass, remnants, etc)
         '''
 
-        fig, axes = self._setup_multi_artist(fig, (3, 2))
+        fig, axes = self._setup_multi_artist(fig, (3, 2), sharex=sharex)
 
         axes = axes.reshape((3, 2))
 
