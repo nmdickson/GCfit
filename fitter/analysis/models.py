@@ -604,9 +604,6 @@ class _ClusterVisualizer:
             res_ax.errorbar(xdata, res, xerr=xerr, yerr=yerr,
                             color=clr, marker=mrk, linestyle='none')
 
-            if percentage:
-                res_ax.set_ylabel(r'% diff.')
-
             # --------------------------------------------------------------
             # Optionally compute chi-squared statistic
             # --------------------------------------------------------------
@@ -617,6 +614,11 @@ class _ClusterVisualizer:
         if show_chi2:
             fake = plt.Line2D([], [], label=fr"$\chi^2={chi2:.2f}$")
             res_ax.legend(handles=[fake], handlelength=0, handletextpad=0)
+
+        if percentage:
+            res_ax.set_ylabel(r'Residuals [%]')
+        else:
+            res_ax.set_ylabel(f'Residuals [{res_ax.get_ylabel()}]')
 
         return res_ax
 
