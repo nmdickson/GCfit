@@ -829,6 +829,9 @@ class _ClusterVisualizer:
 
         axes = axes.reshape((3, 2))
 
+        res_kwargs = dict(size="25%", show_chi2=False, percentage=True)
+        kwargs.setdefault('res_kwargs', res_kwargs)
+
         self.plot_number_density(fig=fig, ax=axes[0, 0], **kwargs)
         self.plot_LOS(fig=fig, ax=axes[1, 0], **kwargs)
         self.plot_pm_ratio(fig=fig, ax=axes[2, 0], **kwargs)
