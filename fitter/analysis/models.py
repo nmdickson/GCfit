@@ -194,6 +194,33 @@ class _ClusterVisualizer:
 
         return fig, np.atleast_1d(axarr)
 
+    def _set_ylabel(self, ax, label, label_position='left', *,
+                    residual_ax=None):
+
+        tick_prms = dict(which='both',
+                         labelright=(label_position == 'right'),
+                         labelleft=(label_position == 'left'))
+
+        if label_position == 'top':
+
+            ax.set_ylabel('')
+            ax.set_title(label)
+
+        else:
+
+            ax.set_ylabel(f'{label} [{ax.get_ylabel()}]')
+
+            ax.yaxis.set_label_position(label_position)
+            ax.yaxis.set_tick_params(**tick_prms)
+
+            if residual_ax is not None:
+
+                residual_ax.yaxis.set_label_position(label_position)
+                residual_ax.yaxis.set_tick_params(**tick_prms)
+                residual_ax.yaxis.set_ticks_position('both')
+
+        ax.yaxis.set_ticks_position('both')
+
     # -----------------------------------------------------------------------
     # Unit support
     # -----------------------------------------------------------------------
@@ -437,6 +464,8 @@ class _ClusterVisualizer:
         # the model data, calling `_plot_model`
         # ------------------------------------------------------------------
 
+        res_ax = None
+
         if model_data is not None:
 
             # ensure that the data is (mass bin, intervals, r domain)
@@ -449,8 +478,6 @@ class _ClusterVisualizer:
                     masses = {self.star_bin: None}
                 else:
                     masses = {0: None}
-
-            res_ax = None
 
             for mbin, errbars in masses.items():
 
@@ -484,6 +511,8 @@ class _ClusterVisualizer:
 
         else:
             bottom_ax.set_xlabel('')
+
+        return ax, res_ax
 
     # -----------------------------------------------------------------------
     # Plot extras
@@ -669,7 +698,7 @@ class _ClusterVisualizer:
     @_support_units
     def plot_LOS(self, fig=None, ax=None,
                  show_obs=True, residuals=False, *,
-                 x_unit='pc', y_unit='km/s', label_as_title=True,
+                 x_unit='pc', y_unit='km/s', label_position='top',
                  res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -684,17 +713,14 @@ class _ClusterVisualizer:
             pattern = var = None
             strict = False
 
-        self._plot_profile(ax, pattern, var, self.LOS,
-                           strict=strict, residuals=residuals,
-                           x_unit=x_unit, y_unit=y_unit,
-                           res_kwargs=res_kwargs, **kwargs)
+        ax, res_ax = self._plot_profile(ax, pattern, var, self.LOS,
+                                        strict=strict, residuals=residuals,
+                                        x_unit=x_unit, y_unit=y_unit,
+                                        res_kwargs=res_kwargs, **kwargs)
 
         label = 'Line-of-Sight Velocity Dispersion'
-        if label_as_title:
-            ax.set_title(label)
-        else:
-            ax.set_ylabel(f'{label} [{ax.get_ylabel()}]')
 
+        self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
         ax.legend()
 
         return fig
@@ -702,7 +728,7 @@ class _ClusterVisualizer:
     @_support_units
     def plot_pm_tot(self, fig=None, ax=None,
                     show_obs=True, residuals=False, *,
-                    x_unit='pc', y_unit='mas/yr', label_as_title=True,
+                    x_unit='pc', y_unit='mas/yr', label_position='top',
                     res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -717,16 +743,14 @@ class _ClusterVisualizer:
             pattern = var = None
             strict = False
 
-        self._plot_profile(ax, pattern, var, self.pm_tot,
-                           strict=strict, residuals=residuals,
-                           x_unit=x_unit, y_unit=y_unit,
-                           res_kwargs=res_kwargs, **kwargs)
+        ax, res_ax = self._plot_profile(ax, pattern, var, self.pm_tot,
+                                        strict=strict, residuals=residuals,
+                                        x_unit=x_unit, y_unit=y_unit,
+                                        res_kwargs=res_kwargs, **kwargs)
 
         label = "Total Proper Motion Dispersion"
-        if label_as_title:
-            ax.set_title(label)
-        else:
-            ax.set_ylabel(f'{label} [{ax.get_ylabel()}]')
+
+        self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
 
         ax.legend()
 
@@ -735,7 +759,7 @@ class _ClusterVisualizer:
     @_support_units
     def plot_pm_ratio(self, fig=None, ax=None,
                       show_obs=True, residuals=False, *,
-                      x_unit='pc', label_as_title=True,
+                      x_unit='pc', label_position='top',
                       res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -750,16 +774,14 @@ class _ClusterVisualizer:
             pattern = var = None
             strict = False
 
-        self._plot_profile(ax, pattern, var, self.pm_ratio,
-                           strict=strict, residuals=residuals,
-                           x_unit=x_unit,
-                           res_kwargs=res_kwargs, **kwargs)
+        ax, res_ax = self._plot_profile(ax, pattern, var, self.pm_ratio,
+                                        strict=strict, residuals=residuals,
+                                        x_unit=x_unit,
+                                        res_kwargs=res_kwargs, **kwargs)
 
         label = "Proper Motion Anisotropy"
-        if label_as_title:
-            ax.set_title(label)
-        else:
-            ax.set_ylabel(label)
+
+        self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
 
         ax.legend()
 
@@ -768,7 +790,7 @@ class _ClusterVisualizer:
     @_support_units
     def plot_pm_T(self, fig=None, ax=None,
                   show_obs=True, residuals=False, *,
-                  x_unit='pc', y_unit='mas/yr', label_as_title=True,
+                  x_unit='pc', y_unit='mas/yr', label_position='top',
                   res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -783,16 +805,14 @@ class _ClusterVisualizer:
             pattern = var = None
             strict = False
 
-        self._plot_profile(ax, pattern, var, self.pm_T,
-                           strict=strict, residuals=residuals,
-                           x_unit=x_unit, y_unit=y_unit,
-                           res_kwargs=res_kwargs, **kwargs)
+        ax, res_ax = self._plot_profile(ax, pattern, var, self.pm_T,
+                                        strict=strict, residuals=residuals,
+                                        x_unit=x_unit, y_unit=y_unit,
+                                        res_kwargs=res_kwargs, **kwargs)
 
         label = "Tangential Proper Motion Dispersion"
-        if label_as_title:
-            ax.set_title(label)
-        else:
-            ax.set_ylabel(f'{label} [{ax.get_ylabel()}]')
+
+        self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
 
         ax.legend()
 
@@ -801,7 +821,7 @@ class _ClusterVisualizer:
     @_support_units
     def plot_pm_R(self, fig=None, ax=None,
                   show_obs=True, residuals=False, *,
-                  x_unit='pc', y_unit='mas/yr', label_as_title=True,
+                  x_unit='pc', y_unit='mas/yr', label_position='top',
                   res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -816,18 +836,14 @@ class _ClusterVisualizer:
             pattern = var = None
             strict = False
 
-        # pm_R = self.pm_R.to('mas/yr')
-
-        self._plot_profile(ax, pattern, var, self.pm_R,
-                           strict=strict, residuals=residuals,
-                           x_unit=x_unit, y_unit=y_unit,
-                           res_kwargs=res_kwargs, **kwargs)
+        ax, res_ax = self._plot_profile(ax, pattern, var, self.pm_R,
+                                        strict=strict, residuals=residuals,
+                                        x_unit=x_unit, y_unit=y_unit,
+                                        res_kwargs=res_kwargs, **kwargs)
 
         label = "Radial Proper Motion Dispersion"
-        if label_as_title:
-            ax.set_title(label)
-        else:
-            ax.set_ylabel(f'{label} [{ax.get_ylabel()}]')
+
+        self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
 
         ax.legend()
 
@@ -836,7 +852,7 @@ class _ClusterVisualizer:
     @_support_units
     def plot_number_density(self, fig=None, ax=None,
                             show_obs=True, residuals=False, *,
-                            x_unit='pc', label_as_title=True,
+                            x_unit='pc', label_position='top',
                             res_kwargs=None, **kwargs):
 
         def quad_nuisance(err):
@@ -855,19 +871,17 @@ class _ClusterVisualizer:
             pattern = var = None
             strict = False
 
-        self._plot_profile(ax, pattern, var, self.numdens,
-                           strict=strict, residuals=residuals,
-                           x_unit=x_unit,
-                           res_kwargs=res_kwargs, **kwargs)
+        ax, res_ax = self._plot_profile(ax, pattern, var, self.numdens,
+                                        strict=strict, residuals=residuals,
+                                        x_unit=x_unit,
+                                        res_kwargs=res_kwargs, **kwargs)
 
         # bit arbitrary, but probably fine for the most part
         ax.set_ylim(bottom=1e-4)
 
         label = 'Number Density'
-        if label_as_title:
-            ax.set_title(label)
-        else:
-            ax.set_ylabel(f'{label} [{ax.get_ylabel()}]')
+
+        self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
 
         ax.legend()
 
