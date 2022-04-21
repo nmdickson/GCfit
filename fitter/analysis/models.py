@@ -225,7 +225,7 @@ class _ClusterVisualizer:
         ax.yaxis.set_ticks_position('both')
 
     def _set_xlabel(self, ax, label='Distance from centre', *,
-                    residual_ax=None):
+                    residual_ax=None, remove_all=False):
 
         bottom_ax = ax if residual_ax is None else residual_ax
 
@@ -238,6 +238,11 @@ class _ClusterVisualizer:
         if residual_ax is not None:
             ax.set_xlabel('')
             ax.xaxis.set_tick_params(bottom=False, labelbottom=False)
+
+        # if desired, simply remove everything
+        if remove_all:
+            bottom_ax.set_xlabel('')
+            bottom_ax.xaxis.set_tick_params(bottom=False, labelbottom=False)
 
     # -----------------------------------------------------------------------
     # Unit support
@@ -705,7 +710,8 @@ class _ClusterVisualizer:
     @_support_units
     def plot_LOS(self, fig=None, ax=None,
                  show_obs=True, residuals=False, *,
-                 x_unit='pc', y_unit='km/s', label_position='top',
+                 x_unit='pc', y_unit='km/s',
+                 label_position='top', blank_xaxis=False,
                  res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -728,7 +734,7 @@ class _ClusterVisualizer:
         label = 'Line-of-Sight Velocity Dispersion'
 
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
-        self._set_xlabel(ax, residual_ax=res_ax)
+        self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
 
         ax.legend()
 
@@ -737,7 +743,8 @@ class _ClusterVisualizer:
     @_support_units
     def plot_pm_tot(self, fig=None, ax=None,
                     show_obs=True, residuals=False, *,
-                    x_unit='pc', y_unit='mas/yr', label_position='top',
+                    x_unit='pc', y_unit='mas/yr',
+                    label_position='top', blank_xaxis=False,
                     res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -760,7 +767,7 @@ class _ClusterVisualizer:
         label = "Total Proper Motion Dispersion"
 
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
-        self._set_xlabel(ax, residual_ax=res_ax)
+        self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
 
         ax.legend()
 
@@ -769,7 +776,7 @@ class _ClusterVisualizer:
     @_support_units
     def plot_pm_ratio(self, fig=None, ax=None,
                       show_obs=True, residuals=False, *,
-                      x_unit='pc', label_position='top',
+                      x_unit='pc', label_position='top', blank_xaxis=False,
                       res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -792,7 +799,7 @@ class _ClusterVisualizer:
         label = "Proper Motion Anisotropy"
 
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
-        self._set_xlabel(ax, residual_ax=res_ax)
+        self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
 
         ax.legend()
 
@@ -801,7 +808,8 @@ class _ClusterVisualizer:
     @_support_units
     def plot_pm_T(self, fig=None, ax=None,
                   show_obs=True, residuals=False, *,
-                  x_unit='pc', y_unit='mas/yr', label_position='top',
+                  x_unit='pc', y_unit='mas/yr',
+                  label_position='top', blank_xaxis=False,
                   res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -824,7 +832,7 @@ class _ClusterVisualizer:
         label = "Tangential Proper Motion Dispersion"
 
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
-        self._set_xlabel(ax, residual_ax=res_ax)
+        self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
 
         ax.legend()
 
@@ -833,7 +841,8 @@ class _ClusterVisualizer:
     @_support_units
     def plot_pm_R(self, fig=None, ax=None,
                   show_obs=True, residuals=False, *,
-                  x_unit='pc', y_unit='mas/yr', label_position='top',
+                  x_unit='pc', y_unit='mas/yr',
+                  label_position='top', blank_xaxis=False,
                   res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -856,7 +865,7 @@ class _ClusterVisualizer:
         label = "Radial Proper Motion Dispersion"
 
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
-        self._set_xlabel(ax, residual_ax=res_ax)
+        self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
 
         ax.legend()
 
@@ -866,7 +875,7 @@ class _ClusterVisualizer:
     def plot_number_density(self, fig=None, ax=None,
                             show_obs=True, residuals=False, *,
                             x_unit='pc', label_position='top',
-                            res_kwargs=None, **kwargs):
+                            blank_xaxis=False, res_kwargs=None, **kwargs):
 
         def quad_nuisance(err):
             return np.sqrt(err**2 + (self.s2 << err.unit**2))
@@ -895,7 +904,7 @@ class _ClusterVisualizer:
         label = 'Number Density'
 
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
-        self._set_xlabel(ax, residual_ax=res_ax)
+        self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
 
         ax.legend()
 
@@ -915,15 +924,22 @@ class _ClusterVisualizer:
         res_kwargs = dict(size="25%", show_chi2=False, percentage=True)
         kwargs.setdefault('res_kwargs', res_kwargs)
 
-        kwargs.setdefault('label_as_title', False)
+        # left plots
+        self.plot_number_density(fig=fig, ax=axes[0, 0], label_position='left',
+                                 blank_xaxis=True, **kwargs)
+        self.plot_LOS(fig=fig, ax=axes[1, 0], label_position='left',
+                      blank_xaxis=True, **kwargs)
 
-        self.plot_number_density(fig=fig, ax=axes[0, 0], labels=False, **kwargs)
-        self.plot_LOS(fig=fig, ax=axes[1, 0], labels=False, **kwargs)
-        self.plot_pm_ratio(fig=fig, ax=axes[2, 0], labels=True, **kwargs)
+        self.plot_pm_ratio(fig=fig, ax=axes[2, 0], label_position='left',
+                           **kwargs)
 
-        self.plot_pm_tot(fig=fig, ax=axes[0, 1], labels=False, **kwargs)
-        self.plot_pm_T(fig=fig, ax=axes[1, 1], labels=False, **kwargs)
-        self.plot_pm_R(fig=fig, ax=axes[2, 1], labels=True, **kwargs)
+        # right plots
+        self.plot_pm_tot(fig=fig, ax=axes[0, 1], label_position='right',
+                         blank_xaxis=True, **kwargs)
+        self.plot_pm_T(fig=fig, ax=axes[1, 1], label_position='right',
+                       blank_xaxis=True, **kwargs)
+        self.plot_pm_R(fig=fig, ax=axes[2, 1], label_position='right',
+                       **kwargs)
 
         return fig
 
