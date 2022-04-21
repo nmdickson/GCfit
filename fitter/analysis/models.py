@@ -208,7 +208,10 @@ class _ClusterVisualizer:
 
         else:
 
-            ax.set_ylabel(f'{label} [{ax.get_ylabel()}]')
+            if (unit_label := ax.get_ylabel()) and unit_label != r'$\mathrm{}$':
+                label += f' [{unit_label}]'
+
+            ax.set_ylabel(label)
 
             ax.yaxis.set_label_position(label_position)
             ax.yaxis.set_tick_params(**tick_prms)
