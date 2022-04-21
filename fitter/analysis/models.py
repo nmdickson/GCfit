@@ -941,6 +941,11 @@ class _ClusterVisualizer:
         self.plot_pm_R(fig=fig, ax=axes[2, 1], label_position='right',
                        **kwargs)
 
+        # brute force clear out any "residuals" labels
+        for ax in fig.axes:
+            if 'Residual' in ax.get_ylabel():
+                ax.set_ylabel('')
+
         return fig
 
     # ----------------------------------------------------------------------
