@@ -221,6 +221,21 @@ class _ClusterVisualizer:
 
         ax.yaxis.set_ticks_position('both')
 
+    def _set_xlabel(self, ax, label='Distance from centre', *,
+                    residual_ax=None):
+
+        bottom_ax = ax if residual_ax is None else residual_ax
+
+        if unit_label := bottom_ax.get_xlabel():
+            label += f' [{unit_label}]'
+
+        bottom_ax.set_xlabel(label)
+
+        # if has residual ax, remove the ticks/labels on the top ax
+        if residual_ax is not None:
+            ax.set_xlabel('')
+            ax.xaxis.set_tick_params(bottom=False, labelbottom=False)
+
     # -----------------------------------------------------------------------
     # Unit support
     # -----------------------------------------------------------------------
@@ -386,7 +401,7 @@ class _ClusterVisualizer:
 
     def _plot_profile(self, ax, ds_pattern, y_key, model_data, *,
                       y_unit=None, residuals=False, err_transform=None,
-                      res_kwargs=None, labels=True, **kwargs):
+                      res_kwargs=None, **kwargs):
         '''figure out what needs to be plotted and call model/data plotters
         all **kwargs passed to both _plot_model and _plot_data
         model_data dimensions *must* be (mass bins, intervals, r axis)
@@ -500,17 +515,6 @@ class _ClusterVisualizer:
         # Adjust x limits
         if self.rlims is not None:
             ax.set_xlim(*self.rlims)
-
-        # Optionally label x axis
-
-        bottom_ax = res_ax if residuals else ax
-
-        if labels:
-            unit_label = res_ax.get_xlabel() if residuals else ax.get_xlabel()
-            bottom_ax.set_xlabel(f'Distance from centre [{unit_label}]')
-
-        else:
-            bottom_ax.set_xlabel('')
 
         return ax, res_ax
 
@@ -721,6 +725,8 @@ class _ClusterVisualizer:
         label = 'Line-of-Sight Velocity Dispersion'
 
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
+        self._set_xlabel(ax, residual_ax=res_ax)
+
         ax.legend()
 
         return fig
@@ -751,6 +757,7 @@ class _ClusterVisualizer:
         label = "Total Proper Motion Dispersion"
 
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
+        self._set_xlabel(ax, residual_ax=res_ax)
 
         ax.legend()
 
@@ -782,6 +789,7 @@ class _ClusterVisualizer:
         label = "Proper Motion Anisotropy"
 
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
+        self._set_xlabel(ax, residual_ax=res_ax)
 
         ax.legend()
 
@@ -813,6 +821,7 @@ class _ClusterVisualizer:
         label = "Tangential Proper Motion Dispersion"
 
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
+        self._set_xlabel(ax, residual_ax=res_ax)
 
         ax.legend()
 
@@ -844,6 +853,7 @@ class _ClusterVisualizer:
         label = "Radial Proper Motion Dispersion"
 
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
+        self._set_xlabel(ax, residual_ax=res_ax)
 
         ax.legend()
 
@@ -882,6 +892,7 @@ class _ClusterVisualizer:
         label = 'Number Density'
 
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
+        self._set_xlabel(ax, residual_ax=res_ax)
 
         ax.legend()
 
