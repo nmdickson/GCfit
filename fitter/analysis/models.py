@@ -658,11 +658,10 @@ class _ClusterVisualizer:
     @_support_units
     def plot_LOS(self, fig=None, ax=None,
                  show_obs=True, residuals=False, *,
-                 x_unit='pc', y_unit='km/s', res_kwargs=None, **kwargs):
+                 x_unit='pc', y_unit='km/s', label_as_title=True,
+                 res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
-
-        ax.set_title('Line-of-Sight Velocity Dispersion')
 
         ax.set_xscale("log")
 
@@ -679,6 +678,12 @@ class _ClusterVisualizer:
                            x_unit=x_unit, y_unit=y_unit,
                            res_kwargs=res_kwargs, **kwargs)
 
+        label = 'Line-of-Sight Velocity Dispersion'
+        if label_as_title:
+            ax.set_title(label)
+        else:
+            ax.set_ylabel(f'{label} [{ax.get_ylabel()}]')
+
         ax.legend()
 
         return fig
@@ -686,11 +691,10 @@ class _ClusterVisualizer:
     @_support_units
     def plot_pm_tot(self, fig=None, ax=None,
                     show_obs=True, residuals=False, *,
-                    x_unit='pc', y_unit='mas/yr', res_kwargs=None, **kwargs):
+                    x_unit='pc', y_unit='mas/yr', label_as_title=True,
+                    res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
-
-        ax.set_title("Total Proper Motion")
 
         ax.set_xscale("log")
 
@@ -707,6 +711,12 @@ class _ClusterVisualizer:
                            x_unit=x_unit, y_unit=y_unit,
                            res_kwargs=res_kwargs, **kwargs)
 
+        label = "Total Proper Motion Dispersion"
+        if label_as_title:
+            ax.set_title(label)
+        else:
+            ax.set_ylabel(f'{label} [{ax.get_ylabel()}]')
+
         ax.legend()
 
         return fig
@@ -714,11 +724,10 @@ class _ClusterVisualizer:
     @_support_units
     def plot_pm_ratio(self, fig=None, ax=None,
                       show_obs=True, residuals=False, *,
-                      x_unit='pc', res_kwargs=None, **kwargs):
+                      x_unit='pc', label_as_title=True,
+                      res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
-
-        ax.set_title("Proper Motion Anisotropy")
 
         ax.set_xscale("log")
 
@@ -735,6 +744,12 @@ class _ClusterVisualizer:
                            x_unit=x_unit,
                            res_kwargs=res_kwargs, **kwargs)
 
+        label = "Proper Motion Anisotropy"
+        if label_as_title:
+            ax.set_title(label)
+        else:
+            ax.set_ylabel(label)
+
         ax.legend()
 
         return fig
@@ -742,11 +757,10 @@ class _ClusterVisualizer:
     @_support_units
     def plot_pm_T(self, fig=None, ax=None,
                   show_obs=True, residuals=False, *,
-                  x_unit='pc', y_unit='mas/yr', res_kwargs=None, **kwargs):
+                  x_unit='pc', y_unit='mas/yr', label_as_title=True,
+                  res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
-
-        ax.set_title("Tangential Proper Motion")
 
         ax.set_xscale("log")
 
@@ -758,12 +772,16 @@ class _ClusterVisualizer:
             pattern = var = None
             strict = False
 
-        # pm_T = self.pm_T.to('mas/yr')
-
         self._plot_profile(ax, pattern, var, self.pm_T,
                            strict=strict, residuals=residuals,
                            x_unit=x_unit, y_unit=y_unit,
                            res_kwargs=res_kwargs, **kwargs)
+
+        label = "Tangential Proper Motion Dispersion"
+        if label_as_title:
+            ax.set_title(label)
+        else:
+            ax.set_ylabel(f'{label} [{ax.get_ylabel()}]')
 
         ax.legend()
 
@@ -772,11 +790,10 @@ class _ClusterVisualizer:
     @_support_units
     def plot_pm_R(self, fig=None, ax=None,
                   show_obs=True, residuals=False, *,
-                  x_unit='pc', y_unit='mas/yr', res_kwargs=None, **kwargs):
+                  x_unit='pc', y_unit='mas/yr', label_as_title=True,
+                  res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
-
-        ax.set_title("Radial Proper Motion")
 
         ax.set_xscale("log")
 
@@ -795,6 +812,12 @@ class _ClusterVisualizer:
                            x_unit=x_unit, y_unit=y_unit,
                            res_kwargs=res_kwargs, **kwargs)
 
+        label = "Radial Proper Motion Dispersion"
+        if label_as_title:
+            ax.set_title(label)
+        else:
+            ax.set_ylabel(f'{label} [{ax.get_ylabel()}]')
+
         ax.legend()
 
         return fig
@@ -802,14 +825,13 @@ class _ClusterVisualizer:
     @_support_units
     def plot_number_density(self, fig=None, ax=None,
                             show_obs=True, residuals=False, *,
-                            x_unit='pc', res_kwargs=None, **kwargs):
+                            x_unit='pc', label_as_title=True,
+                            res_kwargs=None, **kwargs):
 
         def quad_nuisance(err):
             return np.sqrt(err**2 + (self.s2 << err.unit**2))
 
         fig, ax = self._setup_artist(fig, ax)
-
-        ax.set_title('Number Density')
 
         ax.loglog()
 
@@ -830,6 +852,12 @@ class _ClusterVisualizer:
         # bit arbitrary, but probably fine for the most part
         ax.set_ylim(bottom=1e-4)
 
+        label = 'Number Density'
+        if label_as_title:
+            ax.set_title(label)
+        else:
+            ax.set_ylabel(f'{label} [{ax.get_ylabel()}]')
+
         ax.legend()
 
         return fig
@@ -847,6 +875,8 @@ class _ClusterVisualizer:
 
         res_kwargs = dict(size="25%", show_chi2=False, percentage=True)
         kwargs.setdefault('res_kwargs', res_kwargs)
+
+        kwargs.setdefault('label_as_title', False)
 
         self.plot_number_density(fig=fig, ax=axes[0, 0], **kwargs)
         self.plot_LOS(fig=fig, ax=axes[1, 0], **kwargs)
