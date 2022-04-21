@@ -1207,7 +1207,7 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_density(self, fig=None, ax=None, kind='all', *,
-                     x_unit='pc'):
+                     x_unit='pc', label_position='left'):
 
         if kind == 'all':
             kind = {'MS', 'tot', 'BH', 'WD', 'NS'}
@@ -1253,10 +1253,9 @@ class _ClusterVisualizer:
         ax.set_yscale("log")
         ax.set_xscale("log")
 
-        ax.set_ylabel(rf'Surface Density $[M_\odot / pc^3]$')
-        # ax.set_xlabel('arcsec')
+        self._set_ylabel(ax, 'Mass Density', label_position)
+        self._set_xlabel(ax)
 
-        # ax.legend()
         fig.legend(loc='upper center', ncol=6,
                    bbox_to_anchor=(0.5, 1.), fancybox=True)
 
@@ -1264,7 +1263,7 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_surface_density(self, fig=None, ax=None, kind='all', *,
-                             x_unit='pc'):
+                             x_unit='pc', label_position='left'):
 
         if kind == 'all':
             kind = {'MS', 'tot', 'BH', 'WD', 'NS'}
@@ -1310,10 +1309,9 @@ class _ClusterVisualizer:
         ax.set_yscale("log")
         ax.set_xscale("log")
 
-        ax.set_ylabel(rf'Surface Density $[M_\odot / pc^2]$')
-        # ax.set_xlabel('arcsec')
+        self._set_ylabel(ax, 'Surface Mass Density', label_position)
+        self._set_xlabel(ax)
 
-        # ax.legend()
         fig.legend(loc='upper center', ncol=6,
                    bbox_to_anchor=(0.5, 1.), fancybox=True)
 
@@ -1321,7 +1319,7 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_cumulative_mass(self, fig=None, ax=None, kind='all', *,
-                             x_unit='pc'):
+                             x_unit='pc', label_position='left'):
 
         if kind == 'all':
             kind = {'MS', 'tot', 'BH', 'WD', 'NS'}
@@ -1361,18 +1359,17 @@ class _ClusterVisualizer:
         ax.set_yscale("log")
         ax.set_xscale("log")
 
-        # ax.set_ylabel(rf'$M_{{enc}} ({self.cum_M_tot.unit})$')
-        ax.set_ylabel(rf'$M_{{enc}}$ $[M_\odot]$')
-        # ax.set_xlabel('arcsec')
+        self._set_ylabel(ax, rf'$M_{{enc}}$', label_position)
+        self._set_xlabel(ax)
 
-        # ax.legend()
         fig.legend(loc='upper center', ncol=5,
                    bbox_to_anchor=(0.5, 1.), fancybox=True)
 
         return fig
 
     @_support_units
-    def plot_remnant_fraction(self, fig=None, ax=None, *, x_unit='pc'):
+    def plot_remnant_fraction(self, fig=None, ax=None, *,
+                              x_unit='pc', label_position='left'):
         '''Fraction of mass in remnants vs MS stars, like in baumgardt'''
 
         fig, ax = self._setup_artist(fig, ax)
@@ -1386,7 +1383,9 @@ class _ClusterVisualizer:
         self._plot_profile(ax, None, None, self.frac_M_rem,
                            x_unit=x_unit, label="Remnants")
 
-        ax.set_ylabel(r"Mass fraction $M_{MS}/M_{tot}$, $M_{remn.}/M_{tot}$")
+        label = r"Mass fraction $M_{MS}/M_{tot}$, $M_{remn.}/M_{tot}$"
+        self._set_ylabel(ax, label, label_position)
+        self._set_xlabel(ax)
 
         ax.set_ylim(0.0, 1.0)
 
