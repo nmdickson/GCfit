@@ -634,6 +634,14 @@ class _ClusterVisualizer:
         else:
             res_ax.set_ylabel(f'Residuals [{res_ax.get_ylabel()}]')
 
+        # ------------------------------------------------------------------
+        # Set bounds at 100% or less
+        # ------------------------------------------------------------------
+
+        if percentage:
+            ylim = res_ax.get_ylim()
+            res_ax.set_ylim(max(ylim[0], -100), min(ylim[1], 100))
+
         return res_ax
 
     def _add_hyperparam(self, ax, ymodel, xdata, ydata, yerr):
