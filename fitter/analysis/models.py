@@ -731,7 +731,7 @@ class _ClusterVisualizer:
                                         x_unit=x_unit, y_unit=y_unit,
                                         res_kwargs=res_kwargs, **kwargs)
 
-        label = 'Line-of-Sight Velocity Dispersion'
+        label = 'LOS Velocity Dispersion'
 
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
         self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
@@ -764,7 +764,7 @@ class _ClusterVisualizer:
                                         x_unit=x_unit, y_unit=y_unit,
                                         res_kwargs=res_kwargs, **kwargs)
 
-        label = "Total Proper Motion Dispersion"
+        label = "Total PM Dispersion"
 
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
         self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
@@ -796,7 +796,7 @@ class _ClusterVisualizer:
                                         x_unit=x_unit,
                                         res_kwargs=res_kwargs, **kwargs)
 
-        label = "Proper Motion Anisotropy"
+        label = "PM Anisotropy"
 
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
         self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
@@ -829,7 +829,7 @@ class _ClusterVisualizer:
                                         x_unit=x_unit, y_unit=y_unit,
                                         res_kwargs=res_kwargs, **kwargs)
 
-        label = "Tangential Proper Motion Dispersion"
+        label = "Tangential PM Dispersion"
 
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
         self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
@@ -862,7 +862,7 @@ class _ClusterVisualizer:
                                         x_unit=x_unit, y_unit=y_unit,
                                         res_kwargs=res_kwargs, **kwargs)
 
-        label = "Radial Proper Motion Dispersion"
+        label = "Radial PM Dispersion"
 
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
         self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
@@ -899,7 +899,7 @@ class _ClusterVisualizer:
                                         res_kwargs=res_kwargs, **kwargs)
 
         # bit arbitrary, but probably fine for the most part
-        ax.set_ylim(bottom=1e-4)
+        ax.set_ylim(bottom=0.5e-4)
 
         label = 'Number Density'
 
@@ -916,6 +916,8 @@ class _ClusterVisualizer:
         but *not* the mass function, pulsars, or any secondary profiles
         (cum-mass, remnants, etc)
         '''
+        # TODO working with residuals here is hard because constrianed_layout
+        #   doesn't seem super aware of them
 
         fig, axes = self._setup_multi_artist(fig, (3, 2), sharex=sharex)
 
