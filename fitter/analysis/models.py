@@ -492,9 +492,8 @@ class _ClusterVisualizer:
         '''
         from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-        if not errorbars:
-            mssg = "Cannot compute residuals, no observables data provided"
-            raise ValueError(mssg)
+        if errorbars is None:
+            errorbars = []
 
         if divider_kwargs is None:
             divider_kwargs = {}
