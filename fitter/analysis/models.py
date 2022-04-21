@@ -380,8 +380,6 @@ class _ClusterVisualizer:
         if res_kwargs is None:
             res_kwargs = {}
 
-        res_kwargs.setdefault('y_unit', y_unit)
-
         # ------------------------------------------------------------------
         # Determine the relevant datasets to the given pattern
         # ------------------------------------------------------------------
@@ -469,7 +467,8 @@ class _ClusterVisualizer:
 
                 if residuals:
                     res_ax = self._add_residuals(ax, ymodel, errbars,
-                                                 res_ax=res_ax, **res_kwargs)
+                                                 res_ax=res_ax, y_unit=y_unit,
+                                                 **res_kwargs)
 
         # Adjust x limits
         if self.rlims is not None:
