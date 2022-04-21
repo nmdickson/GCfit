@@ -359,7 +359,7 @@ class _ClusterVisualizer:
 
     def _plot_profile(self, ax, ds_pattern, y_key, model_data, *,
                       y_unit=None, residuals=False, err_transform=None,
-                      res_kwargs=None, **kwargs):
+                      res_kwargs=None, labels=True, **kwargs):
         '''figure out what needs to be plotted and call model/data plotters
         all **kwargs passed to both _plot_model and _plot_data
         model_data dimensions *must* be (mass bins, intervals, r axis)
@@ -474,11 +474,16 @@ class _ClusterVisualizer:
         if self.rlims is not None:
             ax.set_xlim(*self.rlims)
 
-        # label x axis
-        if residuals:
-            res_ax.set_xlabel(f'Distance from centre [{res_ax.get_xlabel()}]')
+        # Optionally label x axis
+
+        bottom_ax = res_ax if residuals else ax
+
+        if labels:
+            unit_label = res_ax.get_xlabel() if residuals else ax.get_xlabel()
+            bottom_ax.set_xlabel(f'Distance from centre [{unit_label}]')
+
         else:
-            ax.set_xlabel(f'Distance from centre [{ax.get_xlabel()}]')
+            bottom_ax.set_xlabel('')
 
     # -----------------------------------------------------------------------
     # Plot extras
@@ -486,7 +491,7 @@ class _ClusterVisualizer:
 
     def _add_residuals(self, ax, ymodel, errorbars, percentage=False, *,
                        show_chi2=False, xmodel=None, y_unit=None, size="15%",
-                       res_ax=None, divider_kwargs=None, **kwargs):
+                       res_ax=None, divider_kwargs=None):
         '''
         errorbars : a list of outputs from calls to plt.errorbars
         '''
@@ -620,7 +625,7 @@ class _ClusterVisualizer:
             res_ax.legend(handles=[fake], handlelength=0, handletextpad=0)
 
         # ------------------------------------------------------------------
-        # Label axes
+        # Label y-axes
         # ------------------------------------------------------------------
 
         if percentage:
@@ -876,16 +881,13 @@ class _ClusterVisualizer:
 
         kwargs.setdefault('label_as_title', False)
 
-        self.plot_number_density(fig=fig, ax=axes[0, 0], **kwargs)
-        self.plot_LOS(fig=fig, ax=axes[1, 0], **kwargs)
-        self.plot_pm_ratio(fig=fig, ax=axes[2, 0], **kwargs)
+        self.plot_number_density(fig=fig, ax=axes[0, 0], labels=False, **kwargs)
+        self.plot_LOS(fig=fig, ax=axes[1, 0], labels=False, **kwargs)
+        self.plot_pm_ratio(fig=fig, ax=axes[2, 0], labels=True, **kwargs)
 
-        self.plot_pm_tot(fig=fig, ax=axes[0, 1], **kwargs)
-        self.plot_pm_T(fig=fig, ax=axes[1, 1], **kwargs)
-        self.plot_pm_R(fig=fig, ax=axes[2, 1], **kwargs)
-
-        for ax in axes.flatten():
-            ax.set_xlabel('')
+        self.plot_pm_tot(fig=fig, ax=axes[0, 1], labels=False, **kwargs)
+        self.plot_pm_T(fig=fig, ax=axes[1, 1], labels=False, **kwargs)
+        self.plot_pm_R(fig=fig, ax=axes[2, 1], labels=True, **kwargs)
 
         return fig
 
