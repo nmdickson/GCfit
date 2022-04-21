@@ -477,7 +477,7 @@ class _ClusterVisualizer:
 
         # label x axis
         if residuals:
-            res_ax.set_xlabel(f'Distance from centre [{ax.get_xlabel()}]')
+            res_ax.set_xlabel(f'Distance from centre [{res_ax.get_xlabel()}]')
         else:
             ax.set_xlabel(f'Distance from centre [{ax.get_xlabel()}]')
 
