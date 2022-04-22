@@ -443,13 +443,19 @@ class MCMCRun(_RunAnalysis):
 
         return ModelVisualizer.from_chain(chain, self.obs, method)
 
-    def get_CImodel(self, N=100, Nprocesses=1):
+    def get_CImodel(self, N=100, Nprocesses=1, load=False):
         import multiprocessing
 
-        labels, chain = self._get_chains()
+        if load:
+            return CIModelVisualizer.load(self.file.filename)
 
-        with multiprocessing.Pool(processes=Nprocesses) as pool:
-            return CIModelVisualizer.from_chain(chain, self.obs, N, pool=pool)
+        else:
+
+            labels, chain = self._get_chains()
+
+            with multiprocessing.Pool(processes=Nprocesses) as pool:
+                return CIModelVisualizer.from_chain(chain, self.obs,
+                                                    N, pool=pool)
 
     # ----------------------------------------------------------------------
     # Plots
@@ -1124,16 +1130,22 @@ class NestedRun(_RunAnalysis):
             labels, chain = self._get_equal_weight_chains(add_errors=add_errors)
             return ModelVisualizer.from_chain(chain, self.obs, method)
 
-    def get_CImodel(self, N=100, Nprocesses=1, add_errors=False, shuffle=True):
+    def get_CImodel(self, N=100, Nprocesses=1, add_errors=False, shuffle=True,
+                    load=False):
         import multiprocessing
 
-        labels, chain = self._get_equal_weight_chains(add_errors=add_errors)
+        if load:
+            return CIModelVisualizer.load(self.file.filename)
 
-        if shuffle:
-            np.random.default_rng().shuffle(chain, axis=0)
+        else:
+            labels, chain = self._get_equal_weight_chains(add_errors=add_errors)
 
-        with multiprocessing.Pool(processes=Nprocesses) as pool:
-            return CIModelVisualizer.from_chain(chain, self.obs, N, pool=pool)
+            if shuffle:
+                np.random.default_rng().shuffle(chain, axis=0)
+
+            with multiprocessing.Pool(processes=Nprocesses) as pool:
+                return CIModelVisualizer.from_chain(chain, self.obs,
+                                                    N, pool=pool)
 
     # ----------------------------------------------------------------------
     # Plots
