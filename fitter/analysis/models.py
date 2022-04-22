@@ -7,6 +7,7 @@ import numpy as np
 import astropy.units as u
 import matplotlib.pyplot as plt
 import matplotlib.colors as mpl_clr
+import matplotlib.ticker as mpl_tick
 import astropy.visualization as astroviz
 
 import logging
@@ -193,6 +194,56 @@ class _ClusterVisualizer:
 
         return fig, np.atleast_1d(axarr)
 
+    def _set_ylabel(self, ax, label, label_position='left', *,
+                    residual_ax=None):
+
+        tick_prms = dict(which='both',
+                         labelright=(label_position == 'right'),
+                         labelleft=(label_position == 'left'))
+
+        if label_position == 'top':
+
+            ax.set_ylabel('')
+            ax.set_title(label)
+
+        else:
+
+            if (unit_label := ax.get_ylabel()) and unit_label != r'$\mathrm{}$':
+                label += f' [{unit_label}]'
+
+            ax.set_ylabel(label)
+
+            ax.yaxis.set_label_position(label_position)
+            ax.yaxis.set_tick_params(**tick_prms)
+
+            if residual_ax is not None:
+
+                residual_ax.yaxis.set_label_position(label_position)
+                residual_ax.yaxis.set_tick_params(**tick_prms)
+                residual_ax.yaxis.set_ticks_position('both')
+
+        ax.yaxis.set_ticks_position('both')
+
+    def _set_xlabel(self, ax, label='Distance from centre', *,
+                    residual_ax=None, remove_all=False):
+
+        bottom_ax = ax if residual_ax is None else residual_ax
+
+        if unit_label := bottom_ax.get_xlabel():
+            label += f' [{unit_label}]'
+
+        bottom_ax.set_xlabel(label)
+
+        # if has residual ax, remove the ticks/labels on the top ax
+        if residual_ax is not None:
+            ax.set_xlabel('')
+            ax.xaxis.set_tick_params(bottom=False, labelbottom=False)
+
+        # if desired, simply remove everything
+        if remove_all:
+            bottom_ax.set_xlabel('')
+            bottom_ax.xaxis.set_tick_params(bottom=False, labelbottom=False)
+
     # -----------------------------------------------------------------------
     # Unit support
     # -----------------------------------------------------------------------
@@ -357,8 +408,8 @@ class _ClusterVisualizer:
                            label=label, **kwargs)
 
     def _plot_profile(self, ax, ds_pattern, y_key, model_data, *,
-                      residuals=False, err_transform=None,
-                      **kwargs):
+                      y_unit=None, residuals=False, err_transform=None,
+                      res_kwargs=None, **kwargs):
         '''figure out what needs to be plotted and call model/data plotters
         all **kwargs passed to both _plot_model and _plot_data
         model_data dimensions *must* be (mass bins, intervals, r axis)
@@ -375,6 +426,9 @@ class _ClusterVisualizer:
 
         # TODO need to figure out how we handle passed kwargs better
         default_clr = kwargs.pop('color', None)
+
+        if res_kwargs is None:
+            res_kwargs = {}
 
         # ------------------------------------------------------------------
         # Determine the relevant datasets to the given pattern
@@ -414,7 +468,8 @@ class _ClusterVisualizer:
             # plot the data
             try:
                 line = self._plot_data(ax, dset, y_key, marker=mrk, color=clr,
-                                       err_transform=err_transform, **kwargs)
+                                       err_transform=err_transform,
+                                       y_unit=y_unit, **kwargs)
 
             except KeyError as err:
                 if strict:
@@ -432,6 +487,8 @@ class _ClusterVisualizer:
         # the model data, calling `_plot_model`
         # ------------------------------------------------------------------
 
+        res_ax = None
+
         if model_data is not None:
 
             # ensure that the data is (mass bin, intervals, r domain)
@@ -445,8 +502,6 @@ class _ClusterVisualizer:
                 else:
                     masses = {0: None}
 
-            res_ax = None
-
             for mbin, errbars in masses.items():
 
                 ymodel = model_data[mbin, :, :]
@@ -458,29 +513,36 @@ class _ClusterVisualizer:
                 else:
                     clr = default_clr
 
-                self._plot_model(ax, ymodel, color=clr, **kwargs)
+                self._plot_model(ax, ymodel, color=clr, y_unit=y_unit, **kwargs)
 
                 if residuals:
                     res_ax = self._add_residuals(ax, ymodel, errbars,
-                                                 res_ax=res_ax, **kwargs)
+                                                 res_ax=res_ax, y_unit=y_unit,
+                                                 **res_kwargs)
 
+        # Adjust x limits
         if self.rlims is not None:
             ax.set_xlim(*self.rlims)
+
+        return ax, res_ax
 
     # -----------------------------------------------------------------------
     # Plot extras
     # -----------------------------------------------------------------------
 
-    def _add_residuals(self, ax, ymodel, errorbars, *, show_chi2=True,
-                       xmodel=None, y_unit=None, res_ax=None, **kwargs):
+    def _add_residuals(self, ax, ymodel, errorbars, percentage=False, *,
+                       show_chi2=False, xmodel=None, y_unit=None, size="15%",
+                       res_ax=None, divider_kwargs=None):
         '''
         errorbars : a list of outputs from calls to plt.errorbars
         '''
         from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-        if not errorbars:
-            mssg = "Cannot compute residuals, no observables data provided"
-            raise ValueError(mssg)
+        if errorbars is None:
+            errorbars = []
+
+        if divider_kwargs is None:
+            divider_kwargs = {}
 
         # ------------------------------------------------------------------
         # Get model data and spline
@@ -504,17 +566,24 @@ class _ClusterVisualizer:
         if res_ax is None:
 
             divider = make_axes_locatable(ax)
-            res_ax = divider.append_axes('bottom', size="15%", pad=0, sharex=ax)
+            res_ax = divider.append_axes('bottom', size=size, pad=0, sharex=ax)
 
             res_ax.grid()
 
             res_ax.set_xscale(ax.get_xscale())
 
+            res_ax.spines['top'].set(**divider_kwargs)
+
         # ------------------------------------------------------------------
         # Plot the model line, hopefully centred on zero
         # ------------------------------------------------------------------
 
-        self._plot_model(res_ax, ymodel - ymedian, color='k')
+        if percentage:
+            baseline = 100 * (ymodel - ymedian) / ymodel
+        else:
+            baseline = ymodel - ymedian
+
+        self._plot_model(res_ax, baseline, color='k')
 
         # ------------------------------------------------------------------
         # Get data from the plotted errorbars
@@ -553,22 +622,34 @@ class _ClusterVisualizer:
                 xerr_lines = yerr_lines = None
 
             if xerr_lines:
-                xerr = np.array([(np.diff(seg, axis=0) / 2)[..., -1]
-                                 for seg in xerr_lines.get_segments()]).T[0]
 
-                xerr <<= xdata.unit
+                xerr_segs = xerr_lines.get_segments() << xdata.unit
+
+                xerr = u.Quantity([np.abs(seg[:, 0] - xdata[i])
+                                   for i, seg in enumerate(xerr_segs)]).T
 
             if yerr_lines:
-                yerr = np.array([(np.diff(seg, axis=0) / 2)[..., -1]
-                                 for seg in yerr_lines.get_segments()]).T[0]
 
-                yerr <<= ydata.unit
+                yerr_segs = yerr_lines.get_segments() << ydata.unit
+
+                if percentage:
+                    yerr = 100 * np.array([
+                        np.abs(seg[:, 1] - ydata[i]) / ydata[i]
+                        for i, seg in enumerate(yerr_segs)
+                    ]).T
+
+                else:
+                    yerr = u.Quantity([np.abs(seg[:, 1] - ydata[i])
+                                       for i, seg in enumerate(yerr_segs)]).T
 
             # --------------------------------------------------------------
             # Compute the residuals and plot them
             # --------------------------------------------------------------
 
-            res = yspline(xdata) - ydata
+            if percentage:
+                res = 100 * (ydata - yspline(xdata)) / yspline(xdata)
+            else:
+                res = ydata - yspline(xdata)
 
             res_ax.errorbar(xdata, res, xerr=xerr, yerr=yerr,
                             color=clr, marker=mrk, linestyle='none')
@@ -583,6 +664,24 @@ class _ClusterVisualizer:
         if show_chi2:
             fake = plt.Line2D([], [], label=fr"$\chi^2={chi2:.2f}$")
             res_ax.legend(handles=[fake], handlelength=0, handletextpad=0)
+
+        # ------------------------------------------------------------------
+        # Label y-axes
+        # ------------------------------------------------------------------
+
+        if percentage:
+            res_ax.set_ylabel(r'Residuals')
+            res_ax.yaxis.set_major_formatter(mpl_tick.PercentFormatter())
+        else:
+            res_ax.set_ylabel(f'Residuals [{res_ax.get_ylabel()}]')
+
+        # ------------------------------------------------------------------
+        # Set bounds at 100% or less
+        # ------------------------------------------------------------------
+
+        if percentage:
+            ylim = res_ax.get_ylim()
+            res_ax.set_ylim(max(ylim[0], -100), min(ylim[1], 100))
 
         return res_ax
 
@@ -611,11 +710,11 @@ class _ClusterVisualizer:
     @_support_units
     def plot_LOS(self, fig=None, ax=None,
                  show_obs=True, residuals=False, *,
-                 x_unit='pc', y_unit='km/s'):
+                 x_unit='pc', y_unit='km/s',
+                 label_position='top', blank_xaxis=False,
+                 res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
-
-        ax.set_title('Line-of-Sight Velocity Dispersion')
 
         ax.set_xscale("log")
 
@@ -627,9 +726,15 @@ class _ClusterVisualizer:
             pattern = var = None
             strict = False
 
-        self._plot_profile(ax, pattern, var, self.LOS,
-                           strict=strict, residuals=residuals,
-                           x_unit=x_unit, y_unit=y_unit)
+        ax, res_ax = self._plot_profile(ax, pattern, var, self.LOS,
+                                        strict=strict, residuals=residuals,
+                                        x_unit=x_unit, y_unit=y_unit,
+                                        res_kwargs=res_kwargs, **kwargs)
+
+        label = 'LOS Velocity Dispersion'
+
+        self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
+        self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
 
         ax.legend()
 
@@ -638,11 +743,11 @@ class _ClusterVisualizer:
     @_support_units
     def plot_pm_tot(self, fig=None, ax=None,
                     show_obs=True, residuals=False, *,
-                    x_unit='pc', y_unit='mas/yr'):
+                    x_unit='pc', y_unit='mas/yr',
+                    label_position='top', blank_xaxis=False,
+                    res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
-
-        ax.set_title("Total Proper Motion")
 
         ax.set_xscale("log")
 
@@ -654,9 +759,15 @@ class _ClusterVisualizer:
             pattern = var = None
             strict = False
 
-        self._plot_profile(ax, pattern, var, self.pm_tot,
-                           strict=strict, residuals=residuals,
-                           x_unit=x_unit, y_unit=y_unit)
+        ax, res_ax = self._plot_profile(ax, pattern, var, self.pm_tot,
+                                        strict=strict, residuals=residuals,
+                                        x_unit=x_unit, y_unit=y_unit,
+                                        res_kwargs=res_kwargs, **kwargs)
+
+        label = "Total PM Dispersion"
+
+        self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
+        self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
 
         ax.legend()
 
@@ -665,11 +776,10 @@ class _ClusterVisualizer:
     @_support_units
     def plot_pm_ratio(self, fig=None, ax=None,
                       show_obs=True, residuals=False, *,
-                      x_unit='pc'):
+                      x_unit='pc', label_position='top', blank_xaxis=False,
+                      res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
-
-        ax.set_title("Proper Motion Anisotropy")
 
         ax.set_xscale("log")
 
@@ -681,9 +791,15 @@ class _ClusterVisualizer:
             pattern = var = None
             strict = False
 
-        self._plot_profile(ax, pattern, var, self.pm_ratio,
-                           strict=strict, residuals=residuals,
-                           x_unit=x_unit)
+        ax, res_ax = self._plot_profile(ax, pattern, var, self.pm_ratio,
+                                        strict=strict, residuals=residuals,
+                                        x_unit=x_unit,
+                                        res_kwargs=res_kwargs, **kwargs)
+
+        label = "PM Anisotropy"
+
+        self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
+        self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
 
         ax.legend()
 
@@ -692,11 +808,11 @@ class _ClusterVisualizer:
     @_support_units
     def plot_pm_T(self, fig=None, ax=None,
                   show_obs=True, residuals=False, *,
-                  x_unit='pc', y_unit='mas/yr'):
+                  x_unit='pc', y_unit='mas/yr',
+                  label_position='top', blank_xaxis=False,
+                  res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
-
-        ax.set_title("Tangential Proper Motion")
 
         ax.set_xscale("log")
 
@@ -708,11 +824,15 @@ class _ClusterVisualizer:
             pattern = var = None
             strict = False
 
-        # pm_T = self.pm_T.to('mas/yr')
+        ax, res_ax = self._plot_profile(ax, pattern, var, self.pm_T,
+                                        strict=strict, residuals=residuals,
+                                        x_unit=x_unit, y_unit=y_unit,
+                                        res_kwargs=res_kwargs, **kwargs)
 
-        self._plot_profile(ax, pattern, var, self.pm_T,
-                           strict=strict, residuals=residuals,
-                           x_unit=x_unit, y_unit=y_unit)
+        label = "Tangential PM Dispersion"
+
+        self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
+        self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
 
         ax.legend()
 
@@ -721,11 +841,11 @@ class _ClusterVisualizer:
     @_support_units
     def plot_pm_R(self, fig=None, ax=None,
                   show_obs=True, residuals=False, *,
-                  x_unit='pc', y_unit='mas/yr'):
+                  x_unit='pc', y_unit='mas/yr',
+                  label_position='top', blank_xaxis=False,
+                  res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
-
-        ax.set_title("Radial Proper Motion")
 
         ax.set_xscale("log")
 
@@ -737,11 +857,15 @@ class _ClusterVisualizer:
             pattern = var = None
             strict = False
 
-        # pm_R = self.pm_R.to('mas/yr')
+        ax, res_ax = self._plot_profile(ax, pattern, var, self.pm_R,
+                                        strict=strict, residuals=residuals,
+                                        x_unit=x_unit, y_unit=y_unit,
+                                        res_kwargs=res_kwargs, **kwargs)
 
-        self._plot_profile(ax, pattern, var, self.pm_R,
-                           strict=strict, residuals=residuals,
-                           x_unit=x_unit, y_unit=y_unit)
+        label = "Radial PM Dispersion"
+
+        self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
+        self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
 
         ax.legend()
 
@@ -750,63 +874,79 @@ class _ClusterVisualizer:
     @_support_units
     def plot_number_density(self, fig=None, ax=None,
                             show_obs=True, residuals=False, *,
-                            x_unit='pc'):
+                            x_unit='pc', label_position='top',
+                            blank_xaxis=False, res_kwargs=None, **kwargs):
 
         def quad_nuisance(err):
             return np.sqrt(err**2 + (self.s2 << err.unit**2))
 
         fig, ax = self._setup_artist(fig, ax)
 
-        ax.set_title('Number Density')
-
         ax.loglog()
 
         if show_obs:
             pattern, var = '*number_density*', 'Σ'
             strict = show_obs == 'strict'
-            kwargs = {'err_transform': quad_nuisance}
+            kwargs.setdefault('err_transform', quad_nuisance)
 
         else:
             pattern = var = None
             strict = False
-            kwargs = {}
 
-        self._plot_profile(ax, pattern, var, self.numdens,
-                           strict=strict, residuals=residuals,
-                           x_unit=x_unit, **kwargs)
+        ax, res_ax = self._plot_profile(ax, pattern, var, self.numdens,
+                                        strict=strict, residuals=residuals,
+                                        x_unit=x_unit,
+                                        res_kwargs=res_kwargs, **kwargs)
 
         # bit arbitrary, but probably fine for the most part
-        ax.set_ylim(bottom=1e-4)
+        ax.set_ylim(bottom=0.5e-4)
+
+        label = 'Number Density'
+
+        self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
+        self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
 
         ax.legend()
 
         return fig
 
     @_support_units
-    def plot_all(self, fig=None, show_obs='attempt'):
+    def plot_all(self, fig=None, sharex=True, **kwargs):
         '''Plots all the primary profiles (numdens, LOS, PM)
         but *not* the mass function, pulsars, or any secondary profiles
         (cum-mass, remnants, etc)
         '''
+        # TODO working with residuals here is hard because constrianed_layout
+        #   doesn't seem super aware of them
 
-        fig, axes = self._setup_multi_artist(fig, (3, 2))
+        fig, axes = self._setup_multi_artist(fig, (3, 2), sharex=sharex)
 
         axes = axes.reshape((3, 2))
 
-        fig.suptitle(str(self.obs))
+        res_kwargs = dict(size="25%", show_chi2=False, percentage=True)
+        kwargs.setdefault('res_kwargs', res_kwargs)
 
-        kw = {}
+        # left plots
+        self.plot_number_density(fig=fig, ax=axes[0, 0], label_position='left',
+                                 blank_xaxis=True, **kwargs)
+        self.plot_LOS(fig=fig, ax=axes[1, 0], label_position='left',
+                      blank_xaxis=True, **kwargs)
 
-        self.plot_number_density(fig=fig, ax=axes[0, 0], **kw)
-        self.plot_LOS(fig=fig, ax=axes[1, 0], **kw)
-        self.plot_pm_ratio(fig=fig, ax=axes[2, 0], **kw)
+        self.plot_pm_ratio(fig=fig, ax=axes[2, 0], label_position='left',
+                           **kwargs)
 
-        self.plot_pm_tot(fig=fig, ax=axes[0, 1], **kw)
-        self.plot_pm_T(fig=fig, ax=axes[1, 1], **kw)
-        self.plot_pm_R(fig=fig, ax=axes[2, 1], **kw)
+        # right plots
+        self.plot_pm_tot(fig=fig, ax=axes[0, 1], label_position='right',
+                         blank_xaxis=True, **kwargs)
+        self.plot_pm_T(fig=fig, ax=axes[1, 1], label_position='right',
+                       blank_xaxis=True, **kwargs)
+        self.plot_pm_R(fig=fig, ax=axes[2, 1], label_position='right',
+                       **kwargs)
 
-        for ax in axes.flatten():
-            ax.set_xlabel('')
+        # brute force clear out any "residuals" labels
+        for ax in fig.axes:
+            if 'Residual' in ax.get_ylabel():
+                ax.set_ylabel('')
 
         return fig
 
@@ -1069,7 +1209,7 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_density(self, fig=None, ax=None, kind='all', *,
-                     x_unit='pc'):
+                     x_unit='pc', label_position='left'):
 
         if kind == 'all':
             kind = {'MS', 'tot', 'BH', 'WD', 'NS'}
@@ -1115,10 +1255,9 @@ class _ClusterVisualizer:
         ax.set_yscale("log")
         ax.set_xscale("log")
 
-        ax.set_ylabel(rf'Surface Density $[M_\odot / pc^3]$')
-        # ax.set_xlabel('arcsec')
+        self._set_ylabel(ax, 'Mass Density', label_position)
+        self._set_xlabel(ax)
 
-        # ax.legend()
         fig.legend(loc='upper center', ncol=6,
                    bbox_to_anchor=(0.5, 1.), fancybox=True)
 
@@ -1126,7 +1265,7 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_surface_density(self, fig=None, ax=None, kind='all', *,
-                             x_unit='pc'):
+                             x_unit='pc', label_position='left'):
 
         if kind == 'all':
             kind = {'MS', 'tot', 'BH', 'WD', 'NS'}
@@ -1172,10 +1311,9 @@ class _ClusterVisualizer:
         ax.set_yscale("log")
         ax.set_xscale("log")
 
-        ax.set_ylabel(rf'Surface Density $[M_\odot / pc^2]$')
-        # ax.set_xlabel('arcsec')
+        self._set_ylabel(ax, 'Surface Mass Density', label_position)
+        self._set_xlabel(ax)
 
-        # ax.legend()
         fig.legend(loc='upper center', ncol=6,
                    bbox_to_anchor=(0.5, 1.), fancybox=True)
 
@@ -1183,7 +1321,7 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_cumulative_mass(self, fig=None, ax=None, kind='all', *,
-                             x_unit='pc'):
+                             x_unit='pc', label_position='left'):
 
         if kind == 'all':
             kind = {'MS', 'tot', 'BH', 'WD', 'NS'}
@@ -1223,18 +1361,17 @@ class _ClusterVisualizer:
         ax.set_yscale("log")
         ax.set_xscale("log")
 
-        # ax.set_ylabel(rf'$M_{{enc}} ({self.cum_M_tot.unit})$')
-        ax.set_ylabel(rf'$M_{{enc}}$ $[M_\odot]$')
-        # ax.set_xlabel('arcsec')
+        self._set_ylabel(ax, rf'$M_{{enc}}$', label_position)
+        self._set_xlabel(ax)
 
-        # ax.legend()
         fig.legend(loc='upper center', ncol=5,
                    bbox_to_anchor=(0.5, 1.), fancybox=True)
 
         return fig
 
     @_support_units
-    def plot_remnant_fraction(self, fig=None, ax=None, *, x_unit='pc'):
+    def plot_remnant_fraction(self, fig=None, ax=None, *,
+                              x_unit='pc', label_position='left'):
         '''Fraction of mass in remnants vs MS stars, like in baumgardt'''
 
         fig, ax = self._setup_artist(fig, ax)
@@ -1248,7 +1385,9 @@ class _ClusterVisualizer:
         self._plot_profile(ax, None, None, self.frac_M_rem,
                            x_unit=x_unit, label="Remnants")
 
-        ax.set_ylabel(r"Mass fraction $M_{MS}/M_{tot}$, $M_{remn.}/M_{tot}$")
+        label = r"Mass fraction $M_{MS}/M_{tot}$, $M_{remn.}/M_{tot}$"
+        self._set_ylabel(ax, label, label_position)
+        self._set_xlabel(ax)
 
         ax.set_ylim(0.0, 1.0)
 
