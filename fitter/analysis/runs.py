@@ -636,7 +636,8 @@ class MCMCRun(_RunAnalysis):
     def plot_marginals(self, fig=None, **corner_kw):
         import corner
 
-        fig, ax = self._setup_multi_artist(fig, shape=None)
+        fig, ax = self._setup_multi_artist(fig, shape=None,
+                                           constrained_layout=False)
 
         labels, chain = self._get_chains()
 
@@ -647,8 +648,15 @@ class MCMCRun(_RunAnalysis):
                   else (chain[0, i] - 1, chain[0, i] + 1)
                   for i, lbl in enumerate(labels)]
 
-        return corner.corner(chain, labels=labels, fig=fig,
-                             range=ranges, plot_datapoints=False, **corner_kw)
+        corner_kw.setdefault('plot_datapoints', False)
+        corner_kw.setdefault('labelpad', 0.25)
+
+        fig = corner.corner(chain, labels=labels, fig=fig,
+                            range=ranges, **corner_kw)
+
+        fig.subplots_adjust(left=0.05, bottom=0.06)
+
+        return fig
 
     def plot_posterior(self, param, fig=None, ax=None, chain=None,
                        flipped=True, truth=None, truth_ci=None,
@@ -1154,7 +1162,8 @@ class NestedRun(_RunAnalysis):
     def plot_marginals(self, fig=None, full_volume=False, **corner_kw):
         import corner
 
-        fig, ax = self._setup_multi_artist(fig, shape=None)
+        fig, ax = self._setup_multi_artist(fig, shape=None,
+                                           constrained_layout=False)
 
         if full_volume:
             labels, chain = self._get_chains()
@@ -1169,9 +1178,14 @@ class NestedRun(_RunAnalysis):
                   for i, lbl in enumerate(labels)]
 
         corner_kw.setdefault('plot_datapoints', False)
+        corner_kw.setdefault('labelpad', 0.25)
 
-        return corner.corner(chain, labels=labels, fig=fig,
-                             range=ranges, **corner_kw)
+        fig = corner.corner(chain, labels=labels, fig=fig,
+                            range=ranges, **corner_kw)
+
+        fig.subplots_adjust(left=0.05, bottom=0.06)
+
+        return fig
 
     def plot_bounds(self, iteration, fig=None, show_live=False, **kw):
         from dynesty import plotting as dyplot
