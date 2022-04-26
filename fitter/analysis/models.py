@@ -1370,7 +1370,7 @@ class _ClusterVisualizer:
         return fig
 
     @_support_units
-    def plot_remnant_fraction(self, fig=None, ax=None, *,
+    def plot_remnant_fraction(self, fig=None, ax=None, *, show_total=True,
                               x_unit='pc', label_position='left'):
         '''Fraction of mass in remnants vs MS stars, like in baumgardt'''
 
@@ -1390,6 +1390,15 @@ class _ClusterVisualizer:
         self._set_xlabel(ax)
 
         ax.set_ylim(0.0, 1.0)
+
+        if show_total:
+            from matplotlib.offsetbox import AnchoredText
+
+            tot = AnchoredText(fr'$f_{{\mathrm{{remn}}}}={self.f_rem:.2f}$',
+                               frameon=True, loc='upper center')
+
+            tot.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
+            ax.add_artist(tot)
 
         ax.legend()
 
@@ -1621,6 +1630,8 @@ class ModelVisualizer(_ClusterVisualizer):
         self.star_bin = model.nms - 1
         self.mj = model.mj
 
+        self.f_rem = np.sum(model.Mj[model._remnant_bins]) / model.M
+
         self.LOS = np.sqrt(self.model.v2pj)[:, np.newaxis, :]
         self.pm_T = np.sqrt(model.v2Tj)[:, np.newaxis, :]
         self.pm_R = np.sqrt(model.v2Rj)[:, np.newaxis, :]
@@ -1810,6 +1821,19 @@ class CIModelVisualizer(_ClusterVisualizer):
     '''
 
     @_ClusterVisualizer._support_units
+    def plot_f_rem(self, fig=None, ax=None, bins='auto', color='b'):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        color = mpl_clr.to_rgb(color)
+        facecolor = color + (0.33, )
+
+        ax.hist(self.f_rem, histtype='stepfilled',
+                bins=bins, ec=color, fc=facecolor, lw=2)
+
+        return fig
+
+    @_ClusterVisualizer._support_units
     def plot_BH_mass(self, fig=None, ax=None, bins='auto', color='b'):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -1939,6 +1963,8 @@ class CIModelVisualizer(_ClusterVisualizer):
         frac_M_MS = np.full((1, N, Nr), np.nan) << u.dimensionless_unscaled
         frac_M_rem = frac_M_MS.copy()
 
+        f_rem = np.full(N, np.nan) << u.dimensionless_unscaled
+
         # number density
 
         numdens = np.full((1, N, Nr), np.nan) << u.pc**-2
@@ -2037,6 +2063,8 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             frac_M_MS[slc], frac_M_rem[slc] = viz._init_mass_frac(model)
 
+            f_rem[model_ind] = np.sum(model.Mj[model._remnant_bins]) / model.M
+
             # Black holes
 
             BH_mass[model_ind] = np.sum(model.BH_Mj)
@@ -2087,6 +2115,8 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         viz.frac_M_MS = perc(frac_M_MS, q, axis=1)
         viz.frac_M_rem = perc(frac_M_rem, q, axis=1)
+
+        viz.f_rem = f_rem
 
         viz.BH_mass = BH_mass
         viz.BH_num = BH_num
@@ -2366,6 +2396,9 @@ class CIModelVisualizer(_ClusterVisualizer):
             # --------------------------------------------------------------
 
             quant_grp = modelgrp.create_group('quantities')
+
+            ds = quant_grp.create_dataset('f_rem', data=self.f_rem)
+            ds.attrs['unit'] = self.f_rem.unit.to_string()
 
             ds = quant_grp.create_dataset('BH_mass', data=self.BH_mass)
             ds.attrs['unit'] = self.BH_mass.unit.to_string()
@@ -2667,6 +2700,18 @@ class ModelCollection:
     # ----------------------------------------------------------------------
     # Collection Attributes
     # ----------------------------------------------------------------------
+
+    # TODO technically all of these could be defined as singles for modelviz
+
+    @property
+    def f_rem(self):
+
+        if not self._ci:
+            mssg = ("'ModelCollection' object has no attribute 'f_rem'. "
+                    "Must be constructed with CIModelVisualizer objects.")
+            raise AttributeError(mssg)
+
+        return [mv.f_rem for mv in self.visualizers]
 
     @property
     def BH_mass(self):
