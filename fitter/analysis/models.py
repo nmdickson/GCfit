@@ -2677,6 +2677,18 @@ class ModelCollection:
     # Collection Attributes
     # ----------------------------------------------------------------------
 
+    # TODO technically all of these could be defined as singles for modelviz
+
+    @property
+    def f_rem(self):
+
+        if not self._ci:
+            mssg = ("'ModelCollection' object has no attribute 'f_rem'. "
+                    "Must be constructed with CIModelVisualizer objects.")
+            raise AttributeError(mssg)
+
+        return [mv.f_rem for mv in self.visualizers]
+
     @property
     def BH_mass(self):
 

@@ -2234,6 +2234,7 @@ class RunCollection(_RunAnalysis):
             'chi2': r'$\chi^2$',
             'BH_mass': r'$\mathrm{M}_{BH}\ [M_\odot]$',
             'BH_num': r'$\mathrm{N}_{BH}$',
+            'f_rem': r'$f_{\mathrm{remn}}$',
         }
 
         return math_mapping.get(param, param)
@@ -2604,7 +2605,7 @@ class RunCollection(_RunAnalysis):
             labels = ['FeHe'] + labels
 
         if include_BH:
-            labels += ['BH_mass', 'BH_num']
+            labels += ['BH_mass', 'BH_num', 'f_rem']
 
         # Fill in a dictionary of column data
 
