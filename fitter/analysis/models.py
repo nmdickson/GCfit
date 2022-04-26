@@ -2373,6 +2373,9 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             quant_grp = modelgrp.create_group('quantities')
 
+            ds = quant_grp.create_dataset('f_rem', data=self.f_rem)
+            ds.attrs['unit'] = self.f_rem.unit.to_string()
+
             ds = quant_grp.create_dataset('BH_mass', data=self.BH_mass)
             ds.attrs['unit'] = self.BH_mass.unit.to_string()
 
