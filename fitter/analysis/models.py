@@ -1939,6 +1939,8 @@ class CIModelVisualizer(_ClusterVisualizer):
         frac_M_MS = np.full((1, N, Nr), np.nan) << u.dimensionless_unscaled
         frac_M_rem = frac_M_MS.copy()
 
+        f_rem = np.full(N, np.nan) << u.dimensionless_unscaled
+
         # number density
 
         numdens = np.full((1, N, Nr), np.nan) << u.pc**-2
@@ -2037,6 +2039,8 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             frac_M_MS[slc], frac_M_rem[slc] = viz._init_mass_frac(model)
 
+            f_rem[model_ind] = np.sum(model.Mj[model._remnant_bins]) / model.M
+
             # Black holes
 
             BH_mass[model_ind] = np.sum(model.BH_Mj)
@@ -2087,6 +2091,8 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         viz.frac_M_MS = perc(frac_M_MS, q, axis=1)
         viz.frac_M_rem = perc(frac_M_rem, q, axis=1)
+
+        viz.f_rem = f_rem
 
         viz.BH_mass = BH_mass
         viz.BH_num = BH_num
