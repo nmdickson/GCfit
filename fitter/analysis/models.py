@@ -1621,6 +1621,8 @@ class ModelVisualizer(_ClusterVisualizer):
         self.star_bin = model.nms - 1
         self.mj = model.mj
 
+        self.f_rem = np.sum(model.Mj[model._remnant_bins]) / model.M
+
         self.LOS = np.sqrt(self.model.v2pj)[:, np.newaxis, :]
         self.pm_T = np.sqrt(model.v2Tj)[:, np.newaxis, :]
         self.pm_R = np.sqrt(model.v2Rj)[:, np.newaxis, :]
