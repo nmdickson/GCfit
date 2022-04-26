@@ -1370,7 +1370,7 @@ class _ClusterVisualizer:
         return fig
 
     @_support_units
-    def plot_remnant_fraction(self, fig=None, ax=None, *,
+    def plot_remnant_fraction(self, fig=None, ax=None, *, show_total=True,
                               x_unit='pc', label_position='left'):
         '''Fraction of mass in remnants vs MS stars, like in baumgardt'''
 
@@ -1390,6 +1390,15 @@ class _ClusterVisualizer:
         self._set_xlabel(ax)
 
         ax.set_ylim(0.0, 1.0)
+
+        if show_total:
+            from matplotlib.offsetbox import AnchoredText
+
+            tot = AnchoredText(fr'$f_{{\mathrm{{remn}}}}={self.f_rem:.2f}$',
+                               frameon=True, loc='upper center')
+
+            tot.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
+            ax.add_artist(tot)
 
         ax.legend()
 
@@ -1810,6 +1819,19 @@ class CIModelVisualizer(_ClusterVisualizer):
     class for making, showing, saving all the plots related to a bunch of models
     in the form of confidence intervals
     '''
+
+    @_ClusterVisualizer._support_units
+    def plot_f_rem(self, fig=None, ax=None, bins='auto', color='b'):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        color = mpl_clr.to_rgb(color)
+        facecolor = color + (0.33, )
+
+        ax.hist(self.f_rem, histtype='stepfilled',
+                bins=bins, ec=color, fc=facecolor, lw=2)
+
+        return fig
 
     @_ClusterVisualizer._support_units
     def plot_BH_mass(self, fig=None, ax=None, bins='auto', color='b'):
