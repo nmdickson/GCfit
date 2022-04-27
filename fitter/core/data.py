@@ -811,6 +811,7 @@ class Model(lp.limepy):
         self.r <<= R_units
         self.rh <<= R_units
         self.rt <<= R_units
+        # self.ra <<= u.dimensionless_unscaled  # θ ra is log, model is linear
         self.ra <<= R_units
 
         self.v2Tj <<= V2_units
@@ -919,6 +920,8 @@ class Model(lp.limepy):
         # fix a couple of conflicted attributes
         self.s2 = self._theta['s2']
         self.Nj = self.Mj / self.mj
+        # TODO not really sure what the limepy.ra corresponds to right now
+        # self.ra = 10**self._theta['ra']
 
         # ------------------------------------------------------------------
         # Assign units to model values
