@@ -922,6 +922,8 @@ class Model(lp.limepy):
 
         self._assign_units()
 
+        self.unscaled_ra = self.ra / self.rs
+
         # ------------------------------------------------------------------
         # Split apart the stellar classes of the mass bins
         # ------------------------------------------------------------------
