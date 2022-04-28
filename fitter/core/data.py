@@ -901,7 +901,7 @@ class Model(lp.limepy):
         # Create the limepy model base
         # ------------------------------------------------------------------
 
-        super().__init__(
+        self._limepy_kwargs = dict(
             phi0=self.W0,
             g=self.g,
             M=self.M * 1e6,
@@ -913,6 +913,8 @@ class Model(lp.limepy):
             project=True,
             verbose=verbose,
         )
+
+        super().__init__(**self._limepy_kwargs)
 
         # ------------------------------------------------------------------
         # Assign units to model values
