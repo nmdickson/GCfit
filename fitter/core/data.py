@@ -811,12 +811,13 @@ class Model(lp.limepy):
         self.r <<= R_units
         self.rh <<= R_units
         self.rt <<= R_units
-        # self.ra <<= u.dimensionless_unscaled  # θ ra is log, model is linear
         self.ra <<= R_units
+        self.rs <<= R_units
 
         self.v2Tj <<= V2_units
         self.v2Rj <<= V2_units
         self.v2pj <<= V2_units
+        self.s2 <<= V2_units
 
         self.rhoj <<= (M_units / R_units**3)
         self.Sigmaj <<= (M_units / R_units**2)
@@ -917,12 +918,6 @@ class Model(lp.limepy):
             verbose=verbose,
         )
 
-        # fix a couple of conflicted attributes
-        self.s2 = self._theta['s2']
-        self.Nj = self.Mj / self.mj
-        # TODO not really sure what the limepy.ra corresponds to right now
-        # self.ra = 10**self._theta['ra']
-
         # ------------------------------------------------------------------
         # Assign units to model values
         # ------------------------------------------------------------------
@@ -932,6 +927,8 @@ class Model(lp.limepy):
         # ------------------------------------------------------------------
         # Split apart the stellar classes of the mass bins
         # ------------------------------------------------------------------
+
+        self.Nj = self.Mj / self.mj
 
         # TODO slight difference in mf.IFMR.mBH_min and mf.mBH_min?
         self._mBH_min = self._mf.IFMR.mBH_min << u.Msun
