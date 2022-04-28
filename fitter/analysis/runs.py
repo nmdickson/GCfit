@@ -354,7 +354,7 @@ class MCMCRun(_RunAnalysis):
                 'W0': r'$\phi_0$',
                 'M': r'$M$',
                 'rh': r'$r_h$',
-                'ra': r'$r_a$',
+                'ra': r'$\log\left(r_a\right)$',
                 'g': r'$g$',
                 'delta': r'$\delta$',
                 's2': r'$s^2$',
@@ -1002,13 +1002,14 @@ class NestedRun(_RunAnalysis):
 
         labels = list(self.obs.initials)
 
+        # TODO make sure all plots are showing math, units and stuff in labels
         if math_labels:
 
             math_mapping = {
                 'W0': r'$\phi_0$',
                 'M': r'$M$',
                 'rh': r'$r_h$',
-                'ra': r'$r_a$',
+                'ra': r'$\log\left(r_a\right)$',
                 'g': r'$g$',
                 'delta': r'$\delta$',
                 's2': r'$s^2$',
@@ -2217,7 +2218,7 @@ class RunCollection(_RunAnalysis):
             'W0': r'$\phi_0$',
             'M': r'$M\ [10^6 M_\odot]$',
             'rh': r'$r_h\ [\mathrm{pc}]$',
-            'ra': r'$r_a\ [\mathrm{pc}]$',
+            'ra': r'$\log\left(r_a/\mathrm{pc}\right)$',
             'g': r'$g$',
             'delta': r'$\delta$',
             's2': r'$s^2$',

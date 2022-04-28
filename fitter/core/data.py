@@ -716,14 +716,14 @@ class Model(lp.limepy):
     limepy : Distribution-function model base of this class
     '''
 
-    def _init_mf(self):
+    def _init_mf(self, a1, a2, a3, BHret):
         '''Evolve the cluster mass function from it's IMF using `ssptools`'''
 
         # TODO before comparing with Kroupa we might want to discuss these:
         m123 = [0.1, 0.5, 1.0, 100]  # Slope breakpoints for imf
         nbin12 = [5, 5, 20]
 
-        a12 = [-self.a1, -self.a2, -self.a3]  # Slopes for imf
+        a12 = [-a1, -a2, -a3]  # Slopes for imf
 
         # TODO figure out which of these are cluster dependant, store in hdfs
 
@@ -732,7 +732,7 @@ class Model(lp.limepy):
         tcc = 0  # Core collapse time
         NS_ret = 0.1  # Initial neutron star retention
         BH_ret_int = 1  # Initial Black Hole retention
-        BH_ret_dyn = self.BHret / 100  # Dynamical Black Hole retention
+        BH_ret_dyn = BHret / 100  # Dynamical Black Hole retention
 
         natal_kicks = True
 
@@ -781,10 +781,6 @@ class Model(lp.limepy):
             vesc=vesc
         )
 
-    # def _get_scale(self):
-    #     TODO I have no idea how the scaling is supposed to work in limepy
-    #     G_scale, M_scale, R_scale = self._GS, self._MS, self._RS
-
     def _assign_units(self):
         '''Convert most values to `astropy.Quantity` with correct units'''
 
@@ -812,10 +808,12 @@ class Model(lp.limepy):
         self.rh <<= R_units
         self.rt <<= R_units
         self.ra <<= R_units
+        self.rs <<= R_units
 
         self.v2Tj <<= V2_units
         self.v2Rj <<= V2_units
         self.v2pj <<= V2_units
+        self.s2 <<= V2_units
 
         self.rhoj <<= (M_units / R_units**3)
         self.Sigmaj <<= (M_units / R_units**2)
@@ -842,10 +840,9 @@ class Model(lp.limepy):
             mssg = f"Missing required params: {missing_params}"
             raise KeyError(mssg)
 
-        self._theta = theta
+        self.theta = theta
 
-        for key, val in self._theta.items():
-            setattr(self, key, val)
+        self.d = theta['d']
 
         # ------------------------------------------------------------------
         # Get mass function
@@ -854,7 +851,8 @@ class Model(lp.limepy):
         # TODO I think how we are handling everything with mj and bins could
         #   be done much more nicely (maybe with some sweet masked arrays)
 
-        self._mf = self._init_mf()
+        self._mf = self._init_mf(theta['a1'], theta['a2'], theta['a3'],
+                                 theta['BHret'])
 
         # Set bins that should be empty to empty
         cs = self._mf.Ns[-1] > 10 * self._mf.Nmin
@@ -903,22 +901,20 @@ class Model(lp.limepy):
         # Create the limepy model base
         # ------------------------------------------------------------------
 
-        super().__init__(
-            phi0=self.W0,
-            g=self.g,
-            M=self.M * 1e6,
-            rh=self.rh,
-            ra=10**self.ra,
-            delta=self.delta,
+        self._limepy_kwargs = dict(
+            phi0=theta['W0'],
+            g=theta['g'],
+            M=theta['M'] * 1e6,
+            rh=theta['rh'],
+            ra=10**theta['ra'],
+            delta=theta['delta'],
             mj=mj,
             Mj=Mj,
             project=True,
             verbose=verbose,
         )
 
-        # fix a couple of conflicted attributes
-        self.s2 = self._theta['s2']
-        self.Nj = self.Mj / self.mj
+        super().__init__(**self._limepy_kwargs)
 
         # ------------------------------------------------------------------
         # Assign units to model values
@@ -926,9 +922,13 @@ class Model(lp.limepy):
 
         self._assign_units()
 
+        self.unscaled_ra = self.ra / self.rs
+
         # ------------------------------------------------------------------
         # Split apart the stellar classes of the mass bins
         # ------------------------------------------------------------------
+
+        self.Nj = self.Mj / self.mj
 
         # TODO slight difference in mf.IFMR.mBH_min and mf.mBH_min?
         self._mBH_min = self._mf.IFMR.mBH_min << u.Msun
