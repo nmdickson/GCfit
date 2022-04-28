@@ -781,10 +781,6 @@ class Model(lp.limepy):
             vesc=vesc
         )
 
-    # def _get_scale(self):
-    #     TODO I have no idea how the scaling is supposed to work in limepy
-    #     G_scale, M_scale, R_scale = self._GS, self._MS, self._RS
-
     def _assign_units(self):
         '''Convert most values to `astropy.Quantity` with correct units'''
 
