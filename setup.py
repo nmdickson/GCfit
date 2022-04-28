@@ -6,7 +6,7 @@ here = os.path.abspath(os.path.dirname(__file__))
 
 # Package information
 NAME = 'GCfit'
-VERSION = "0.9"
+VERSION = "0.10"
 
 DESCRIPTION = 'Multimass MCMC fitting of Limepy globular cluster analytic model'
 with io.open(os.path.join(here, 'README.md'), encoding='utf-8') as f:
@@ -14,7 +14,7 @@ with io.open(os.path.join(here, 'README.md'), encoding='utf-8') as f:
 
 # Contributor information
 AUTHOR = 'Nolan Dickson'
-CONTACT_EMAIL = 'ndickson@ap.smu.ca'
+CONTACT_EMAIL = 'nolan.dickson@smu.ca'
 
 # Installation information
 # TODO document the subrequirements like geos, gsl, etc
