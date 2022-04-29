@@ -6,6 +6,7 @@ import sys
 import pathlib
 import logging
 import warnings
+import contextlib
 
 import h5py
 import numpy as np
@@ -24,15 +25,56 @@ __all__ = ['RunCollection', 'MCMCRun', 'NestedRun']
 
 # TODO a way to plot our priors, probably for both vizs
 class _RunAnalysis:
-    '''base class for all visualizers of all run types'''
+    '''base class for all visualizers of all run types
+
+    filename : path to run output file
+    group : base group for sampler outputs, probably either 'nested' or 'mcmc'
+    '''
 
     _cmap = plt.cm.get_cmap('viridis')
 
     def __str__(self):
         try:
-            return f'{self.file.filename} - Run Results'
+            return f'{self._filename} - Run Results'
         except AttributeError:
             return "Run Results"
+
+    def __init__(self, filename, observations, group, name=None):
+        self._filename = filename
+        self._gname = group
+
+        if name is not None:
+            self.name = name
+
+        if observations is not None:
+            self.obs = observations
+
+        else:
+            try:
+                with h5py.File(filename, 'r') as of:
+                    cluster = of['metadata'].attrs['cluster']
+
+                self.obs = Observations(cluster)
+
+            except KeyError as err:
+                mssg = "No cluster name in metadata, must supply observations"
+                print(filename, err, type(err))
+                raise ValueError(mssg) from err
+
+    @contextlib.contextmanager
+    def _openfile(self, group=None, mode='r'):
+        file = h5py.File(self._filename, mode)
+
+        try:
+
+            if group is not None:
+                yield file[group]
+
+            else:
+                yield file
+
+        finally:
+            file.close()
 
     def _setup_artist(self, fig, ax, *, use_name=True):
         '''setup a plot (figure and ax) with one single ax'''
@@ -218,32 +260,14 @@ class MCMCRun(_RunAnalysis):
     based on an output file I guess?
     '''
 
-    def __init__(self, file, observations=None, group='mcmc', name=None):
+    def __init__(self, filename, observations=None, group='mcmc', name=None):
 
-        # TODO this needs to be closed properly, probably
-        if isinstance(file, h5py.File):
-            self.file = file
-        else:
-            self.file = h5py.File(file, 'r+')
+        super().__init__(filename, observations, group, name)
 
-        self._gname = group
-
-        if name is not None:
-            self.name = name
-
-        if observations is not None:
-            self.obs = observations
-        else:
-            try:
-                cluster = self.file['metadata'].attrs['cluster']
-                self.obs = Observations(cluster)
-            except KeyError as err:
-                mssg = "No cluster name in run metadata, must supply obs"
-                raise err(mssg)
-
-        self.has_indiv = 'blobs' in self.file[self._gname]
-        self.has_stats = 'statistics' in self.file
-        self.has_meta = 'metadata' in self.file
+        # with self._openfile() as file:
+        # self.has_indiv = 'blobs' in self.file[self._gname]
+        # self.has_stats = 'statistics' in self.file
+        # self.has_meta = 'metadata' in self.file
 
         # Ensure the dimensions are initialized correctly
         self.iterations = slice(None)
@@ -322,7 +346,10 @@ class MCMCRun(_RunAnalysis):
             raise TypeError(mssg)
 
         if value.stop is None and self.cut_incomplete:
-            stop = self.file[self._gname].attrs['iteration']
+
+            with self._openfile(self._gname) as file:
+                stop = file.attrs['iteration']
+
             value = slice(value.start, stop, value.step)
 
         self._iterations = value
@@ -334,7 +361,9 @@ class MCMCRun(_RunAnalysis):
             start = 0
 
         if (stop := self.iterations.stop) is None:
-            stop = self.file[self._gname]['chain'].shape[0]
+
+            with self._openfile(self._gname) as file:
+                stop = file['chain'].shape[0]
 
         step = self.iterations.step
 
@@ -370,11 +399,13 @@ class MCMCRun(_RunAnalysis):
 
         if label_fixed:
 
-            fixed = sorted(
-                ((k, labels.index(k)) for k in
-                 self.file['metadata']['fixed_params'].attrs),
-                key=lambda item: labels.index(item[0])
-            )
+            with self._openfile('metadata') as mdata:
+
+                fixed = sorted(
+                    ((k, labels.index(k)) for k in
+                     mdata['fixed_params'].attrs),
+                    key=lambda item: labels.index(item[0])
+                )
 
             for k, i in fixed:
                 labels[i] += ' (fixed)'
@@ -385,22 +416,24 @@ class MCMCRun(_RunAnalysis):
         '''get the chains, properly using the iterations and walkers set,
         and accounting for fixed params'''
 
-        labels = list(self.obs.initials)
+        with self._openfile() as file:
 
-        chain = self._reduce(self.file[self._gname]['chain'])
+            labels = list(self.obs.initials)
 
-        # Handle fixed parameters
-        if self.has_meta:
+            chain = self._reduce(file[self._gname]['chain'])
 
-            fixed = sorted(
-                ((k, v, labels.index(k)) for k, v in
-                 self.file['metadata']['fixed_params'].attrs.items()),
-                key=lambda item: labels.index(item[0])
-            )
+            # Handle fixed parameters
+            if self.has_meta:
 
-            for k, v, i in fixed:
-                labels[i] += ' (fixed)'
-                chain = np.insert(chain, i, v, axis=-1)
+                fixed = sorted(
+                    ((k, v, labels.index(k)) for k, v in
+                     file['metadata']['fixed_params'].attrs.items()),
+                    key=lambda item: labels.index(item[0])
+                )
+
+                for k, v, i in fixed:
+                    labels[i] += ' (fixed)'
+                    chain = np.insert(chain, i, v, axis=-1)
 
         if flatten:
             chain = chain.reshape((-1, chain.shape[-1]))
@@ -413,8 +446,10 @@ class MCMCRun(_RunAnalysis):
         if not self.has_meta:
             raise AttributeError("No metadata stored in file")
 
-        stored_priors = self.file['metadata']['specified_priors'].attrs
-        fixed = self.file['metadata']['fixed_params'].attrs
+        with self._openfile('metadata') as mdata:
+
+            stored_priors = mdata['specified_priors'].attrs
+            fixed = mdata['fixed_params'].attrs
 
         prior_params = {}
 
@@ -447,7 +482,7 @@ class MCMCRun(_RunAnalysis):
         import multiprocessing
 
         if load:
-            return CIModelVisualizer.load(self.file.filename)
+            return CIModelVisualizer.load(self._filename)
 
         else:
 
@@ -614,7 +649,8 @@ class MCMCRun(_RunAnalysis):
         if not self.has_indiv:
             raise AttributeError("No blobs stored in file")
 
-        probs = self.file[self._gname]['blobs']
+        with self._openfile(self._gname) as file:
+            probs = file['blobs']
 
         fig, axes = self._setup_multi_artist(fig, (len(probs.dtype), ),
                                              sharex=True)
@@ -722,7 +758,8 @@ class MCMCRun(_RunAnalysis):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        acc = self._reduce(self.file['statistics']['acceptance_rate'])
+        with self._openfile('statistics') as stats:
+            acc = self._reduce(stats['acceptance_rate'])
 
         ax.plot(self._iteration_domain, acc)
 
@@ -735,7 +772,8 @@ class MCMCRun(_RunAnalysis):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        prob = self._reduce(self.file[self._gname]['log_prob'])
+        with self._openfile(self._gname) as file:
+            prob = self._reduce(file['log_prob'])
 
         ax.plot(self._iteration_domain, prob)
 
@@ -786,45 +824,47 @@ class MCMCRun(_RunAnalysis):
 
         if content == 'all' or content == 'metadata':
 
-            # INFO OF RUN
-            mssg += f'\nRun Metadata'
-            mssg += f'\n{"=" * 12}\n'
+            with self._openfile() as file:
 
-            # number of iterations
-            Niter = self.file[self._gname].attrs['iteration']
-            mssg += f'Iterations = {Niter}\n'
+                # INFO OF RUN
+                mssg += f'\nRun Metadata'
+                mssg += f'\n{"=" * 12}\n'
 
-            # dimensions ndim, nwalkers
-            Ndim = self.file[self._gname].attrs['ndim']
-            Nwalkers = self.file[self._gname].attrs['nwalkers']
-            mssg += f'Dimensions = ({Nwalkers}, {Ndim})\n'
+                # number of iterations
+                Niter = file[self._gname].attrs['iteration']
+                mssg += f'Iterations = {Niter}\n'
 
-            # has stats? if so ... idk
-            mssg += f'Has statistics = {self.has_stats}\n'
+                # dimensions ndim, nwalkers
+                Ndim = file[self._gname].attrs['ndim']
+                Nwalkers = file[self._gname].attrs['nwalkers']
+                mssg += f'Dimensions = ({Nwalkers}, {Ndim})\n'
 
-            # has metadata? if so fixed and excluded
-            mssg += f'Has metadata = {self.has_meta}\n'
-            if self.has_meta:
-                mdata = self.file['metadata']
+                # has stats? if so ... idk
+                mssg += f'Has statistics = {self.has_stats}\n'
 
-                mssg += 'Fixed parameters:\n'
-                fixed = mdata['fixed_params'].attrs
-                if fixed:
-                    for k, v in fixed.items():
-                        mssg += f'    {k} = {v}\n'
-                else:
-                    mssg += '    None\n'
+                # has metadata? if so fixed and excluded
+                mssg += f'Has metadata = {self.has_meta}\n'
+                if self.has_meta:
+                    mdata = file['metadata']
 
-                mssg += 'Excluded components:\n'
-                exc = mdata['excluded_likelihoods'].attrs
-                if exc:
-                    for i, v in exc.items():
-                        mssg += f'    ({i}) {v}\n'
-                else:
-                    mssg += '    None\n'
+                    mssg += 'Fixed parameters:\n'
+                    fixed = mdata['fixed_params'].attrs
+                    if fixed:
+                        for k, v in fixed.items():
+                            mssg += f'    {k} = {v}\n'
+                    else:
+                        mssg += '    None\n'
 
-                # TODO add specified bounds/priors
-                # mssg += 'Specified prior bounds'
+                    mssg += 'Excluded components:\n'
+                    exc = mdata['excluded_likelihoods'].attrs
+                    if exc:
+                        for i, v in exc.items():
+                            mssg += f'    ({i}) {v}\n'
+                    else:
+                        mssg += '    None\n'
+
+                    # TODO add specified bounds/priors
+                    # mssg += 'Specified prior bounds'
 
         out.write(mssg)
 
@@ -838,7 +878,10 @@ class NestedRun(_RunAnalysis):
 
         # If maxfrac is added as arg, make sure to add here as well
         if self.has_meta:
-            stop_kw = {'pfrac': self.file['metadata'].attrs['pfrac']}
+
+            with self._openfile('metadata') as mdata:
+                stop_kw = {'pfrac': mdata.attrs['pfrac']}
+
         else:
             stop_kw = {}
 
@@ -855,14 +898,16 @@ class NestedRun(_RunAnalysis):
     @property
     def AIC(self):
 
-        exc = [L.decode() for L in
-               self.file['metadata/excluded_likelihoods'].attrs.values()]
+        with self._openfile() as file:
 
-        N = sum([self.obs[comp[0]].size for comp in
-                 self.obs.filter_likelihoods(exc, True)])
+            exc = [L.decode() for L in
+                   file['metadata/excluded_likelihoods'].attrs.values()]
 
-        k = len(self._get_chains(include_fixed=False)[1])
-        lnL0 = np.max(self.file[self._gname]['logl'][:])
+            N = sum([self.obs[comp[0]].size for comp in
+                     self.obs.filter_likelihoods(exc, True)])
+
+            k = len(self._get_chains(include_fixed=False)[1])
+            lnL0 = np.max(file[self._gname]['logl'][:])
 
         AIC = -2 * lnL0 + (2 * k) + ((2 * k * (k + 1)) / (N - k - 1))
 
@@ -871,14 +916,16 @@ class NestedRun(_RunAnalysis):
     @property
     def BIC(self):
 
-        exc = [L.decode() for L in
-               self.file['metadata/excluded_likelihoods'].attrs.values()]
+        with self._openfile() as file:
 
-        N = sum([self.obs[comp[0]].size for comp in
-                 self.obs.filter_likelihoods(exc, True)])
+            exc = [L.decode() for L in
+                   file['metadata/excluded_likelihoods'].attrs.values()]
 
-        k = len(self._get_chains(include_fixed=False)[1])
-        lnL0 = np.max(self.file[self._gname]['logl'][:])
+            N = sum([self.obs[comp[0]].size for comp in
+                     self.obs.filter_likelihoods(exc, True)])
+
+            k = len(self._get_chains(include_fixed=False)[1])
+            lnL0 = np.max(file[self._gname]['logl'][:])
 
         BIC = -2 * lnL0 + (k * np.log(N))
 
@@ -895,33 +942,14 @@ class NestedRun(_RunAnalysis):
         # Compute the KDE of resampled logvols and evaluate on normal logvols
         return gaussian_kde(eq_logvol)(-self.results.logvol)
 
-    def __init__(self, file, observations=None, group='nested', name=None):
+    def __init__(self, filename, observations=None, group='nested', name=None):
 
-        # TODO this needs to be closed properly, probably
-        if isinstance(file, h5py.File):
-            self.file = file
-        else:
-            self.file = h5py.File(file, 'r+')
-
-        self._gname = group
-
-        if name is not None:
-            self.name = name
-
-        if observations is not None:
-            self.obs = observations
-        else:
-            try:
-                cluster = self.file['metadata'].attrs['cluster']
-                self.obs = Observations(cluster)
-            except KeyError as err:
-                mssg = "No cluster name in run metadata, must supply obs"
-                raise err(mssg)
+        super().__init__(filename, observations, group, name)
 
         self.results = self._get_results()
 
-        self.has_meta = 'metadata' in self.file
-        self.has_stats = 'statistics' in self.file
+        # self.has_meta = 'metadata' in self.file
+        # self.has_stats = 'statistics' in self.file
 
     # ----------------------------------------------------------------------
     # Helpers
@@ -931,26 +959,26 @@ class NestedRun(_RunAnalysis):
         '''return a dynesty-style `Results` class'''
         from dynesty.results import Results
 
-        res = self.file[self._gname]
+        with self._openfile(self._gname) as file:
 
-        if finite_only:
-            inds = res['logl'][:] > -1e300
-        else:
-            inds = slice(None)
-
-        r = {}
-
-        for k, d in res.items():
-
-            if k in ('current_batch', 'initial_batch', 'bound'):
-                continue
-
-            if d.shape and (d.shape[0] == res['logl'].shape[0]):
-                d = np.array(d)[inds]
+            if finite_only:
+                inds = file['logl'][:] > -1e300
             else:
-                d = np.array(d)
+                inds = slice(None)
 
-            r[k] = d
+            r = {}
+
+            for k, d in file.items():
+
+                if k in ('current_batch', 'initial_batch', 'bound'):
+                    continue
+
+                if d.shape and (d.shape[0] == file['logl'].shape[0]):
+                    d = np.array(d)[inds]
+                else:
+                    d = np.array(d)
+
+                r[k] = d
 
         if finite_only:
             # remove the amount of non-finite values we removed from niter
@@ -966,35 +994,36 @@ class NestedRun(_RunAnalysis):
         '''
         from dynesty import bounding
 
-        res = self.file['nested']
-        bnd_grp = res['bound']
+        with self._openfile(self._gname) as file:
 
-        bnds = []
-        for i in range(len(bnd_grp)):
+            bnd_grp = file['bound']
 
-            ds = bnd_grp[str(i)]
-            btype = ds.attrs['type']
+            bnds = []
+            for i in range(len(bnd_grp)):
 
-            if btype == 'UnitCube':
-                bnds.append(bounding.UnitCube(ds.attrs['ndim']))
+                ds = bnd_grp[str(i)]
+                btype = ds.attrs['type']
 
-            elif btype == 'MultiEllipsoid':
-                ctrs = ds['centres'][:]
-                covs = ds['covariances'][:]
-                bnds.append(bounding.MultiEllipsoid(ctrs=ctrs, covs=covs))
+                if btype == 'UnitCube':
+                    bnds.append(bounding.UnitCube(ds.attrs['ndim']))
 
-            elif btype == 'RadFriends':
-                cov = ds['covariances'][:]
-                ndim = ds.attrs['ndim']
-                bnds.append(bounding.RadFriends(ndim=ndim, cov=cov))
+                elif btype == 'MultiEllipsoid':
+                    ctrs = ds['centres'][:]
+                    covs = ds['covariances'][:]
+                    bnds.append(bounding.MultiEllipsoid(ctrs=ctrs, covs=covs))
 
-            elif btype == 'SupFriends':
-                cov = ds['covariances'][:]
-                ndim = ds.attrs['ndim']
-                bnds.append(bounding.SupFriends(ndim=ndim, cov=cov))
+                elif btype == 'RadFriends':
+                    cov = ds['covariances'][:]
+                    ndim = ds.attrs['ndim']
+                    bnds.append(bounding.RadFriends(ndim=ndim, cov=cov))
 
-            else:
-                raise RuntimeError('unrecognized bound type ', btype)
+                elif btype == 'SupFriends':
+                    cov = ds['covariances'][:]
+                    ndim = ds.attrs['ndim']
+                    bnds.append(bounding.SupFriends(ndim=ndim, cov=cov))
+
+                else:
+                    raise RuntimeError('unrecognized bound type ', btype)
 
         return bnds
 
@@ -1025,11 +1054,12 @@ class NestedRun(_RunAnalysis):
 
         if label_fixed:
 
-            fixed = sorted(
-                ((k, labels.index(k)) for k in
-                 self.file['metadata']['fixed_params'].attrs),
-                key=lambda item: labels.index(item[0])
-            )
+            with self._openfile('metadata') as mdata:
+
+                fixed = sorted(
+                    ((k, labels.index(k)) for k in mdata['fixed_params'].attrs),
+                    key=lambda item: labels.index(item[0])
+                )
 
             for k, i in fixed:
                 labels[i] += ' (fixed)'
@@ -1040,62 +1070,62 @@ class NestedRun(_RunAnalysis):
     def _get_chains(self, include_fixed=True):
         '''for nested sampling results (current Batch)'''
 
-        try:
-            chain = self.file[self._gname]['samples'][:]
-        except KeyError as err:
-            mssg = f'{err.args[0]}. This run may not yet have converged'
-            raise KeyError(mssg)
+        with self._openfile() as file:
 
-        labels = list(self.obs.initials)
+            chain = file[self._gname]['samples'][:]
 
-        if self.has_meta:
+            labels = list(self.obs.initials)
 
-            fixed = sorted(
-                ((k, v, labels.index(k)) for k, v in
-                 self.file['metadata']['fixed_params'].attrs.items()),
-                key=lambda item: labels.index(item[0])
-            )
+            if self.has_meta:
 
-            if include_fixed:
-                for k, v, i in fixed:
-                    labels[i] += ' (fixed)'
-                    chain = np.insert(chain, i, v, axis=-1)
-            else:
-                for *_, i in reversed(fixed):
-                    del labels[i]
+                fixed = sorted(
+                    ((k, v, labels.index(k)) for k, v in
+                     file['metadata']['fixed_params'].attrs.items()),
+                    key=lambda item: labels.index(item[0])
+                )
+
+                if include_fixed:
+                    for k, v, i in fixed:
+                        labels[i] += ' (fixed)'
+                        chain = np.insert(chain, i, v, axis=-1)
+                else:
+                    for *_, i in reversed(fixed):
+                        del labels[i]
 
         return labels, chain
 
     def _get_equal_weight_chains(self, include_fixed=True, add_errors=False):
         from dynesty.utils import resample_equal
 
-        if add_errors is False:
-            chain = self.file[self._gname]['samples'][:]
-            eq_chain = resample_equal(chain, self.weights)
+        with self._openfile() as file:
 
-        else:
-            from dynesty.dynamicsampler import weight_function
-            sim_run = self._sim_errors(1)[0]
-            sim_wt = weight_function(sim_run, {'pfrac': 1.}, True)[1][2]
-            eq_chain = resample_equal(sim_run.samples, sim_wt)
+            if add_errors is False:
+                chain = file[self._gname]['samples'][:]
+                eq_chain = resample_equal(chain, self.weights)
 
-        labels = list(self.obs.initials)
-
-        if self.has_meta:
-
-            fixed = sorted(
-                ((k, v, labels.index(k)) for k, v in
-                 self.file['metadata']['fixed_params'].attrs.items()),
-                key=lambda item: labels.index(item[0])
-            )
-
-            if include_fixed:
-                for k, v, i in fixed:
-                    labels[i] += ' (fixed)'
-                    eq_chain = np.insert(eq_chain, i, v, axis=-1)
             else:
-                for *_, i in reversed(fixed):
-                    del labels[i]
+                from dynesty.dynamicsampler import weight_function
+                sim_run = self._sim_errors(1)[0]
+                sim_wt = weight_function(sim_run, {'pfrac': 1.}, True)[1][2]
+                eq_chain = resample_equal(sim_run.samples, sim_wt)
+
+            labels = list(self.obs.initials)
+
+            if self.has_meta:
+
+                fixed = sorted(
+                    ((k, v, labels.index(k)) for k, v in
+                     file['metadata']['fixed_params'].attrs.items()),
+                    key=lambda item: labels.index(item[0])
+                )
+
+                if include_fixed:
+                    for k, v, i in fixed:
+                        labels[i] += ' (fixed)'
+                        eq_chain = np.insert(eq_chain, i, v, axis=-1)
+                else:
+                    for *_, i in reversed(fixed):
+                        del labels[i]
 
         return labels, eq_chain
 
@@ -1105,8 +1135,10 @@ class NestedRun(_RunAnalysis):
         if not self.has_meta:
             raise AttributeError("No metadata stored in file")
 
-        stored_priors = self.file['metadata']['specified_priors'].attrs
-        fixed = self.file['metadata']['fixed_params'].attrs
+        with self._openfile('metadata') as mdata:
+
+            stored_priors = mdata['specified_priors'].attrs
+            fixed = mdata['fixed_params'].attrs
 
         prior_params = {}
 
@@ -1144,7 +1176,7 @@ class NestedRun(_RunAnalysis):
         import multiprocessing
 
         if load:
-            return CIModelVisualizer.load(self.file.filename)
+            return CIModelVisualizer.load(self._filename)
 
         else:
             labels, chain = self._get_equal_weight_chains(add_errors=add_errors)
@@ -1252,7 +1284,9 @@ class NestedRun(_RunAnalysis):
 
         if show_bounds:
             if self.has_meta:
-                maxfrac = self.file['metadata'].attrs['maxfrac']
+
+                with self._openfile('metadata') as mdata:
+                    maxfrac = mdata.attrs['maxfrac']
 
             else:
                 maxfrac = 0.8
@@ -1824,26 +1858,27 @@ class NestedRun(_RunAnalysis):
             # has metadata? if so fixed and excluded
             mssg += f'Has metadata = {self.has_meta}\n'
             if self.has_meta:
-                mdata = self.file['metadata']
 
-                mssg += 'Fixed parameters:\n'
-                fixed = mdata['fixed_params'].attrs
-                if fixed:
-                    for k, v in fixed.items():
-                        mssg += f'    {k} = {v}\n'
-                else:
-                    mssg += '    None\n'
+                with self._openfile('metadata') as mdata:
 
-                mssg += 'Excluded components:\n'
-                exc = mdata['excluded_likelihoods'].attrs
-                if exc:
-                    for i, v in exc.items():
-                        mssg += f'    ({i}) {v}\n'
-                else:
-                    mssg += '    None\n'
+                    mssg += 'Fixed parameters:\n'
+                    fixed = mdata['fixed_params'].attrs
+                    if fixed:
+                        for k, v in fixed.items():
+                            mssg += f'    {k} = {v}\n'
+                    else:
+                        mssg += '    None\n'
 
-                # TODO add specified bounds/priors
-                # mssg += 'Specified prior bounds'
+                    mssg += 'Excluded components:\n'
+                    exc = mdata['excluded_likelihoods'].attrs
+                    if exc:
+                        for i, v in exc.items():
+                            mssg += f'    ({i}) {v}\n'
+                    else:
+                        mssg += '    None\n'
+
+                    # TODO add specified bounds/priors
+                    # mssg += 'Specified prior bounds'
 
         out.write(mssg)
 
@@ -2262,7 +2297,7 @@ class RunCollection(_RunAnalysis):
         import multiprocessing
 
         if load:
-            filenames = [run.file.filename for run in self.runs]
+            filenames = [run._filename for run in self.runs]
             mc = ModelCollection.load(filenames)
 
         else:
