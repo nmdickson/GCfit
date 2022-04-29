@@ -13,7 +13,8 @@ import astropy.visualization as astroviz
 import logging
 
 
-__all__ = ['ModelVisualizer', 'CIModelVisualizer', 'ObservationsVisualizer']
+__all__ = ['ModelVisualizer', 'CIModelVisualizer', 'ObservationsVisualizer',
+           'ModelCollection']
 
 
 def _get_model(theta, observations):
