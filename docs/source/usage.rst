@@ -73,7 +73,7 @@ types of datasets, can be excluded from the posterior using the
 
 .. code-block:: python
 
-    excluded_L = ['proper_motion/gedr3', 'pulsar*']  # glob patterns can be used
+    excluded_L = ['proper_motion/GEDR3', 'pulsar*']  # glob patterns can be used
     fitter.nested_fit(cluster, excluded_likelihoods=excluded_L)
 
 
