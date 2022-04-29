@@ -880,7 +880,7 @@ class NestedRun(_RunAnalysis):
 
         with self._openfile('metadata') as mdata:
             try:
-                stop_kw = {'pfrac': dict(mdata.attrs['pfrac'])}
+                stop_kw = {'pfrac': mdata.attrs['pfrac']}
 
             except KeyError:
                 stop_kw = {}
