@@ -109,10 +109,10 @@ distribution function:
         m^{-\alpha_3} & 1\ M_\odot < m \leq 100\ M_\odot \\
     \end{cases}
 
-where the :math:`\alpha` parameters are defined by the free parameters above,
-and :math:`\xi(m) \Delta m` is the number of stars with masses within the range
-:math:`m + \Delta m`. This function determines the initial distribution of the
-cluster total mass.
+where the :math:`\alpha_i` parameters are defined by the free parameters above,
+and :math:`\xi(m) \Delta m` is the number of stars with masses within the
+interval :math:`m + \Delta m`. This function determines the initial distribution
+of the cluster total mass.
 
 To evolve to the present day population of stars, the rate of change of
 main-sequence stars in each mass bin is given by the equation:
@@ -133,16 +133,38 @@ determined from stellar evolution models, and vary with metallicity.
 Initial-final mass relations (IFMRs) for both are also determined from these
 models and are similarly metallicity-dependant. All stars within this mass
 range will form neutron stars, always with a mass of :math:`1.4\ M_\odot`.
+The amount and final mass of these remnants must then be scaled downwards to
+mimic the loss of newly formed remnants. By default a neutron star retention
+fraction of 10% is assumed.
 
-The other avenue for mass loss is through the escape of stars and
-remnants past the cluster tidal radius, lost to the potential of the host
-galaxy.
-Stellar losses are dominated by the escape of low-mass stars in the outer edges
-of the cluster. Lacking a precise method for determining the overall losses,
-which will depend on the cluster potential and galactic orbit, we opt to
-disallow the escape of any stars.
+This algorithm includes two more complicated
+prescriptions for the loss of black holes, accounting for dynamical
+ejections on top of the typical natal kicks.
+Firstly the ejection of, primarily low-mass, BHs through natal kicks is
+simulated. Beginning with the assumption that the kick velocity is drawn from a
+Maxwellian distribution with a dispersion of 265 km/s (scaled down by a
+"fallback fraction" interpolated from a grid of SSE models), the fraction of
+black holes retained in each mass bin is then found by integrating the
+kick velocity distribution from 0 to the estimated initial system escape
+velocity.
+Black holes are also ejected over time from the core of GCs due to dynamical
+interactions with one another. This
+process is simulated through the removal of BHs, beginning with the heaviest
+mean-mass bins through to the lighest. This is carried
+out iteratively until the combination of mass lost through both the natal
+kicks and these dynamical ejections equals the fraction of BHs specified by
+the :math:`\mathrm{BH}_{ret}` parameter.
 
-.. TODO Remnant losses
+The final avenue for cluster mass loss is through the escape of stars and
+remnants driven by two-body relaxation and lost to the potential of the host
+galaxy. Such losses, in a mass segregated cluster, are dominated by
+the escape of low-mass objects from the outer regions of the cluster.
+Determining the overall losses through this process is a complicated task,
+dependent on the dynamical history and orbital evolution of the cluster,
+which we do not attempt to model here.
+By default, we opt to ignore this preferential
+loss of low-mass stars and do not further model the escape of any
+stars, apart from through the processes described above.
 
 Observations
 ============
