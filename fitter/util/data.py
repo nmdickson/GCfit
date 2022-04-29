@@ -47,7 +47,12 @@ def bibcode2bibtex(bibcode):
 
     query = ads.ExportQuery(bibcode, format='bibtex')
 
-    return query.execute()
+    try:
+        return query.execute()
+
+    except ads.exceptions.APIResponseError as err:
+        mssg = "Failed to retrieve citation from ads"
+        raise RuntimeError(mssg) from err
 
 
 def bibcode2cite(bibcode):
@@ -66,16 +71,22 @@ def bibcode2cite(bibcode):
     query = ads.ExportQuery(bibcode, format='aastex')
 
     cites = []
-    for entry in query.execute().strip().split('\n'):
-        entry = entry.replace('\\', '')
 
-        # Grab citation from initial square brackets of aastex format
-        entry = entry[entry.index('[') + 1: entry.index(']')]
+    try:
+        for entry in query.execute().strip().split('\n'):
+            entry = entry.replace('\\', '')
 
-        # Add a space between the authors and the year
-        entry = f"{entry[:entry.index('(')]} {entry[entry.index('('):]}"
+            # Grab citation from initial square brackets of aastex format
+            entry = entry[entry.index('[') + 1: entry.index(']')]
 
-        cites.append(entry)
+            # Add a space between the authors and the year
+            entry = f"{entry[:entry.index('(')]} {entry[entry.index('('):]}"
+
+            cites.append(entry)
+
+    except ads.exceptions.APIResponseError as err:
+        mssg = "Failed to retrieve citation from ads"
+        raise RuntimeError(mssg) from err
 
     return '; '.join(cites)
 
