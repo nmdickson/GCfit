@@ -170,7 +170,14 @@ class Dataset:
         else:
             try:
                 bibcodes = self.mdata['source'].split(';')
-                self._citation = util.bibcode2cite(bibcodes)
+
+                try:
+                    self._citation = util.bibcode2cite(bibcodes)
+
+                except RuntimeError:
+                    # Failed to get citation, just return raw source
+                    self._citation = '; '.join(bibcodes)
+
                 return self._citation
 
             except KeyError:
