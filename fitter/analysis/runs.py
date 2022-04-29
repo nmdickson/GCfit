@@ -39,9 +39,22 @@ class _RunAnalysis:
         except AttributeError:
             return "Run Results"
 
-    def __init__(self, filename, observations, group, name=None):
+    def __init__(self, filename, observations, group, name=None, *,
+                 strict=True):
+
         self._filename = filename
         self._gname = group
+
+        # if strict, ensure all necessary groups exist in the given file
+        if strict:
+            with h5py.File(filename, 'r') as file:
+                reqd_groups = {group, 'metadata', 'statistics'}
+
+                if missing_groups := (reqd_groups - file.keys()):
+                    mssg = (f"Output file {filename} is invalid: "
+                            f"missing {missing_groups} groups. "
+                            "Are you sure this was created by GCfit?")
+                    raise RuntimeError(mssg)
 
         if name is not None:
             self.name = name
@@ -51,8 +64,8 @@ class _RunAnalysis:
 
         else:
             try:
-                with h5py.File(filename, 'r') as of:
-                    cluster = of['metadata'].attrs['cluster']
+                with h5py.File(filename, 'r') as file:
+                    cluster = file['metadata'].attrs['cluster']
 
                 self.obs = Observations(cluster)
 
@@ -264,11 +277,6 @@ class MCMCRun(_RunAnalysis):
 
         super().__init__(filename, observations, group, name)
 
-        # with self._openfile() as file:
-        # self.has_indiv = 'blobs' in self.file[self._gname]
-        # self.has_stats = 'statistics' in self.file
-        # self.has_meta = 'metadata' in self.file
-
         # Ensure the dimensions are initialized correctly
         self.iterations = slice(None)
         self.walkers = slice(None)
@@ -423,17 +431,16 @@ class MCMCRun(_RunAnalysis):
             chain = self._reduce(file[self._gname]['chain'])
 
             # Handle fixed parameters
-            if self.has_meta:
 
-                fixed = sorted(
-                    ((k, v, labels.index(k)) for k, v in
-                     file['metadata']['fixed_params'].attrs.items()),
-                    key=lambda item: labels.index(item[0])
-                )
+            fixed = sorted(
+                ((k, v, labels.index(k)) for k, v in
+                 file['metadata']['fixed_params'].attrs.items()),
+                key=lambda item: labels.index(item[0])
+            )
 
-                for k, v, i in fixed:
-                    labels[i] += ' (fixed)'
-                    chain = np.insert(chain, i, v, axis=-1)
+            for k, v, i in fixed:
+                labels[i] += ' (fixed)'
+                chain = np.insert(chain, i, v, axis=-1)
 
         if flatten:
             chain = chain.reshape((-1, chain.shape[-1]))
@@ -443,13 +450,10 @@ class MCMCRun(_RunAnalysis):
     def _reconstruct_priors(self):
         '''based on the stored "specified_priors" get a PriorTransform object'''
 
-        if not self.has_meta:
-            raise AttributeError("No metadata stored in file")
-
         with self._openfile('metadata') as mdata:
 
-            stored_priors = mdata['specified_priors'].attrs
-            fixed = mdata['fixed_params'].attrs
+            stored_priors = dict(mdata['specified_priors'].attrs)
+            fixed = dict(mdata['fixed_params'].attrs)
 
         prior_params = {}
 
@@ -646,24 +650,25 @@ class MCMCRun(_RunAnalysis):
 
     def plot_indiv(self, fig=None):
 
-        if not self.has_indiv:
-            raise AttributeError("No blobs stored in file")
-
         with self._openfile(self._gname) as file:
-            probs = file['blobs']
+            try:
+                probs = file['blobs']
+            except KeyError as err:
+                mssg = f"No individial likelihoods stored as blobs"
+                raise KeyError(mssg) from err
 
-        fig, axes = self._setup_multi_artist(fig, (len(probs.dtype), ),
-                                             sharex=True)
+            fig, axes = self._setup_multi_artist(fig, (len(probs.dtype), ),
+                                                 sharex=True)
 
-        for ind, ax in enumerate(axes.flatten()):
+            for ind, ax in enumerate(axes.flatten()):
 
-            label = probs.dtype.names[ind]
+                label = probs.dtype.names[ind]
 
-            indiv = self._reduce(probs[:][label])
+                indiv = self._reduce(probs[:][label])
 
-            ax.plot(self._iteration_domain, indiv)
+                ax.plot(self._iteration_domain, indiv)
 
-            ax.set_title(label)
+                ax.set_title(label)
 
         axes[-1].set_xlabel('Iterations')
 
@@ -753,9 +758,6 @@ class MCMCRun(_RunAnalysis):
 
     def plot_acceptance(self, fig=None, ax=None):
 
-        if not self.has_stats:
-            raise AttributeError("No statistics stored in file")
-
         fig, ax = self._setup_artist(fig, ax)
 
         with self._openfile('statistics') as stats:
@@ -839,29 +841,23 @@ class MCMCRun(_RunAnalysis):
                 Nwalkers = file[self._gname].attrs['nwalkers']
                 mssg += f'Dimensions = ({Nwalkers}, {Ndim})\n'
 
-                # has stats? if so ... idk
-                mssg += f'Has statistics = {self.has_stats}\n'
+                mdata = file['metadata']
 
-                # has metadata? if so fixed and excluded
-                mssg += f'Has metadata = {self.has_meta}\n'
-                if self.has_meta:
-                    mdata = file['metadata']
+                mssg += 'Fixed parameters:\n'
+                fixed = mdata['fixed_params'].attrs
+                if fixed:
+                    for k, v in fixed.items():
+                        mssg += f'    {k} = {v}\n'
+                else:
+                    mssg += '    None\n'
 
-                    mssg += 'Fixed parameters:\n'
-                    fixed = mdata['fixed_params'].attrs
-                    if fixed:
-                        for k, v in fixed.items():
-                            mssg += f'    {k} = {v}\n'
-                    else:
-                        mssg += '    None\n'
-
-                    mssg += 'Excluded components:\n'
-                    exc = mdata['excluded_likelihoods'].attrs
-                    if exc:
-                        for i, v in exc.items():
-                            mssg += f'    ({i}) {v}\n'
-                    else:
-                        mssg += '    None\n'
+                mssg += 'Excluded components:\n'
+                exc = mdata['excluded_likelihoods'].attrs
+                if exc:
+                    for i, v in exc.items():
+                        mssg += f'    ({i}) {v}\n'
+                else:
+                    mssg += '    None\n'
 
                     # TODO add specified bounds/priors
                     # mssg += 'Specified prior bounds'
@@ -876,14 +872,14 @@ class NestedRun(_RunAnalysis):
 
         from dynesty.dynamicsampler import weight_function
 
-        # If maxfrac is added as arg, make sure to add here as well
-        if self.has_meta:
+        # TODO If maxfrac is added as arg, make sure to add here as well
 
-            with self._openfile('metadata') as mdata:
-                stop_kw = {'pfrac': mdata.attrs['pfrac']}
+        with self._openfile('metadata') as mdata:
+            try:
+                stop_kw = {'pfrac': dict(mdata.attrs['pfrac'])}
 
-        else:
-            stop_kw = {}
+            except KeyError:
+                stop_kw = {}
 
         return weight_function(self.results, stop_kw, return_weights=True)[1][2]
 
@@ -947,9 +943,6 @@ class NestedRun(_RunAnalysis):
         super().__init__(filename, observations, group, name)
 
         self.results = self._get_results()
-
-        # self.has_meta = 'metadata' in self.file
-        # self.has_stats = 'statistics' in self.file
 
     # ----------------------------------------------------------------------
     # Helpers
@@ -1076,21 +1069,19 @@ class NestedRun(_RunAnalysis):
 
             labels = list(self.obs.initials)
 
-            if self.has_meta:
+            fixed = sorted(
+                ((k, v, labels.index(k)) for k, v in
+                 file['metadata']['fixed_params'].attrs.items()),
+                key=lambda item: labels.index(item[0])
+            )
 
-                fixed = sorted(
-                    ((k, v, labels.index(k)) for k, v in
-                     file['metadata']['fixed_params'].attrs.items()),
-                    key=lambda item: labels.index(item[0])
-                )
-
-                if include_fixed:
-                    for k, v, i in fixed:
-                        labels[i] += ' (fixed)'
-                        chain = np.insert(chain, i, v, axis=-1)
-                else:
-                    for *_, i in reversed(fixed):
-                        del labels[i]
+            if include_fixed:
+                for k, v, i in fixed:
+                    labels[i] += ' (fixed)'
+                    chain = np.insert(chain, i, v, axis=-1)
+            else:
+                for *_, i in reversed(fixed):
+                    del labels[i]
 
         return labels, chain
 
@@ -1111,34 +1102,29 @@ class NestedRun(_RunAnalysis):
 
             labels = list(self.obs.initials)
 
-            if self.has_meta:
+            fixed = sorted(
+                ((k, v, labels.index(k)) for k, v in
+                 file['metadata']['fixed_params'].attrs.items()),
+                key=lambda item: labels.index(item[0])
+            )
 
-                fixed = sorted(
-                    ((k, v, labels.index(k)) for k, v in
-                     file['metadata']['fixed_params'].attrs.items()),
-                    key=lambda item: labels.index(item[0])
-                )
-
-                if include_fixed:
-                    for k, v, i in fixed:
-                        labels[i] += ' (fixed)'
-                        eq_chain = np.insert(eq_chain, i, v, axis=-1)
-                else:
-                    for *_, i in reversed(fixed):
-                        del labels[i]
+            if include_fixed:
+                for k, v, i in fixed:
+                    labels[i] += ' (fixed)'
+                    eq_chain = np.insert(eq_chain, i, v, axis=-1)
+            else:
+                for *_, i in reversed(fixed):
+                    del labels[i]
 
         return labels, eq_chain
 
     def _reconstruct_priors(self):
         '''based on the stored "specified_priors" get a PriorTransform object'''
 
-        if not self.has_meta:
-            raise AttributeError("No metadata stored in file")
-
         with self._openfile('metadata') as mdata:
 
-            stored_priors = mdata['specified_priors'].attrs
-            fixed = mdata['fixed_params'].attrs
+            stored_priors = dict(mdata['specified_priors'].attrs)
+            fixed = dict(mdata['fixed_params'].attrs)
 
         prior_params = {}
 
@@ -1283,16 +1269,18 @@ class NestedRun(_RunAnalysis):
                             color=color, fc=facecolor)
 
         if show_bounds:
-            if self.has_meta:
 
-                with self._openfile('metadata') as mdata:
+            with self._openfile('metadata') as mdata:
+
+                try:
                     maxfrac = mdata.attrs['maxfrac']
 
-            else:
-                maxfrac = 0.8
+                except KeyError:
 
-                mssg = "No metadata stored in file, `maxfrac` defaults to 80%"
-                warnings.warn(mssg)
+                    maxfrac = 0.8
+
+                    mssg = "No maxfrac stored in metadata, defaulting to 80%"
+                    warnings.warn(mssg)
 
             ax.axhline(maxfrac * max(wts), c='g')
 
@@ -1852,33 +1840,26 @@ class NestedRun(_RunAnalysis):
             mssg += f'\nRun Metadata'
             mssg += f'\n{"=" * 12}\n'
 
-            # has stats? if so ... idk
-            mssg += f'Has statistics = {self.has_stats}\n'
+            with self._openfile('metadata') as mdata:
 
-            # has metadata? if so fixed and excluded
-            mssg += f'Has metadata = {self.has_meta}\n'
-            if self.has_meta:
+                mssg += 'Fixed parameters:\n'
+                fixed = mdata['fixed_params'].attrs
+                if fixed:
+                    for k, v in fixed.items():
+                        mssg += f'    {k} = {v}\n'
+                else:
+                    mssg += '    None\n'
 
-                with self._openfile('metadata') as mdata:
+                mssg += 'Excluded components:\n'
+                exc = mdata['excluded_likelihoods'].attrs
+                if exc:
+                    for i, v in exc.items():
+                        mssg += f'    ({i}) {v}\n'
+                else:
+                    mssg += '    None\n'
 
-                    mssg += 'Fixed parameters:\n'
-                    fixed = mdata['fixed_params'].attrs
-                    if fixed:
-                        for k, v in fixed.items():
-                            mssg += f'    {k} = {v}\n'
-                    else:
-                        mssg += '    None\n'
-
-                    mssg += 'Excluded components:\n'
-                    exc = mdata['excluded_likelihoods'].attrs
-                    if exc:
-                        for i, v in exc.items():
-                            mssg += f'    ({i}) {v}\n'
-                    else:
-                        mssg += '    None\n'
-
-                    # TODO add specified bounds/priors
-                    # mssg += 'Specified prior bounds'
+                # TODO add specified bounds/priors
+                # mssg += 'Specified prior bounds'
 
         out.write(mssg)
 
