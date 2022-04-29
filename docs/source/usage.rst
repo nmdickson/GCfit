@@ -177,13 +177,13 @@ for more information on each.
 *Dynamic* nested sampling allows for a targeted focusing of the sampler
 algorithm in order to more efficiently probe the posterior or evidence. This
 works by beginning with a short "baseline" static run, to define the likelihood
-surface, and then iterative batches of sampling in targetted locations of
+surface, and then iterative batches of sampling in targeted locations of
 parameter space.
 
 The exact definition of these targets depends on a number of parameters. Here
 the two most important can be specified; ``pfrac``, which defines the fraction
 of importance to give to the posterior vs the evidence, and ``maxfrac``, which
-determines the size of the targetted space.
+determines the size of the targeted space.
 
 .. code-block:: python
 
