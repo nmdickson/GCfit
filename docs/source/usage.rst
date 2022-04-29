@@ -104,7 +104,7 @@ easily parallelized in multiple ways.
 
 Local parallelization (through the multiprocessing module) can be triggered
 using the ``Ncpu`` argument, which simply accepts an integer number of processes
-to spawn.z
+to spawn.
 
 .. code-block:: python
 
