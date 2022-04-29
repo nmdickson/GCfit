@@ -697,6 +697,12 @@ class Model(lp.limepy):
     {BH,NS,WD}_Nj : astropy.Quantity
         Black hole, neutron star or white dwarf total bin number (Mj / mj)
 
+    theta : dict
+        Dictionary of input parameters.
+        Some parameters may technically also be accessible as attributes, but
+        that interface should not be considered stable. This dictionary
+        should be used as the only access to any input parameters.
+
     Notes
     -----
     The IMF of the model is defined using a three-component broken power law,

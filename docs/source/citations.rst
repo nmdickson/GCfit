@@ -17,9 +17,9 @@ While these can be accessed directly through the metadata attribute of each
 
 .. code-block:: python
     
-    >>> dset = obs['proper_motion/gedr3']
+    >>> dset = obs['number_density']
     >>> dset.mdata['source']
-    '2021MNRAS.505.5978V'
+    '2019MNRAS.485.4906D'
 
 ``GCfit`` also comes equipped with some utility functions to automatically
 convert bibcodes to useful formats, like bibtex. This functionality requires
@@ -32,27 +32,29 @@ formats directly:
 .. code-block:: python
 
     >>> sources = obs.get_sources()
-    >>> print(sources['proper_motion/gedr3'])
-    @ARTICLE{2021MNRAS.505.5978V,
-           author = {{Vasiliev}, Eugene and {Baumgardt}, Holger},
+    >>> print(sources['number_density'])
+    @ARTICLE{2019MNRAS.485.4906D,
+           author = {{de Boer}, T.~J.~L. and {Gieles}, M. and {Balbinot}, E. and {H{\'e}nault-Brunet}, V. and {Sollima}, A. and {Watkins}, L.~L. and {Claydon}, I.},
+            title = "{Globular cluster number density profiles using Gaia DR2}",
     ...
           adsnote = {Provided by the SAO/NASA Astrophysics Data System}
     }
-    >>> dset.cite()
-    'Vasiliev & Baumgardt (2021)'
+    >>> print(dset.cite())
+    de Boer et al. (2019)
 
 Or the utility methods can be used directly:
 
 .. code-block:: python
 
     >>> print(fitter.util.bibcode2bibtex(dset.mdata['source']))
-    @ARTICLE{2021MNRAS.505.5978V,
-           author = {{Vasiliev}, Eugene and {Baumgardt}, Holger},
+    @ARTICLE{2019MNRAS.485.4906D,
+           author = {{de Boer}, T.~J.~L. and {Gieles}, M. and {Balbinot}, E. and {H{\'e}nault-Brunet}, V. and {Sollima}, A. and {Watkins}, L.~L. and {Claydon}, I.},
+            title = "{Globular cluster number density profiles using Gaia DR2}",
     ...
           adsnote = {Provided by the SAO/NASA Astrophysics Data System}
     }
-    >>> fitter.util.bibcode2cite(dset.mdata['source'])
-    'Vasiliev & Baumgardt (2021)'
+    >>> print(fitter.util.bibcode2cite(dset.mdata['source']))
+    de Boer et al. (2019)
 
 
 Models
