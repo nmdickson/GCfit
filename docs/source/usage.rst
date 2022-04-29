@@ -89,7 +89,7 @@ distribution.
     priors = {
         "d": ("Gaussian", 5.2, 0.01), # Gaussian priors specify mean and width 
         "M": ("Uniform", [(0, 1.2)]), # Uniform priors specify a list of bounds
-        "a2": ("Uniform", [('a1', 4)]), # Other params can be used as bounds
+        "a2": ("Uniform", [(0, 4), ('a1', 4)]), # Other params can be used as bounds
     }
 
     fitter.nested_fit(cluster, param_priors=priors)
