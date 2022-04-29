@@ -51,10 +51,10 @@ The models used in ``GCfit`` are defined by 13 free parameters.
     * - :math:`r_h`
       - ``rh``
       - The system half-mass radius, in parsecs.
-    * - :math:`r_a`
+    * - :math:`\log(r_a)`
       - ``ra``
-      - The anisotropy-radius, which determines the amount of anisotropy in the
-        system (higher ra values indicate more isotropy)
+      - The (log) anisotropy-radius, which determines the amount of anisotropy
+        in the system (higher ra values indicate more isotropy).
     * - g
       - ``g``
       - The truncation parameter, which controls the sharpness of the outer
