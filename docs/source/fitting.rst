@@ -280,29 +280,36 @@ Mass Functions
 """"""""""""""
 
 To compare against the Mass function datasets, the model surface density is
-(Monte Carlo) integrated, within each dataset's corresponding field boundaries,
-over each radial bin :math:`j` (with bounds :math:`r0,\ r1`) to get the count
-:math:`N_{\rm{model},j}` of stars within this bin slice of the field:
+integrated, using a Monte Carlo method, within the area :math:`A_k` sliced from
+each dataset's photometric field boundaries by the annulus of
+the radial bin :math:`k`, to get the count :math:`N_{\rm{model},j,k}` of stars
+within this footprint in the mass bin :math:`j`:
 
 .. math::
 
-    N_{\rm{model},j} = \int_{r_0}^{r_1} \Sigma(r) dr
+    N_{\rm{model},j,k} = \int_{A_k} \Sigma_j(r) dA_k
 
-This count can be used in the usual gaussian likelihood:
+This count can then be used in the usual gaussian likelihood:
+
+.. math::
+    \ln(\mathcal{L}_i) = \frac{1}{2}
+        \sum_k^{\substack{\rm{radial}\\\rm{bins}}}
+        \sum_j^{\substack{\rm{mass}\\\rm{bins}}}
+        \left( \frac{(N_{\rm{obs},j,k} - N_{\rm{model},j,k})^2}
+                    {\delta N_{j,k}^2}
+              - \ln(\delta N_{j,k}^2) \right)
+
+
+The error term :math:`\delta N_{j,k}` must also account for unknown
+sources of error in the mass function counts. Therefore we include another
+free nuisance parameter (``F``) which scales the upwards the uncertainties:
 
 .. math::
 
-    \ln(\mathcal{L}_i) = \frac{1}{2} \sum_j^{\rm{bins}}
-        \left( \frac{(N_{\rm{obs},j} - N_{\rm{model},j})^2}{\delta N_j^2}
-              - \ln(\delta N_j^2) \right)
+    \delta N_{j,k} = \delta N_{\rm{obs},j,k} \cdot F
 
-where the error :math:`\delta N` also includes the nuisance parameter ``F``
-which acts to account for unknown sources of error in the mass function counts
-by scaling upwards the uncertainties in the counts:
-
-.. math::
-
-    \delta N_j = \delta N_{\rm{model},j} \cdot F
+This scaling boosts the errors by a constant factor, leading to larger
+relative errors in regions with lower counts.
 
 Pulsar Timings
 """"""""""""""
