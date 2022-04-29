@@ -48,7 +48,7 @@ class _RunAnalysis:
         # if strict, ensure all necessary groups exist in the given file
         if strict:
             with h5py.File(filename, 'r') as file:
-                reqd_groups = {group, 'metadata', 'statistics'}
+                reqd_groups = {group, 'metadata'}
 
                 if missing_groups := (reqd_groups - file.keys()):
                     mssg = (f"Output file {filename} is invalid: "
@@ -760,8 +760,12 @@ class MCMCRun(_RunAnalysis):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        with self._openfile('statistics') as stats:
-            acc = self._reduce(stats['acceptance_rate'])
+        with self._openfile() as file:
+            try:
+                acc = self._reduce(file['statistics']['acceptance_rate'])
+            except KeyError as err:
+                mssg = f"No acceptance rate stored"
+                raise KeyError(mssg) from err
 
         ax.plot(self._iteration_domain, acc)
 
