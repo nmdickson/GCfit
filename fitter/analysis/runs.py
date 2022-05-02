@@ -2399,7 +2399,7 @@ class RunCollection(_RunAnalysis):
         ax.set_ylabel(self._get_latex_labels(param2))
 
         if annotate:
-            _Annotator(fig, self.runs, x, y)
+            _Annotator(fig, ax, self.runs, x, y)
 
         else:
             # TODO not happy with any legend
@@ -2467,7 +2467,7 @@ class RunCollection(_RunAnalysis):
             res_ax.set_xlabel(param)
 
         if annotate:
-            _Annotator(fig, self.runs, x, y)
+            _Annotator(fig, ax, self.runs, x, y)
         else:
             # TODO not happy with any legend
             fig.legend(loc='upper center', ncol=10)
@@ -2530,7 +2530,7 @@ class RunCollection(_RunAnalysis):
             res_ax.set_xlabel(param)
 
         if annotate:
-            _Annotator(fig, self.runs, x, y)
+            _Annotator(fig, ax, self.runs, x, y)
         else:
             # TODO not happy with any legend
             fig.legend(loc='upper center', ncol=10)
