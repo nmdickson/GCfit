@@ -12,6 +12,8 @@ import h5py
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mpl_clr
+import matplotlib.offsetbox as mpl_obx
+
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 
@@ -1878,55 +1880,62 @@ class _Annotator:
     picker=True must be set on the actual plot
     '''
 
-    arrow = {'arrowstyle': "-", "connectionstyle": "arc3", "color": "black"}
+    highlight_style = {'marker': 'D', 'linestyle': 'None',
+                       'mfc': 'none', 'mec': 'red', 'mew': 2.0}
 
-    def __init__(self, fig, runs, xdata, ydata, loc='upper right'):
-        self.fig = fig
+    def set_text(self, text):
+        ''''get the corresponding `TextArea` and set its text'''
+        return self.annotation.get_child().set_text(text)
+
+    def set_highlight(self, x, y):
+        self.highlight, = self.ax.plot(x, y, **self.highlight_style)
+
+    def remove_highlight(self):
+        if self.highlight:
+            self.highlight.remove()
+            self.highlight = None
+
+    def __init__(self, fig, ax, runs, xdata, ydata,
+                 loc='upper right', **annot_kw):
+        self.fig, self.ax = fig, ax
         self.runs, self.xdata, self.ydata = runs, xdata, ydata
-
-        if loc == 'lower right':
-            self.loc = (0.95, 0.05)
-        elif loc == 'upper right':
-            self.loc = (0.95, 0.95)
-        elif loc == 'lower left':
-            self.loc = (0.05, 0.05)
-        elif loc == 'upper left':
-            self.loc = (0.05, 0.95)
-        else:
-            mssg = (f"{loc} is not a valid value for loc; supported values are"
-                    f" 'lower right','upper right','lower left','upper left'")
-            raise ValueError(mssg)
 
         self.fig.canvas.mpl_connect('pick_event', self)
 
-        self.cur_annot = None
         self.cur_ind = None
+
+        # initialize annotation box
+        self.annotation = mpl_obx.AnchoredText(None, loc=loc, **annot_kw)
+        self.ax.add_artist(self.annotation)
+        self.annotation.set_visible(False)
+
+        self.highlight = None
 
     def __call__(self, event):
         ind = event.ind[0]
-        ax = event.artist.axes
 
-        xy = (self.xdata[ind], self.ydata[ind])
-
-        # cluster = self.runs[ind]
         cluster = self.runs[ind].name
 
-        # clear old annotation
-        if self.cur_annot is not None:
-            self.cur_annot.remove()
+        # get rid of the current highlight point
+        self.remove_highlight()
 
+        # rehitting the same one, hide the annotation and highlight
         if ind == self.cur_ind:
             self.cur_ind = None
-            self.cur_annot = None
 
+            self.annotation.set_visible(False)
+
+            self.set_text(None)
+
+        # hitting new one, reset the text, ensure its visible and add highlight
         else:
             self.cur_ind = ind
-            # self.cur_annot = ax.annotate(cluster, xy, (xtext, ytext),
-            #                              arrowprops=self.arrow)
 
-            self.cur_annot = ax.annotate(cluster, xy, self.loc,
-                                         textcoords='axes fraction',
-                                         arrowprops=self.arrow)
+            self.annotation.set_visible(True)
+
+            self.set_text(cluster)
+
+            self.set_highlight(self.xdata[ind], self.ydata[ind])
 
         self.fig.canvas.draw()
 
@@ -2370,7 +2379,8 @@ class RunCollection(_RunAnalysis):
         return fig
 
     def plot_relation(self, param1, param2, fig=None, ax=None, *,
-                      errors='bars', annotate=False, **kwargs):
+                      errors='bars', annotate=False, annotate_kwargs=None,
+                      **kwargs):
         '''plot correlation between two param means with all runs
 
         errorbars, or 2d-ellipses
@@ -2390,7 +2400,11 @@ class RunCollection(_RunAnalysis):
         ax.set_ylabel(self._get_latex_labels(param2))
 
         if annotate:
-            _Annotator(fig, self.runs, x, y)
+
+            if annotate_kwargs is None:
+                annotate_kwargs = {}
+
+            _Annotator(fig, ax, self.runs, x, y, **annotate_kwargs)
 
         else:
             # TODO not happy with any legend
@@ -2401,7 +2415,8 @@ class RunCollection(_RunAnalysis):
     def plot_lit_comp(self, param, truths, e_truths=None, src_truths='',
                       fig=None, ax=None, *,
                       clr_param=None, residuals=False, inset=False,
-                      annotate=False, diagonal=True, **kwargs):
+                      annotate=False, annotate_kwargs=None, diagonal=True,
+                      **kwargs):
         '''plot a x-y comparison against provided literature values
 
         Meant to compare 1-1 the same parameter (i.e. mass vs mass, etc)
@@ -2458,7 +2473,12 @@ class RunCollection(_RunAnalysis):
             res_ax.set_xlabel(param)
 
         if annotate:
-            _Annotator(fig, self.runs, x, y)
+
+            if annotate_kwargs is None:
+                annotate_kwargs = {}
+
+            _Annotator(fig, ax, self.runs, x, y, **annotate_kwargs)
+
         else:
             # TODO not happy with any legend
             fig.legend(loc='upper center', ncol=10)
@@ -2469,7 +2489,7 @@ class RunCollection(_RunAnalysis):
                           lit, e_lit=None, param_lit='', src_lit='',
                           fig=None, ax=None, *, lit_on_x=False,
                           clr_param=None, residuals=False,
-                          annotate=False, **kwargs):
+                          annotate=False, annotate_kwargs=None, **kwargs):
         '''plot a relation plot against provided literature values
 
         Meant to compare two different parameters, with one from outside source
@@ -2521,7 +2541,12 @@ class RunCollection(_RunAnalysis):
             res_ax.set_xlabel(param)
 
         if annotate:
-            _Annotator(fig, self.runs, x, y)
+
+            if annotate_kwargs is None:
+                annotate_kwargs = {}
+
+            _Annotator(fig, ax, self.runs, x, y, **annotate_kwargs)
+
         else:
             # TODO not happy with any legend
             fig.legend(loc='upper center', ncol=10)
