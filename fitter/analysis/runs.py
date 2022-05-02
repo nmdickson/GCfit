@@ -12,6 +12,8 @@ import h5py
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mpl_clr
+import matplotlib.offsetbox as mpl_obx
+
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 
@@ -1880,53 +1882,43 @@ class _Annotator:
 
     arrow = {'arrowstyle': "-", "connectionstyle": "arc3", "color": "black"}
 
-    def __init__(self, fig, runs, xdata, ydata, loc='upper right'):
-        self.fig = fig
-        self.runs, self.xdata, self.ydata = runs, xdata, ydata
+    def set_text(self, text):
+        ''''get the corresponding `TextArea` and set its text'''
+        return self.annotation.get_child().set_text(text)
 
-        if loc == 'lower right':
-            self.loc = (0.95, 0.05)
-        elif loc == 'upper right':
-            self.loc = (0.95, 0.95)
-        elif loc == 'lower left':
-            self.loc = (0.05, 0.05)
-        elif loc == 'upper left':
-            self.loc = (0.05, 0.95)
-        else:
-            mssg = (f"{loc} is not a valid value for loc; supported values are"
-                    f" 'lower right','upper right','lower left','upper left'")
-            raise ValueError(mssg)
+    def __init__(self, fig, ax, runs, loc='upper right', **annot_kw):
+        self.fig, self.ax = fig, ax
+        self.runs = runs
 
         self.fig.canvas.mpl_connect('pick_event', self)
 
-        self.cur_annot = None
         self.cur_ind = None
+
+        # initialize annotation box
+        self.annotation = mpl_obx.AnchoredText(None, loc=loc, **annot_kw)
+        self.ax.add_artist(self.annotation)
+        self.annotation.set_visible(False)
 
     def __call__(self, event):
         ind = event.ind[0]
-        ax = event.artist.axes
 
-        xy = (self.xdata[ind], self.ydata[ind])
-
-        # cluster = self.runs[ind]
         cluster = self.runs[ind].name
 
-        # clear old annotation
-        if self.cur_annot is not None:
-            self.cur_annot.remove()
-
+        # rehitting the same one, hide the annotation
         if ind == self.cur_ind:
             self.cur_ind = None
-            self.cur_annot = None
 
+            self.annotation.set_visible(False)
+
+            self.set_text(None)
+
+        # hitting new one, reset the text and make sure its visible
         else:
             self.cur_ind = ind
-            # self.cur_annot = ax.annotate(cluster, xy, (xtext, ytext),
-            #                              arrowprops=self.arrow)
 
-            self.cur_annot = ax.annotate(cluster, xy, self.loc,
-                                         textcoords='axes fraction',
-                                         arrowprops=self.arrow)
+            self.annotation.set_visible(True)
+
+            self.set_text(cluster)
 
         self.fig.canvas.draw()
 
