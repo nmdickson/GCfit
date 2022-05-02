@@ -2675,7 +2675,7 @@ class ModelCollection:
 
             yield (fig, mv) if yield_model else fig
 
-    def save_plots(self, plot_func, fn_pattern=None, save_kw=None,
+    def save_plots(self, plot_func, fn_pattern=None, save_kw=None, size=None,
                    *args, **kwargs):
         '''
         fn_pattern is format string which will be passed the kw "cluster" name
@@ -2692,11 +2692,16 @@ class ModelCollection:
 
         for fig, mv in self.iter_plots(plot_func, True, *args, **kwargs):
 
+            if size is not None:
+                fig.set_size_inches(size)
+
             save_kw['fname'] = fn_pattern.format(cluster=mv.name)
 
             logging.info(f'Saving {mv} to {save_kw["fname"]}')
 
             fig.savefig(**save_kw)
+
+            plt.close(fig)
 
     # ----------------------------------------------------------------------
     # Collection Attributes
