@@ -1880,15 +1880,25 @@ class _Annotator:
     picker=True must be set on the actual plot
     '''
 
-    arrow = {'arrowstyle': "-", "connectionstyle": "arc3", "color": "black"}
+    highlight_style = {'marker': 'D', 'linestyle': 'None',
+                       'mfc': 'none', 'mec': 'red', 'mew': 2.0}
 
     def set_text(self, text):
         ''''get the corresponding `TextArea` and set its text'''
         return self.annotation.get_child().set_text(text)
 
-    def __init__(self, fig, ax, runs, loc='upper right', **annot_kw):
+    def set_highlight(self, x, y):
+        self.highlight, = self.ax.plot(x, y, **self.highlight_style)
+
+    def remove_highlight(self):
+        if self.highlight:
+            self.highlight.remove()
+            self.highlight = None
+
+    def __init__(self, fig, ax, runs, xdata, ydata,
+                 loc='upper right', **annot_kw):
         self.fig, self.ax = fig, ax
-        self.runs = runs
+        self.runs, self.xdata, self.ydata = runs, xdata, ydata
 
         self.fig.canvas.mpl_connect('pick_event', self)
 
@@ -1899,12 +1909,17 @@ class _Annotator:
         self.ax.add_artist(self.annotation)
         self.annotation.set_visible(False)
 
+        self.highlight = None
+
     def __call__(self, event):
         ind = event.ind[0]
 
         cluster = self.runs[ind].name
 
-        # rehitting the same one, hide the annotation
+        # get rid of the current highlight point
+        self.remove_highlight()
+
+        # rehitting the same one, hide the annotation and highlight
         if ind == self.cur_ind:
             self.cur_ind = None
 
@@ -1912,13 +1927,15 @@ class _Annotator:
 
             self.set_text(None)
 
-        # hitting new one, reset the text and make sure its visible
+        # hitting new one, reset the text, ensure its visible and add highlight
         else:
             self.cur_ind = ind
 
             self.annotation.set_visible(True)
 
             self.set_text(cluster)
+
+            self.set_highlight(self.xdata[ind], self.ydata[ind])
 
         self.fig.canvas.draw()
 
