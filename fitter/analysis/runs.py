@@ -2379,7 +2379,8 @@ class RunCollection(_RunAnalysis):
         return fig
 
     def plot_relation(self, param1, param2, fig=None, ax=None, *,
-                      errors='bars', annotate=False, **kwargs):
+                      errors='bars', annotate=False, annotate_kwargs=None,
+                      **kwargs):
         '''plot correlation between two param means with all runs
 
         errorbars, or 2d-ellipses
@@ -2399,7 +2400,11 @@ class RunCollection(_RunAnalysis):
         ax.set_ylabel(self._get_latex_labels(param2))
 
         if annotate:
-            _Annotator(fig, ax, self.runs, x, y)
+
+            if annotate_kwargs is None:
+                annotate_kwargs = {}
+
+            _Annotator(fig, ax, self.runs, x, y, **annotate_kwargs)
 
         else:
             # TODO not happy with any legend
@@ -2410,7 +2415,8 @@ class RunCollection(_RunAnalysis):
     def plot_lit_comp(self, param, truths, e_truths=None, src_truths='',
                       fig=None, ax=None, *,
                       clr_param=None, residuals=False, inset=False,
-                      annotate=False, diagonal=True, **kwargs):
+                      annotate=False, annotate_kwargs=None, diagonal=True,
+                      **kwargs):
         '''plot a x-y comparison against provided literature values
 
         Meant to compare 1-1 the same parameter (i.e. mass vs mass, etc)
@@ -2467,7 +2473,12 @@ class RunCollection(_RunAnalysis):
             res_ax.set_xlabel(param)
 
         if annotate:
-            _Annotator(fig, ax, self.runs, x, y)
+
+            if annotate_kwargs is None:
+                annotate_kwargs = {}
+
+            _Annotator(fig, ax, self.runs, x, y, **annotate_kwargs)
+
         else:
             # TODO not happy with any legend
             fig.legend(loc='upper center', ncol=10)
@@ -2478,7 +2489,7 @@ class RunCollection(_RunAnalysis):
                           lit, e_lit=None, param_lit='', src_lit='',
                           fig=None, ax=None, *, lit_on_x=False,
                           clr_param=None, residuals=False,
-                          annotate=False, **kwargs):
+                          annotate=False, annotate_kwargs=None, **kwargs):
         '''plot a relation plot against provided literature values
 
         Meant to compare two different parameters, with one from outside source
@@ -2530,7 +2541,12 @@ class RunCollection(_RunAnalysis):
             res_ax.set_xlabel(param)
 
         if annotate:
-            _Annotator(fig, ax, self.runs, x, y)
+
+            if annotate_kwargs is None:
+                annotate_kwargs = {}
+
+            _Annotator(fig, ax, self.runs, x, y, **annotate_kwargs)
+
         else:
             # TODO not happy with any legend
             fig.legend(loc='upper center', ncol=10)
