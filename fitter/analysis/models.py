@@ -1618,7 +1618,7 @@ class ModelVisualizer(_ClusterVisualizer):
         self.rh = model.rh
         self.ra = model.ra
         self.rt = model.rt
-        self.F = model.F
+        self.F = model.theta['F']
         self.s2 = model.theta['s2']
         self.d = model.d
 

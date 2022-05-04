@@ -993,7 +993,7 @@ def likelihood_mass_func(model, mf, field, *, hyperparams=False):
 
         N_data[r_mask] = N[r_mask]
         N_model[r_mask] = N_spline(mbin_mean[r_mask])
-        err[r_mask] = model.F * ΔN[r_mask]
+        err[r_mask] = model.theta['F'] * ΔN[r_mask]
 
     return likelihood(N_data, N_model, err)
 
