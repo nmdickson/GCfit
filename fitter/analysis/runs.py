@@ -2269,6 +2269,46 @@ class RunCollection(_RunAnalysis):
 
         return math_mapping.get(param, param)
 
+    def _add_colours(self, ax, mappable, cparam, clabel=None, *,
+                     extra_artists=None, fix_cbar_ticks=True):
+        '''add colours to all artists and add the relevant colorbar to ax'''
+        import matplotlib.colorbar as mpl_cbar
+
+        # Get colour values
+        try:
+            cvalues = np.array(self._get_param(cparam))[:, 0]
+            clabel = cparam if clabel is None else clabel
+
+        except TypeError:
+            cvalues = cparam
+
+        cnorm = mpl_clr.Normalize(cvalues.min(), cvalues.max())
+        colors = self._cmap(cnorm(cvalues))
+
+        # apply colour to all artists
+        mappable.set_color(colors)
+
+        if extra_artists is not None:
+            for artist in extra_artists:
+                artist.set_color(colors)
+
+        # make ax for colorbar
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="3%", pad=0.05)
+
+        # make colorbar
+        cbar = mpl_cbar.Colorbar(cax, mappable)
+
+        cbar.set_label(clabel)
+
+        # if desired, explicitly set ticks at 25% intervals of bar
+        if fix_cbar_ticks:
+            cticks = [0, .25, .5, .75, 1.]
+            ctick_labels = [f'{t:.2f}' for t in cnorm.inverse(cticks)]
+            cbar.set_ticks(cticks, labels=ctick_labels)
+
+        return cbar
+
     # ----------------------------------------------------------------------
     # Model Collection Visualizers
     # ----------------------------------------------------------------------
