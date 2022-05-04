@@ -74,7 +74,6 @@ class _RunAnalysis:
 
             except KeyError as err:
                 mssg = "No cluster name in metadata, must supply observations"
-                print(filename, err, type(err))
                 raise ValueError(mssg) from err
 
     @contextlib.contextmanager
@@ -2271,7 +2270,7 @@ class RunCollection(_RunAnalysis):
 
         return math_mapping.get(param, param)
 
-    def _add_colours(self, ax, mappable, cparam, clabel=None, *,
+    def _add_colours(self, ax, mappable, cparam, clabel=None, *, alpha=1.,
                      extra_artists=None, fix_cbar_ticks=True):
         '''add colours to all artists and add the relevant colorbar to ax'''
         import matplotlib.colorbar as mpl_cbar
@@ -2287,12 +2286,29 @@ class RunCollection(_RunAnalysis):
         cnorm = mpl_clr.Normalize(cvalues.min(), cvalues.max())
         colors = self._cmap(cnorm(cvalues))
 
+        colors[:, -1] = alpha
+
         # apply colour to all artists
-        mappable.set_color(colors)
+        if mappable is not None:
+            mappable.set_color(colors)
 
         if extra_artists is not None:
             for artist in extra_artists:
-                artist.set_color(colors)
+
+                # Set colors normally
+                try:
+                    artist.set_color(colors)
+
+                # If fails, attempt to set one colour at a time
+                except (ValueError, AttributeError) as err:
+
+                    try:
+                        for i, subart in enumerate(artist):
+                            subart.set_color(colors[i])
+
+                    except (ValueError, TypeError):
+                        mssg = f'Cannot `set_color` of extra artist "{artist}"'
+                        raise TypeError(mssg) from err
 
         # make ax for colorbar
         divider = make_axes_locatable(ax)
@@ -2572,7 +2588,7 @@ class RunCollection(_RunAnalysis):
     # ----------------------------------------------------------------------
 
     def plot_param_means(self, param, fig=None, ax=None,
-                         color=None, sort=False, *args, **kwargs):
+                         clr_param=None, **kwargs):
         '''plot mean and std errorbars for each run of the given param'''
         fig, ax = self._setup_artist(fig, ax)
 
@@ -2582,13 +2598,12 @@ class RunCollection(_RunAnalysis):
 
         labels = self.names
 
-        kwargs.setdefault('fmt', 'o')
+        errbar = ax.errorbar(x=xticks, y=mean, yerr=std, fmt='none', **kwargs)
+        points = ax.scatter(x=xticks, y=mean, picker=True, **kwargs)
 
-        if sort:
-            s_ind = np.argsort(mean)
-            mean, std, labels = mean[s_ind], std[s_ind], np.array(labels)[s_ind]
-
-        ax.errorbar(x=xticks, y=mean, yerr=std, *args, **kwargs)
+        if clr_param is not None:
+            err_artists = itertools.chain.from_iterable(errbar[1:])
+            self._add_colours(ax, points, clr_param, extra_artists=err_artists)
 
         ax.set_xticks(xticks, labels=labels, rotation=45)
 
@@ -2599,8 +2614,7 @@ class RunCollection(_RunAnalysis):
         return fig
 
     def plot_param_bar(self, param, fig=None, ax=None,
-                       color=None, edgecolor=None, alpha=0.3, sort=False,
-                       *args, **kwargs):
+                       clr_param=None, alpha=0.3, *args, **kwargs):
         '''plot mean and std bar chart for each run of the given param'''
         fig, ax = self._setup_artist(fig, ax)
 
@@ -2610,12 +2624,11 @@ class RunCollection(_RunAnalysis):
 
         labels = self.names
 
-        if sort:
-            s_ind = np.argsort(mean)
-            mean, std, labels = mean[s_ind], std[s_ind], np.array(labels)[s_ind]
+        bars = ax.bar(x=xticks, height=mean, yerr=std, *args, **kwargs)
 
-        # TODO change ecolor to be based on color but visible
-        ax.bar(x=xticks, height=mean, yerr=std, *args, **kwargs)
+        if clr_param is not None:
+            self._add_colours(ax, None, clr_param,
+                              extra_artists=(bars,), alpha=alpha)
 
         ax.set_xticks(xticks, labels=labels, rotation=45)
 
@@ -2624,8 +2637,7 @@ class RunCollection(_RunAnalysis):
         return fig
 
     def plot_param_violins(self, param, fig=None, ax=None,
-                           color=None, edgecolor=None, alpha=0.3, sort=False,
-                           *args, **kwargs):
+                           clr_param=None, alpha=0.3, *args, **kwargs):
         '''plot violins for each run of the given param'''
         fig, ax = self._setup_artist(fig, ax)
 
@@ -2635,21 +2647,13 @@ class RunCollection(_RunAnalysis):
 
         labels = self.names
 
-        if sort:
-            mean = np.array(self._get_param(param))[:, 0]
-            _, chains, labels = zip(*sorted(zip(mean, chains, labels)))
+        parts = ax.violinplot(chains, positions=xticks, *args, **kwargs)
 
-        artists = ax.violinplot(chains, positions=xticks, *args, **kwargs)
+        if clr_param is not None:
+            self._add_colours(ax, None, clr_param, extra_artists=parts.values())
 
-        # TODO add similar clr_param stuff as above
-
-        for part in artists['bodies']:
-            part.set_facecolor(color)
-            part.set_edgecolor(edgecolor)
+        for part in parts['bodies']:
             part.set_alpha(alpha)
-
-        for linetype in (set(artists) - {'bodies'}):
-            artists[linetype].set_color(color)
 
         ax.set_xticks(xticks, labels=labels, rotation=45)
 
