@@ -6,6 +6,7 @@ import sys
 import pathlib
 import logging
 import warnings
+import itertools
 import contextlib
 
 import h5py
@@ -2243,6 +2244,7 @@ class RunCollection(_RunAnalysis):
     def _get_latex_labels(self, param):
         '''return the param names in math mode, for plotting'''
 
+        # TODO FEHE should always be FeH, change everything (25)
         math_mapping = {
             'W0': r'$\phi_0$',
             'M': r'$M\ [10^6 M_\odot]$',
@@ -2420,7 +2422,7 @@ class RunCollection(_RunAnalysis):
 
     def plot_relation(self, param1, param2, fig=None, ax=None, *,
                       errors='bars', annotate=False, annotate_kwargs=None,
-                      **kwargs):
+                      clr_param=None, **kwargs):
         '''plot correlation between two param means with all runs
 
         errorbars, or 2d-ellipses
@@ -2428,16 +2430,18 @@ class RunCollection(_RunAnalysis):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        clrs = self._cmap(np.linspace(0., 1., len(self.runs)))
-
         x, dx = zip(*self._get_param(param1))
         y, dy = zip(*self._get_param(param2))
 
-        ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', ecolor=clrs, **kwargs)
-        ax.scatter(x, y, color=clrs, picker=True, **kwargs)  # TODO pickradius?
+        errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', **kwargs)
+        points = ax.scatter(x, y, picker=True, **kwargs)
 
         ax.set_xlabel(self._get_latex_labels(param1))
         ax.set_ylabel(self._get_latex_labels(param2))
+
+        if clr_param is not None:
+            err_artists = itertools.chain.from_iterable(errbar[1:])
+            self._add_colours(ax, points, clr_param, extra_artists=err_artists)
 
         if annotate:
 
@@ -2467,17 +2471,8 @@ class RunCollection(_RunAnalysis):
         x, dx = zip(*self._get_param(param))
         y, dy = truths, e_truths
 
-        if clr_param is None:
-            clrs = self._cmap(np.linspace(0., 1., len(self.runs)))
-        else:
-            cvals = np.array(self._get_param(clr_param))[:, 0]
-
-            cnorm = mpl_clr.Normalize(cvals.min(), cvals.max())
-            clrs = self._cmap(cnorm(cvals))
-
-        ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', ecolor=clrs, **kwargs)
-        pnts = ax.scatter(x, y, color=clrs, picker=True, **kwargs)
-        # TODO pickradius?
+        errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', **kwargs)
+        points = ax.scatter(x, y, picker=True, **kwargs)
 
         if diagonal:
             grid_kw = {
@@ -2497,18 +2492,12 @@ class RunCollection(_RunAnalysis):
         ax.set_xlim(0.)
         ax.set_ylim(0.)
 
-        divider = make_axes_locatable(ax)
-
         if clr_param is not None:
-            # TODO all the colours stuff is all confused
-            #   highly doubt this is the best way to be marking them
-            cticks = [0, .25, .5, .75, 1.]
-            cax = divider.append_axes("right", size="3%", pad=0.05)
-            cbar = fig.colorbar(pnts, cax=cax, ticks=cticks)
-            cbar.ax.set_ylabel(clr_param)
-            cbar.ax.set_yticklabels([f'{t:.2f}' for t in cnorm.inverse(cticks)])
+            err_artists = itertools.chain.from_iterable(errbar[1:])
+            self._add_colours(ax, points, clr_param, extra_artists=err_artists)
 
         if residuals:
+            clrs = points.get_facecolors()
             res_ax = self.add_residuals(ax, x, y, dx, dy, clrs, pad=0)
             res_ax.set_xlabel(param)
 
@@ -2550,33 +2539,18 @@ class RunCollection(_RunAnalysis):
             dx, dy = dy, dx
             xlabel, ylabel = ylabel, xlabel
 
-        if clr_param is None:
-            clrs = self._cmap(np.linspace(0., 1., len(self.runs)))
-        else:
-            cvals = np.array(self._get_param(clr_param))[:, 0]
-
-            cnorm = mpl_clr.Normalize(cvals.min(), cvals.max())
-            clrs = self._cmap(cnorm(cvals))
-
-        ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', ecolor=clrs, **kwargs)
-        pnts = ax.scatter(x, y, color=clrs, picker=True, **kwargs)
-        # TODO pickradius?
+        errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', **kwargs)
+        points = ax.scatter(x, y, picker=True, **kwargs)
 
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
 
-        divider = make_axes_locatable(ax)
-
         if clr_param is not None:
-            # TODO all the colours stuff is all confused
-            #   highly doubt this is the best way to be marking them
-            cticks = [0, .25, .5, .75, 1.]
-            cax = divider.append_axes("right", size="3%", pad=0.05)
-            cbar = fig.colorbar(pnts, cax=cax, ticks=cticks)
-            cbar.ax.set_ylabel(clr_param)
-            cbar.ax.set_yticklabels([f'{t:.2f}' for t in cnorm.inverse(cticks)])
+            err_artists = itertools.chain.from_iterable(errbar[1:])
+            self._add_colours(ax, points, clr_param, extra_artists=err_artists)
 
         if residuals:
+            clrs = points.get_facecolors()
             res_ax = self.add_residuals(ax, x, y, dx, dy, clrs, pad=0)
             res_ax.set_xlabel(param)
 
@@ -2687,6 +2661,7 @@ class RunCollection(_RunAnalysis):
 
     def summary_dataframe(self, *, include_FeHe=True, include_BH=False):
         import pandas as pd
+        # TODO pandas isn't in the setup requirements
 
         # Get name of all desired parameters
 
