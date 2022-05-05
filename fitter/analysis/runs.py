@@ -2274,7 +2274,7 @@ class RunCollection(_RunAnalysis):
         return math_mapping.get(param, param)
 
     def _add_colours(self, ax, mappable, cparam, clabel=None, *, alpha=1.,
-                     extra_artists=None, fix_cbar_ticks=True):
+                     extra_artists=None, math_label=True, fix_cbar_ticks=True):
         '''add colours to all artists and add the relevant colorbar to ax'''
         import matplotlib.colorbar as mpl_cbar
 
@@ -2321,7 +2321,7 @@ class RunCollection(_RunAnalysis):
         # make colorbar
         cbar = mpl_cbar.Colorbar(cax, mappable, cmap=self._cmap)
 
-        cbar.set_label(clabel)
+        cbar.set_label(self._get_latex_labels(clabel) if math_label else clabel)
 
         # if desired, explicitly set ticks at 25% intervals of bar
         if fix_cbar_ticks:
