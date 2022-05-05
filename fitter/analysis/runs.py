@@ -2002,7 +2002,10 @@ class RunCollection(_RunAnalysis):
 
                 raise TypeError(mssg)
 
-        return RunCollection(runs, N_simruns=self._N_simruns)
+        rc = RunCollection(runs, N_simruns=self._N_simruns)
+        rc._cmap = self._cmap
+
+        return rc
 
     # ----------------------------------------------------------------------
     # Initialization
@@ -2291,6 +2294,7 @@ class RunCollection(_RunAnalysis):
         # apply colour to all artists
         if mappable is not None:
             mappable.set_color(colors)
+            mappable.cmap = self._cmap
 
         if extra_artists is not None:
             for artist in extra_artists:
@@ -2315,7 +2319,7 @@ class RunCollection(_RunAnalysis):
         cax = divider.append_axes("right", size="3%", pad=0.05)
 
         # make colorbar
-        cbar = mpl_cbar.Colorbar(cax, mappable)
+        cbar = mpl_cbar.Colorbar(cax, mappable, cmap=self._cmap)
 
         cbar.set_label(clabel)
 
