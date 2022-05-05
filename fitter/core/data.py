@@ -758,10 +758,10 @@ class Model(lp.limepy):
 
         # Metallicity
         try:
-            FeHe = self.observations.mdata['FeHe']
+            FeH = self.observations.mdata['FeH']
         except (AttributeError, KeyError):
-            logging.debug("No cluster FeHe stored, defaulting to -1.0")
-            FeHe = -1.0
+            logging.debug("No cluster FeH stored, defaulting to -1.0")
+            FeH = -1.0
 
         # Regulates low mass objects depletion
         try:
@@ -789,7 +789,7 @@ class Model(lp.limepy):
             NS_ret=NS_ret,
             BH_ret_int=BH_ret_int,
             BH_ret_dyn=BH_ret_dyn,
-            FeHe=FeHe,
+            FeHe=FeH,
             natal_kicks=natal_kicks,
             vesc=vesc
         )
