@@ -2261,7 +2261,7 @@ class RunCollection(_RunAnalysis):
             'a3': r'$\alpha_3$',
             'BHret': r'$\mathrm{BH}_{ret}$',
             'd': r'$d$',
-            'FeHe': r'$[\mathrm{Fe}/\mathrm{He}]$',
+            'FeH': r'$[\mathrm{Fe}/\mathrm{H}]$',
             'Ndot': r'$\dot{N}$',
             'RA': r'RA $[\deg]$',
             'DEC': r'DEC $[\deg]$',
@@ -2428,11 +2428,11 @@ class RunCollection(_RunAnalysis):
     # Comparison plots
     # ----------------------------------------------------------------------
 
-    def plot_a3_FeHe(self, fig=None, ax=None, show_kroupa=False,
+    def plot_a3_FeH(self, fig=None, ax=None, show_kroupa=False,
                      *args, **kwargs):
         '''Some special cases of plot_relation can have their own named func'''
 
-        fig = self.plot_relation('FeHe', 'a3', fig, ax, *args, **kwargs)
+        fig = self.plot_relation('FeH', 'a3', fig, ax, *args, **kwargs)
 
         if show_kroupa:
 
@@ -2712,7 +2712,7 @@ class RunCollection(_RunAnalysis):
 
         return fig
 
-    def summary_dataframe(self, *, include_FeHe=True, include_BH=False):
+    def summary_dataframe(self, *, include_FeH=True, include_BH=False):
         import pandas as pd
         # TODO pandas isn't in the setup requirements
 
@@ -2720,8 +2720,8 @@ class RunCollection(_RunAnalysis):
 
         labels = self.runs[0]._get_labels(label_fixed=False)
 
-        if include_FeHe:
-            labels = ['FeHe'] + labels
+        if include_FeH:
+            labels = ['FeH'] + labels
 
         if include_BH:
             labels += ['BH_mass', 'BH_num', 'f_rem']
@@ -2740,12 +2740,12 @@ class RunCollection(_RunAnalysis):
         return pd.DataFrame.from_dict(data)
 
     def output_summary(self, outfile=sys.stdout, style='latex', *,
-                       include_FeHe=True, include_BH=False, **kwargs):
+                       include_FeH=True, include_BH=False, **kwargs):
         '''output a table of all parameter means for each cluster'''
 
         # get dataframe
 
-        df = self.summary_dataframe(include_FeHe=include_FeHe,
+        df = self.summary_dataframe(include_FeH=include_FeH,
                                     include_BH=include_BH)
 
         # output in desired format
