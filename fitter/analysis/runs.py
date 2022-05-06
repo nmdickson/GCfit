@@ -2274,7 +2274,8 @@ class RunCollection(_RunAnalysis):
         return math_mapping.get(param, param)
 
     def _add_colours(self, ax, mappable, cparam, clabel=None, *, alpha=1.,
-                     extra_artists=None, math_label=True, fix_cbar_ticks=True):
+                     add_colorbar=True, extra_artists=None, math_label=True,
+                     fix_cbar_ticks=True):
         '''add colours to all artists and add the relevant colorbar to ax'''
         import matplotlib.colorbar as mpl_cbar
 
@@ -2314,22 +2315,27 @@ class RunCollection(_RunAnalysis):
                         mssg = f'Cannot `set_color` of extra artist "{artist}"'
                         raise TypeError(mssg) from err
 
-        # make ax for colorbar
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="3%", pad=0.05)
+        if add_colorbar:
+            # make ax for colorbar
+            divider = make_axes_locatable(ax)
+            cax = divider.append_axes("right", size="3%", pad=0.05)
 
-        # make colorbar
-        cbar = mpl_cbar.Colorbar(cax, mappable, cmap=self._cmap)
+            # make colorbar
+            cbar = mpl_cbar.Colorbar(cax, mappable, cmap=self._cmap)
 
-        cbar.set_label(self._get_latex_labels(clabel) if math_label else clabel)
+            clabel = self._get_latex_labels(clabel) if math_label else clabel
+            cbar.set_label(clabel)
 
-        # if desired, explicitly set ticks at 25% intervals of bar
-        if fix_cbar_ticks:
-            cticks = [0, .25, .5, .75, 1.]
-            ctick_labels = [f'{t:.2f}' for t in cnorm.inverse(cticks)]
-            cbar.set_ticks(cticks, labels=ctick_labels)
+            # if desired, explicitly set ticks at 25% intervals of bar
+            if fix_cbar_ticks:
+                cticks = [0, .25, .5, .75, 1.]
+                ctick_labels = [f'{t:.2f}' for t in cnorm.inverse(cticks)]
+                cbar.set_ticks(cticks, labels=ctick_labels)
 
-        return cbar
+            return cbar
+
+        else:
+            return None
 
     # ----------------------------------------------------------------------
     # Model Collection Visualizers
@@ -2442,7 +2448,7 @@ class RunCollection(_RunAnalysis):
 
     def plot_relation(self, param1, param2, fig=None, ax=None, *,
                       errors='bars', annotate=False, annotate_kwargs=None,
-                      clr_param=None, **kwargs):
+                      clr_param=None, clr_kwargs=None, **kwargs):
         '''plot correlation between two param means with all runs
 
         errorbars, or 2d-ellipses
@@ -2460,8 +2466,14 @@ class RunCollection(_RunAnalysis):
         ax.set_ylabel(self._get_latex_labels(param2))
 
         if clr_param is not None:
+
+            if clr_kwargs is None:
+                clr_kwargs = {}
+
             err_artists = itertools.chain.from_iterable(errbar[1:])
-            self._add_colours(ax, points, clr_param, extra_artists=err_artists)
+
+            self._add_colours(ax, points, clr_param,
+                              extra_artists=err_artists, **clr_kwargs)
 
         if annotate:
 
@@ -2478,8 +2490,9 @@ class RunCollection(_RunAnalysis):
 
     def plot_lit_comp(self, param, truths, e_truths=None, src_truths='',
                       fig=None, ax=None, *,
-                      clr_param=None, residuals=False, inset=False,
-                      annotate=False, annotate_kwargs=None, diagonal=True,
+                      clr_param=None, clr_kwargs=None,
+                      annotate=False, annotate_kwargs=None,
+                      residuals=False, inset=False, diagonal=True,
                       **kwargs):
         '''plot a x-y comparison against provided literature values
 
@@ -2513,8 +2526,14 @@ class RunCollection(_RunAnalysis):
         ax.set_ylim(0.)
 
         if clr_param is not None:
+
+            if clr_kwargs is None:
+                clr_kwargs = {}
+
             err_artists = itertools.chain.from_iterable(errbar[1:])
-            self._add_colours(ax, points, clr_param, extra_artists=err_artists)
+
+            self._add_colours(ax, points, clr_param,
+                              extra_artists=err_artists, **clr_kwargs)
 
         if residuals:
             clrs = points.get_facecolors()
@@ -2537,7 +2556,7 @@ class RunCollection(_RunAnalysis):
     def plot_lit_relation(self, param,
                           lit, e_lit=None, param_lit='', src_lit='',
                           fig=None, ax=None, *, lit_on_x=False,
-                          clr_param=None, residuals=False,
+                          clr_param=None, clr_kwargs=None, residuals=False,
                           annotate=False, annotate_kwargs=None, **kwargs):
         '''plot a relation plot against provided literature values
 
@@ -2566,8 +2585,14 @@ class RunCollection(_RunAnalysis):
         ax.set_ylabel(ylabel)
 
         if clr_param is not None:
+
+            if clr_kwargs is None:
+                clr_kwargs = {}
+
             err_artists = itertools.chain.from_iterable(errbar[1:])
-            self._add_colours(ax, points, clr_param, extra_artists=err_artists)
+
+            self._add_colours(ax, points, clr_param,
+                              extra_artists=err_artists, **clr_kwargs)
 
         if residuals:
             clrs = points.get_facecolors()
@@ -2592,7 +2617,7 @@ class RunCollection(_RunAnalysis):
     # ----------------------------------------------------------------------
 
     def plot_param_means(self, param, fig=None, ax=None,
-                         clr_param=None, **kwargs):
+                         clr_param=None, clr_kwargs=None, **kwargs):
         '''plot mean and std errorbars for each run of the given param'''
         fig, ax = self._setup_artist(fig, ax)
 
@@ -2606,8 +2631,14 @@ class RunCollection(_RunAnalysis):
         points = ax.scatter(x=xticks, y=mean, picker=True, **kwargs)
 
         if clr_param is not None:
+
+            if clr_kwargs is None:
+                clr_kwargs = {}
+
             err_artists = itertools.chain.from_iterable(errbar[1:])
-            self._add_colours(ax, points, clr_param, extra_artists=err_artists)
+
+            self._add_colours(ax, points, clr_param,
+                              extra_artists=err_artists, **clr_kwargs)
 
         ax.set_xticks(xticks, labels=labels, rotation=45)
 
@@ -2618,7 +2649,7 @@ class RunCollection(_RunAnalysis):
         return fig
 
     def plot_param_bar(self, param, fig=None, ax=None,
-                       clr_param=None, alpha=0.3, *args, **kwargs):
+                       clr_param=None, clr_kwargs=None, *args, **kwargs):
         '''plot mean and std bar chart for each run of the given param'''
         fig, ax = self._setup_artist(fig, ax)
 
@@ -2631,8 +2662,14 @@ class RunCollection(_RunAnalysis):
         bars = ax.bar(x=xticks, height=mean, yerr=std, *args, **kwargs)
 
         if clr_param is not None:
+
+            if clr_kwargs is None:
+                clr_kwargs = {}
+
+            clr_kwargs.setdefault('alpha', 0.3)
+
             self._add_colours(ax, None, clr_param,
-                              extra_artists=(bars,), alpha=alpha)
+                              extra_artists=(bars,), **clr_kwargs)
 
         ax.set_xticks(xticks, labels=labels, rotation=45)
 
@@ -2641,7 +2678,8 @@ class RunCollection(_RunAnalysis):
         return fig
 
     def plot_param_violins(self, param, fig=None, ax=None,
-                           clr_param=None, alpha=0.3, *args, **kwargs):
+                           clr_param=None, clr_kwargs=None, alpha=0.3,
+                           *args, **kwargs):
         '''plot violins for each run of the given param'''
         fig, ax = self._setup_artist(fig, ax)
 
@@ -2654,7 +2692,14 @@ class RunCollection(_RunAnalysis):
         parts = ax.violinplot(chains, positions=xticks, *args, **kwargs)
 
         if clr_param is not None:
-            self._add_colours(ax, None, clr_param, extra_artists=parts.values())
+
+            if clr_kwargs is None:
+                clr_kwargs = {}
+
+            clr_kwargs.setdefault('alpha', alpha)
+
+            self._add_colours(ax, None, clr_param,
+                              extra_artists=parts.values(), **clr_kwargs)
 
         for part in parts['bodies']:
             part.set_alpha(alpha)
