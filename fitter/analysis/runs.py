@@ -2640,7 +2640,8 @@ class RunCollection(_RunAnalysis):
             self._add_colours(ax, points, clr_param,
                               extra_artists=err_artists, **clr_kwargs)
 
-        ax.set_xticks(xticks, labels=labels, rotation=45)
+        ax.set_xticks(xticks, labels=labels, rotation=45,
+                      ha='right', rotation_mode="anchor")
 
         ax.grid(axis='x')
 
@@ -2671,7 +2672,8 @@ class RunCollection(_RunAnalysis):
             self._add_colours(ax, None, clr_param,
                               extra_artists=(bars,), **clr_kwargs)
 
-        ax.set_xticks(xticks, labels=labels, rotation=45)
+        ax.set_xticks(xticks, labels=labels, rotation=45,
+                      ha='right', rotation_mode="anchor")
 
         ax.set_ylabel(self._get_latex_labels(param))
 
@@ -2704,7 +2706,8 @@ class RunCollection(_RunAnalysis):
         for part in parts['bodies']:
             part.set_alpha(alpha)
 
-        ax.set_xticks(xticks, labels=labels, rotation=45)
+        ax.set_xticks(xticks, labels=labels, rotation=45,
+                      ha='right', rotation_mode="anchor")
 
         ax.grid(axis='x')
 
