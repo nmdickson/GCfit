@@ -43,7 +43,7 @@ class _RunAnalysis:
             return "Run Results"
 
     def __init__(self, filename, observations, group, name=None, *,
-                 strict=True):
+                 strict=True, restrict_to='core'):
 
         self._filename = filename
         self._gname = group
@@ -70,7 +70,7 @@ class _RunAnalysis:
                 with h5py.File(filename, 'r') as file:
                     cluster = file['metadata'].attrs['cluster']
 
-                self.obs = Observations(cluster)
+                self.obs = Observations(cluster, restrict_to=restrict_to)
 
             except KeyError as err:
                 mssg = "No cluster name in metadata, must supply observations"
