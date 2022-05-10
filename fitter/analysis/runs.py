@@ -2247,7 +2247,6 @@ class RunCollection(_RunAnalysis):
     def _get_latex_labels(self, param):
         '''return the param names in math mode, for plotting'''
 
-        # TODO FEHE should always be FeH, change everything (25)
         math_mapping = {
             'W0': r'$\phi_0$',
             'M': r'$M\ [10^6 M_\odot]$',
@@ -2483,10 +2482,6 @@ class RunCollection(_RunAnalysis):
 
             _Annotator(fig, ax, self.runs, x, y, **annotate_kwargs)
 
-        else:
-            # TODO not happy with any legend
-            fig.legend(loc='upper center', ncol=10)
-
         return fig
 
     def plot_lit_comp(self, param, truths, e_truths=None, src_truths='',
@@ -2548,10 +2543,6 @@ class RunCollection(_RunAnalysis):
 
             _Annotator(fig, ax, self.runs, x, y, **annotate_kwargs)
 
-        else:
-            # TODO not happy with any legend
-            fig.legend(loc='upper center', ncol=10)
-
         return fig
 
     def plot_lit_relation(self, param,
@@ -2606,10 +2597,6 @@ class RunCollection(_RunAnalysis):
                 annotate_kwargs = {}
 
             _Annotator(fig, ax, self.runs, x, y, **annotate_kwargs)
-
-        else:
-            # TODO not happy with any legend
-            fig.legend(loc='upper center', ncol=10)
 
         return fig
 
