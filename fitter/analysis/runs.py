@@ -575,6 +575,7 @@ class MCMCRun(_RunAnalysis):
 
         gs_kw = {}
 
+        # TODO broken when # params < 5
         if shape := len(labels) > 5:
             shape = int(np.ceil(shape / 2), 2)
 
@@ -2429,7 +2430,7 @@ class RunCollection(_RunAnalysis):
     # ----------------------------------------------------------------------
 
     def plot_a3_FeH(self, fig=None, ax=None, show_kroupa=False,
-                     *args, **kwargs):
+                    *args, **kwargs):
         '''Some special cases of plot_relation can have their own named func'''
 
         fig = self.plot_relation('FeH', 'a3', fig, ax, *args, **kwargs)
@@ -2686,6 +2687,9 @@ class RunCollection(_RunAnalysis):
         fig, ax = self._setup_artist(fig, ax)
 
         chains = self._get_param_chains(param)
+
+        # filter out all nans (causes violinplot to fail silently)
+        chains = [ch[~np.isnan(ch)] for ch in chains]
 
         xticks = np.arange(len(self.runs))
 
