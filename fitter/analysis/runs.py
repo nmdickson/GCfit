@@ -34,7 +34,21 @@ class _RunAnalysis:
     group : base group for sampler outputs, probably either 'nested' or 'mcmc'
     '''
 
-    _cmap = plt.cm.get_cmap('viridis')
+    _cmap = plt.rcParams['image.cmap']
+
+    @property
+    def cmap(self):
+        return plt.cm.get_cmap(self._cmap)
+
+    @cmap.setter
+    def cmap(self, cm):
+        if isinstance(cm, mpl_clr.Colormap) or (cm in plt.colormaps()):
+            self._cmap = cm
+        elif cm is None:
+            self._cmap = plt.rcParams['image.cmap']
+        else:
+            mssg = f"{cm} is not a registered colormap, see `plt.colormaps`"
+            raise ValueError(mssg)
 
     def __str__(self):
         try:
@@ -620,7 +634,7 @@ class MCMCRun(_RunAnalysis):
             # --------------------------------------------------------------
 
             # TODO the y tick values have disappeared should be on the last axis
-            ax.scatter(self._iteration_domain, prm, cmap=self._cmap, **kw)
+            ax.scatter(self._iteration_domain, prm, cmap=self.cmap, **kw)
 
             ax.set_ylabel(lbl)
             ax.set_xlim(left=0)
@@ -1243,7 +1257,7 @@ class NestedRun(_RunAnalysis):
         for ind, it in enumerate(iteration):
 
             if N > 1:
-                clr = self._cmap((ind + 1) / N)
+                clr = self.cmap((ind + 1) / N)
 
             if show_live:
                 kw.setdefault('live_color', clr)
@@ -1574,7 +1588,7 @@ class NestedRun(_RunAnalysis):
                 # plot weights above scatter plots
                 # TODO figure out what colors to use
                 self.plot_weights(fig=fig, ax=ax, resampled=True, filled=True,
-                                  color=self._cmap(np.inf))
+                                  color=self.cmap(np.inf))
 
                 ax.set_xticklabels([])
                 ax.set_xlabel(None)
@@ -1620,7 +1634,7 @@ class NestedRun(_RunAnalysis):
             # --------------------------------------------------------------
 
             # TODO the y tick values have disappeared should be on the last axis
-            ax.scatter(-self.results.logvol, prm, c=c, cmap=self._cmap, **kw)
+            ax.scatter(-self.results.logvol, prm, c=c, cmap=self.cmap, **kw)
 
             ax.set_ylabel(lbl)
             ax.set_xlim(left=0)
@@ -2004,7 +2018,7 @@ class RunCollection(_RunAnalysis):
                 raise TypeError(mssg)
 
         rc = RunCollection(runs, N_simruns=self._N_simruns)
-        rc._cmap = self._cmap
+        rc.cmap = self.cmap
 
         return rc
 
@@ -2288,14 +2302,14 @@ class RunCollection(_RunAnalysis):
             cvalues = cparam
 
         cnorm = mpl_clr.Normalize(cvalues.min(), cvalues.max())
-        colors = self._cmap(cnorm(cvalues))
+        colors = self.cmap(cnorm(cvalues))
 
         colors[:, -1] = alpha
 
         # apply colour to all artists
         if mappable is not None:
             mappable.set_color(colors)
-            mappable.cmap = self._cmap
+            mappable.cmap = self.cmap
 
         if extra_artists is not None:
             for artist in extra_artists:
@@ -2321,7 +2335,7 @@ class RunCollection(_RunAnalysis):
             cax = divider.append_axes("right", size="3%", pad=0.05)
 
             # make colorbar
-            cbar = mpl_cbar.Colorbar(cax, mappable, cmap=self._cmap)
+            cbar = mpl_cbar.Colorbar(cax, mappable, cmap=self.cmap)
 
             clabel = self._get_latex_labels(clabel) if math_label else clabel
             cbar.set_label(clabel)
