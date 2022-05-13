@@ -36,7 +36,7 @@ class _ClusterVisualizer:
     # Default xaxis limits for all profiles. Set by inits, can be reset by user
     rlims = None
 
-    _cmap = plt.rcParams['image.cmap']
+    _cmap = plt.cm.jet
 
     @property
     def cmap(self):
