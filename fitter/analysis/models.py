@@ -36,6 +36,22 @@ class _ClusterVisualizer:
     # Default xaxis limits for all profiles. Set by inits, can be reset by user
     rlims = None
 
+    _cmap = plt.rcParams['image.cmap']
+
+    @property
+    def cmap(self):
+        return plt.cm.get_cmap(self._cmap)
+
+    @cmap.setter
+    def cmap(self, cm):
+        if isinstance(cm, mpl_clr.Colormap) or (cm in plt.colormaps()):
+            self._cmap = cm
+        elif cm is None:
+            self._cmap = plt.rcParams['image.cmap']
+        else:
+            mssg = f"{cm} is not a registered colormap, see `plt.colormaps`"
+            raise ValueError(mssg)
+
     # -----------------------------------------------------------------------
     # Artist setups
     # -----------------------------------------------------------------------
@@ -878,6 +894,8 @@ class _ClusterVisualizer:
                             x_unit='pc', label_position='top',
                             blank_xaxis=False, res_kwargs=None, **kwargs):
 
+        # TODO add minor ticks to y axis
+
         def quad_nuisance(err):
             return np.sqrt(err**2 + (self.s2 << err.unit**2))
 
@@ -957,8 +975,7 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_mass_func(self, fig=None, show_obs=True, show_fields=True, *,
-                       colours=None, PI_legend=False, logscaled=False,
-                       field_kw=None):
+                       PI_legend=False, logscaled=False, field_kw=None):
 
         # ------------------------------------------------------------------
         # Setup axes, splitting into two columns if necessary and adding the
@@ -1115,8 +1132,7 @@ class _ClusterVisualizer:
         return fig
 
     @_support_units
-    def plot_MF_fields(self, fig=None, ax=None, *, radii=("rh",),
-                       cmap=None, grid=True):
+    def plot_MF_fields(self, fig=None, ax=None, *, radii=("rh",), grid=True):
         '''plot all mass function fields in this observation
         '''
         import shapely.geometry as geom
@@ -1686,14 +1702,12 @@ class ModelVisualizer(_ClusterVisualizer):
         self.numdens = nd
 
     @_ClusterVisualizer._support_units
-    def _init_massfunc(self, model, observations, *, cmap=None):
+    def _init_massfunc(self, model, observations):
         '''
         sets self.mass_func as a dict of PI's, where each PI has a list of
         subdicts. Each subdict represents a single radial slice (within this PI)
         and contains the radii, the mass func values, and the field slice
         '''
-
-        cmap = cmap or plt.cm.rainbow
 
         self.mass_func = {}
 
@@ -1708,7 +1722,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
             self.mass_func[key] = []
 
-            clr = cmap(i / len(PI_list))
+            clr = self.cmap(i / len(PI_list))
 
             field = mass.Field.from_dataset(mf, cen=cen)
 
@@ -2276,9 +2290,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         return (K * nd_interp(self.r)).to('pc-2', equivs)
 
-    def _prep_massfunc(self, observations, *, cmap=None):
-
-        cmap = cmap or plt.cm.rainbow
+    def _prep_massfunc(self, observations):
 
         massfunc = {}
 
@@ -2290,7 +2302,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             massfunc[key] = []
 
-            clr = cmap(i / len(PI_list))
+            clr = self.cmap(i / len(PI_list))
 
             field = mass.Field.from_dataset(mf, cen=cen)
 
@@ -2519,14 +2531,12 @@ class ObservationsVisualizer(_ClusterVisualizer):
     '''
 
     @_ClusterVisualizer._support_units
-    def _init_massfunc(self, observations, *, cmap=None):
+    def _init_massfunc(self, observations):
         '''
         sets self.mass_func as a dict of PI's, where each PI has a list of
         subdicts. Each subdict represents a single radial slice (within this PI)
         and contains the radii, the mass func values, and the field slice
         '''
-
-        cmap = cmap or plt.cm.rainbow
 
         self.mass_func = {}
 
@@ -2538,7 +2548,7 @@ class ObservationsVisualizer(_ClusterVisualizer):
 
             self.mass_func[key] = []
 
-            clr = cmap(i / len(PI_list))
+            clr = self.cmap(i / len(PI_list))
 
             field = mass.Field.from_dataset(mf, cen=cen)
 
