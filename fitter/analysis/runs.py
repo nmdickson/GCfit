@@ -958,26 +958,42 @@ class NestedRun(_RunAnalysis):
         '''return a dynesty-style `Results` class'''
         from dynesty.results import Results
 
-        with self._openfile(self._gname) as file:
+        with self._openfile() as file:
 
             if finite_only:
-                inds = file['logl'][:] > -1e300
+                inds = file[self._gname]['logl'][:] > -1e300
             else:
                 inds = slice(None)
 
             r = {}
 
-            for k, d in file.items():
+            Niter = file[self._gname]['logl'].shape[0]
+
+            for k, d in file[self._gname].items():
 
                 if k in ('current_batch', 'initial_batch', 'bound'):
                     continue
 
-                if d.shape and (d.shape[0] == file['logl'].shape[0]):
+                if d.shape and (d.shape[0] == Niter):
                     d = np.array(d)[inds]
                 else:
                     d = np.array(d)
 
                 r[k] = d
+
+            # add in any fixed params, if they exist
+
+            labels = self._get_labels(False, False)
+
+            fixed = sorted(
+                ((k, v, labels.index(k)) for k, v in
+                 file['metadata']['fixed_params'].attrs.items()),
+                key=lambda item: labels.index(item[0])
+            )
+
+            for k, v, i in fixed:
+                r['samples'] = np.insert(r['samples'], i, v, axis=-1)
+                r['samples_u'] = np.insert(r['samples_u'], i, v, axis=-1)
 
         if finite_only:
             # remove the amount of non-finite values we removed from niter
