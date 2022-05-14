@@ -973,26 +973,42 @@ class NestedRun(_RunAnalysis):
         '''return a dynesty-style `Results` class'''
         from dynesty.results import Results
 
-        with self._openfile(self._gname) as file:
+        with self._openfile() as file:
 
             if finite_only:
-                inds = file['logl'][:] > -1e300
+                inds = file[self._gname]['logl'][:] > -1e300
             else:
                 inds = slice(None)
 
             r = {}
 
-            for k, d in file.items():
+            Niter = file[self._gname]['logl'].shape[0]
+
+            for k, d in file[self._gname].items():
 
                 if k in ('current_batch', 'initial_batch', 'bound'):
                     continue
 
-                if d.shape and (d.shape[0] == file['logl'].shape[0]):
+                if d.shape and (d.shape[0] == Niter):
                     d = np.array(d)[inds]
                 else:
                     d = np.array(d)
 
                 r[k] = d
+
+            # add in any fixed params, if they exist
+
+            labels = self._get_labels(False, False)
+
+            fixed = sorted(
+                ((k, v, labels.index(k)) for k, v in
+                 file['metadata']['fixed_params'].attrs.items()),
+                key=lambda item: labels.index(item[0])
+            )
+
+            for k, v, i in fixed:
+                r['samples'] = np.insert(r['samples'], i, v, axis=-1)
+                r['samples_u'] = np.insert(r['samples_u'], i, v, axis=-1)
 
         if finite_only:
             # remove the amount of non-finite values we removed from niter
@@ -1996,19 +2012,27 @@ class RunCollection(_RunAnalysis):
             mssg = f"No Run found with name {name}"
             raise ValueError(mssg)
 
-    def filter_runs(self, pattern):
-        '''filter runs based on name and return a new runcollection with them'''
+    def filter_runs(self, pattern, sort_by=None, sort=True, **kwargs):
+        '''filter runs based on name and return a new runcollection with them
+
+        sort : bool
+            Whether or not to sort this run
+
+        sort_by: ('old', 'new', None)
+            sort runs in new collection by either the order in this collection,
+            the list of patterns (if it's a list, otherwise does None)
+            if None, jsut passes `sort` to init and lets it go.
+            only used if `sort` is True
+        '''
         import fnmatch
 
         try:
-            runs = [self.get_run(n)
-                    for n in fnmatch.filter(self.names, pattern)]
+            filtered_names = fnmatch.filter(self.names, pattern)
 
         except TypeError:
 
             try:
-                runs = [self.get_run(n)
-                        for n in (set(self.names) & set(pattern))]
+                filtered_names = list(set(self.names) & set(pattern))
 
             except TypeError:
 
@@ -2017,7 +2041,21 @@ class RunCollection(_RunAnalysis):
 
                 raise TypeError(mssg)
 
-        rc = RunCollection(runs, N_simruns=self._N_simruns)
+        if sort:
+            if sort_by == 'old':
+                filtered_names.sort(key=lambda n: self.names.index(n))
+                sort = False
+
+            elif sort_by == 'new':
+                filtered_names.sort(key=lambda n: pattern.index(n))
+                sort = False
+
+            else:
+                pass
+
+        runs = [self.get_run(r) for r in filtered_names]
+
+        rc = RunCollection(runs, N_simruns=self._N_simruns, sort=sort, **kwargs)
         rc.cmap = self.cmap
 
         return rc
@@ -2167,7 +2205,7 @@ class RunCollection(_RunAnalysis):
 
         if statistic:
             # Compute average and std for each run
-            return [(np.median(ds), np.std(ds)) for ds in data]
+            return [(np.nanmedian(ds), np.nanstd(ds)) for ds in data]
 
         else:
             # return the full dataset for each run
