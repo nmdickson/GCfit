@@ -373,9 +373,6 @@ class _ClusterVisualizer:
                    x_key='r', x_unit='pc', y_unit=None,
                    err_transform=None, **kwargs):
 
-        # TODO need to handle colours better
-        defaultcolour = None
-
         # ------------------------------------------------------------------
         # Get data and relevant errors for plotting
         # ------------------------------------------------------------------
@@ -409,7 +406,6 @@ class _ClusterVisualizer:
 
         kwargs.setdefault('marker', '.')
         kwargs.setdefault('linestyle', 'None')
-        kwargs.setdefault('color', defaultcolour)
 
         label = dataset.cite()
         if 'm' in dataset.mdata:
