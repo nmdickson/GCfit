@@ -1230,10 +1230,13 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_density(self, fig=None, ax=None, kind='all', *,
-                     x_unit='pc', label_position='left'):
+                     x_unit='pc', label_position='left', colours=None):
 
         if kind == 'all':
             kind = {'MS', 'tot', 'BH', 'WD', 'NS'}
+
+        if colours is None:
+            colours = {}
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -1241,37 +1244,37 @@ class _ClusterVisualizer:
 
         # Total density
         if 'tot' in kind:
-            kw = {"label": "Total", "color": "tab:cyan"}
             self._plot_profile(ax, None, None, self.rho_tot,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="Total",
+                               color=colours.get("tot", "tab:cyan"))
 
         # Total Remnant density
         if 'rem' in kind:
-            kw = {"label": "Remnants", "color": "tab:purple"}
             self._plot_profile(ax, None, None, self.rho_rem,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="Remnants",
+                               color=colours.get("rem", "tab:purple"))
 
         # Main sequence density
         if 'MS' in kind:
-            kw = {"label": "Main-sequence stars", "color": "tab:orange"}
             self._plot_profile(ax, None, None, self.rho_MS,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="Main-sequence stars",
+                               color=colours.get("MS", "tab:orange"))
 
         if 'WD' in kind:
-            kw = {"label": "White Dwarfs", "color": "tab:green"}
             self._plot_profile(ax, None, None, self.rho_WD,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="White Dwarfs",
+                               color=colours.get("WD", "tab:green"))
 
         if 'NS' in kind:
-            kw = {"label": "Neutron Stars", "color": "tab:red"}
             self._plot_profile(ax, None, None, self.rho_NS,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="Neutron Stars",
+                               color=colours.get("NS", "tab:red"))
 
         # Black hole density
         if 'BH' in kind:
-            kw = {"label": "Black Holes", "color": "tab:gray"}
             self._plot_profile(ax, None, None, self.rho_BH,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="Black Holes",
+                               color=colours.get("BH", "tab:gray"))
 
         ax.set_yscale("log")
         ax.set_xscale("log")
@@ -1286,10 +1289,13 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_surface_density(self, fig=None, ax=None, kind='all', *,
-                             x_unit='pc', label_position='left'):
+                             x_unit='pc', label_position='left', colours=None):
 
         if kind == 'all':
             kind = {'MS', 'tot', 'BH', 'WD', 'NS'}
+
+        if colours is None:
+            colours = {}
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -1297,37 +1303,37 @@ class _ClusterVisualizer:
 
         # Total density
         if 'tot' in kind:
-            kw = {"label": "Total", "color": "tab:cyan"}
             self._plot_profile(ax, None, None, self.Sigma_tot,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="Total",
+                               color=colours.get("tot", "tab:cyan"))
 
         # Total Remnant density
         if 'rem' in kind:
-            kw = {"label": "Remnants", "color": "tab:purple"}
             self._plot_profile(ax, None, None, self.Sigma_rem,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="Remnants",
+                               color=colours.get("rem", "tab:purple"))
 
         # Main sequence density
         if 'MS' in kind:
-            kw = {"label": "Main-sequence stars", "color": "tab:orange"}
             self._plot_profile(ax, None, None, self.Sigma_MS,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="Main-sequence stars",
+                               color=colours.get("MS", "tab:orange"))
 
         if 'WD' in kind:
-            kw = {"label": "White Dwarfs", "color": "tab:green"}
             self._plot_profile(ax, None, None, self.Sigma_WD,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="White Dwarfs",
+                               color=colours.get("WD", "tab:green"))
 
         if 'NS' in kind:
-            kw = {"label": "Neutron Stars", "color": "tab:red"}
             self._plot_profile(ax, None, None, self.Sigma_NS,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="Neutron Stars",
+                               color=colours.get("NS", "tab:red"))
 
         # Black hole density
         if 'BH' in kind:
-            kw = {"label": "Black Holes", "color": "tab:gray"}
             self._plot_profile(ax, None, None, self.Sigma_BH,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="Black Holes",
+                               color=colours.get("BH", "tab:gray"))
 
         ax.set_yscale("log")
         ax.set_xscale("log")
@@ -1342,10 +1348,13 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_cumulative_mass(self, fig=None, ax=None, kind='all', *,
-                             x_unit='pc', label_position='left'):
+                             x_unit='pc', label_position='left', colours=None):
 
         if kind == 'all':
             kind = {'MS', 'tot', 'BH', 'WD', 'NS'}
+
+        if colours is None:
+            colours = {}
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -1353,31 +1362,31 @@ class _ClusterVisualizer:
 
         # Total density
         if 'tot' in kind:
-            kw = {"label": "Total", "color": "tab:cyan"}
             self._plot_profile(ax, None, None, self.cum_M_tot,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="Total",
+                               color=colours.get("tot", "tab:cyan"))
 
         # Main sequence density
         if 'MS' in kind:
-            kw = {"label": "Main-sequence stars", "color": "tab:orange"}
             self._plot_profile(ax, None, None, self.cum_M_MS,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="Main-sequence stars",
+                               color=colours.get("MS", "tab:orange"))
 
         if 'WD' in kind:
-            kw = {"label": "White Dwarfs", "color": "tab:green"}
             self._plot_profile(ax, None, None, self.cum_M_WD,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="White Dwarfs",
+                               color=colours.get("WD", "tab:green"))
 
         if 'NS' in kind:
-            kw = {"label": "Neutron Stars", "color": "tab:red"}
             self._plot_profile(ax, None, None, self.cum_M_NS,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="Neutron Stars",
+                               color=colours.get("NS", "tab:red"))
 
         # Black hole density
         if 'BH' in kind:
-            kw = {"label": "Black Holes", "color": "tab:gray"}
             self._plot_profile(ax, None, None, self.cum_M_BH,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="Black Holes",
+                               color=colours.get("BH", "tab:gray"))
 
         ax.set_yscale("log")
         ax.set_xscale("log")
