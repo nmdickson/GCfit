@@ -444,8 +444,8 @@ class _ClusterVisualizer:
         # Restart marker styles each plotting call
         markers = iter(self._MARKERS)
 
-        # Force each mass bin to have different colour based on default cycle
-        default_clr = None
+        # Unless specified, each mass bin should cycle colour from matplotlib
+        default_clr = kwargs.pop('color', None)
 
         if res_kwargs is None:
             res_kwargs = {}
