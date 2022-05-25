@@ -430,6 +430,9 @@ class _ClusterVisualizer:
         '''figure out what needs to be plotted and call model/data plotters
         all **kwargs passed to both _plot_model and _plot_data
         model_data dimensions *must* be (mass bins, intervals, r axis)
+
+        Each mass bin will be plotted with it's own colour, as
+        decided by the usual matplotlib colour cycle (color=None).
         '''
 
         # TODO we might still want to allow for specific model/data kwargs?
@@ -441,8 +444,8 @@ class _ClusterVisualizer:
         # Restart marker styles each plotting call
         markers = iter(self._MARKERS)
 
-        # TODO need to figure out how we handle passed kwargs better
-        default_clr = kwargs.pop('color', None)
+        # Force each mass bin to have different colour based on default cycle
+        default_clr = None
 
         if res_kwargs is None:
             res_kwargs = {}
