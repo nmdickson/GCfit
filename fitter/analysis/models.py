@@ -451,6 +451,7 @@ class _ClusterVisualizer:
         # Determine the relevant datasets to the given pattern
         # ------------------------------------------------------------------
 
+        # TODO optionally exclude any "excluded_datasets"?
         datasets = self.obs.filter_datasets(ds_pattern)
 
         if strict and ds_pattern and not datasets:
