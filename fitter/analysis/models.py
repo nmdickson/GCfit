@@ -1849,7 +1849,7 @@ class CIModelVisualizer(_ClusterVisualizer):
     '''
 
     @_ClusterVisualizer._support_units
-    def plot_f_rem(self, fig=None, ax=None, bins='auto', color='b'):
+    def plot_f_rem(self, fig=None, ax=None, bins='auto', color='tab:blue'):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -1862,7 +1862,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         return fig
 
     @_ClusterVisualizer._support_units
-    def plot_BH_mass(self, fig=None, ax=None, bins='auto', color='b'):
+    def plot_BH_mass(self, fig=None, ax=None, bins='auto', color='tab:blue'):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -1875,7 +1875,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         return fig
 
     @_ClusterVisualizer._support_units
-    def plot_BH_num(self, fig=None, ax=None, bins='auto', color='b'):
+    def plot_BH_num(self, fig=None, ax=None, bins='auto', color='tab:blue'):
 
         fig, ax = self._setup_artist(fig, ax)
 
