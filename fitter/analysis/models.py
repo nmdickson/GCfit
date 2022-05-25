@@ -36,6 +36,22 @@ class _ClusterVisualizer:
     # Default xaxis limits for all profiles. Set by inits, can be reset by user
     rlims = None
 
+    _cmap = plt.cm.jet
+
+    @property
+    def cmap(self):
+        return plt.cm.get_cmap(self._cmap)
+
+    @cmap.setter
+    def cmap(self, cm):
+        if isinstance(cm, mpl_clr.Colormap) or (cm in plt.colormaps()):
+            self._cmap = cm
+        elif cm is None:
+            self._cmap = plt.rcParams['image.cmap']
+        else:
+            mssg = f"{cm} is not a registered colormap, see `plt.colormaps`"
+            raise ValueError(mssg)
+
     # -----------------------------------------------------------------------
     # Artist setups
     # -----------------------------------------------------------------------
@@ -357,9 +373,6 @@ class _ClusterVisualizer:
                    x_key='r', x_unit='pc', y_unit=None,
                    err_transform=None, **kwargs):
 
-        # TODO need to handle colours better
-        defaultcolour = None
-
         # ------------------------------------------------------------------
         # Get data and relevant errors for plotting
         # ------------------------------------------------------------------
@@ -393,7 +406,6 @@ class _ClusterVisualizer:
 
         kwargs.setdefault('marker', '.')
         kwargs.setdefault('linestyle', 'None')
-        kwargs.setdefault('color', defaultcolour)
 
         label = dataset.cite()
         if 'm' in dataset.mdata:
@@ -414,6 +426,9 @@ class _ClusterVisualizer:
         '''figure out what needs to be plotted and call model/data plotters
         all **kwargs passed to both _plot_model and _plot_data
         model_data dimensions *must* be (mass bins, intervals, r axis)
+
+        Each mass bin will be plotted with it's own colour, as
+        decided by the usual matplotlib colour cycle (color=None).
         '''
 
         # TODO we might still want to allow for specific model/data kwargs?
@@ -425,7 +440,7 @@ class _ClusterVisualizer:
         # Restart marker styles each plotting call
         markers = iter(self._MARKERS)
 
-        # TODO need to figure out how we handle passed kwargs better
+        # Unless specified, each mass bin should cycle colour from matplotlib
         default_clr = kwargs.pop('color', None)
 
         if res_kwargs is None:
@@ -435,6 +450,7 @@ class _ClusterVisualizer:
         # Determine the relevant datasets to the given pattern
         # ------------------------------------------------------------------
 
+        # TODO optionally exclude any "excluded_datasets"?
         datasets = self.obs.filter_datasets(ds_pattern)
 
         if strict and ds_pattern and not datasets:
@@ -878,6 +894,8 @@ class _ClusterVisualizer:
                             x_unit='pc', label_position='top',
                             blank_xaxis=False, res_kwargs=None, **kwargs):
 
+        # TODO add minor ticks to y axis
+
         def quad_nuisance(err):
             return np.sqrt(err**2 + (self.s2 << err.unit**2))
 
@@ -957,8 +975,7 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_mass_func(self, fig=None, show_obs=True, show_fields=True, *,
-                       colours=None, PI_legend=False, logscaled=False,
-                       field_kw=None):
+                       PI_legend=False, logscaled=False, field_kw=None):
 
         # ------------------------------------------------------------------
         # Setup axes, splitting into two columns if necessary and adding the
@@ -1115,8 +1132,7 @@ class _ClusterVisualizer:
         return fig
 
     @_support_units
-    def plot_MF_fields(self, fig=None, ax=None, *, radii=("rh",),
-                       cmap=None, grid=True):
+    def plot_MF_fields(self, fig=None, ax=None, *, radii=("rh",), grid=True):
         '''plot all mass function fields in this observation
         '''
         import shapely.geometry as geom
@@ -1210,10 +1226,13 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_density(self, fig=None, ax=None, kind='all', *,
-                     x_unit='pc', label_position='left'):
+                     x_unit='pc', label_position='left', colors=None):
 
         if kind == 'all':
             kind = {'MS', 'tot', 'BH', 'WD', 'NS'}
+
+        if colors is None:
+            colors = {}
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -1221,37 +1240,37 @@ class _ClusterVisualizer:
 
         # Total density
         if 'tot' in kind:
-            kw = {"label": "Total", "color": "tab:cyan"}
             self._plot_profile(ax, None, None, self.rho_tot,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="Total",
+                               color=colors.get("tot", "tab:cyan"))
 
         # Total Remnant density
         if 'rem' in kind:
-            kw = {"label": "Remnants", "color": "tab:purple"}
             self._plot_profile(ax, None, None, self.rho_rem,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="Remnants",
+                               color=colors.get("rem", "tab:purple"))
 
         # Main sequence density
         if 'MS' in kind:
-            kw = {"label": "Main-sequence stars", "color": "tab:orange"}
             self._plot_profile(ax, None, None, self.rho_MS,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="Main-sequence stars",
+                               color=colors.get("MS", "tab:orange"))
 
         if 'WD' in kind:
-            kw = {"label": "White Dwarfs", "color": "tab:green"}
             self._plot_profile(ax, None, None, self.rho_WD,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="White Dwarfs",
+                               color=colors.get("WD", "tab:green"))
 
         if 'NS' in kind:
-            kw = {"label": "Neutron Stars", "color": "tab:red"}
             self._plot_profile(ax, None, None, self.rho_NS,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="Neutron Stars",
+                               color=colors.get("NS", "tab:red"))
 
         # Black hole density
         if 'BH' in kind:
-            kw = {"label": "Black Holes", "color": "tab:gray"}
             self._plot_profile(ax, None, None, self.rho_BH,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="Black Holes",
+                               color=colors.get("BH", "tab:gray"))
 
         ax.set_yscale("log")
         ax.set_xscale("log")
@@ -1266,10 +1285,13 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_surface_density(self, fig=None, ax=None, kind='all', *,
-                             x_unit='pc', label_position='left'):
+                             x_unit='pc', label_position='left', colors=None):
 
         if kind == 'all':
             kind = {'MS', 'tot', 'BH', 'WD', 'NS'}
+
+        if colors is None:
+            colors = {}
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -1277,37 +1299,37 @@ class _ClusterVisualizer:
 
         # Total density
         if 'tot' in kind:
-            kw = {"label": "Total", "color": "tab:cyan"}
             self._plot_profile(ax, None, None, self.Sigma_tot,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="Total",
+                               color=colors.get("tot", "tab:cyan"))
 
         # Total Remnant density
         if 'rem' in kind:
-            kw = {"label": "Remnants", "color": "tab:purple"}
             self._plot_profile(ax, None, None, self.Sigma_rem,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="Remnants",
+                               color=colors.get("rem", "tab:purple"))
 
         # Main sequence density
         if 'MS' in kind:
-            kw = {"label": "Main-sequence stars", "color": "tab:orange"}
             self._plot_profile(ax, None, None, self.Sigma_MS,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="Main-sequence stars",
+                               color=colors.get("MS", "tab:orange"))
 
         if 'WD' in kind:
-            kw = {"label": "White Dwarfs", "color": "tab:green"}
             self._plot_profile(ax, None, None, self.Sigma_WD,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="White Dwarfs",
+                               color=colors.get("WD", "tab:green"))
 
         if 'NS' in kind:
-            kw = {"label": "Neutron Stars", "color": "tab:red"}
             self._plot_profile(ax, None, None, self.Sigma_NS,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="Neutron Stars",
+                               color=colors.get("NS", "tab:red"))
 
         # Black hole density
         if 'BH' in kind:
-            kw = {"label": "Black Holes", "color": "tab:gray"}
             self._plot_profile(ax, None, None, self.Sigma_BH,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="Black Holes",
+                               color=colors.get("BH", "tab:gray"))
 
         ax.set_yscale("log")
         ax.set_xscale("log")
@@ -1322,10 +1344,13 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_cumulative_mass(self, fig=None, ax=None, kind='all', *,
-                             x_unit='pc', label_position='left'):
+                             x_unit='pc', label_position='left', colors=None):
 
         if kind == 'all':
             kind = {'MS', 'tot', 'BH', 'WD', 'NS'}
+
+        if colors is None:
+            colors = {}
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -1333,31 +1358,31 @@ class _ClusterVisualizer:
 
         # Total density
         if 'tot' in kind:
-            kw = {"label": "Total", "color": "tab:cyan"}
             self._plot_profile(ax, None, None, self.cum_M_tot,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="Total",
+                               color=colors.get("tot", "tab:cyan"))
 
         # Main sequence density
         if 'MS' in kind:
-            kw = {"label": "Main-sequence stars", "color": "tab:orange"}
             self._plot_profile(ax, None, None, self.cum_M_MS,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="Main-sequence stars",
+                               color=colors.get("MS", "tab:orange"))
 
         if 'WD' in kind:
-            kw = {"label": "White Dwarfs", "color": "tab:green"}
             self._plot_profile(ax, None, None, self.cum_M_WD,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="White Dwarfs",
+                               color=colors.get("WD", "tab:green"))
 
         if 'NS' in kind:
-            kw = {"label": "Neutron Stars", "color": "tab:red"}
             self._plot_profile(ax, None, None, self.cum_M_NS,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="Neutron Stars",
+                               color=colors.get("NS", "tab:red"))
 
         # Black hole density
         if 'BH' in kind:
-            kw = {"label": "Black Holes", "color": "tab:gray"}
             self._plot_profile(ax, None, None, self.cum_M_BH,
-                               x_unit=x_unit, **kw)
+                               x_unit=x_unit, label="Black Holes",
+                               color=colors.get("BH", "tab:gray"))
 
         ax.set_yscale("log")
         ax.set_xscale("log")
@@ -1686,14 +1711,12 @@ class ModelVisualizer(_ClusterVisualizer):
         self.numdens = nd
 
     @_ClusterVisualizer._support_units
-    def _init_massfunc(self, model, observations, *, cmap=None):
+    def _init_massfunc(self, model, observations):
         '''
         sets self.mass_func as a dict of PI's, where each PI has a list of
         subdicts. Each subdict represents a single radial slice (within this PI)
         and contains the radii, the mass func values, and the field slice
         '''
-
-        cmap = cmap or plt.cm.rainbow
 
         self.mass_func = {}
 
@@ -1708,7 +1731,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
             self.mass_func[key] = []
 
-            clr = cmap(i / len(PI_list))
+            clr = self.cmap(i / len(PI_list))
 
             field = mass.Field.from_dataset(mf, cen=cen)
 
@@ -1822,7 +1845,7 @@ class CIModelVisualizer(_ClusterVisualizer):
     '''
 
     @_ClusterVisualizer._support_units
-    def plot_f_rem(self, fig=None, ax=None, bins='auto', color='b'):
+    def plot_f_rem(self, fig=None, ax=None, bins='auto', color='tab:blue'):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -1835,7 +1858,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         return fig
 
     @_ClusterVisualizer._support_units
-    def plot_BH_mass(self, fig=None, ax=None, bins='auto', color='b'):
+    def plot_BH_mass(self, fig=None, ax=None, bins='auto', color='tab:blue'):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -1848,7 +1871,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         return fig
 
     @_ClusterVisualizer._support_units
-    def plot_BH_num(self, fig=None, ax=None, bins='auto', color='b'):
+    def plot_BH_num(self, fig=None, ax=None, bins='auto', color='tab:blue'):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -2276,9 +2299,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         return (K * nd_interp(self.r)).to('pc-2', equivs)
 
-    def _prep_massfunc(self, observations, *, cmap=None):
-
-        cmap = cmap or plt.cm.rainbow
+    def _prep_massfunc(self, observations):
 
         massfunc = {}
 
@@ -2290,7 +2311,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             massfunc[key] = []
 
-            clr = cmap(i / len(PI_list))
+            clr = self.cmap(i / len(PI_list))
 
             field = mass.Field.from_dataset(mf, cen=cen)
 
@@ -2519,14 +2540,12 @@ class ObservationsVisualizer(_ClusterVisualizer):
     '''
 
     @_ClusterVisualizer._support_units
-    def _init_massfunc(self, observations, *, cmap=None):
+    def _init_massfunc(self, observations):
         '''
         sets self.mass_func as a dict of PI's, where each PI has a list of
         subdicts. Each subdict represents a single radial slice (within this PI)
         and contains the radii, the mass func values, and the field slice
         '''
-
-        cmap = cmap or plt.cm.rainbow
 
         self.mass_func = {}
 
@@ -2538,7 +2557,7 @@ class ObservationsVisualizer(_ClusterVisualizer):
 
             self.mass_func[key] = []
 
-            clr = cmap(i / len(PI_list))
+            clr = self.cmap(i / len(PI_list))
 
             field = mass.Field.from_dataset(mf, cen=cen)
 

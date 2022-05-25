@@ -6,6 +6,7 @@ import sys
 import pathlib
 import logging
 import warnings
+import itertools
 import contextlib
 
 import h5py
@@ -33,7 +34,21 @@ class _RunAnalysis:
     group : base group for sampler outputs, probably either 'nested' or 'mcmc'
     '''
 
-    _cmap = plt.cm.get_cmap('viridis')
+    _cmap = plt.rcParams['image.cmap']
+
+    @property
+    def cmap(self):
+        return plt.cm.get_cmap(self._cmap)
+
+    @cmap.setter
+    def cmap(self, cm):
+        if isinstance(cm, mpl_clr.Colormap) or (cm in plt.colormaps()):
+            self._cmap = cm
+        elif cm is None:
+            self._cmap = plt.rcParams['image.cmap']
+        else:
+            mssg = f"{cm} is not a registered colormap, see `plt.colormaps`"
+            raise ValueError(mssg)
 
     def __str__(self):
         try:
@@ -42,7 +57,7 @@ class _RunAnalysis:
             return "Run Results"
 
     def __init__(self, filename, observations, group, name=None, *,
-                 strict=True):
+                 strict=True, restrict_to='core'):
 
         self._filename = filename
         self._gname = group
@@ -69,11 +84,10 @@ class _RunAnalysis:
                 with h5py.File(filename, 'r') as file:
                     cluster = file['metadata'].attrs['cluster']
 
-                self.obs = Observations(cluster)
+                self.obs = Observations(cluster, restrict_to=restrict_to)
 
             except KeyError as err:
                 mssg = "No cluster name in metadata, must supply observations"
-                print(filename, err, type(err))
                 raise ValueError(mssg) from err
 
     @contextlib.contextmanager
@@ -575,6 +589,7 @@ class MCMCRun(_RunAnalysis):
 
         gs_kw = {}
 
+        # TODO broken when # params < 5
         if shape := len(labels) > 5:
             shape = int(np.ceil(shape / 2), 2)
 
@@ -619,7 +634,7 @@ class MCMCRun(_RunAnalysis):
             # --------------------------------------------------------------
 
             # TODO the y tick values have disappeared should be on the last axis
-            ax.scatter(self._iteration_domain, prm, cmap=self._cmap, **kw)
+            ax.scatter(self._iteration_domain, prm, cmap=self.cmap, **kw)
 
             ax.set_ylabel(lbl)
             ax.set_xlim(left=0)
@@ -1258,7 +1273,7 @@ class NestedRun(_RunAnalysis):
         for ind, it in enumerate(iteration):
 
             if N > 1:
-                clr = self._cmap((ind + 1) / N)
+                clr = self.cmap((ind + 1) / N)
 
             if show_live:
                 kw.setdefault('live_color', clr)
@@ -1589,7 +1604,7 @@ class NestedRun(_RunAnalysis):
                 # plot weights above scatter plots
                 # TODO figure out what colors to use
                 self.plot_weights(fig=fig, ax=ax, resampled=True, filled=True,
-                                  color=self._cmap(np.inf))
+                                  color=self.cmap(np.inf))
 
                 ax.set_xticklabels([])
                 ax.set_xlabel(None)
@@ -1635,7 +1650,7 @@ class NestedRun(_RunAnalysis):
             # --------------------------------------------------------------
 
             # TODO the y tick values have disappeared should be on the last axis
-            ax.scatter(-self.results.logvol, prm, c=c, cmap=self._cmap, **kw)
+            ax.scatter(-self.results.logvol, prm, c=c, cmap=self.cmap, **kw)
 
             ax.set_ylabel(lbl)
             ax.set_xlim(left=0)
@@ -2310,6 +2325,70 @@ class RunCollection(_RunAnalysis):
 
         return math_mapping.get(param, param)
 
+    def _add_colours(self, ax, mappable, cparam, clabel=None, *, alpha=1.,
+                     add_colorbar=True, extra_artists=None, math_label=True,
+                     fix_cbar_ticks=True):
+        '''add colours to all artists and add the relevant colorbar to ax'''
+        import matplotlib.colorbar as mpl_cbar
+
+        # Get colour values
+        try:
+            cvalues = np.array(self._get_param(cparam))[:, 0]
+            clabel = cparam if clabel is None else clabel
+
+        except TypeError:
+            cvalues = cparam
+
+        cnorm = mpl_clr.Normalize(cvalues.min(), cvalues.max())
+        colors = self.cmap(cnorm(cvalues))
+
+        colors[:, -1] = alpha
+
+        # apply colour to all artists
+        if mappable is not None:
+            mappable.set_color(colors)
+            mappable.cmap = self.cmap
+
+        if extra_artists is not None:
+            for artist in extra_artists:
+
+                # Set colors normally
+                try:
+                    artist.set_color(colors)
+
+                # If fails, attempt to set one colour at a time
+                except (ValueError, AttributeError) as err:
+
+                    try:
+                        for i, subart in enumerate(artist):
+                            subart.set_color(colors[i])
+
+                    except (ValueError, TypeError):
+                        mssg = f'Cannot `set_color` of extra artist "{artist}"'
+                        raise TypeError(mssg) from err
+
+        if add_colorbar:
+            # make ax for colorbar
+            divider = make_axes_locatable(ax)
+            cax = divider.append_axes("right", size="3%", pad=0.05)
+
+            # make colorbar
+            cbar = mpl_cbar.Colorbar(cax, mappable, cmap=self.cmap)
+
+            clabel = self._get_latex_labels(clabel) if math_label else clabel
+            cbar.set_label(clabel)
+
+            # if desired, explicitly set ticks at 25% intervals of bar
+            if fix_cbar_ticks:
+                cticks = [0, .25, .5, .75, 1.]
+                ctick_labels = [f'{t:.2f}' for t in cnorm.inverse(cticks)]
+                cbar.set_ticks(cticks, labels=ctick_labels)
+
+            return cbar
+
+        else:
+            return None
+
     # ----------------------------------------------------------------------
     # Model Collection Visualizers
     # ----------------------------------------------------------------------
@@ -2402,7 +2481,7 @@ class RunCollection(_RunAnalysis):
     # ----------------------------------------------------------------------
 
     def plot_a3_FeH(self, fig=None, ax=None, show_kroupa=False,
-                     *args, **kwargs):
+                    *args, **kwargs):
         '''Some special cases of plot_relation can have their own named func'''
 
         fig = self.plot_relation('FeH', 'a3', fig, ax, *args, **kwargs)
@@ -2421,7 +2500,7 @@ class RunCollection(_RunAnalysis):
 
     def plot_relation(self, param1, param2, fig=None, ax=None, *,
                       errors='bars', annotate=False, annotate_kwargs=None,
-                      **kwargs):
+                      clr_param=None, clr_kwargs=None, **kwargs):
         '''plot correlation between two param means with all runs
 
         errorbars, or 2d-ellipses
@@ -2429,16 +2508,24 @@ class RunCollection(_RunAnalysis):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        clrs = self._cmap(np.linspace(0., 1., len(self.runs)))
-
         x, dx = zip(*self._get_param(param1))
         y, dy = zip(*self._get_param(param2))
 
-        ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', ecolor=clrs, **kwargs)
-        ax.scatter(x, y, color=clrs, picker=True, **kwargs)  # TODO pickradius?
+        errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', **kwargs)
+        points = ax.scatter(x, y, picker=True, **kwargs)
 
         ax.set_xlabel(self._get_latex_labels(param1))
         ax.set_ylabel(self._get_latex_labels(param2))
+
+        if clr_param is not None:
+
+            if clr_kwargs is None:
+                clr_kwargs = {}
+
+            err_artists = itertools.chain.from_iterable(errbar[1:])
+
+            self._add_colours(ax, points, clr_param,
+                              extra_artists=err_artists, **clr_kwargs)
 
         if annotate:
 
@@ -2447,16 +2534,13 @@ class RunCollection(_RunAnalysis):
 
             _Annotator(fig, ax, self.runs, x, y, **annotate_kwargs)
 
-        else:
-            # TODO not happy with any legend
-            fig.legend(loc='upper center', ncol=10)
-
         return fig
 
     def plot_lit_comp(self, param, truths, e_truths=None, src_truths='',
                       fig=None, ax=None, *,
-                      clr_param=None, residuals=False, inset=False,
-                      annotate=False, annotate_kwargs=None, diagonal=True,
+                      clr_param=None, clr_kwargs=None,
+                      annotate=False, annotate_kwargs=None,
+                      residuals=False, inset=False, diagonal=True,
                       **kwargs):
         '''plot a x-y comparison against provided literature values
 
@@ -2468,17 +2552,8 @@ class RunCollection(_RunAnalysis):
         x, dx = zip(*self._get_param(param))
         y, dy = truths, e_truths
 
-        if clr_param is None:
-            clrs = self._cmap(np.linspace(0., 1., len(self.runs)))
-        else:
-            cvals = np.array(self._get_param(clr_param))[:, 0]
-
-            cnorm = mpl_clr.Normalize(cvals.min(), cvals.max())
-            clrs = self._cmap(cnorm(cvals))
-
-        ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', ecolor=clrs, **kwargs)
-        pnts = ax.scatter(x, y, color=clrs, picker=True, **kwargs)
-        # TODO pickradius?
+        errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', **kwargs)
+        points = ax.scatter(x, y, picker=True, **kwargs)
 
         if diagonal:
             grid_kw = {
@@ -2498,18 +2573,18 @@ class RunCollection(_RunAnalysis):
         ax.set_xlim(0.)
         ax.set_ylim(0.)
 
-        divider = make_axes_locatable(ax)
-
         if clr_param is not None:
-            # TODO all the colours stuff is all confused
-            #   highly doubt this is the best way to be marking them
-            cticks = [0, .25, .5, .75, 1.]
-            cax = divider.append_axes("right", size="3%", pad=0.05)
-            cbar = fig.colorbar(pnts, cax=cax, ticks=cticks)
-            cbar.ax.set_ylabel(clr_param)
-            cbar.ax.set_yticklabels([f'{t:.2f}' for t in cnorm.inverse(cticks)])
+
+            if clr_kwargs is None:
+                clr_kwargs = {}
+
+            err_artists = itertools.chain.from_iterable(errbar[1:])
+
+            self._add_colours(ax, points, clr_param,
+                              extra_artists=err_artists, **clr_kwargs)
 
         if residuals:
+            clrs = points.get_facecolors()
             res_ax = self.add_residuals(ax, x, y, dx, dy, clrs, pad=0)
             res_ax.set_xlabel(param)
 
@@ -2520,16 +2595,12 @@ class RunCollection(_RunAnalysis):
 
             _Annotator(fig, ax, self.runs, x, y, **annotate_kwargs)
 
-        else:
-            # TODO not happy with any legend
-            fig.legend(loc='upper center', ncol=10)
-
         return fig
 
     def plot_lit_relation(self, param,
                           lit, e_lit=None, param_lit='', src_lit='',
                           fig=None, ax=None, *, lit_on_x=False,
-                          clr_param=None, residuals=False,
+                          clr_param=None, clr_kwargs=None, residuals=False,
                           annotate=False, annotate_kwargs=None, **kwargs):
         '''plot a relation plot against provided literature values
 
@@ -2551,33 +2622,24 @@ class RunCollection(_RunAnalysis):
             dx, dy = dy, dx
             xlabel, ylabel = ylabel, xlabel
 
-        if clr_param is None:
-            clrs = self._cmap(np.linspace(0., 1., len(self.runs)))
-        else:
-            cvals = np.array(self._get_param(clr_param))[:, 0]
-
-            cnorm = mpl_clr.Normalize(cvals.min(), cvals.max())
-            clrs = self._cmap(cnorm(cvals))
-
-        ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', ecolor=clrs, **kwargs)
-        pnts = ax.scatter(x, y, color=clrs, picker=True, **kwargs)
-        # TODO pickradius?
+        errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', **kwargs)
+        points = ax.scatter(x, y, picker=True, **kwargs)
 
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
 
-        divider = make_axes_locatable(ax)
-
         if clr_param is not None:
-            # TODO all the colours stuff is all confused
-            #   highly doubt this is the best way to be marking them
-            cticks = [0, .25, .5, .75, 1.]
-            cax = divider.append_axes("right", size="3%", pad=0.05)
-            cbar = fig.colorbar(pnts, cax=cax, ticks=cticks)
-            cbar.ax.set_ylabel(clr_param)
-            cbar.ax.set_yticklabels([f'{t:.2f}' for t in cnorm.inverse(cticks)])
+
+            if clr_kwargs is None:
+                clr_kwargs = {}
+
+            err_artists = itertools.chain.from_iterable(errbar[1:])
+
+            self._add_colours(ax, points, clr_param,
+                              extra_artists=err_artists, **clr_kwargs)
 
         if residuals:
+            clrs = points.get_facecolors()
             res_ax = self.add_residuals(ax, x, y, dx, dy, clrs, pad=0)
             res_ax.set_xlabel(param)
 
@@ -2588,10 +2650,6 @@ class RunCollection(_RunAnalysis):
 
             _Annotator(fig, ax, self.runs, x, y, **annotate_kwargs)
 
-        else:
-            # TODO not happy with any legend
-            fig.legend(loc='upper center', ncol=10)
-
         return fig
 
     # ----------------------------------------------------------------------
@@ -2599,7 +2657,7 @@ class RunCollection(_RunAnalysis):
     # ----------------------------------------------------------------------
 
     def plot_param_means(self, param, fig=None, ax=None,
-                         color=None, sort=False, *args, **kwargs):
+                         clr_param=None, clr_kwargs=None, **kwargs):
         '''plot mean and std errorbars for each run of the given param'''
         fig, ax = self._setup_artist(fig, ax)
 
@@ -2609,15 +2667,21 @@ class RunCollection(_RunAnalysis):
 
         labels = self.names
 
-        kwargs.setdefault('fmt', 'o')
+        errbar = ax.errorbar(x=xticks, y=mean, yerr=std, fmt='none', **kwargs)
+        points = ax.scatter(x=xticks, y=mean, picker=True, **kwargs)
 
-        if sort:
-            s_ind = np.argsort(mean)
-            mean, std, labels = mean[s_ind], std[s_ind], np.array(labels)[s_ind]
+        if clr_param is not None:
 
-        ax.errorbar(x=xticks, y=mean, yerr=std, *args, **kwargs)
+            if clr_kwargs is None:
+                clr_kwargs = {}
 
-        ax.set_xticks(xticks, labels=labels, rotation=45)
+            err_artists = itertools.chain.from_iterable(errbar[1:])
+
+            self._add_colours(ax, points, clr_param,
+                              extra_artists=err_artists, **clr_kwargs)
+
+        ax.set_xticks(xticks, labels=labels, rotation=45,
+                      ha='right', rotation_mode="anchor")
 
         ax.grid(axis='x')
 
@@ -2626,8 +2690,7 @@ class RunCollection(_RunAnalysis):
         return fig
 
     def plot_param_bar(self, param, fig=None, ax=None,
-                       color=None, edgecolor=None, alpha=0.3, sort=False,
-                       *args, **kwargs):
+                       clr_param=None, clr_kwargs=None, *args, **kwargs):
         '''plot mean and std bar chart for each run of the given param'''
         fig, ax = self._setup_artist(fig, ax)
 
@@ -2637,48 +2700,57 @@ class RunCollection(_RunAnalysis):
 
         labels = self.names
 
-        if sort:
-            s_ind = np.argsort(mean)
-            mean, std, labels = mean[s_ind], std[s_ind], np.array(labels)[s_ind]
+        bars = ax.bar(x=xticks, height=mean, yerr=std, *args, **kwargs)
 
-        # TODO change ecolor to be based on color but visible
-        ax.bar(x=xticks, height=mean, yerr=std, *args, **kwargs)
+        if clr_param is not None:
 
-        ax.set_xticks(xticks, labels=labels, rotation=45)
+            if clr_kwargs is None:
+                clr_kwargs = {}
+
+            clr_kwargs.setdefault('alpha', 0.3)
+
+            self._add_colours(ax, None, clr_param,
+                              extra_artists=(bars,), **clr_kwargs)
+
+        ax.set_xticks(xticks, labels=labels, rotation=45,
+                      ha='right', rotation_mode="anchor")
 
         ax.set_ylabel(self._get_latex_labels(param))
 
         return fig
 
     def plot_param_violins(self, param, fig=None, ax=None,
-                           color=None, edgecolor=None, alpha=0.3, sort=False,
+                           clr_param=None, clr_kwargs=None, alpha=0.3,
                            *args, **kwargs):
         '''plot violins for each run of the given param'''
         fig, ax = self._setup_artist(fig, ax)
 
         chains = self._get_param_chains(param)
 
+        # filter out all nans (causes violinplot to fail silently)
+        chains = [ch[~np.isnan(ch)] for ch in chains]
+
         xticks = np.arange(len(self.runs))
 
         labels = self.names
 
-        if sort:
-            mean = np.array(self._get_param(param))[:, 0]
-            _, chains, labels = zip(*sorted(zip(mean, chains, labels)))
+        parts = ax.violinplot(chains, positions=xticks, *args, **kwargs)
 
-        artists = ax.violinplot(chains, positions=xticks, *args, **kwargs)
+        if clr_param is not None:
 
-        # TODO add similar clr_param stuff as above
+            if clr_kwargs is None:
+                clr_kwargs = {}
 
-        for part in artists['bodies']:
-            part.set_facecolor(color)
-            part.set_edgecolor(edgecolor)
+            clr_kwargs.setdefault('alpha', alpha)
+
+            self._add_colours(ax, None, clr_param,
+                              extra_artists=parts.values(), **clr_kwargs)
+
+        for part in parts['bodies']:
             part.set_alpha(alpha)
 
-        for linetype in (set(artists) - {'bodies'}):
-            artists[linetype].set_color(color)
-
-        ax.set_xticks(xticks, labels=labels, rotation=45)
+        ax.set_xticks(xticks, labels=labels, rotation=45,
+                      ha='right', rotation_mode="anchor")
 
         ax.grid(axis='x')
 
@@ -2688,6 +2760,7 @@ class RunCollection(_RunAnalysis):
 
     def summary_dataframe(self, *, include_FeH=True, include_BH=False):
         import pandas as pd
+        # TODO pandas isn't in the setup requirements
 
         # Get name of all desired parameters
 
