@@ -1157,6 +1157,8 @@ class _ClusterVisualizer:
 
         for PI, bins in self.mass_func.items():
 
+            lbl = f"{pathlib.Path(PI).name} ({self.obs[PI].mdata['proposal']})"
+
             for rbin in bins:
 
                 # ----------------------------------------------------------
@@ -1165,10 +1167,10 @@ class _ClusterVisualizer:
 
                 clr = rbin.get("colour", None)
 
-                rbin['field'].plot(ax, fc=clr, alpha=0.7, ec='k', label=PI)
+                rbin['field'].plot(ax, fc=clr, alpha=0.7, ec='k', label=lbl)
 
                 # make this label private so it's only added once to legend
-                PI = f'_{PI}'
+                lbl = f'_{lbl}'
 
         # ------------------------------------------------------------------
         # If desired, add a "pseudo" grid in the polar projection, at 2
