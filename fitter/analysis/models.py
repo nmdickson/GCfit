@@ -11,6 +11,7 @@ import matplotlib.ticker as mpl_tick
 import astropy.visualization as astroviz
 
 import logging
+import pathlib
 
 
 __all__ = ['ModelVisualizer', 'CIModelVisualizer', 'ObservationsVisualizer',
@@ -975,7 +976,8 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_mass_func(self, fig=None, show_obs=True, show_fields=True, *,
-                       PI_legend=False, logscaled=False, field_kw=None):
+                       PI_legend=False, propid_legend=False,
+                       logscaled=False, field_kw=None):
 
         # ------------------------------------------------------------------
         # Setup axes, splitting into two columns if necessary and adding the
@@ -1030,6 +1032,13 @@ class _ClusterVisualizer:
 
             N = mf['N'] / mbin_width
             ΔN = mf['ΔN'] / mbin_width
+
+            label = ''
+            if PI_legend:
+                label += pathlib.Path(PI).name
+
+            if propid_legend:
+                label += f" ({mf.mdata['proposal']})"
 
             # --------------------------------------------------------------
             # Iterate over radial bin dicts for this PI
@@ -1110,9 +1119,9 @@ class _ClusterVisualizer:
                 leg_kw = {'handlelength': 0, 'handletextpad': 0}
 
                 # If this is the first bin, also add a PI tag
-                if PI_legend and not rind and not show_fields:
-                    pi_fake = plt.Line2D([], [], label=PI)
-                    handles.append(pi_fake)
+                if label and not rind and not show_fields:
+                    lbl_fake = plt.Line2D([], [], label=label)
+                    handles.append(lbl_fake)
                     leg_kw['labelcolor'] = ['k', clr]
 
                 ax.legend(handles=handles, **leg_kw)
