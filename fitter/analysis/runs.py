@@ -2,6 +2,7 @@ from .. import Observations
 from ..probabilities import priors
 from .models import CIModelVisualizer, ModelVisualizer, ModelCollection
 
+import os
 import sys
 import pathlib
 import logging
@@ -62,17 +63,56 @@ class _RunAnalysis:
         self._filename = filename
         self._gname = group
 
-        # if strict, ensure all necessary groups exist in the given file
-        if strict:
-            with h5py.File(filename, 'r') as file:
-                reqd_groups = {group, 'metadata'}
+        with h5py.File(filename, 'r') as file:
 
-                if missing_groups := (reqd_groups - file.keys()):
-                    mssg = (f"Output file {filename} is invalid: "
-                            f"missing {missing_groups} groups. "
-                            "Are you sure this was created by GCfit?")
+            # Check that all necessary groups exist in the given file
+            reqd_groups = {group, 'metadata'}
+
+            if missing_groups := (reqd_groups - file.keys()):
+                mssg = (f"Output file {filename} is invalid: "
+                        f"missing {missing_groups} groups. "
+                        "Are you sure this was created by GCfit?")
+
+                if strict:
                     raise RuntimeError(mssg)
+                else:
+                    logging.warning(mssg)
 
+            # Check if this run seems to have used a local cluster data file
+            gcfit_dir = file['metadata'].attrs.get('GCFIT_DIR', 'CORE')
+
+            mssg = None
+
+            if gcfit_dir == 'CORE':
+                if restrict_to == 'core':
+                    pass
+
+                else:
+                    mssg = (f"This run used a core datafile, restricting to "
+                            f"`{restrict_to}` may use different observations")
+
+            else:
+
+                cur_gcfit_dir = os.getenv('GCFIT_DIR')
+
+                if restrict_to == 'core':
+                    mssg = (f"This run used a local datafile at `{gcfit_dir}`, "
+                            f"restricting to `{restrict_to}` may use different "
+                            f"observations")
+
+                elif cur_gcfit_dir != gcfit_dir:
+                    mssg = (f"This run used a local datafile at `{gcfit_dir}`, "
+                            f"restricting to `{restrict_to}` with "
+                            f"`GCFIT_DIR={cur_gcfit_dir}`  may use different "
+                            f"observations")
+
+            if mssg:
+                if strict:
+                    raise RuntimeError(mssg)
+                else:
+                    logging.warning(mssg)
+
+        # Determine and init cluster observations if necessary
         if name is not None:
             self.name = name
 
