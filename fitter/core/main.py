@@ -9,6 +9,7 @@ import numpy as np
 import dynesty
 import dynesty.dynamicsampler as dysamp
 
+import os
 import sys
 import time
 import shutil
@@ -500,6 +501,8 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
         backend.store_metadata('cluster', cluster)
 
+        backend.store_metadata('GCFIT_DIR', os.getenv('GCFIT_DIR', 'CORE'))
+
         backend.store_metadata('mpi', mpi)
         backend.store_metadata('Ncpu', Ncpu)
 
@@ -828,6 +831,8 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         # ----------------------------------------------------------------------
 
         backend.store_metadata('cluster', cluster)
+
+        backend.store_metadata('GCFIT_DIR', os.getenv('GCFIT_DIR', 'CORE'))
 
         backend.store_metadata('mpi', mpi)
         backend.store_metadata('Ncpu', Ncpu)
