@@ -329,9 +329,10 @@ class MCMCRun(_RunAnalysis):
     based on an output file I guess?
     '''
 
-    def __init__(self, filename, observations=None, group='mcmc', name=None):
+    def __init__(self, filename, observations=None, group='mcmc', name=None,
+                 *args, **kwargs):
 
-        super().__init__(filename, observations, group, name)
+        super().__init__(filename, observations, group, name, *args, **kwargs)
 
         # Ensure the dimensions are initialized correctly
         self.iterations = slice(None)
@@ -999,9 +1000,10 @@ class NestedRun(_RunAnalysis):
         # Compute the KDE of resampled logvols and evaluate on normal logvols
         return gaussian_kde(eq_logvol)(-self.results.logvol)
 
-    def __init__(self, filename, observations=None, group='nested', name=None):
+    def __init__(self, filename, observations=None, group='nested', name=None,
+                 *args, **kwargs):
 
-        super().__init__(filename, observations, group, name)
+        super().__init__(filename, observations, group, name, *args, **kwargs)
 
         self.results = self._get_results()
 
@@ -2118,7 +2120,7 @@ class RunCollection(_RunAnalysis):
 
     @classmethod
     def from_dir(cls, directory, pattern='**/*hdf', strict=False,
-                 *args, sampler='nested', **kwargs):
+                 *args, sampler='nested', run_kwargs=None, **kwargs):
         '''init by finding all run files in a directory'''
 
         cls._src = f'{directory}/{pattern}'
@@ -2133,12 +2135,15 @@ class RunCollection(_RunAnalysis):
             mssg = "Invalid sampler. Must be one of {'nested', 'mcmc'}"
             raise ValueError(mssg)
 
+        if run_kwargs is None:
+            run_kwargs = {}
+
         runs = []
 
         for fn in directory.glob(pattern):
 
             try:
-                run = run_cls(fn)
+                run = run_cls(fn, **run_kwargs)
                 run.name = run.obs.cluster
 
             except KeyError as err:
@@ -2161,7 +2166,7 @@ class RunCollection(_RunAnalysis):
 
     @classmethod
     def from_files(cls, file_list, strict=False,
-                   *args, sampler='nested', **kwargs):
+                   *args, sampler='nested', run_kwargs=None, **kwargs):
         '''init by finding all run files in a directory'''
 
         if not file_list:
@@ -2176,6 +2181,9 @@ class RunCollection(_RunAnalysis):
             mssg = "Invalid sampler. Must be one of {'nested', 'mcmc'}"
             raise ValueError(mssg)
 
+        if run_kwargs is None:
+            run_kwargs = {}
+
         runs = []
 
         for file in file_list:
@@ -2187,7 +2195,7 @@ class RunCollection(_RunAnalysis):
                 raise FileNotFoundError(mssg)
 
             try:
-                run = run_cls(file)
+                run = run_cls(file, **run_kwargs)
                 run.name = run.obs.cluster
 
             except KeyError as err:
