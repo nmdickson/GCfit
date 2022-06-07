@@ -445,7 +445,7 @@ class MCMCRun(_RunAnalysis):
         if math_labels:
 
             math_mapping = {
-                'W0': r'$\phi_0$',
+                'W0': r'$\hat{\phi}_0$',
                 'M': r'$M$',
                 'rh': r'$r_h$',
                 'ra': r'$\log\left(r_a\right)$',
@@ -1107,7 +1107,7 @@ class NestedRun(_RunAnalysis):
         if math_labels:
 
             math_mapping = {
-                'W0': r'$\phi_0$',
+                'W0': r'$\hat{\phi}_0$',
                 'M': r'$M$',
                 'rh': r'$r_h$',
                 'ra': r'$\log\left(r_a\right)$',
@@ -2348,7 +2348,7 @@ class RunCollection(_RunAnalysis):
         '''return the param names in math mode, for plotting'''
 
         math_mapping = {
-            'W0': r'$\phi_0$',
+            'W0': r'$\hat{\phi}_0$',
             'M': r'$M\ [10^6 M_\odot]$',
             'rh': r'$r_h\ [\mathrm{pc}]$',
             'ra': r'$\log\left(r_a/\mathrm{pc}\right)$',
@@ -2540,7 +2540,7 @@ class RunCollection(_RunAnalysis):
 
             ax.axhline(y=2.3, color='r')
 
-            ax2 = ax.secondary_yaxis('right')
+            ax2 = ax.secondary_yaxis('left')
 
             ax2.set_yticks([2.3], [r'Kroupa ($\alpha_3=2.3$)'], c='r')
 
