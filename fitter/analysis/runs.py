@@ -2315,7 +2315,7 @@ class RunCollection(_RunAnalysis):
             theta = [dict(zip(labels, r._get_equal_weight_chains()[1].T))
                      for r in self.runs]
 
-            mdata = [{k: [v, ] for k, v in r.obs.mdata.items()}
+            mdata = [{k: np.array([v, ]) for k, v in r.obs.mdata.items()}
                      for r in self.runs]
 
             # join the param and metadata dicts (union in 3.9)
@@ -2329,7 +2329,7 @@ class RunCollection(_RunAnalysis):
         except KeyError as err:
 
             try:
-                out = [[v, ] for v, e in self._get_from_run(param)]
+                out = [np.array([v, ]) for v, e in self._get_from_run(param)]
             except AttributeError:
 
                 if from_model:
@@ -2803,6 +2803,126 @@ class RunCollection(_RunAnalysis):
         ax.grid(axis='x')
 
         ax.set_ylabel(self._get_latex_labels(param))
+
+        return fig
+
+    def plot_param_kde(self, param, fig=None, ax=None, *args, **kwargs):
+        '''
+        plot a kde representing the sum (convolution) of all run's
+        distributions (kde) of this parameter
+        '''
+        from scipy.stats import gaussian_kde
+        import scipy.interpolate as interp
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        # get param distributions
+
+        chains = self._get_param_chains(param)
+        chains = [ch[~np.isnan(ch)] for ch in chains]
+        chains = np.concatenate(chains)
+
+        domain = np.linspace(chains.min(), chains.max(), 500)
+
+        distribution = gaussian_kde(chains)(domain)
+
+        distribution /= interp.UnivariateSpline(
+            domain, distribution, k=1, s=0, ext=1
+        ).integral(-np.inf, np.inf)
+
+        ax.fill_between(domain, 0, distribution, *args, **kwargs)
+
+        return fig
+
+    def plot_param_corner(self, fig=None, params=None,
+                          include_FeH=True, include_BH=False, *args, **kwargs):
+        '''
+        plot corner plot of all params for all runs
+        if params is none, default params used are:
+
+        if include_{FeH,BH}, those are included in the defaults. does not
+        override params
+        '''
+
+        if params is None:
+            params = ['W0', 'M', 'rh', 'ra', 'g', 'delta',
+                      's2', 'F', 'a1', 'a2', 'a3', 'BHret', 'd']
+
+            if include_FeH:
+                params += ['FeH']
+
+            if include_BH:
+                params += ['BH_mass']
+
+        # setup axes
+        Nparams = len(params)
+
+        # TODO somehow only make a N-1 square so when the last ones are removed
+        #   (or in this case isnt created) the fig sizes better
+
+        fig, axes = self._setup_multi_artist(fig, (Nparams, Nparams),
+                                             constrained_layout=False)
+        axes = axes.reshape((Nparams, Nparams))
+
+        # Setup axis layout (from `corner`).
+        factor = 2.0  # size of side of one panel
+        lbdim = 0.5 * factor  # size of left/bottom margin
+        trdim = 0.2 * factor  # size of top/right margin
+        whspace = 0.05  # size of width/height margin
+        plotdim = factor * (Nparams - 1.) + factor * (Nparams - 2.) * whspace
+        dim = lbdim + plotdim + trdim  # total size
+
+        # Format figure.
+        lb = lbdim / dim
+        tr = (lbdim + plotdim) / dim
+        fig.subplots_adjust(left=lb,
+                            bottom=lb,
+                            right=tr,
+                            top=tr,
+                            wspace=whspace,
+                            hspace=whspace)
+
+        for i, py in enumerate(params):
+
+            # plot histograms
+            self.plot_param_kde(py, fig=fig, ax=axes[i, i], alpha=0.3)
+
+            for j, px in enumerate(params):
+
+                ax = axes[i, j]
+
+                if j > i:
+                    # ax.set_frame_on(False)
+                    # ax.set_xticks([])
+                    # ax.set_yticks([])
+                    ax.remove()
+                    continue
+
+                elif j == i:
+                    ax.set_xticks([])
+                    ax.set_yticks([])
+
+                else:
+
+                    self.plot_relation(px, py, fig=fig, ax=ax, *args, **kwargs)
+
+                if i < Nparams - 2:
+                    ax.set_xticklabels([])
+                    ax.set_xlabel('')
+                else:
+                    # rotate_ticks(ax, 'x')
+                    # ax.set_xlabel(params[j])
+                    ax.set_xlabel(self._get_latex_labels(px))
+                    ax.xaxis.set_label_coords(0.5, -0.3)
+
+                if j > 0:
+                    ax.set_yticklabels([])
+                    ax.set_ylabel('')
+                else:
+                    # rotate_ticks(ax, 'y')
+                    # ax.set_ylabel(params[i])
+                    ax.set_ylabel(self._get_latex_labels(py))
+                    ax.yaxis.set_label_coords(-0.3, 0.5)
 
         return fig
 

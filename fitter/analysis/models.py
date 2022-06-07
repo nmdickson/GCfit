@@ -2473,6 +2473,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         ''' load the CI from a file which was `save`d, to avoid rerunning models
         validate: check while loading that all datasets are there, error if not
         '''
+        # TODO load should accept an optional observations like all others
 
         with h5py.File(filename, 'r') as file:
 
