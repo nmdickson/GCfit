@@ -1905,14 +1905,17 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         viz = cls(observations)
 
-        viz.N = N
-
         # ------------------------------------------------------------------
         # Get info about the chain and set of models
         # ------------------------------------------------------------------
 
         # Flatten walkers, if not already
         chain = chain.reshape((-1, chain.shape[-1]))[-N:]
+
+        # Truncate if N is larger than the given chain size
+        N = chain.shape[0]
+
+        viz.N = N
 
         median_chain = np.median(chain, axis=0)
 
