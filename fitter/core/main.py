@@ -908,7 +908,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         backend.store_results(sampler.results)
 
         tn = datetime.timedelta(seconds=time.time() - t0)
-        logging.info("Beginning dynamic batch sampling ({tn})")
+        logging.info(f"Beginning dynamic batch sampling ({tn})")
 
         # run the dynamic sampler in batches, until the stop condition is met
         while not dysamp.stopping_function(sampler.results, args=stop_kw,
@@ -924,7 +924,8 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
             for results in sampler.sample_batch(logl_bounds=wt, **batch_kwargs):
                 backend.update_current_batch(results)
 
-            logging.info("Combining batch with existing results")
+            logging.info(f"Combining batch with existing results "
+                         f"(ESS={sampler.n_effective})")
 
             # add new samples to previous results, save in backend
             sampler.combine_runs()
