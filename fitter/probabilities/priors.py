@@ -658,8 +658,8 @@ DEFAULT_PRIORS = {
     'delta': ('uniform', [(0.3, 0.5)]),
     's2': ('uniform', [(0, 15)]),
     'F': ('uniform', [(1, 3)]),
-    'a1': ('uniform', [(0, 2.35)]),
-    'a2': ('uniform', [(0, 2.35), ('a1', np.inf)]),
+    'a1': ('uniform', [(-1, 2.35)]),
+    'a2': ('uniform', [(-1, 2.35), ('a1', np.inf)]),
     'a3': ('uniform', [(1.6, 4), ('a2', np.inf)]),
     'BHret': ('uniform', [(0, 100)]),
     'd': ('uniform', [(2, 8)])
