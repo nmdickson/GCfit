@@ -1651,9 +1651,17 @@ class ModelVisualizer(_ClusterVisualizer):
         self.obs = observations if observations else model.observations
         self.name = observations.cluster
 
+        # various structural model attributes
+        self.r0 = model.r0
         self.rh = model.rh
+        self.rhp = model.rhp
         self.ra = model.ra
+        self.rv = model.rv
         self.rt = model.rt
+        self.mmean = model.mmean
+        self.volume = model.volume
+
+        # various fitting-related attributes
         self.F = model.theta['F']
         self.s2 = model.theta['s2']
         self.d = model.d
@@ -1937,8 +1945,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         # TODO https://github.com/nmdickson/GCfit/issues/100
         huge_model = Model(chain[np.argmax(chain[:, 4])], viz.obs)
 
-        viz.rt = huge_model.rt
-        viz.r = np.r_[0, np.geomspace(1e-5, viz.rt.value, num=99)] << u.pc
+        viz.r = np.r_[0, np.geomspace(1e-5, huge_model.rt.value, 99)] << u.pc
 
         viz.rlims = (9e-3, viz.r.max().value + 5) << viz.r.unit
 
@@ -2022,6 +2029,15 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         BH_mass = np.full(N, np.nan) << u.Msun
         BH_num = np.full(N, np.nan) << u.dimensionless_unscaled
+
+        # Structural params
+
+        r0 = np.full(N, np.nan) << huge_model.r0.unit
+        rt = np.full(N, np.nan) << huge_model.rt.unit
+        rhp = np.full(N, np.nan) << huge_model.rhp.unit
+        rv = np.full(N, np.nan) << huge_model.rv.unit
+        mmean = np.full(N, np.nan) << huge_model.mmean.unit
+        volume = np.full(N, np.nan) << huge_model.volume.unit
 
         # ------------------------------------------------------------------
         # Setup iteration and pooling
@@ -2108,6 +2124,15 @@ class CIModelVisualizer(_ClusterVisualizer):
             BH_mass[model_ind] = np.sum(model.BH_Mj)
             BH_num[model_ind] = np.sum(model.BH_Nj)
 
+            # Structural params
+
+            r0[model_ind] = model.r0
+            rt[model_ind] = model.rt
+            rhp[model_ind] = model.rhp
+            rv[model_ind] = model.rv
+            mmean[model_ind] = model.mmean
+            volume[model_ind] = model.volume
+
         # ------------------------------------------------------------------
         # compute and store the percentiles and medians
         # ------------------------------------------------------------------
@@ -2158,6 +2183,13 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         viz.BH_mass = BH_mass
         viz.BH_num = BH_num
+
+        viz.r0 = r0
+        viz.rt = rt
+        viz.rhp = rhp
+        viz.rv = rv
+        viz.mmean = mmean
+        viz.volume = volume
 
         return viz
 
@@ -2433,14 +2465,16 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             quant_grp = modelgrp.create_group('quantities')
 
-            ds = quant_grp.create_dataset('f_rem', data=self.f_rem)
-            ds.attrs['unit'] = self.f_rem.unit.to_string()
+            quant_keys = (
+                'f_rem', 'BH_mass', 'BH_num',
+                'r0', 'rt', 'rhp', 'rv', 'mmean', 'volume'
+            )
 
-            ds = quant_grp.create_dataset('BH_mass', data=self.BH_mass)
-            ds.attrs['unit'] = self.BH_mass.unit.to_string()
+            for key in quant_keys:
 
-            ds = quant_grp.create_dataset('BH_num', data=self.BH_num)
-            ds.attrs['unit'] = self.BH_num.unit.to_string()
+                data = getattr(self, key)
+                ds = quant_grp.create_dataset(key, data=data)
+                ds.attrs['unit'] = data.unit.to_string()
 
             # --------------------------------------------------------------
             # Store mass function

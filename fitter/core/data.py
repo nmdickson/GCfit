@@ -815,13 +815,19 @@ class Model(lp.limepy):
         self.mj <<= M_units
         self.Mj <<= M_units
         self.mc <<= M_units
+        self.mmean <<= M_units
         self.mes_widths <<= M_units
 
         self.r <<= R_units
+        self.r0 <<= R_units
         self.rh <<= R_units
+        self.rhp <<= R_units
         self.rt <<= R_units
         self.ra <<= R_units
+        self.rv <<= R_units
         self.rs <<= R_units
+
+        self.volume <<= R_units**3
 
         self.v2Tj <<= V2_units
         self.v2Rj <<= V2_units
