@@ -827,6 +827,7 @@ class Model(lp.limepy):
         self.rv <<= R_units
         self.rs <<= R_units
 
+        # TODO this may be wrong (it's "phase-space" volume)
         self.volume <<= R_units**3
 
         self.v2Tj <<= V2_units
