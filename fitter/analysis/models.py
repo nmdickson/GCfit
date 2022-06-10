@@ -2623,9 +2623,8 @@ class ObservationsVisualizer(_ClusterVisualizer):
 
 class ModelCollection:
     '''A collection of models, allowing for overplotting multiple models
-    with one another.
-    intimately tied to RunCollection, so we'll need "posterior distributions"
-    on some things like BH mass and num, etc
+    with one another, and accessing the various parameters of multiple models at
+    once. Intimately tied to RunCollection.
     '''
 
     def __str__(self):
@@ -2634,6 +2633,10 @@ class ModelCollection:
     def __iter__(self):
         '''return an iterator over the individual model vizs'''
         return iter(self.visualizers)
+
+    def __getattr__(self, key):
+        '''When accessing an attribute, fall back to get it from each model'''
+        return [getattr(mv, key) for mv in self.visualizers]
 
     def __init__(self, visualizers):
         self.visualizers = visualizers
@@ -2735,43 +2738,3 @@ class ModelCollection:
             fig.savefig(**save_kw)
 
             plt.close(fig)
-
-    # ----------------------------------------------------------------------
-    # Collection Attributes
-    # ----------------------------------------------------------------------
-
-    # TODO technically all of these could be defined as singles for modelviz
-
-    @property
-    def f_rem(self):
-
-        if not self._ci:
-            mssg = ("'ModelCollection' object has no attribute 'f_rem'. "
-                    "Must be constructed with CIModelVisualizer objects.")
-            raise AttributeError(mssg)
-
-        return [mv.f_rem for mv in self.visualizers]
-
-    @property
-    def BH_mass(self):
-
-        if not self._ci:
-            mssg = ("'ModelCollection' object has no attribute 'BH_mass'. "
-                    "Must be constructed with CIModelVisualizer objects.")
-            raise AttributeError(mssg)
-
-        return [mv.BH_mass for mv in self.visualizers]
-
-    @property
-    def BH_num(self):
-
-        if not self._ci:
-            mssg = ("'ModelCollection' object has no attribute 'BH_num'. "
-                    "Must be constructed with CIModelVisualizer objects.")
-            raise AttributeError(mssg)
-
-        return [mv.BH_num for mv in self.visualizers]
-
-    @property
-    def chi2(self):
-        return [mv.chi2 for mv in self.visualizers]
