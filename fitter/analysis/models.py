@@ -1206,12 +1206,13 @@ class _ClusterVisualizer:
         # ------------------------------------------------------------------
 
         # TODO for CI this could be a CI of rh, ra, rt actually (60)
+        valid_rs = {'rh', 'ra', 'rt', 'r0', 'rhp', 'rv'}
 
         for r_type in radii:
 
             # This is to explicitly avoid very ugly exceptions from geom
-            if r_type not in {'rh', 'ra', 'rt'}:
-                mssg = f'radii must be one of {{rh, ra, rt}}, not `{r_type}`'
+            if r_type not in valid_rs:
+                mssg = f'radii must be one of {valid_rs}, not `{r_type}`'
                 raise TypeError(mssg)
 
             radius = getattr(self, r_type).to_value('arcmin')
