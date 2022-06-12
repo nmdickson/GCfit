@@ -12,6 +12,7 @@ import contextlib
 
 import h5py
 import numpy as np
+import astropy.units as u
 import matplotlib.pyplot as plt
 import matplotlib.colors as mpl_clr
 import matplotlib.offsetbox as mpl_obx
@@ -1826,6 +1827,7 @@ class NestedRun(_RunAnalysis):
             wt = np.exp(res.logwt - res.logz[-1])
             means.append(mean_and_cov(res.samples, wt)[0])
 
+        # TODO I think this assumes symmetrical guassian dist, is that alright?
         mean = np.mean(means, axis=0)
         err = np.std(means, axis=0)
 
@@ -2218,7 +2220,7 @@ class RunCollection(_RunAnalysis):
 
     def _get_from_run(self, param):
         '''get a property from each run (BIC, AIC, ESS, etc)'''
-        return [(getattr(run, param), 0) for run in self.runs]
+        return np.array([(getattr(run, param), 0, 0) for run in self.runs]).T
 
     def _get_from_model(self, param, *, statistic=False, with_units=True,
                         **kwargs):
@@ -2252,16 +2254,19 @@ class RunCollection(_RunAnalysis):
                 pass
 
         if statistic:
-            # Compute average and std for each run
-            return [(np.nanmedian(ds), np.nanstd(ds)) for ds in data]
+            # Compute average and stds for each run
+
+            base = u.Quantity if isinstance(data[0], u.Quantity) else np.array
+            q = [50., 15.87, 84.13]
+            return base([np.nanpercentile(ds, q=q) for ds in data])
 
         else:
             # return the full dataset for each run
             return data
 
     def _get_param(self, param, *, from_model=True, **kwargs):
-        '''return the mean & std for a θ, metadata or model quntity "param"
-        for all runs
+        '''return the median, -1σ, +1σ for a θ, metadata or model quntity
+        "param" for all runs
 
         from_model=False if you want to really avoid model params (i.e. dont
         want to compute the models) all kwargs are passed to get_model otherwise
@@ -2273,10 +2278,12 @@ class RunCollection(_RunAnalysis):
         try:
 
             # join the param and metadata dicts (union in 3.9)
-            out = [
+            # also expand the symmetric errors
+            out = np.array([
                 {**self._params[ind], **self._mdata[ind]}[param]
                 for ind, run in enumerate(self.runs)
-            ]
+            ])
+            out = np.c_[out, out[:, 1]].T
 
         # otherwise try to get from model properties
         # this is only worst case because may take a long time to gen models
@@ -2386,7 +2393,7 @@ class RunCollection(_RunAnalysis):
 
         # Get colour values
         try:
-            cvalues = np.array(self._get_param(cparam))[:, 0]
+            cvalues, *_ = self._get_param(cparam)
             clabel = cparam if clabel is None else clabel
 
         except TypeError:
@@ -2561,8 +2568,8 @@ class RunCollection(_RunAnalysis):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        x, dx = zip(*self._get_param(param1))
-        y, dy = zip(*self._get_param(param2))
+        x, *dx = self._get_param(param1)
+        y, *dy = self._get_param(param2)
 
         errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', **kwargs)
         points = ax.scatter(x, y, picker=True, **kwargs)
@@ -2602,7 +2609,7 @@ class RunCollection(_RunAnalysis):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        x, dx = zip(*self._get_param(param))
+        x, *dx = self._get_param(param)
         y, dy = truths, e_truths
 
         errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', **kwargs)
@@ -2662,7 +2669,7 @@ class RunCollection(_RunAnalysis):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        x, dx = zip(*self._get_param(param))
+        x, *dx = self._get_param(param)
         y, dy = lit, e_lit
 
         xlabel = self._get_latex_labels(param)
@@ -2714,13 +2721,13 @@ class RunCollection(_RunAnalysis):
         '''plot mean and std errorbars for each run of the given param'''
         fig, ax = self._setup_artist(fig, ax)
 
-        mean, std = np.array(self._get_param(param)).T
+        mean, *err = self._get_param(param)
 
         xticks = np.arange(len(self.runs))
 
         labels = self.names
 
-        errbar = ax.errorbar(x=xticks, y=mean, yerr=std, fmt='none', **kwargs)
+        errbar = ax.errorbar(x=xticks, y=mean, yerr=err, fmt='none', **kwargs)
         points = ax.scatter(x=xticks, y=mean, picker=True, **kwargs)
 
         if clr_param is not None:
@@ -2747,13 +2754,13 @@ class RunCollection(_RunAnalysis):
         '''plot mean and std bar chart for each run of the given param'''
         fig, ax = self._setup_artist(fig, ax)
 
-        mean, std = np.array(self._get_param(param)).T
+        mean, *err = self._get_param(param)
 
         xticks = np.arange(len(self.runs))
 
         labels = self.names
 
-        bars = ax.bar(x=xticks, height=mean, yerr=std, *args, **kwargs)
+        bars = ax.bar(x=xticks, height=mean, yerr=err, *args, **kwargs)
 
         if clr_param is not None:
 
@@ -2832,7 +2839,9 @@ class RunCollection(_RunAnalysis):
         data['Cluster'] = [run.name for run in self.runs]
 
         for param in labels:
-            data[param], data[f'σ_{param}'] = zip(*self._get_param(param))
+            median, σ_down, σ_up = self._get_param(param)
+            data[param] = median
+            data[f'-1σ_{param}'], data[f'+1σ_{param}'] = σ_down, σ_up
 
         # Create dataframe
 
