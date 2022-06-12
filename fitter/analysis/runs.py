@@ -2257,8 +2257,13 @@ class RunCollection(_RunAnalysis):
             # Compute average and stds for each run
 
             base = u.Quantity if isinstance(data[0], u.Quantity) else np.array
+
+            # TODO make this optionally return 2sig instead?
             q = [50., 15.87, 84.13]
-            return base([np.nanpercentile(ds, q=q) for ds in data])
+            out = base([np.nanpercentile(ds, q=q) for ds in data]).T
+            out[1:] = np.abs(out[1:] - out[0])
+
+            return out
 
         else:
             # return the full dataset for each run
