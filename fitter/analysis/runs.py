@@ -2376,11 +2376,11 @@ class RunCollection(_RunAnalysis):
             'BH_mass': r'$\mathrm{M}_{BH}\ [M_\odot]$',
             'BH_num': r'$\mathrm{N}_{BH}$',
             'f_rem': r'$f_{\mathrm{remn}}$',
-            'r0': r'r_0\ [\mathrm{pc}]',
-            'rt': r'r_t\ [\mathrm{pc}]',
-            'rv': r'r_v\ [\mathrm{pc}]',
-            'rhp': r'r_{hp}\ [\mathrm{pc}]',
-            'mmean': r'\bar{m}\ [M_\odot]',
+            'r0': r'$r_0\ [\mathrm{pc}]$',
+            'rt': r'$r_t\ [\mathrm{pc}]$',
+            'rv': r'$r_v\ [\mathrm{pc}]$',
+            'rhp': r'$r_{hp}\ [\mathrm{pc}]$',
+            'mmean': r'$\bar{m}\ [M_\odot]$',
         }
 
         return math_mapping.get(param, param)
