@@ -2100,7 +2100,7 @@ class RunCollection(_RunAnalysis):
 
         runs = [self.get_run(r) for r in filtered_names]
 
-        rc = RunCollection(runs, N_simruns=self._N_simruns, sort=sort, **kwargs)
+        rc = RunCollection(runs, sort=sort, **kwargs)
         rc.cmap = self.cmap
 
         return rc
