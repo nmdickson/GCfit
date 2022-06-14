@@ -2866,20 +2866,20 @@ class RunCollection(_RunAnalysis):
 
         # setup axes
         Nparams = len(params)
+        Nrows = Ncols = Nparams - 1
 
-        # TODO somehow only make a N-1 square so when the last ones are removed
-        #   (or in this case isnt created) the fig sizes better
+        fig, axes = self._setup_multi_artist(fig, (Nrows, Ncols),
+                                             constrained_layout=False,
+                                             sharex='col', sharey='row')
+        axes = axes.reshape((Nrows, Ncols))
 
-        fig, axes = self._setup_multi_artist(fig, (Nparams, Nparams),
-                                             constrained_layout=False)
-        axes = axes.reshape((Nparams, Nparams))
-
+        # TODO these are not ideal, lots of conflicting labels and ticks
         # Setup axis layout (from `corner`).
         factor = 2.0  # size of side of one panel
         lbdim = 0.5 * factor  # size of left/bottom margin
         trdim = 0.2 * factor  # size of top/right margin
         whspace = 0.05  # size of width/height margin
-        plotdim = factor * (Nparams - 1.) + factor * (Nparams - 2.) * whspace
+        plotdim = factor * (Nrows - 1) + factor * (Ncols - 2.) * whspace
         dim = lbdim + plotdim + trdim  # total size
 
         # Format figure.
@@ -2892,47 +2892,35 @@ class RunCollection(_RunAnalysis):
                             wspace=whspace,
                             hspace=whspace)
 
-        for i, py in enumerate(params):
+        for i, py in enumerate(params[1:]):
 
-            # plot histograms
-            self.plot_param_kde(py, fig=fig, ax=axes[i, i], alpha=0.3)
-
-            for j, px in enumerate(params):
+            for j, px in enumerate(params[:-1]):
 
                 ax = axes[i, j]
 
                 if j > i:
-                    # ax.set_frame_on(False)
-                    # ax.set_xticks([])
-                    # ax.set_yticks([])
                     ax.remove()
                     continue
-
-                elif j == i:
-                    ax.set_xticks([])
-                    ax.set_yticks([])
 
                 else:
 
                     self.plot_relation(px, py, fig=fig, ax=ax, *args, **kwargs)
 
-                if i < Nparams - 2:
-                    ax.set_xticklabels([])
-                    ax.set_xlabel('')
-                else:
+                # set labels on bottom row
+                if i + 1 == Nrows:
                     # rotate_ticks(ax, 'x')
-                    # ax.set_xlabel(params[j])
                     ax.set_xlabel(self._get_latex_labels(px))
                     ax.xaxis.set_label_coords(0.5, -0.3)
-
-                if j > 0:
-                    ax.set_yticklabels([])
-                    ax.set_ylabel('')
                 else:
+                    ax.set_xlabel('')
+
+                # Set labels on leftmost col
+                if j == 0:
                     # rotate_ticks(ax, 'y')
-                    # ax.set_ylabel(params[i])
                     ax.set_ylabel(self._get_latex_labels(py))
                     ax.yaxis.set_label_coords(-0.3, 0.5)
+                else:
+                    ax.set_ylabel('')
 
         return fig
 
