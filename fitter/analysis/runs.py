@@ -2806,31 +2806,41 @@ class RunCollection(_RunAnalysis):
 
         return fig
 
-    def plot_param_kde(self, param, fig=None, ax=None, *args, **kwargs):
+    def plot_param_hist(self, param, fig=None, ax=None, kde=False, **kwargs):
         '''
         plot a kde representing the sum (convolution) of all run's
         distributions (kde) of this parameter
         '''
-        from scipy.stats import gaussian_kde
-        import scipy.interpolate as interp
+        # TODO is a liiittle bit invalid if chains don't all have same N
 
         fig, ax = self._setup_artist(fig, ax)
-
-        # get param distributions
 
         chains = self._get_param_chains(param)
         chains = [ch[~np.isnan(ch)] for ch in chains]
         chains = np.concatenate(chains)
 
-        domain = np.linspace(chains.min(), chains.max(), 500)
+        # Plot a filled KDE distribution
+        if kde:
+            from scipy.stats import gaussian_kde
+            import scipy.interpolate as interp
 
-        distribution = gaussian_kde(chains)(domain)
+            # get param distributions
+            domain = np.linspace(chains.min(), chains.max(), 500)
 
-        distribution /= interp.UnivariateSpline(
-            domain, distribution, k=1, s=0, ext=1
-        ).integral(-np.inf, np.inf)
+            distribution = gaussian_kde(chains)(domain)
 
-        ax.fill_between(domain, 0, distribution, *args, **kwargs)
+            distribution /= interp.UnivariateSpline(
+                domain, distribution, k=1, s=0, ext=1
+            ).integral(-np.inf, np.inf)
+
+            ax.fill_between(domain, 0, distribution, **kwargs)
+
+            ax.set_ylim(bottom=0)
+
+        # plot a simple histogram
+        else:
+
+            ax.hist(chains, **kwargs)
 
         return fig
 
