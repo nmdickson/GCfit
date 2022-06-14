@@ -1182,7 +1182,7 @@ class _ClusterVisualizer:
 
         if grid:
             # TODO this should probably use distance to furthest field
-            rt = self.rt if hasattr(self, 'rt') else (20 << u.arcmin)
+            rt = np.median(self.rt) if hasattr(self, 'rt') else (20 << u.arcmin)
             ticks = np.arange(2, rt.to_value('arcmin'), 2)
 
             # make sure this grid matches normal grids
@@ -1206,12 +1206,13 @@ class _ClusterVisualizer:
         # ------------------------------------------------------------------
 
         # TODO for CI this could be a CI of rh, ra, rt actually (60)
+        valid_rs = {'rh', 'ra', 'rt', 'r0', 'rhp', 'rv'}
 
         for r_type in radii:
 
             # This is to explicitly avoid very ugly exceptions from geom
-            if r_type not in {'rh', 'ra', 'rt'}:
-                mssg = f'radii must be one of {{rh, ra, rt}}, not `{r_type}`'
+            if r_type not in valid_rs:
+                mssg = f'radii must be one of {valid_rs}, not `{r_type}`'
                 raise TypeError(mssg)
 
             radius = getattr(self, r_type).to_value('arcmin')
@@ -1651,9 +1652,17 @@ class ModelVisualizer(_ClusterVisualizer):
         self.obs = observations if observations else model.observations
         self.name = observations.cluster
 
+        # various structural model attributes
+        self.r0 = model.r0
         self.rh = model.rh
+        self.rhp = model.rhp
         self.ra = model.ra
+        self.rv = model.rv
         self.rt = model.rt
+        self.mmean = model.mmean
+        self.volume = model.volume
+
+        # various fitting-related attributes
         self.F = model.theta['F']
         self.s2 = model.theta['s2']
         self.d = model.d
@@ -1905,14 +1914,17 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         viz = cls(observations)
 
-        viz.N = N
-
         # ------------------------------------------------------------------
         # Get info about the chain and set of models
         # ------------------------------------------------------------------
 
         # Flatten walkers, if not already
         chain = chain.reshape((-1, chain.shape[-1]))[-N:]
+
+        # Truncate if N is larger than the given chain size
+        N = chain.shape[0]
+
+        viz.N = N
 
         median_chain = np.median(chain, axis=0)
 
@@ -1934,8 +1946,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         # TODO https://github.com/nmdickson/GCfit/issues/100
         huge_model = Model(chain[np.argmax(chain[:, 4])], viz.obs)
 
-        viz.rt = huge_model.rt
-        viz.r = np.r_[0, np.geomspace(1e-5, viz.rt.value, num=99)] << u.pc
+        viz.r = np.r_[0, np.geomspace(1e-5, huge_model.rt.value, 99)] << u.pc
 
         viz.rlims = (9e-3, viz.r.max().value + 5) << viz.r.unit
 
@@ -2019,6 +2030,15 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         BH_mass = np.full(N, np.nan) << u.Msun
         BH_num = np.full(N, np.nan) << u.dimensionless_unscaled
+
+        # Structural params
+
+        r0 = np.full(N, np.nan) << huge_model.r0.unit
+        rt = np.full(N, np.nan) << huge_model.rt.unit
+        rhp = np.full(N, np.nan) << huge_model.rhp.unit
+        rv = np.full(N, np.nan) << huge_model.rv.unit
+        mmean = np.full(N, np.nan) << huge_model.mmean.unit
+        volume = np.full(N, np.nan) << huge_model.volume.unit
 
         # ------------------------------------------------------------------
         # Setup iteration and pooling
@@ -2105,6 +2125,15 @@ class CIModelVisualizer(_ClusterVisualizer):
             BH_mass[model_ind] = np.sum(model.BH_Mj)
             BH_num[model_ind] = np.sum(model.BH_Nj)
 
+            # Structural params
+
+            r0[model_ind] = model.r0
+            rt[model_ind] = model.rt
+            rhp[model_ind] = model.rhp
+            rv[model_ind] = model.rv
+            mmean[model_ind] = model.mmean
+            volume[model_ind] = model.volume
+
         # ------------------------------------------------------------------
         # compute and store the percentiles and medians
         # ------------------------------------------------------------------
@@ -2155,6 +2184,13 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         viz.BH_mass = BH_mass
         viz.BH_num = BH_num
+
+        viz.r0 = r0
+        viz.rt = rt
+        viz.rhp = rhp
+        viz.rv = rv
+        viz.mmean = mmean
+        viz.volume = volume
 
         return viz
 
@@ -2430,14 +2466,16 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             quant_grp = modelgrp.create_group('quantities')
 
-            ds = quant_grp.create_dataset('f_rem', data=self.f_rem)
-            ds.attrs['unit'] = self.f_rem.unit.to_string()
+            quant_keys = (
+                'f_rem', 'BH_mass', 'BH_num',
+                'r0', 'rt', 'rhp', 'rv', 'mmean', 'volume'
+            )
 
-            ds = quant_grp.create_dataset('BH_mass', data=self.BH_mass)
-            ds.attrs['unit'] = self.BH_mass.unit.to_string()
+            for key in quant_keys:
 
-            ds = quant_grp.create_dataset('BH_num', data=self.BH_num)
-            ds.attrs['unit'] = self.BH_num.unit.to_string()
+                data = getattr(self, key)
+                ds = quant_grp.create_dataset(key, data=data)
+                ds.attrs['unit'] = data.unit.to_string()
 
             # --------------------------------------------------------------
             # Store mass function
@@ -2621,9 +2659,8 @@ class ObservationsVisualizer(_ClusterVisualizer):
 
 class ModelCollection:
     '''A collection of models, allowing for overplotting multiple models
-    with one another.
-    intimately tied to RunCollection, so we'll need "posterior distributions"
-    on some things like BH mass and num, etc
+    with one another, and accessing the various parameters of multiple models at
+    once. Intimately tied to RunCollection.
     '''
 
     def __str__(self):
@@ -2632,6 +2669,10 @@ class ModelCollection:
     def __iter__(self):
         '''return an iterator over the individual model vizs'''
         return iter(self.visualizers)
+
+    def __getattr__(self, key):
+        '''When accessing an attribute, fall back to get it from each model'''
+        return [getattr(mv, key) for mv in self.visualizers]
 
     def __init__(self, visualizers):
         self.visualizers = visualizers
@@ -2733,43 +2774,3 @@ class ModelCollection:
             fig.savefig(**save_kw)
 
             plt.close(fig)
-
-    # ----------------------------------------------------------------------
-    # Collection Attributes
-    # ----------------------------------------------------------------------
-
-    # TODO technically all of these could be defined as singles for modelviz
-
-    @property
-    def f_rem(self):
-
-        if not self._ci:
-            mssg = ("'ModelCollection' object has no attribute 'f_rem'. "
-                    "Must be constructed with CIModelVisualizer objects.")
-            raise AttributeError(mssg)
-
-        return [mv.f_rem for mv in self.visualizers]
-
-    @property
-    def BH_mass(self):
-
-        if not self._ci:
-            mssg = ("'ModelCollection' object has no attribute 'BH_mass'. "
-                    "Must be constructed with CIModelVisualizer objects.")
-            raise AttributeError(mssg)
-
-        return [mv.BH_mass for mv in self.visualizers]
-
-    @property
-    def BH_num(self):
-
-        if not self._ci:
-            mssg = ("'ModelCollection' object has no attribute 'BH_num'. "
-                    "Must be constructed with CIModelVisualizer objects.")
-            raise AttributeError(mssg)
-
-        return [mv.BH_num for mv in self.visualizers]
-
-    @property
-    def chi2(self):
-        return [mv.chi2 for mv in self.visualizers]

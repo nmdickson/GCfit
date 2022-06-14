@@ -12,6 +12,7 @@ import contextlib
 
 import h5py
 import numpy as np
+import astropy.units as u
 import matplotlib.pyplot as plt
 import matplotlib.colors as mpl_clr
 import matplotlib.offsetbox as mpl_obx
@@ -1187,6 +1188,7 @@ class NestedRun(_RunAnalysis):
                 key=lambda item: labels.index(item[0])
             )
 
+            # TODO allow including fixed without labelling as fixed
             if include_fixed:
                 for k, v, i in fixed:
                     labels[i] += ' (fixed)'
@@ -1826,6 +1828,7 @@ class NestedRun(_RunAnalysis):
             wt = np.exp(res.logwt - res.logz[-1])
             means.append(mean_and_cov(res.samples, wt)[0])
 
+        # TODO I think this assumes symmetrical guassian dist, is that alright?
         mean = np.mean(means, axis=0)
         err = np.std(means, axis=0)
 
@@ -2106,17 +2109,20 @@ class RunCollection(_RunAnalysis):
     # Initialization
     # ----------------------------------------------------------------------
 
-    def __init__(self, runs, *, N_simruns=100, sort=True):
+    def __init__(self, runs, *, sort=True):
 
         if sort:
             runs.sort(key=lambda run: run.name)
 
         self.runs = runs
-        self._N_simruns = N_simruns
 
-        self._params = [r.parameter_summary(N_simruns=N_simruns) for r in runs]
-        self._mdata = [{k: (v, 0) for k, v in r.obs.mdata.items()}
-                       for r in runs]
+        labels = runs[0]._get_labels(label_fixed=False)
+
+        self._params = [dict(zip(labels, r._get_equal_weight_chains()[1].T))
+                        for r in runs]
+
+        self._mdata = [{k: [v, ] for k, v in r.obs.mdata.items()}
+                       for r in self.runs]
 
     @classmethod
     def from_dir(cls, directory, pattern='**/*hdf', strict=False,
@@ -2217,14 +2223,14 @@ class RunCollection(_RunAnalysis):
     # ----------------------------------------------------------------------
 
     def _get_from_run(self, param):
-        '''get a property from each run (BIC, AIC, ESS, etc)'''
-        return [(getattr(run, param), 0) for run in self.runs]
+        '''
+        get a property from each run (BIC, AIC, ESS, etc),
+        in the form of a one-element chain
+        '''
+        return [[getattr(run, param), ] for run in self.runs]
 
-    def _get_from_model(self, param, *, statistic=False, with_units=True,
-                        **kwargs):
-        '''get one of the "integrated" attributes from models (like BH mass)
-        if statistic, return only the mean/std for each (used in params),
-        otherwise return full array for each modelviz (used explicitly)
+    def _get_from_model(self, param, *, with_units=True, **kwargs):
+        '''get chains one of the attributes from models (like BH mass)
 
         if havent generated models already (using the get_*models function),
         then they will be computed here, with all **kwargs pass to it.
@@ -2251,21 +2257,43 @@ class RunCollection(_RunAnalysis):
             except AttributeError:
                 pass
 
-        if statistic:
-            # Compute average and std for each run
-            return [(np.nanmedian(ds), np.nanstd(ds)) for ds in data]
-
-        else:
-            # return the full dataset for each run
-            return data
+        # return the full dataset for each run
+        return data
 
     def _get_param(self, param, *, from_model=True, **kwargs):
-        '''return the mean & std for a θ, metadata or model quntity "param"
+        '''return the median, -1σ, +1σ for a θ, metadata or model quntity
+        "param" for all runs
+
+        from_model=False if you want to really avoid model params (i.e. dont
+        want to compute the models) all kwargs are passed to get_model otherwise
+        '''
+
+        # get parameter chains
+        chains = self._get_param_chains(param, from_model=from_model, **kwargs)
+
+        # Keep units, if they've got them (optional kwarg to _get_from_model)
+        base = u.Quantity if isinstance(chains[0], u.Quantity) else np.array
+
+        # Compute the statistics based on the chains
+        # TODO somehow allow optionally 2,3sig?
+        q = [50., 15.87, 84.13]
+
+        out = base([np.nanpercentile(ds, q=q) for ds in chains]).T
+        out[1:] = np.abs(out[1:] - out[0])
+
+        return out
+
+    def _get_param_chains(self, param, *, from_model=True, logged=False,
+                          **kwargs):
+        '''return the full chain for a θ, metadata or model quntity "param"
         for all runs
 
         from_model=False if you want to really avoid model params (i.e. dont
         want to compute the models) all kwargs are passed to get_model otherwise
         '''
+
+        if logged := param.startswith('log_'):
+            param = param[4:]
 
         err_mssg = f'No such parameter "{param}" was found'
 
@@ -2273,7 +2301,7 @@ class RunCollection(_RunAnalysis):
         try:
 
             # join the param and metadata dicts (union in 3.9)
-            out = [
+            chains = [
                 {**self._params[ind], **self._mdata[ind]}[param]
                 for ind, run in enumerate(self.runs)
             ]
@@ -2283,75 +2311,40 @@ class RunCollection(_RunAnalysis):
         except KeyError as err:
 
             try:
-                out = self._get_from_run(param)
+                chains = self._get_from_run(param)
             except AttributeError:
 
                 if from_model:
                     try:
-                        out = self._get_from_model(param, statistic=True,
-                                                   with_units=False, **kwargs)
-                    except AttributeError:
-                        raise ValueError(err_mssg)
-                else:
-                    raise ValueError(err_mssg) from err
 
-        return out
-
-    def _get_param_chains(self, param, *, from_model=True, **kwargs):
-        '''return the full chain for a θ, metadata or model quntity "param"
-        for all runs
-
-        from_model=False if you want to really avoid model params (i.e. dont
-        want to compute the models) all kwargs are passed to get_model otherwise
-        '''
-
-        err_mssg = f'No such parameter "{param}" was found'
-
-        # try to get it from the best-fit params or metadata
-        try:
-
-            labels = self.runs[0]._get_labels(label_fixed=False)
-
-            theta = [dict(zip(labels, r._get_equal_weight_chains()[1].T))
-                     for r in self.runs]
-
-            mdata = [{k: np.array([v, ]) for k, v in r.obs.mdata.items()}
-                     for r in self.runs]
-
-            # join the param and metadata dicts (union in 3.9)
-            out = [
-                {**theta[ind], **mdata[ind]}[param]
-                for ind, run in enumerate(self.runs)
-            ]
-
-        # otherwise try to get from model properties
-        # this is only worst case because may take a long time to gen models
-        except KeyError as err:
-
-            try:
-                out = [np.array([v, ]) for v, e in self._get_from_run(param)]
-            except AttributeError:
-
-                if from_model:
-                    try:
-                        out = self._get_from_model(param, statistic=False,
-                                                   with_units=False, **kwargs)
+                        chains = self._get_from_model(param, **kwargs)
 
                     except AttributeError:
                         raise ValueError(err_mssg)
                 else:
                     raise ValueError(err_mssg) from err
 
-        return out
+        if logged:
+
+            scale = 1
+            if hasattr(chains[0], 'unit'):
+                scale /= chains[0].unit
+
+            chains = [np.log10(ch * scale) for ch in chains]
+
+        return chains
 
     def _get_latex_labels(self, param):
         '''return the param names in math mode, for plotting'''
+
+        if logged := param.startswith('log_'):
+            param = param[4:]
 
         math_mapping = {
             'W0': r'$\hat{\phi}_0$',
             'M': r'$M\ [10^6 M_\odot]$',
             'rh': r'$r_h\ [\mathrm{pc}]$',
-            'ra': r'$\log\left(r_a/\mathrm{pc}\right)$',
+            'ra': r'$\log_{10}\left(r_a\ [\mathrm{pc}]\right)$',
             'g': r'$g$',
             'delta': r'$\delta$',
             's2': r'$s^2$',
@@ -2369,9 +2362,19 @@ class RunCollection(_RunAnalysis):
             'BH_mass': r'$\mathrm{M}_{BH}\ [M_\odot]$',
             'BH_num': r'$\mathrm{N}_{BH}$',
             'f_rem': r'$f_{\mathrm{remn}}$',
+            'r0': r'$r_0\ [\mathrm{pc}]$',
+            'rt': r'$r_t\ [\mathrm{pc}]$',
+            'rv': r'$r_v\ [\mathrm{pc}]$',
+            'rhp': r'$r_{hp}\ [\mathrm{pc}]$',
+            'mmean': r'$\bar{m}\ [M_\odot]$',
         }
 
-        return math_mapping.get(param, param)
+        label = math_mapping.get(param, param)
+
+        if logged:
+            label = fr'$\log_{{10}}\left( {label.strip("$")} \right)$'
+
+        return label
 
     def _add_colours(self, ax, mappable, cparam, clabel=None, *, alpha=1.,
                      add_colorbar=True, extra_artists=None, math_label=True,
@@ -2381,7 +2384,7 @@ class RunCollection(_RunAnalysis):
 
         # Get colour values
         try:
-            cvalues = np.array(self._get_param(cparam))[:, 0]
+            cvalues, *_ = self._get_param(cparam)
             clabel = cparam if clabel is None else clabel
 
         except TypeError:
@@ -2556,8 +2559,8 @@ class RunCollection(_RunAnalysis):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        x, dx = zip(*self._get_param(param1))
-        y, dy = zip(*self._get_param(param2))
+        x, *dx = self._get_param(param1)
+        y, *dy = self._get_param(param2)
 
         errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', **kwargs)
         points = ax.scatter(x, y, picker=True, **kwargs)
@@ -2597,7 +2600,7 @@ class RunCollection(_RunAnalysis):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        x, dx = zip(*self._get_param(param))
+        x, *dx = self._get_param(param)
         y, dy = truths, e_truths
 
         errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', **kwargs)
@@ -2657,7 +2660,7 @@ class RunCollection(_RunAnalysis):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        x, dx = zip(*self._get_param(param))
+        x, *dx = self._get_param(param)
         y, dy = lit, e_lit
 
         xlabel = self._get_latex_labels(param)
@@ -2709,13 +2712,13 @@ class RunCollection(_RunAnalysis):
         '''plot mean and std errorbars for each run of the given param'''
         fig, ax = self._setup_artist(fig, ax)
 
-        mean, std = np.array(self._get_param(param)).T
+        mean, *err = self._get_param(param)
 
         xticks = np.arange(len(self.runs))
 
         labels = self.names
 
-        errbar = ax.errorbar(x=xticks, y=mean, yerr=std, fmt='none', **kwargs)
+        errbar = ax.errorbar(x=xticks, y=mean, yerr=err, fmt='none', **kwargs)
         points = ax.scatter(x=xticks, y=mean, picker=True, **kwargs)
 
         if clr_param is not None:
@@ -2742,13 +2745,13 @@ class RunCollection(_RunAnalysis):
         '''plot mean and std bar chart for each run of the given param'''
         fig, ax = self._setup_artist(fig, ax)
 
-        mean, std = np.array(self._get_param(param)).T
+        mean, *err = self._get_param(param)
 
         xticks = np.arange(len(self.runs))
 
         labels = self.names
 
-        bars = ax.bar(x=xticks, height=mean, yerr=std, *args, **kwargs)
+        bars = ax.bar(x=xticks, height=mean, yerr=err, *args, **kwargs)
 
         if clr_param is not None:
 
@@ -2773,7 +2776,7 @@ class RunCollection(_RunAnalysis):
         '''plot violins for each run of the given param'''
         fig, ax = self._setup_artist(fig, ax)
 
-        chains = self._get_param_chains(param)
+        chains = self._get_param_chains(param, with_units=False)
 
         # filter out all nans (causes violinplot to fail silently)
         chains = [ch[~np.isnan(ch)] for ch in chains]
@@ -2945,7 +2948,9 @@ class RunCollection(_RunAnalysis):
         data['Cluster'] = [run.name for run in self.runs]
 
         for param in labels:
-            data[param], data[f'σ_{param}'] = zip(*self._get_param(param))
+            median, σ_down, σ_up = self._get_param(param)
+            data[param] = median
+            data[f'-1σ_{param}'], data[f'+1σ_{param}'] = σ_down, σ_up
 
         # Create dataframe
 
