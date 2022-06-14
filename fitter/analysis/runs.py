@@ -2223,13 +2223,14 @@ class RunCollection(_RunAnalysis):
     # ----------------------------------------------------------------------
 
     def _get_from_run(self, param):
-        '''get a property from each run (BIC, AIC, ESS, etc)'''
+        '''
+        get a property from each run (BIC, AIC, ESS, etc),
+        in the form of a one-element chain
+        '''
         return [[getattr(run, param), ] for run in self.runs]
 
     def _get_from_model(self, param, *, with_units=True, **kwargs):
-        '''get one of the "integrated" attributes from models (like BH mass)
-        if statistic, return only the mean/std for each (used in params),
-        otherwise return full array for each modelviz (used explicitly)
+        '''get chains one of the attributes from models (like BH mass)
 
         if havent generated models already (using the get_*models function),
         then they will be computed here, with all **kwargs pass to it.
@@ -2282,13 +2283,17 @@ class RunCollection(_RunAnalysis):
 
         return out
 
-    def _get_param_chains(self, param, *, from_model=True, **kwargs):
+    def _get_param_chains(self, param, *, from_model=True, logged=False,
+                          **kwargs):
         '''return the full chain for a θ, metadata or model quntity "param"
         for all runs
 
         from_model=False if you want to really avoid model params (i.e. dont
         want to compute the models) all kwargs are passed to get_model otherwise
         '''
+
+        if logged := param.startswith('log_'):
+            param = param[4:]
 
         err_mssg = f'No such parameter "{param}" was found'
 
@@ -2318,16 +2323,27 @@ class RunCollection(_RunAnalysis):
                 else:
                     raise ValueError(err_mssg) from err
 
+        if logged:
+
+            scale = 1
+            if hasattr(chains[0], 'unit'):
+                scale /= chains[0].unit
+
+            chains = [np.log10(ch * scale) for ch in chains]
+
         return chains
 
     def _get_latex_labels(self, param):
         '''return the param names in math mode, for plotting'''
 
+        if logged := param.startswith('log_'):
+            param = param[4:]
+
         math_mapping = {
             'W0': r'$\phi_0$',
             'M': r'$M\ [10^6 M_\odot]$',
             'rh': r'$r_h\ [\mathrm{pc}]$',
-            'ra': r'$\log\left(r_a/\mathrm{pc}\right)$',
+            'ra': r'$\log_{10}\left(r_a\ [\mathrm{pc}]\right)$',
             'g': r'$g$',
             'delta': r'$\delta$',
             's2': r'$s^2$',
@@ -2352,7 +2368,12 @@ class RunCollection(_RunAnalysis):
             'mmean': r'$\bar{m}\ [M_\odot]$',
         }
 
-        return math_mapping.get(param, param)
+        label = math_mapping.get(param, param)
+
+        if logged:
+            label = fr'$\log_{{10}}\left( {label.strip("$")} \right)$'
+
+        return label
 
     def _add_colours(self, ax, mappable, cparam, clabel=None, *, alpha=1.,
                      add_colorbar=True, extra_artists=None, math_label=True,
