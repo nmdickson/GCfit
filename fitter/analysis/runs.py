@@ -2845,7 +2845,7 @@ class RunCollection(_RunAnalysis):
         return fig
 
     def plot_param_corner(self, fig=None, params=None,
-                          include_FeH=True, include_BH=False, *args, **kwargs):
+                          include_FeH=True, include_BH=False, **kwargs):
         '''
         plot corner plot of all params for all runs
         if params is none, default params used are:
@@ -2904,13 +2904,13 @@ class RunCollection(_RunAnalysis):
 
                 else:
 
-                    self.plot_relation(px, py, fig=fig, ax=ax, *args, **kwargs)
+                    self.plot_relation(px, py, fig=fig, ax=ax, **kwargs)
 
                 # set labels on bottom row
                 if i + 1 == Nrows:
                     # rotate_ticks(ax, 'x')
                     ax.set_xlabel(self._get_latex_labels(px))
-                    ax.xaxis.set_label_coords(0.5, -0.3)
+                    # ax.xaxis.set_label_coords(0.5, -0.3)
                 else:
                     ax.set_xlabel('')
 
@@ -2918,7 +2918,7 @@ class RunCollection(_RunAnalysis):
                 if j == 0:
                     # rotate_ticks(ax, 'y')
                     ax.set_ylabel(self._get_latex_labels(py))
-                    ax.yaxis.set_label_coords(-0.3, 0.5)
+                    # ax.yaxis.set_label_coords(-0.3, 0.5)
                 else:
                     ax.set_ylabel('')
 
