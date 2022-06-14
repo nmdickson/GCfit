@@ -1188,6 +1188,7 @@ class NestedRun(_RunAnalysis):
                 key=lambda item: labels.index(item[0])
             )
 
+            # TODO allow including fixed without labelling as fixed
             if include_fixed:
                 for k, v, i in fixed:
                     labels[i] += ' (fixed)'
@@ -2108,17 +2109,20 @@ class RunCollection(_RunAnalysis):
     # Initialization
     # ----------------------------------------------------------------------
 
-    def __init__(self, runs, *, N_simruns=100, sort=True):
+    def __init__(self, runs, *, sort=True):
 
         if sort:
             runs.sort(key=lambda run: run.name)
 
         self.runs = runs
-        self._N_simruns = N_simruns
 
-        self._params = [r.parameter_summary(N_simruns=N_simruns) for r in runs]
-        self._mdata = [{k: (v, 0) for k, v in r.obs.mdata.items()}
-                       for r in runs]
+        labels = runs[0]._get_labels(label_fixed=False)
+
+        self._params = [dict(zip(labels, r._get_equal_weight_chains()[1].T))
+                        for r in runs]
+
+        self._mdata = [{k: [v, ] for k, v in r.obs.mdata.items()}
+                       for r in self.runs]
 
     @classmethod
     def from_dir(cls, directory, pattern='**/*hdf', strict=False,
@@ -2220,10 +2224,9 @@ class RunCollection(_RunAnalysis):
 
     def _get_from_run(self, param):
         '''get a property from each run (BIC, AIC, ESS, etc)'''
-        return np.array([(getattr(run, param), 0, 0) for run in self.runs]).T
+        return [[getattr(run, param), ] for run in self.runs]
 
-    def _get_from_model(self, param, *, statistic=False, with_units=True,
-                        **kwargs):
+    def _get_from_model(self, param, *, with_units=True, **kwargs):
         '''get one of the "integrated" attributes from models (like BH mass)
         if statistic, return only the mean/std for each (used in params),
         otherwise return full array for each modelviz (used explicitly)
@@ -2253,21 +2256,8 @@ class RunCollection(_RunAnalysis):
             except AttributeError:
                 pass
 
-        if statistic:
-            # Compute average and stds for each run
-
-            base = u.Quantity if isinstance(data[0], u.Quantity) else np.array
-
-            # TODO make this optionally return 2sig instead?
-            q = [50., 15.87, 84.13]
-            out = base([np.nanpercentile(ds, q=q) for ds in data]).T
-            out[1:] = np.abs(out[1:] - out[0])
-
-            return out
-
-        else:
-            # return the full dataset for each run
-            return data
+        # return the full dataset for each run
+        return data
 
     def _get_param(self, param, *, from_model=True, **kwargs):
         '''return the median, -1σ, +1σ for a θ, metadata or model quntity
@@ -2277,35 +2267,18 @@ class RunCollection(_RunAnalysis):
         want to compute the models) all kwargs are passed to get_model otherwise
         '''
 
-        err_mssg = f'No such parameter "{param}" was found'
+        # get parameter chains
+        chains = self._get_param_chains(param, from_model=from_model, **kwargs)
 
-        # try to get it from the best-fit params or metadata
-        try:
+        # Keep units, if they've got them (optional kwarg to _get_from_model)
+        base = u.Quantity if isinstance(chains[0], u.Quantity) else np.array
 
-            # join the param and metadata dicts (union in 3.9)
-            # also expand the symmetric errors
-            out = np.array([
-                {**self._params[ind], **self._mdata[ind]}[param]
-                for ind, run in enumerate(self.runs)
-            ])
-            out = np.c_[out, out[:, 1]].T
+        # Compute the statistics based on the chains
+        # TODO somehow allow optionally 2,3sig?
+        q = [50., 15.87, 84.13]
 
-        # otherwise try to get from model properties
-        # this is only worst case because may take a long time to gen models
-        except KeyError as err:
-
-            try:
-                out = self._get_from_run(param)
-            except AttributeError:
-
-                if from_model:
-                    try:
-                        out = self._get_from_model(param, statistic=True,
-                                                   with_units=False, **kwargs)
-                    except AttributeError:
-                        raise ValueError(err_mssg)
-                else:
-                    raise ValueError(err_mssg) from err
+        out = base([np.nanpercentile(ds, q=q) for ds in chains]).T
+        out[1:] = np.abs(out[1:] - out[0])
 
         return out
 
@@ -2322,17 +2295,9 @@ class RunCollection(_RunAnalysis):
         # try to get it from the best-fit params or metadata
         try:
 
-            labels = self.runs[0]._get_labels(label_fixed=False)
-
-            theta = [dict(zip(labels, r._get_equal_weight_chains()[1].T))
-                     for r in self.runs]
-
-            mdata = [{k: [v, ] for k, v in r.obs.mdata.items()}
-                     for r in self.runs]
-
             # join the param and metadata dicts (union in 3.9)
-            out = [
-                {**theta[ind], **mdata[ind]}[param]
+            chains = [
+                {**self._params[ind], **self._mdata[ind]}[param]
                 for ind, run in enumerate(self.runs)
             ]
 
@@ -2341,20 +2306,19 @@ class RunCollection(_RunAnalysis):
         except KeyError as err:
 
             try:
-                out = [[v, ] for v, e in self._get_from_run(param)]
+                chains = self._get_from_run(param)
             except AttributeError:
 
                 if from_model:
                     try:
-                        out = self._get_from_model(param, statistic=False,
-                                                   with_units=False, **kwargs)
+                        chains = self._get_from_model(param, **kwargs)
 
                     except AttributeError:
                         raise ValueError(err_mssg)
                 else:
                     raise ValueError(err_mssg) from err
 
-        return out
+        return chains
 
     def _get_latex_labels(self, param):
         '''return the param names in math mode, for plotting'''
@@ -2790,7 +2754,7 @@ class RunCollection(_RunAnalysis):
         '''plot violins for each run of the given param'''
         fig, ax = self._setup_artist(fig, ax)
 
-        chains = self._get_param_chains(param)
+        chains = self._get_param_chains(param, with_units=False)
 
         # filter out all nans (causes violinplot to fail silently)
         chains = [ch[~np.isnan(ch)] for ch in chains]
