@@ -694,7 +694,10 @@ class MCMCRun(_RunAnalysis):
                 'fc': facecolor
             }
 
-            self.plot_posterior(lbl, fig=fig, ax=post_ax, **post_kw)
+            try:
+                self.plot_posterior(lbl, fig=fig, ax=post_ax, **post_kw)
+            except ValueError:
+                post_ax.axhline(np.median(prm), color=color)
 
             if not posterior_border:
                 post_ax.axis('off')
@@ -785,7 +788,11 @@ class MCMCRun(_RunAnalysis):
             prm_ind = labels.index(param)
             chain = self._get_chains(flatten=True)[1][..., prm_ind]
 
-        kde = gaussian_kde(chain)
+        try:
+            kde = gaussian_kde(chain)
+        except np.linalg.LinAlgError as err:
+            mssg = f"Cannot compute kde of {param}: {err}"
+            raise ValueError(mssg)
 
         domain = np.linspace(chain.min(), chain.max(), 500)
 
@@ -1514,7 +1521,11 @@ class NestedRun(_RunAnalysis):
             prm_ind = labels.index(param)
             chain = self._get_equal_weight_chains()[1][..., prm_ind]
 
-        kde = gaussian_kde(chain)
+        try:
+            kde = gaussian_kde(chain)
+        except np.linalg.LinAlgError as err:
+            mssg = f"Cannot compute kde of {param}: {err}"
+            raise ValueError(mssg)
 
         domain = np.linspace(chain.min(), chain.max(), 500)
 
@@ -1712,7 +1723,10 @@ class NestedRun(_RunAnalysis):
                 'fc': facecolor
             }
 
-            self.plot_posterior(lbl, fig=fig, ax=post_ax, **post_kw)
+            try:
+                self.plot_posterior(lbl, fig=fig, ax=post_ax, **post_kw)
+            except ValueError:
+                post_ax.axhline(np.median(prm), color=color)
 
             if not posterior_border:
                 post_ax.axis('off')
