@@ -2292,8 +2292,12 @@ class RunCollection(_RunAnalysis):
         want to compute the models) all kwargs are passed to get_model otherwise
         '''
 
-        if logged := param.startswith('log_'):
-            param = param[4:]
+        try:
+            if logged := param.startswith('log_'):
+                param = param[4:]
+        except AttributeError:
+            # pass gracefully, as this should be allowed to fail below
+            pass
 
         err_mssg = f'No such parameter "{param}" was found'
 
