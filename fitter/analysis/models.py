@@ -890,7 +890,7 @@ class _ClusterVisualizer:
         return fig
 
     @_support_units
-    def plot_number_density(self, fig=None, ax=None,
+    def plot_number_density(self, fig=None, ax=None, show_background=False,
                             show_obs=True, residuals=False, *,
                             x_unit='pc', label_position='top',
                             blank_xaxis=False, res_kwargs=None, **kwargs):
@@ -917,6 +917,16 @@ class _ClusterVisualizer:
                                         strict=strict, residuals=residuals,
                                         x_unit=x_unit,
                                         res_kwargs=res_kwargs, **kwargs)
+
+        if show_background:
+            # TODO this doesnt use the newer general dataset filtering
+            try:
+                background = self.obs['number_density'].mdata['background']
+                ax.axhline(y=background, ls='--', c='black', alpha=0.66)
+
+            except KeyError:
+                mssg = 'No background level found in number density metadata'
+                raise RuntimeError(mssg)
 
         # bit arbitrary, but probably fine for the most part
         ax.set_ylim(bottom=0.5e-4)

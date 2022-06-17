@@ -478,6 +478,11 @@ def likelihood_number_density(model, ndensity, *,
     add a constant error component and minimize the background effects present
     near the outskirts of the cluster.
 
+    Optionally, a background level can be provided in the dataset metadata
+    (`ndensity.mdata["background"]`) which will be subtracted from all
+    observations before calculation of the likelihood. By default, will be
+    assumed to have same units as Σ.
+
     parameters
     ----------
     model : fitter.Model
@@ -533,13 +538,11 @@ def likelihood_number_density(model, ndensity, *,
     else:
         likelihood = util.gaussian_likelihood
 
-    # Set cutoff to avoid fitting flat end of data
-    # TODO should do this cutoff based on a flatness, rather than a set value
-    valid = (ndensity['Σ'].value > 0.1)
+    background = ndensity.mdata.get('background', 0.0) << ndensity['Σ'].unit
 
-    obs_r = ndensity['r'][valid]
-    obs_Σ = ndensity['Σ'][valid]
-    obs_err = ndensity['ΔΣ'][valid]
+    obs_r = ndensity['r']
+    obs_Σ = ndensity['Σ'] - background
+    obs_err = ndensity['ΔΣ']
 
     # Now nuisance parameter (from θ, not the model velocity scale)
     s2 = model.theta['s2']
