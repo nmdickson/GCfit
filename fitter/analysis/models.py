@@ -1182,8 +1182,12 @@ class _ClusterVisualizer:
 
         if grid:
             # TODO this should probably use distance to furthest field
-            rt = np.median(self.rt) if hasattr(self, 'rt') else (20 << u.arcmin)
-            ticks = np.arange(2, rt.to_value('arcmin'), 2)
+
+            try:
+                rt = np.nanmedian(self.rt).to_value('arcmin') + 2
+                ticks = np.arange(2, rt, 2)
+            except AttributeError:
+                ticks = np.arange(2, 20, 2)
 
             # make sure this grid matches normal grids
             grid_kw = {
