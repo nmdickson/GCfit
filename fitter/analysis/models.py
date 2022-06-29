@@ -418,6 +418,7 @@ class _ClusterVisualizer:
 
         # TODO not sure if I like the mfc=none style,
         #   mostly due to https://github.com/matplotlib/matplotlib/issues/3400
+        #   maybe set mfc to be a slightly lighter colour than fc/errbars
         return ax.errorbar(xdata, ydata, xerr=xerr, yerr=yerr, mfc='none',
                            label=label, **kwargs)
 

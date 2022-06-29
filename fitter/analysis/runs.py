@@ -1837,6 +1837,7 @@ class NestedRun(_RunAnalysis):
         if sim_runs is None:
             sim_runs = self._sim_errors(Nruns)
 
+        # TODO returns a weird nan very rarely?
         means = []
         for res in sim_runs:
             wt = np.exp(res.logwt - res.logz[-1])
@@ -2311,6 +2312,7 @@ class RunCollection(_RunAnalysis):
                 param = param[4:]
         except AttributeError:
             # pass gracefully, as this should be allowed to fail below
+            logged = False
             pass
 
         err_mssg = f'No such parameter "{param}" was found'
@@ -2355,12 +2357,17 @@ class RunCollection(_RunAnalysis):
     def _get_latex_labels(self, param):
         '''return the param names in math mode, for plotting'''
 
-        if logged := param.startswith('log_'):
-            param = param[4:]
+        try:
+            if logged := param.startswith('log_'):
+                param = param[4:]
+        except AttributeError:
+            # pass gracefully, as this should be allowed to fail below
+            logged = False
+            pass
 
         math_mapping = {
             'W0': r'$\hat{\phi}_0$',
-            'M': r'$M\ [10^6 M_\odot]$',
+            'M': r'$M\ [10^6\ M_\odot]$',
             'rh': r'$r_h\ [\mathrm{pc}]$',
             'ra': r'$\log_{10}\left(r_a\ [\mathrm{pc}]\right)$',
             'g': r'$g$',
