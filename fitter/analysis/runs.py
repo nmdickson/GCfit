@@ -2575,7 +2575,7 @@ class RunCollection(_RunAnalysis):
         return fig
 
     def plot_relation(self, param1, param2, fig=None, ax=None, *,
-                      errors='bars', show_pearsonr=True,
+                      errors='bars', show_pearsonr=False,
                       annotate=False, annotate_kwargs=None,
                       clr_param=None, clr_kwargs=None, **kwargs):
         '''plot correlation between two param means with all runs
