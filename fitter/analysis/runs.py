@@ -2575,7 +2575,8 @@ class RunCollection(_RunAnalysis):
         return fig
 
     def plot_relation(self, param1, param2, fig=None, ax=None, *,
-                      errors='bars', annotate=False, annotate_kwargs=None,
+                      errors='bars', show_pearsonr=True,
+                      annotate=False, annotate_kwargs=None,
                       clr_param=None, clr_kwargs=None, **kwargs):
         '''plot correlation between two param means with all runs
 
@@ -2609,6 +2610,13 @@ class RunCollection(_RunAnalysis):
                 annotate_kwargs = {}
 
             _Annotator(fig, ax, self.runs, x, y, **annotate_kwargs)
+
+        if show_pearsonr:
+            # TODO include uncertainties using (Curran, 2015) method
+            from scipy.stats import pearsonr
+            r, p = pearsonr(x, y)
+            text = '\n'.join((fr'$\rho={r:.2f}$', fr'$p={p:.2%}$%'))
+            ax.add_artist(mpl_obx.AnchoredText(text, loc='lower right'))
 
         return fig
 
