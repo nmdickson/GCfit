@@ -2880,8 +2880,9 @@ class RunCollection(_RunAnalysis):
 
         return fig
 
-    def plot_param_corner(self, fig=None, params=None,
-                          include_FeH=True, include_BH=False, **kwargs):
+    def plot_param_corner(self, params=None, fig=None, *,
+                          include_FeH=True, include_BH=False, include_rt=False,
+                          log_radii=False, **kwargs):
         '''
         plot corner plot of all params for all runs
         if params is none, default params used are:
@@ -2891,14 +2892,17 @@ class RunCollection(_RunAnalysis):
         '''
 
         if params is None:
-            params = ['W0', 'M', 'rh', 'ra', 'g', 'delta',
-                      's2', 'F', 'a1', 'a2', 'a3', 'BHret', 'd']
+            params = ['W0', 'M', 'log_rh' if log_radii else 'rh', 'ra', 'g',
+                      'delta', 's2', 'F', 'a1', 'a2', 'a3', 'BHret', 'd']
 
             if include_FeH:
                 params += ['FeH']
 
             if include_BH:
                 params += ['BH_mass']
+
+            if include_rt:
+                params += ['log_rt' if log_radii else 'rt']
 
         # setup axes
         Nparams = len(params)
