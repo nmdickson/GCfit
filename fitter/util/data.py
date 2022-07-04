@@ -377,6 +377,7 @@ def get_cluster_path(name, standardize_name=True, restrict_to=None):
     # Get file paths of prospective local and core cluster files
     # ----------------------------------------------------------------------
 
+    # TODO maybe this shouldn't be made if it doesnt exists, its just clutter
     local_dir = pathlib.Path(GCFIT_DIR, 'clusters')
     local_dir.mkdir(parents=True, exist_ok=True)
 
