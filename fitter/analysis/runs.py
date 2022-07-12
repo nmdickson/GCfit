@@ -446,7 +446,7 @@ class MCMCRun(_RunAnalysis):
         if math_labels:
 
             math_mapping = {
-                'W0': r'$\phi_0$',
+                'W0': r'$\hat{\phi}_0$',
                 'M': r'$M$',
                 'rh': r'$r_h$',
                 'ra': r'$\log\left(r_a\right)$',
@@ -694,7 +694,10 @@ class MCMCRun(_RunAnalysis):
                 'fc': facecolor
             }
 
-            self.plot_posterior(lbl, fig=fig, ax=post_ax, **post_kw)
+            try:
+                self.plot_posterior(lbl, fig=fig, ax=post_ax, **post_kw)
+            except ValueError:
+                post_ax.axhline(np.median(prm), color=color)
 
             if not posterior_border:
                 post_ax.axis('off')
@@ -785,7 +788,11 @@ class MCMCRun(_RunAnalysis):
             prm_ind = labels.index(param)
             chain = self._get_chains(flatten=True)[1][..., prm_ind]
 
-        kde = gaussian_kde(chain)
+        try:
+            kde = gaussian_kde(chain)
+        except np.linalg.LinAlgError as err:
+            mssg = f"Cannot compute kde of {param}: {err}"
+            raise ValueError(mssg)
 
         domain = np.linspace(chain.min(), chain.max(), 500)
 
@@ -1108,7 +1115,7 @@ class NestedRun(_RunAnalysis):
         if math_labels:
 
             math_mapping = {
-                'W0': r'$\phi_0$',
+                'W0': r'$\hat{\phi}_0$',
                 'M': r'$M$',
                 'rh': r'$r_h$',
                 'ra': r'$\log\left(r_a\right)$',
@@ -1514,7 +1521,11 @@ class NestedRun(_RunAnalysis):
             prm_ind = labels.index(param)
             chain = self._get_equal_weight_chains()[1][..., prm_ind]
 
-        kde = gaussian_kde(chain)
+        try:
+            kde = gaussian_kde(chain)
+        except np.linalg.LinAlgError as err:
+            mssg = f"Cannot compute kde of {param}: {err}"
+            raise ValueError(mssg)
 
         domain = np.linspace(chain.min(), chain.max(), 500)
 
@@ -1712,7 +1723,10 @@ class NestedRun(_RunAnalysis):
                 'fc': facecolor
             }
 
-            self.plot_posterior(lbl, fig=fig, ax=post_ax, **post_kw)
+            try:
+                self.plot_posterior(lbl, fig=fig, ax=post_ax, **post_kw)
+            except ValueError:
+                post_ax.axhline(np.median(prm), color=color)
 
             if not posterior_border:
                 post_ax.axis('off')
@@ -1823,6 +1837,7 @@ class NestedRun(_RunAnalysis):
         if sim_runs is None:
             sim_runs = self._sim_errors(Nruns)
 
+        # TODO returns a weird nan very rarely?
         means = []
         for res in sim_runs:
             wt = np.exp(res.logwt - res.logz[-1])
@@ -2100,7 +2115,7 @@ class RunCollection(_RunAnalysis):
 
         runs = [self.get_run(r) for r in filtered_names]
 
-        rc = RunCollection(runs, N_simruns=self._N_simruns, sort=sort, **kwargs)
+        rc = RunCollection(runs, sort=sort, **kwargs)
         rc.cmap = self.cmap
 
         return rc
@@ -2292,8 +2307,13 @@ class RunCollection(_RunAnalysis):
         want to compute the models) all kwargs are passed to get_model otherwise
         '''
 
-        if logged := param.startswith('log_'):
-            param = param[4:]
+        try:
+            if logged := param.startswith('log_'):
+                param = param[4:]
+        except AttributeError:
+            # pass gracefully, as this should be allowed to fail below
+            logged = False
+            pass
 
         err_mssg = f'No such parameter "{param}" was found'
 
@@ -2316,6 +2336,7 @@ class RunCollection(_RunAnalysis):
 
                 if from_model:
                     try:
+
                         chains = self._get_from_model(param, **kwargs)
 
                     except AttributeError:
@@ -2336,12 +2357,17 @@ class RunCollection(_RunAnalysis):
     def _get_latex_labels(self, param):
         '''return the param names in math mode, for plotting'''
 
-        if logged := param.startswith('log_'):
-            param = param[4:]
+        try:
+            if logged := param.startswith('log_'):
+                param = param[4:]
+        except AttributeError:
+            # pass gracefully, as this should be allowed to fail below
+            logged = False
+            pass
 
         math_mapping = {
-            'W0': r'$\phi_0$',
-            'M': r'$M\ [10^6 M_\odot]$',
+            'W0': r'$\hat{\phi}_0$',
+            'M': r'$M\ [10^6\ M_\odot]$',
             'rh': r'$r_h\ [\mathrm{pc}]$',
             'ra': r'$\log_{10}\left(r_a\ [\mathrm{pc}]\right)$',
             'g': r'$g$',
@@ -2542,14 +2568,15 @@ class RunCollection(_RunAnalysis):
 
             ax.axhline(y=2.3, color='r')
 
-            ax2 = ax.secondary_yaxis('right')
+            ax2 = ax.secondary_yaxis('left')
 
             ax2.set_yticks([2.3], [r'Kroupa ($\alpha_3=2.3$)'], c='r')
 
         return fig
 
     def plot_relation(self, param1, param2, fig=None, ax=None, *,
-                      errors='bars', annotate=False, annotate_kwargs=None,
+                      errors='bars', show_pearsonr=False,
+                      annotate=False, annotate_kwargs=None,
                       clr_param=None, clr_kwargs=None, **kwargs):
         '''plot correlation between two param means with all runs
 
@@ -2583,6 +2610,13 @@ class RunCollection(_RunAnalysis):
                 annotate_kwargs = {}
 
             _Annotator(fig, ax, self.runs, x, y, **annotate_kwargs)
+
+        if show_pearsonr:
+            # TODO include uncertainties using (Curran, 2015) method
+            from scipy.stats import pearsonr
+            r, p = pearsonr(x, y)
+            text = '\n'.join((fr'$\rho={r:.2f}$', fr'$p={p:.2%}$%'))
+            ax.add_artist(mpl_obx.AnchoredText(text, loc='lower right'))
 
         return fig
 
@@ -2771,6 +2805,7 @@ class RunCollection(_RunAnalysis):
 
     def plot_param_violins(self, param, fig=None, ax=None,
                            clr_param=None, clr_kwargs=None, alpha=0.3,
+                           quantiles=[0.9772, 0.8413, 0.5, 0.1587, 0.0228],
                            *args, **kwargs):
         '''plot violins for each run of the given param'''
         fig, ax = self._setup_artist(fig, ax)
@@ -2784,8 +2819,30 @@ class RunCollection(_RunAnalysis):
 
         labels = self.names
 
-        parts = ax.violinplot(chains, positions=xticks, *args, **kwargs)
+        quantiles = np.array(quantiles)
+        if quantiles.ndim < 2:
+            quantiles = np.tile(quantiles, (len(self.runs), 1)).T
 
+        kwargs.setdefault('showextrema', False)
+
+        parts = ax.violinplot(chains, positions=xticks, quantiles=quantiles,
+                              *args, **kwargs)
+
+        # optionally draw a vert between max quantiles
+        if 'cbars' not in parts and 'cquantiles' in parts:
+            segs = np.array(parts['cquantiles'].get_segments())[:, 0, 1]
+
+            mins, maxes = [], []
+            Nquant = quantiles.shape[0]
+
+            for i, xi in enumerate(xticks):
+                si = segs[i * Nquant:(i + 1) * Nquant]
+                mins.append(si.min())
+                maxes.append(si.max())
+
+            parts['cbars'] = ax.vlines(xticks, mins, maxes)
+
+        # handle and add colours
         if clr_param is not None:
 
             if clr_kwargs is None:
@@ -2805,6 +2862,128 @@ class RunCollection(_RunAnalysis):
         ax.grid(axis='x')
 
         ax.set_ylabel(self._get_latex_labels(param))
+
+        return fig
+
+    def plot_param_hist(self, param, fig=None, ax=None, kde=False, **kwargs):
+        '''
+        plot a kde representing the sum (convolution) of all run's
+        distributions (kde) of this parameter
+        '''
+        # TODO is a liiittle bit invalid if chains don't all have same N
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        chains = self._get_param_chains(param)
+        chains = [ch[~np.isnan(ch)] for ch in chains]
+        chains = np.concatenate(chains)
+
+        # Plot a filled KDE distribution
+        if kde:
+            from scipy.stats import gaussian_kde
+            import scipy.interpolate as interp
+
+            # get param distributions
+            domain = np.linspace(chains.min(), chains.max(), 500)
+
+            distribution = gaussian_kde(chains)(domain)
+
+            distribution /= interp.UnivariateSpline(
+                domain, distribution, k=1, s=0, ext=1
+            ).integral(-np.inf, np.inf)
+
+            ax.fill_between(domain, 0, distribution, **kwargs)
+
+            ax.set_ylim(bottom=0)
+
+        # plot a simple histogram
+        else:
+
+            ax.hist(chains, **kwargs)
+
+        return fig
+
+    def plot_param_corner(self, params=None, fig=None, *,
+                          include_FeH=True, include_BH=False, include_rt=False,
+                          log_radii=False, **kwargs):
+        '''
+        plot corner plot of all params for all runs
+        if params is none, default params used are:
+
+        if include_{FeH,BH}, those are included in the defaults. does not
+        override params
+        '''
+
+        if params is None:
+            params = ['W0', 'M', 'log_rh' if log_radii else 'rh', 'ra', 'g',
+                      'delta', 's2', 'F', 'a1', 'a2', 'a3', 'BHret', 'd']
+
+            if include_FeH:
+                params += ['FeH']
+
+            if include_BH:
+                params += ['BH_mass']
+
+            if include_rt:
+                params += ['log_rt' if log_radii else 'rt']
+
+        # setup axes
+        Nparams = len(params)
+        Nrows = Ncols = Nparams - 1
+
+        fig, axes = self._setup_multi_artist(fig, (Nrows, Ncols),
+                                             constrained_layout=False,
+                                             sharex='col', sharey='row')
+        axes = axes.reshape((Nrows, Ncols))
+
+        # TODO these are not ideal, lots of conflicting labels and ticks
+        # Setup axis layout (from `corner`).
+        factor = 2.0  # size of side of one panel
+        lbdim = 0.5 * factor  # size of left/bottom margin
+        trdim = 0.2 * factor  # size of top/right margin
+        whspace = 0.05  # size of width/height margin
+        plotdim = factor * (Nrows - 1) + factor * (Ncols - 2.) * whspace
+        dim = lbdim + plotdim + trdim  # total size
+
+        # Format figure.
+        lb = lbdim / dim
+        tr = (lbdim + plotdim) / dim
+        fig.subplots_adjust(left=lb,
+                            bottom=lb,
+                            right=tr,
+                            top=tr,
+                            wspace=whspace,
+                            hspace=whspace)
+
+        for i, py in enumerate(params[1:]):
+
+            for j, px in enumerate(params[:-1]):
+
+                ax = axes[i, j]
+
+                if j > i:
+                    ax.remove()
+                    continue
+
+                else:
+
+                    self.plot_relation(px, py, fig=fig, ax=ax, **kwargs)
+
+                # set labels on bottom row
+                if i + 1 == Nrows:
+                    # rotate_ticks(ax, 'x')
+                    ax.set_xlabel(self._get_latex_labels(px))
+                    # ax.xaxis.set_label_coords(0.5, -0.3)
+                else:
+                    ax.set_xlabel('')
+
+                # Set labels on leftmost col
+                if j == 0:
+                    # rotate_ticks(ax, 'y')
+                    ax.set_ylabel(self._get_latex_labels(py))
+                    # ax.yaxis.set_label_coords(-0.3, 0.5)
+                else:
+                    ax.set_ylabel('')
 
         return fig
 

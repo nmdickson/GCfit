@@ -418,6 +418,7 @@ class _ClusterVisualizer:
 
         # TODO not sure if I like the mfc=none style,
         #   mostly due to https://github.com/matplotlib/matplotlib/issues/3400
+        #   maybe set mfc to be a slightly lighter colour than fc/errbars
         return ax.errorbar(xdata, ydata, xerr=xerr, yerr=yerr, mfc='none',
                            label=label, **kwargs)
 
@@ -1192,8 +1193,12 @@ class _ClusterVisualizer:
 
         if grid:
             # TODO this should probably use distance to furthest field
-            rt = np.median(self.rt) if hasattr(self, 'rt') else (20 << u.arcmin)
-            ticks = np.arange(2, rt.to_value('arcmin'), 2)
+
+            try:
+                rt = np.nanmedian(self.rt).to_value('arcmin') + 2
+                ticks = np.arange(2, rt, 2)
+            except AttributeError:
+                ticks = np.arange(2, 20, 2)
 
             # make sure this grid matches normal grids
             grid_kw = {
@@ -2521,6 +2526,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         ''' load the CI from a file which was `save`d, to avoid rerunning models
         validate: check while loading that all datasets are there, error if not
         '''
+        # TODO load should accept an optional observations like all others
 
         with h5py.File(filename, 'r') as file:
 
