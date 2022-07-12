@@ -2805,6 +2805,7 @@ class RunCollection(_RunAnalysis):
 
     def plot_param_violins(self, param, fig=None, ax=None,
                            clr_param=None, clr_kwargs=None, alpha=0.3,
+                           quantiles=[0.9772, 0.8413, 0.5, 0.1587, 0.0228],
                            *args, **kwargs):
         '''plot violins for each run of the given param'''
         fig, ax = self._setup_artist(fig, ax)
@@ -2818,8 +2819,30 @@ class RunCollection(_RunAnalysis):
 
         labels = self.names
 
-        parts = ax.violinplot(chains, positions=xticks, *args, **kwargs)
+        quantiles = np.array(quantiles)
+        if quantiles.ndim < 2:
+            quantiles = np.tile(quantiles, (len(self.runs), 1)).T
 
+        kwargs.setdefault('showextrema', False)
+
+        parts = ax.violinplot(chains, positions=xticks, quantiles=quantiles,
+                              *args, **kwargs)
+
+        # optionally draw a vert between max quantiles
+        if 'cbars' not in parts and 'cquantiles' in parts:
+            segs = np.array(parts['cquantiles'].get_segments())[:, 0, 1]
+
+            mins, maxes = [], []
+            Nquant = quantiles.shape[0]
+
+            for i, xi in enumerate(xticks):
+                si = segs[i * Nquant:(i + 1) * Nquant]
+                mins.append(si.min())
+                maxes.append(si.max())
+
+            parts['cbars'] = ax.vlines(xticks, mins, maxes)
+
+        # handle and add colours
         if clr_param is not None:
 
             if clr_kwargs is None:
