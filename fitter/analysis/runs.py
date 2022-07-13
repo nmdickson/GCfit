@@ -2823,6 +2823,8 @@ class RunCollection(_RunAnalysis):
         if quantiles.ndim < 2:
             quantiles = np.tile(quantiles, (len(self.runs), 1)).T
 
+        Nquant = quantiles.shape[0]
+
         kwargs.setdefault('showextrema', False)
 
         parts = ax.violinplot(chains, positions=xticks, quantiles=quantiles,
@@ -2833,7 +2835,6 @@ class RunCollection(_RunAnalysis):
             segs = np.array(parts['cquantiles'].get_segments())[:, 0, 1]
 
             mins, maxes = [], []
-            Nquant = quantiles.shape[0]
 
             for i, xi in enumerate(xticks):
                 si = segs[i * Nquant:(i + 1) * Nquant]
@@ -2850,8 +2851,24 @@ class RunCollection(_RunAnalysis):
 
             clr_kwargs.setdefault('alpha', alpha)
 
+            quant_arts = parts.pop('cquantiles', None)
+
             self._add_colours(ax, None, clr_param,
                               extra_artists=parts.values(), **clr_kwargs)
+
+            # if Nquants>1, have to manually add repeated colours separately
+            #   due to how plt.LineCollection handles colours
+            if quant_arts is not None:
+
+                # Unpack colour values, to handle arrays and params here
+                try:
+                    clr_param, *_ = self._get_param(clr_param)
+                except TypeError:
+                    pass
+
+                clr = np.repeat(clr_param, Nquant)
+
+                self._add_colours(ax, quant_arts, clr, **clr_kwargs)
 
         for part in parts['bodies']:
             part.set_alpha(alpha)

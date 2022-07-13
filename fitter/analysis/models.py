@@ -434,6 +434,8 @@ class _ClusterVisualizer:
         '''
 
         # TODO we might still want to allow for specific model/data kwargs?
+        # TODO need better way to differentiate data/models, when same colour
+        #   especially when only one mass bin being used, it's unclear.
 
         ds_pattern = ds_pattern or ''
 
@@ -1417,6 +1419,8 @@ class _ClusterVisualizer:
         self._set_ylabel(ax, rf'$M_{{enc}}$', label_position)
         self._set_xlabel(ax)
 
+        # TODO stop ever doing fig.legend, put legend on inside of ax
+        #   also maybe make it optional
         fig.legend(loc='upper center', ncol=5,
                    bbox_to_anchor=(0.5, 1.), fancybox=True)
 
