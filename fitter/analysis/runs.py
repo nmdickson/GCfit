@@ -2062,6 +2062,31 @@ class RunCollection(_RunAnalysis):
         # Important that the order of self.runs (and thus this iter) is constant
         return iter(self.runs)
 
+    def __add__(self, other):
+
+        new_runs = self.runs + other.runs
+
+        if repeated_names := set(self.names) & set(other.names):
+            mssg = f"Runs {repeated_names} repeated in both {self} and {other}"
+            raise ValueError(mssg)
+
+        return RunCollection(new_runs, sort=False)
+
+    def __or__(self, other):
+        '''return a new RunCollection with merged runs from self and other
+        with runs from other taking priority when in both (runs identified by
+        their name)
+        '''
+
+        self_runs = dict(zip(self.names, self.runs))
+        other_runs = dict(zip(other.names, other.runs))
+
+        new_runs = list((self_runs | other_runs).values())
+
+        new_runs.sort(key=lambda r: (self.names + other.names).index(r.name))
+
+        return RunCollection(new_runs, sort=False)
+
     def get_run(self, name):
         '''Return the run with a name `name`'''
         for run in self.runs:
