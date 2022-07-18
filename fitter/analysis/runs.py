@@ -2064,6 +2064,8 @@ class RunCollection(_RunAnalysis):
 
     def __add__(self, other):
 
+        # TODO make this and __or__ preserve stuff like cmap
+
         new_runs = self.runs + other.runs
 
         if repeated_names := set(self.names) & set(other.names):
@@ -2428,7 +2430,7 @@ class RunCollection(_RunAnalysis):
 
     def _add_colours(self, ax, mappable, cparam, clabel=None, *, alpha=1.,
                      add_colorbar=True, extra_artists=None, math_label=True,
-                     fix_cbar_ticks=True):
+                     fix_cbar_ticks=True, cbounds=None):
         '''add colours to all artists and add the relevant colorbar to ax'''
         import matplotlib.colorbar as mpl_cbar
 
@@ -2440,7 +2442,10 @@ class RunCollection(_RunAnalysis):
         except TypeError:
             cvalues = cparam
 
-        cnorm = mpl_clr.Normalize(cvalues.min(), cvalues.max())
+        if cbounds is None:
+            cbounds = cvalues.min(), cvalues.max()
+
+        cnorm = mpl_clr.Normalize(*cbounds)
         colors = self.cmap(cnorm(cvalues))
 
         colors[:, -1] = alpha
