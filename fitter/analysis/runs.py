@@ -3034,7 +3034,8 @@ class RunCollection(_RunAnalysis):
 
         return fig
 
-    def summary_dataframe(self, *, include_FeH=True, include_BH=False):
+    def summary_dataframe(self, *, include_FeH=True, include_BH=False,
+                          math_labels=False):
         import pandas as pd
         # TODO pandas isn't in the setup requirements
 
@@ -3055,22 +3056,29 @@ class RunCollection(_RunAnalysis):
         data['Cluster'] = [run.name for run in self.runs]
 
         for param in labels:
+
+            name = self._get_latex_labels(param)[1:] if math_labels else param
+            sig = ((r'$-1\sigma\_', r'$+1\sigma\_') if math_labels
+                   else ('-1σ_', '+1σ_'))
+
             median, σ_down, σ_up = self._get_param(param)
-            data[param] = median
-            data[f'-1σ_{param}'], data[f'+1σ_{param}'] = σ_down, σ_up
+            data[name] = median
+            data[f'{sig[0]}{name}'], data[f'{sig[1]}{name}'] = σ_down, σ_up
 
         # Create dataframe
 
         return pd.DataFrame.from_dict(data)
 
     def output_summary(self, outfile=sys.stdout, style='latex', *,
-                       include_FeH=True, include_BH=False, **kwargs):
+                       include_FeH=True, include_BH=False, math_labels=False,
+                       **kwargs):
         '''output a table of all parameter means for each cluster'''
 
         # get dataframe
 
         df = self.summary_dataframe(include_FeH=include_FeH,
-                                    include_BH=include_BH)
+                                    include_BH=include_BH,
+                                    math_labels=math_labels)
 
         # output in desired format
 
@@ -3080,6 +3088,8 @@ class RunCollection(_RunAnalysis):
             df.to_string(buf=outfile, **kwargs)
 
         elif style == 'latex':
+            kwargs.setdefault('escape', False)
+            kwargs.setdefault('float_format', '%.4f')
             df.to_latex(buf=outfile, **kwargs)
 
         elif style == 'hdf':
