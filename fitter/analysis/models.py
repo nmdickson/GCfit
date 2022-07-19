@@ -732,7 +732,7 @@ class _ClusterVisualizer:
     def plot_LOS(self, fig=None, ax=None,
                  show_obs=True, residuals=False, *,
                  x_unit='pc', y_unit='km/s',
-                 label_position='top', blank_xaxis=False,
+                 label_position='top', verbose_label=True, blank_xaxis=False,
                  res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -752,7 +752,10 @@ class _ClusterVisualizer:
                                         x_unit=x_unit, y_unit=y_unit,
                                         res_kwargs=res_kwargs, **kwargs)
 
-        label = 'LOS Velocity Dispersion'
+        if verbose_label:
+            label = 'LOS Velocity Dispersion'
+        else:
+            label = r'$\sigma_{\mathrm{LOS}}$'
 
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
         self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
@@ -765,7 +768,7 @@ class _ClusterVisualizer:
     def plot_pm_tot(self, fig=None, ax=None,
                     show_obs=True, residuals=False, *,
                     x_unit='pc', y_unit='mas/yr',
-                    label_position='top', blank_xaxis=False,
+                    label_position='top', verbose_label=True, blank_xaxis=False,
                     res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -785,7 +788,10 @@ class _ClusterVisualizer:
                                         x_unit=x_unit, y_unit=y_unit,
                                         res_kwargs=res_kwargs, **kwargs)
 
-        label = "Total PM Dispersion"
+        if verbose_label:
+            label = "Total PM Dispersion"
+        else:
+            label = r'$\sigma_{\mathrm{PM},\mathrm{tot}}$'
 
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
         self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
@@ -797,7 +803,8 @@ class _ClusterVisualizer:
     @_support_units
     def plot_pm_ratio(self, fig=None, ax=None,
                       show_obs=True, residuals=False, *,
-                      x_unit='pc', label_position='top', blank_xaxis=False,
+                      x_unit='pc', blank_xaxis=False,
+                      label_position='top', verbose_label=True,
                       res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -817,7 +824,11 @@ class _ClusterVisualizer:
                                         x_unit=x_unit,
                                         res_kwargs=res_kwargs, **kwargs)
 
-        label = "PM Anisotropy"
+        if verbose_label:
+            label = "PM Anisotropy Ratio"
+        else:
+            label = (r'$\sigma_{\mathrm{PM},\mathrm{T}} / '
+                     r'\sigma_{\mathrm{PM},\mathrm{R}}$')
 
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
         self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
@@ -830,7 +841,7 @@ class _ClusterVisualizer:
     def plot_pm_T(self, fig=None, ax=None,
                   show_obs=True, residuals=False, *,
                   x_unit='pc', y_unit='mas/yr',
-                  label_position='top', blank_xaxis=False,
+                  label_position='top', verbose_label=True, blank_xaxis=False,
                   res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -850,7 +861,10 @@ class _ClusterVisualizer:
                                         x_unit=x_unit, y_unit=y_unit,
                                         res_kwargs=res_kwargs, **kwargs)
 
-        label = "Tangential PM Dispersion"
+        if verbose_label:
+            label = "Tangential PM Dispersion"
+        else:
+            label = r'$\sigma_{\mathrm{PM},\mathrm{T}}$'
 
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
         self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
@@ -863,7 +877,7 @@ class _ClusterVisualizer:
     def plot_pm_R(self, fig=None, ax=None,
                   show_obs=True, residuals=False, *,
                   x_unit='pc', y_unit='mas/yr',
-                  label_position='top', blank_xaxis=False,
+                  label_position='top', verbose_label=True, blank_xaxis=False,
                   res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -883,7 +897,10 @@ class _ClusterVisualizer:
                                         x_unit=x_unit, y_unit=y_unit,
                                         res_kwargs=res_kwargs, **kwargs)
 
-        label = "Radial PM Dispersion"
+        if verbose_label:
+            label = "Radial PM Dispersion"
+        else:
+            label = r'$\sigma_{\mathrm{PM},\mathrm{R}}$'
 
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
         self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
@@ -895,7 +912,8 @@ class _ClusterVisualizer:
     @_support_units
     def plot_number_density(self, fig=None, ax=None, show_background=False,
                             show_obs=True, residuals=False, *,
-                            x_unit='pc', label_position='top',
+                            x_unit='pc',
+                            label_position='top', verbose_label=True,
                             blank_xaxis=False, res_kwargs=None, **kwargs):
 
         # TODO add minor ticks to y axis
@@ -931,10 +949,10 @@ class _ClusterVisualizer:
                 mssg = 'No background level found in number density metadata'
                 raise RuntimeError(mssg)
 
-        # bit arbitrary, but probably fine for the most part
-        ax.set_ylim(bottom=0.5e-4)
-
-        label = 'Number Density'
+        if verbose_label:
+            label = 'Number Density'
+        else:
+            label = r'$\Sigma$'
 
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
         self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
@@ -961,7 +979,9 @@ class _ClusterVisualizer:
 
         # left plots
         self.plot_number_density(fig=fig, ax=axes[0, 0], label_position='left',
-                                 blank_xaxis=True, **kwargs)
+                                 blank_xaxis=True, show_background=True,
+                                 **kwargs)
+
         self.plot_LOS(fig=fig, ax=axes[1, 0], label_position='left',
                       blank_xaxis=True, **kwargs)
 
@@ -969,17 +989,21 @@ class _ClusterVisualizer:
                            **kwargs)
 
         # right plots
-        self.plot_pm_tot(fig=fig, ax=axes[0, 1], label_position='right',
+        self.plot_pm_tot(fig=fig, ax=axes[0, 1], label_position='left',
                          blank_xaxis=True, **kwargs)
-        self.plot_pm_T(fig=fig, ax=axes[1, 1], label_position='right',
+
+        self.plot_pm_T(fig=fig, ax=axes[1, 1], label_position='left',
                        blank_xaxis=True, **kwargs)
-        self.plot_pm_R(fig=fig, ax=axes[2, 1], label_position='right',
+
+        self.plot_pm_R(fig=fig, ax=axes[2, 1], label_position='left',
                        **kwargs)
 
         # brute force clear out any "residuals" labels
         for ax in fig.axes:
             if 'Residual' in ax.get_ylabel():
                 ax.set_ylabel('')
+
+        fig.align_ylabels()
 
         return fig
 
