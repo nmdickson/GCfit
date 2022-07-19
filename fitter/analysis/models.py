@@ -425,18 +425,17 @@ class _ClusterVisualizer:
     def _plot_profile(self, ax, ds_pattern, y_key, model_data, *,
                       y_unit=None, residuals=False, err_transform=None,
                       res_kwargs=None, data_kwargs=None, model_kwargs=None,
+                      color=None, data_color=None, model_color=None,
                       **kwargs):
         '''figure out what needs to be plotted and call model/data plotters
         all **kwargs passed to both _plot_model and _plot_data
         model_data dimensions *must* be (mass bins, intervals, r axis)
 
         Each mass bin will be plotted with it's own colour, as
-        decided by the usual matplotlib colour cycle (color=None).
+        decided by the usual matplotlib colour cycle (color=None),
+        Unless data_color, model_color or color are supplied, in which case
+        they will take precedence (in that order)
         '''
-
-        # TODO we might still want to allow for specific model/data kwargs?
-        # TODO need better way to differentiate data/models, when same colour
-        #   especially when only one mass bin being used, it's unclear.
 
         ds_pattern = ds_pattern or ''
 
@@ -444,9 +443,6 @@ class _ClusterVisualizer:
 
         # Restart marker styles each plotting call
         markers = iter(self._MARKERS)
-
-        # Unless specified, each mass bin should cycle colour from matplotlib
-        default_clr = kwargs.pop('color', None)
 
         if res_kwargs is None:
             res_kwargs = {}
@@ -456,6 +452,12 @@ class _ClusterVisualizer:
 
         if model_kwargs is None:
             model_kwargs = {}
+
+        # Unless specified, each mass bin should cycle colour from matplotlib
+        default_color = color
+
+        data_color = data_color or default_color
+        model_color = model_color or default_color
 
         # ------------------------------------------------------------------
         # Determine the relevant datasets to the given pattern
@@ -491,7 +493,7 @@ class _ClusterVisualizer:
             if mass_bin in masses:
                 clr = masses[mass_bin][0][0].get_color()
             else:
-                clr = default_clr
+                clr = data_color
 
             # plot the data
             try:
@@ -534,12 +536,13 @@ class _ClusterVisualizer:
 
                 ymodel = model_data[mbin, :, :]
 
-                # TODO having model/data be same color is kinda hard to read
-                #   this is why I added mfc=none, but I dont like that either
-                if errbars is not None:
+                # if no model color specified *and* multiple masses exists, use
+                #   corresponding data colours, otherwise use default
+                if (model_color is None and errbars is not None
+                        and len(masses) > 1):
                     clr = errbars[0][0].get_color()
                 else:
-                    clr = default_clr
+                    clr = model_color
 
                 self._plot_model(ax, ymodel, color=clr, y_unit=y_unit,
                                  **model_kwargs, **kwargs)
