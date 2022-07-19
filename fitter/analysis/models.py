@@ -424,7 +424,8 @@ class _ClusterVisualizer:
 
     def _plot_profile(self, ax, ds_pattern, y_key, model_data, *,
                       y_unit=None, residuals=False, err_transform=None,
-                      res_kwargs=None, **kwargs):
+                      res_kwargs=None, data_kwargs=None, model_kwargs=None,
+                      **kwargs):
         '''figure out what needs to be plotted and call model/data plotters
         all **kwargs passed to both _plot_model and _plot_data
         model_data dimensions *must* be (mass bins, intervals, r axis)
@@ -449,6 +450,12 @@ class _ClusterVisualizer:
 
         if res_kwargs is None:
             res_kwargs = {}
+
+        if data_kwargs is None:
+            data_kwargs = {}
+
+        if model_kwargs is None:
+            model_kwargs = {}
 
         # ------------------------------------------------------------------
         # Determine the relevant datasets to the given pattern
@@ -490,7 +497,7 @@ class _ClusterVisualizer:
             try:
                 line = self._plot_data(ax, dset, y_key, marker=mrk, color=clr,
                                        err_transform=err_transform,
-                                       y_unit=y_unit, **kwargs)
+                                       y_unit=y_unit, **data_kwargs, **kwargs)
 
             except KeyError as err:
                 if strict:
@@ -534,7 +541,8 @@ class _ClusterVisualizer:
                 else:
                     clr = default_clr
 
-                self._plot_model(ax, ymodel, color=clr, y_unit=y_unit, **kwargs)
+                self._plot_model(ax, ymodel, color=clr, y_unit=y_unit,
+                                 **model_kwargs, **kwargs)
 
                 if residuals:
                     res_ax = self._add_residuals(ax, ymodel, errbars,
