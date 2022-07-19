@@ -983,6 +983,10 @@ class _ClusterVisualizer:
         # TODO working with residuals here is hard because constrianed_layout
         #   doesn't seem super aware of them
 
+        # ------------------------------------------------------------------
+        # Setup figure
+        # ------------------------------------------------------------------
+
         fig, axes = self._setup_multi_artist(fig, (3, 2), sharex=sharex)
 
         axes = axes.reshape((3, 2))
@@ -990,26 +994,60 @@ class _ClusterVisualizer:
         res_kwargs = dict(size="25%", show_chi2=False, percentage=True)
         kwargs.setdefault('res_kwargs', res_kwargs)
 
-        # left plots
+        # ------------------------------------------------------------------
+        # Left Plots
+        # ------------------------------------------------------------------
+
+        # Number Density
+
         self.plot_number_density(fig=fig, ax=axes[0, 0], label_position='left',
                                  blank_xaxis=True, show_background=True,
                                  **kwargs)
 
+        axes[0, 0].set_ylim(bottom=self.numdens[..., :-2].min())
+
+        # Line-of-Sight Velocity Dispersion
+
         self.plot_LOS(fig=fig, ax=axes[1, 0], label_position='left',
                       blank_xaxis=True, **kwargs)
+
+        axes[1, 0].set_ylim(bottom=0.0)
+
+        # Proper Motion Anisotropy
 
         self.plot_pm_ratio(fig=fig, ax=axes[2, 0], label_position='left',
                            **kwargs)
 
-        # right plots
+        axes[2, 0].set_ylim(bottom=0.3)
+
+        # ------------------------------------------------------------------
+        # Right Plots
+        # ------------------------------------------------------------------
+
+        # Total Proper Motion Dispersion
+
         self.plot_pm_tot(fig=fig, ax=axes[0, 1], label_position='left',
                          blank_xaxis=True, **kwargs)
+
+        axes[0, 1].set_ylim(bottom=0.0)
+
+        # Tangential Proper Motion Dispersion
 
         self.plot_pm_T(fig=fig, ax=axes[1, 1], label_position='left',
                        blank_xaxis=True, **kwargs)
 
+        axes[1, 1].set_ylim(bottom=0.0)
+
+        # Radial Proper Motion Dispersion
+
         self.plot_pm_R(fig=fig, ax=axes[2, 1], label_position='left',
                        **kwargs)
+
+        axes[2, 1].set_ylim(bottom=0.0)
+
+        # ------------------------------------------------------------------
+        # Style plots
+        # ------------------------------------------------------------------
 
         # brute force clear out any "residuals" labels
         for ax in fig.axes:
