@@ -2609,7 +2609,7 @@ class CIModelVisualizer(_ClusterVisualizer):
                     slc_grp.create_dataset('dNdm', data=rbin['dNdm'])
 
     @classmethod
-    def load(cls, filename, validate=False):
+    def load(cls, filename, observations=None, validate=False):
         ''' load the CI from a file which was `save`d, to avoid rerunning models
         validate: check while loading that all datasets are there, error if not
         '''
@@ -2624,7 +2624,9 @@ class CIModelVisualizer(_ClusterVisualizer):
                 raise RuntimeError(mssg) from err
 
             # init class
-            obs = Observations(modelgrp['metadata'].attrs['cluster'])
+            if (obs := observations) is None:
+                obs = Observations(modelgrp['metadata'].attrs['cluster'])
+
             viz = cls(obs)
 
             # Get metadata
