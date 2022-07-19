@@ -760,7 +760,10 @@ class _ClusterVisualizer:
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
         self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
 
-        ax.legend()
+        leg = ax.legend()
+        # Remove empty legend boxes. TODO must be a better way to check this
+        if not leg.legendHandles:
+            leg.remove()
 
         return fig
 
@@ -796,7 +799,9 @@ class _ClusterVisualizer:
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
         self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
 
-        ax.legend()
+        leg = ax.legend()
+        if not leg.legendHandles:
+            leg.remove()
 
         return fig
 
@@ -833,7 +838,9 @@ class _ClusterVisualizer:
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
         self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
 
-        ax.legend()
+        leg = ax.legend()
+        if not leg.legendHandles:
+            leg.remove()
 
         return fig
 
@@ -869,7 +876,9 @@ class _ClusterVisualizer:
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
         self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
 
-        ax.legend()
+        leg = ax.legend()
+        if not leg.legendHandles:
+            leg.remove()
 
         return fig
 
@@ -905,7 +914,9 @@ class _ClusterVisualizer:
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
         self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
 
-        ax.legend()
+        leg = ax.legend()
+        if not leg.legendHandles:
+            leg.remove()
 
         return fig
 
@@ -957,7 +968,9 @@ class _ClusterVisualizer:
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
         self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
 
-        ax.legend()
+        leg = ax.legend()
+        if not leg.legendHandles:
+            leg.remove()
 
         return fig
 
