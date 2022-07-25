@@ -1931,11 +1931,11 @@ class NestedRun(_RunAnalysis):
                              f'(±{σ_mns[ind]:.3f}) | ')
                     mssg += (f'{std[ind]:.3f} (±{σ_std[ind]:.3f})\n')
 
-        if content == 'all' or content == 'metadata':
+        if content == 'all' or content == 'setup':
 
             # INFO OF RUN
-            mssg += f'\nRun Metadata'
-            mssg += f'\n{"=" * 12}\n'
+            mssg += f'\nRun Setup'
+            mssg += f'\n{"=" * 9}\n'
 
             with self._openfile('metadata') as mdata:
 
@@ -1957,6 +1957,21 @@ class NestedRun(_RunAnalysis):
 
                 # TODO add specified bounds/priors
                 # mssg += 'Specified prior bounds'
+
+        if content == 'all' or content == 'metadata':
+
+            mssg += f'\nRun Metadata'
+            mssg += f'\n{"=" * 12}\n'
+
+            mssg += f'{"ESS":>6} = {self.ESS:.2f}\n'
+            mssg += f'{"AIC":>6} = {self.AIC:.2f}\n'
+            mssg += f'{"BIC":>6} = {self.BIC:.2f}\n'
+            mssg += f'{"logL0":>6} = {np.max(self.results.logl):.2f}\n'
+            mssg += (f'{"logz":>6} = {self.results.logz[-1]:.2f} '
+                     f'(±{self.results.logzerr[-1]:.2f})\n')
+            mssg += f'{"niter":>6} = {int(self.results.niter)}\n'
+            mssg += f'{"ncall":>6} = {int(np.sum(self.results.ncall))}\n'
+            mssg += f'{"eff":>6} = {float(self.results.eff):.2f}\n'
 
         out.write(mssg)
 
@@ -2516,6 +2531,7 @@ class RunCollection(_RunAnalysis):
                      load=True):
         import multiprocessing
 
+        # TODO also pass all the obs from the runs here too
         if load:
             filenames = [run._filename for run in self.runs]
             mc = ModelCollection.load(filenames)
