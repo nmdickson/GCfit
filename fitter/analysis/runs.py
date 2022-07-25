@@ -742,7 +742,8 @@ class MCMCRun(_RunAnalysis):
         fig, ax = self._setup_multi_artist(fig, shape=None,
                                            constrained_layout=False)
 
-        labels, chain = self._get_chains()
+        labels = self._get_labels(math_labels=True, label_fixed=False)
+        _, chain = self._get_chains()
 
         chain = chain.reshape((-1, chain.shape[-1]))
 
@@ -1272,10 +1273,12 @@ class NestedRun(_RunAnalysis):
         fig, ax = self._setup_multi_artist(fig, shape=None,
                                            constrained_layout=False)
 
+        labels = self._get_labels(math_labels=True, label_fixed=False)
+
         if full_volume:
-            labels, chain = self._get_chains()
+            _, chain = self._get_chains()
         else:
-            labels, chain = self._get_equal_weight_chains()
+            _, chain = self._get_equal_weight_chains()
 
         chain = chain.reshape((-1, chain.shape[-1]))
 
@@ -1931,11 +1934,11 @@ class NestedRun(_RunAnalysis):
                              f'(±{σ_mns[ind]:.3f}) | ')
                     mssg += (f'{std[ind]:.3f} (±{σ_std[ind]:.3f})\n')
 
-        if content == 'all' or content == 'metadata':
+        if content == 'all' or content == 'setup':
 
             # INFO OF RUN
-            mssg += f'\nRun Metadata'
-            mssg += f'\n{"=" * 12}\n'
+            mssg += f'\nRun Setup'
+            mssg += f'\n{"=" * 9}\n'
 
             with self._openfile('metadata') as mdata:
 
@@ -1957,6 +1960,21 @@ class NestedRun(_RunAnalysis):
 
                 # TODO add specified bounds/priors
                 # mssg += 'Specified prior bounds'
+
+        if content == 'all' or content == 'metadata':
+
+            mssg += f'\nRun Metadata'
+            mssg += f'\n{"=" * 12}\n'
+
+            mssg += f'{"ESS":>6} = {self.ESS:.2f}\n'
+            mssg += f'{"AIC":>6} = {self.AIC:.2f}\n'
+            mssg += f'{"BIC":>6} = {self.BIC:.2f}\n'
+            mssg += f'{"logL0":>6} = {np.max(self.results.logl):.2f}\n'
+            mssg += (f'{"logz":>6} = {self.results.logz[-1]:.2f} '
+                     f'(±{self.results.logzerr[-1]:.2f})\n')
+            mssg += f'{"niter":>6} = {int(self.results.niter)}\n'
+            mssg += f'{"ncall":>6} = {int(np.sum(self.results.ncall))}\n'
+            mssg += f'{"eff":>6} = {float(self.results.eff):.2f}\n'
 
         out.write(mssg)
 
@@ -2516,6 +2534,7 @@ class RunCollection(_RunAnalysis):
                      load=True):
         import multiprocessing
 
+        # TODO also pass all the obs from the runs here too
         if load:
             filenames = [run._filename for run in self.runs]
             mc = ModelCollection.load(filenames)
@@ -2557,7 +2576,7 @@ class RunCollection(_RunAnalysis):
             yield (fig, run) if yield_run else fig
 
     def save_plots(self, plot_func, fn_pattern=None, save_kw=None, size=None,
-                   *args, **kwargs):
+                   remove_name=True, *args, **kwargs):
         '''
         fn_pattern is format string which will be passed the kw "cluster" name
             (i.e. `fn_pattern.format(cluster=run.name)`)
@@ -2575,6 +2594,9 @@ class RunCollection(_RunAnalysis):
 
             if size is not None:
                 fig.set_size_inches(size)
+
+            if remove_name:
+                fig.suptitle(None)
 
             save_kw['fname'] = fn_pattern.format(cluster=run.name)
 
