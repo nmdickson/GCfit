@@ -424,18 +424,18 @@ class _ClusterVisualizer:
 
     def _plot_profile(self, ax, ds_pattern, y_key, model_data, *,
                       y_unit=None, residuals=False, err_transform=None,
-                      res_kwargs=None, **kwargs):
+                      res_kwargs=None, data_kwargs=None, model_kwargs=None,
+                      color=None, data_color=None, model_color=None,
+                      **kwargs):
         '''figure out what needs to be plotted and call model/data plotters
         all **kwargs passed to both _plot_model and _plot_data
         model_data dimensions *must* be (mass bins, intervals, r axis)
 
         Each mass bin will be plotted with it's own colour, as
-        decided by the usual matplotlib colour cycle (color=None).
+        decided by the usual matplotlib colour cycle (color=None),
+        Unless data_color, model_color or color are supplied, in which case
+        they will take precedence (in that order)
         '''
-
-        # TODO we might still want to allow for specific model/data kwargs?
-        # TODO need better way to differentiate data/models, when same colour
-        #   especially when only one mass bin being used, it's unclear.
 
         ds_pattern = ds_pattern or ''
 
@@ -444,11 +444,20 @@ class _ClusterVisualizer:
         # Restart marker styles each plotting call
         markers = iter(self._MARKERS)
 
-        # Unless specified, each mass bin should cycle colour from matplotlib
-        default_clr = kwargs.pop('color', None)
-
         if res_kwargs is None:
             res_kwargs = {}
+
+        if data_kwargs is None:
+            data_kwargs = {}
+
+        if model_kwargs is None:
+            model_kwargs = {}
+
+        # Unless specified, each mass bin should cycle colour from matplotlib
+        default_color = color
+
+        data_color = data_color or default_color
+        model_color = model_color or default_color
 
         # ------------------------------------------------------------------
         # Determine the relevant datasets to the given pattern
@@ -484,13 +493,13 @@ class _ClusterVisualizer:
             if mass_bin in masses:
                 clr = masses[mass_bin][0][0].get_color()
             else:
-                clr = default_clr
+                clr = data_color
 
             # plot the data
             try:
                 line = self._plot_data(ax, dset, y_key, marker=mrk, color=clr,
                                        err_transform=err_transform,
-                                       y_unit=y_unit, **kwargs)
+                                       y_unit=y_unit, **data_kwargs, **kwargs)
 
             except KeyError as err:
                 if strict:
@@ -527,14 +536,16 @@ class _ClusterVisualizer:
 
                 ymodel = model_data[mbin, :, :]
 
-                # TODO having model/data be same color is kinda hard to read
-                #   this is why I added mfc=none, but I dont like that either
-                if errbars is not None:
+                # if no model color specified *and* multiple masses exists, use
+                #   corresponding data colours, otherwise use default
+                if (model_color is None and errbars is not None
+                        and len(masses) > 1):
                     clr = errbars[0][0].get_color()
                 else:
-                    clr = default_clr
+                    clr = model_color
 
-                self._plot_model(ax, ymodel, color=clr, y_unit=y_unit, **kwargs)
+                self._plot_model(ax, ymodel, color=clr, y_unit=y_unit,
+                                 **model_kwargs, **kwargs)
 
                 if residuals:
                     res_ax = self._add_residuals(ax, ymodel, errbars,
@@ -732,7 +743,7 @@ class _ClusterVisualizer:
     def plot_LOS(self, fig=None, ax=None,
                  show_obs=True, residuals=False, *,
                  x_unit='pc', y_unit='km/s',
-                 label_position='top', blank_xaxis=False,
+                 label_position='top', verbose_label=True, blank_xaxis=False,
                  res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -752,12 +763,18 @@ class _ClusterVisualizer:
                                         x_unit=x_unit, y_unit=y_unit,
                                         res_kwargs=res_kwargs, **kwargs)
 
-        label = 'LOS Velocity Dispersion'
+        if verbose_label:
+            label = 'LOS Velocity Dispersion'
+        else:
+            label = r'$\sigma_{\mathrm{LOS}}$'
 
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
         self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
 
-        ax.legend()
+        leg = ax.legend()
+        # Remove empty legend boxes. TODO must be a better way to check this
+        if not leg.legendHandles:
+            leg.remove()
 
         return fig
 
@@ -765,7 +782,7 @@ class _ClusterVisualizer:
     def plot_pm_tot(self, fig=None, ax=None,
                     show_obs=True, residuals=False, *,
                     x_unit='pc', y_unit='mas/yr',
-                    label_position='top', blank_xaxis=False,
+                    label_position='top', verbose_label=True, blank_xaxis=False,
                     res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -785,19 +802,25 @@ class _ClusterVisualizer:
                                         x_unit=x_unit, y_unit=y_unit,
                                         res_kwargs=res_kwargs, **kwargs)
 
-        label = "Total PM Dispersion"
+        if verbose_label:
+            label = "Total PM Dispersion"
+        else:
+            label = r'$\sigma_{\mathrm{PM},\mathrm{tot}}$'
 
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
         self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
 
-        ax.legend()
+        leg = ax.legend()
+        if not leg.legendHandles:
+            leg.remove()
 
         return fig
 
     @_support_units
     def plot_pm_ratio(self, fig=None, ax=None,
                       show_obs=True, residuals=False, *,
-                      x_unit='pc', label_position='top', blank_xaxis=False,
+                      x_unit='pc', blank_xaxis=False,
+                      label_position='top', verbose_label=True,
                       res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -817,12 +840,18 @@ class _ClusterVisualizer:
                                         x_unit=x_unit,
                                         res_kwargs=res_kwargs, **kwargs)
 
-        label = "PM Anisotropy"
+        if verbose_label:
+            label = "PM Anisotropy Ratio"
+        else:
+            label = (r'$\sigma_{\mathrm{PM},\mathrm{T}} / '
+                     r'\sigma_{\mathrm{PM},\mathrm{R}}$')
 
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
         self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
 
-        ax.legend()
+        leg = ax.legend()
+        if not leg.legendHandles:
+            leg.remove()
 
         return fig
 
@@ -830,7 +859,7 @@ class _ClusterVisualizer:
     def plot_pm_T(self, fig=None, ax=None,
                   show_obs=True, residuals=False, *,
                   x_unit='pc', y_unit='mas/yr',
-                  label_position='top', blank_xaxis=False,
+                  label_position='top', verbose_label=True, blank_xaxis=False,
                   res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -850,12 +879,17 @@ class _ClusterVisualizer:
                                         x_unit=x_unit, y_unit=y_unit,
                                         res_kwargs=res_kwargs, **kwargs)
 
-        label = "Tangential PM Dispersion"
+        if verbose_label:
+            label = "Tangential PM Dispersion"
+        else:
+            label = r'$\sigma_{\mathrm{PM},\mathrm{T}}$'
 
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
         self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
 
-        ax.legend()
+        leg = ax.legend()
+        if not leg.legendHandles:
+            leg.remove()
 
         return fig
 
@@ -863,7 +897,7 @@ class _ClusterVisualizer:
     def plot_pm_R(self, fig=None, ax=None,
                   show_obs=True, residuals=False, *,
                   x_unit='pc', y_unit='mas/yr',
-                  label_position='top', blank_xaxis=False,
+                  label_position='top', verbose_label=True, blank_xaxis=False,
                   res_kwargs=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -883,19 +917,25 @@ class _ClusterVisualizer:
                                         x_unit=x_unit, y_unit=y_unit,
                                         res_kwargs=res_kwargs, **kwargs)
 
-        label = "Radial PM Dispersion"
+        if verbose_label:
+            label = "Radial PM Dispersion"
+        else:
+            label = r'$\sigma_{\mathrm{PM},\mathrm{R}}$'
 
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
         self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
 
-        ax.legend()
+        leg = ax.legend()
+        if not leg.legendHandles:
+            leg.remove()
 
         return fig
 
     @_support_units
     def plot_number_density(self, fig=None, ax=None, show_background=False,
                             show_obs=True, residuals=False, *,
-                            x_unit='pc', label_position='top',
+                            x_unit='pc',
+                            label_position='top', verbose_label=True,
                             blank_xaxis=False, res_kwargs=None, **kwargs):
 
         # TODO add minor ticks to y axis
@@ -922,24 +962,27 @@ class _ClusterVisualizer:
                                         res_kwargs=res_kwargs, **kwargs)
 
         if show_background:
-            # TODO this doesnt use the newer general dataset filtering
+            # TODO this doesnt use the newer more general dataset filtering
             try:
-                background = self.obs['number_density'].mdata['background']
+                nd = self.obs['number_density']
+                background = nd.mdata['background'] << nd['Σ'].unit
                 ax.axhline(y=background, ls='--', c='black', alpha=0.66)
 
             except KeyError:
                 mssg = 'No background level found in number density metadata'
                 raise RuntimeError(mssg)
 
-        # bit arbitrary, but probably fine for the most part
-        ax.set_ylim(bottom=0.5e-4)
-
-        label = 'Number Density'
+        if verbose_label:
+            label = 'Number Density'
+        else:
+            label = r'$\Sigma$'
 
         self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
         self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
 
-        ax.legend()
+        leg = ax.legend()
+        if not leg.legendHandles:
+            leg.remove()
 
         return fig
 
@@ -952,6 +995,10 @@ class _ClusterVisualizer:
         # TODO working with residuals here is hard because constrianed_layout
         #   doesn't seem super aware of them
 
+        # ------------------------------------------------------------------
+        # Setup figure
+        # ------------------------------------------------------------------
+
         fig, axes = self._setup_multi_artist(fig, (3, 2), sharex=sharex)
 
         axes = axes.reshape((3, 2))
@@ -959,27 +1006,70 @@ class _ClusterVisualizer:
         res_kwargs = dict(size="25%", show_chi2=False, percentage=True)
         kwargs.setdefault('res_kwargs', res_kwargs)
 
-        # left plots
+        # ------------------------------------------------------------------
+        # Left Plots
+        # ------------------------------------------------------------------
+
+        # Number Density
+
         self.plot_number_density(fig=fig, ax=axes[0, 0], label_position='left',
-                                 blank_xaxis=True, **kwargs)
+                                 blank_xaxis=True, show_background=True,
+                                 **kwargs)
+
+        nd = self.obs['number_density']
+        bg = 0.9 * nd.mdata['background'] << nd['Σ'].unit
+        axes[0, 0].set_ylim(bottom=min([bg,
+                                        np.abs(self.numdens[..., :-2].min())]))
+
+        # Line-of-Sight Velocity Dispersion
+
         self.plot_LOS(fig=fig, ax=axes[1, 0], label_position='left',
                       blank_xaxis=True, **kwargs)
+
+        axes[1, 0].set_ylim(bottom=0.0)
+
+        # Proper Motion Anisotropy
 
         self.plot_pm_ratio(fig=fig, ax=axes[2, 0], label_position='left',
                            **kwargs)
 
-        # right plots
-        self.plot_pm_tot(fig=fig, ax=axes[0, 1], label_position='right',
+        axes[2, 0].set_ylim(bottom=0.3, top=max(axes[2, 0].get_ylim()[1], 1.1))
+
+        # ------------------------------------------------------------------
+        # Right Plots
+        # ------------------------------------------------------------------
+
+        # Total Proper Motion Dispersion
+
+        self.plot_pm_tot(fig=fig, ax=axes[0, 1], label_position='left',
                          blank_xaxis=True, **kwargs)
-        self.plot_pm_T(fig=fig, ax=axes[1, 1], label_position='right',
+
+        axes[0, 1].set_ylim(bottom=0.0)
+
+        # Tangential Proper Motion Dispersion
+
+        self.plot_pm_T(fig=fig, ax=axes[1, 1], label_position='left',
                        blank_xaxis=True, **kwargs)
-        self.plot_pm_R(fig=fig, ax=axes[2, 1], label_position='right',
+
+        axes[1, 1].set_ylim(bottom=0.0)
+
+        # Radial Proper Motion Dispersion
+
+        self.plot_pm_R(fig=fig, ax=axes[2, 1], label_position='left',
                        **kwargs)
+
+        axes[2, 1].set_ylim(bottom=0.0)
+
+        # ------------------------------------------------------------------
+        # Style plots
+        # ------------------------------------------------------------------
 
         # brute force clear out any "residuals" labels
         for ax in fig.axes:
             if 'Residual' in ax.get_ylabel():
                 ax.set_ylabel('')
+
+        fig.align_ylabels()
 
         return fig
 
@@ -1024,6 +1114,8 @@ class _ClusterVisualizer:
             field_kw.setdefault('radii', [])
 
             self.plot_MF_fields(fig, ax, **field_kw)
+
+            ax.set_aspect('equal')
 
             ax_ind += 1
 
@@ -1117,6 +1209,9 @@ class _ClusterVisualizer:
 
                 ax.set_xlabel(None)
 
+                # TODO would be nice to use scientific notation on yaxis, but
+                #   it's hard to get it working nicely
+
                 # ----------------------------------------------------------
                 # "Label" each bin with it's radial bounds.
                 # Uses fake text to allow for using loc='best' from `legend`.
@@ -1154,7 +1249,8 @@ class _ClusterVisualizer:
         return fig
 
     @_support_units
-    def plot_MF_fields(self, fig=None, ax=None, *, radii=("rh",), grid=True):
+    def plot_MF_fields(self, fig=None, ax=None, *, radii=("rh",),
+                       grid=True, label_grid=True):
         '''plot all mass function fields in this observation
         '''
         import shapely.geometry as geom
@@ -1215,8 +1311,9 @@ class _ClusterVisualizer:
                 circle = np.array(geom.Point(0, 0).buffer(gr).exterior.coords).T
                 gr_line, = ax.plot(*circle, **grid_kw)
 
-                ax.annotate(f'{gr:.0f}"', xy=(circle[0].max(), 0),
-                            color=grid_kw['color'])
+                if label_grid:
+                    ax.annotate(f'{gr:.0f}"', xy=(circle[0].max(), 0),
+                                color=grid_kw['color'])
 
         # ------------------------------------------------------------------
         # Try to plot the various radii quantities from this model, if desired
@@ -1241,8 +1338,8 @@ class _ClusterVisualizer:
         # Add plot labels and legends
         # ------------------------------------------------------------------
 
-        ax.set_xlabel('RA [arcmin]')
-        ax.set_ylabel('DEC [arcmin]')
+        ax.set_xlabel(r'$δ\,\mathrm{RA}\ [\mathrm{arcmin}]$')
+        ax.set_ylabel(r'$δ\,\mathrm{DEC}\ [\mathrm{arcmin}]$')
 
         # TODO figure out a better way of handling this always using best? (75)
         ax.legend(loc='upper left' if grid else 'best')
@@ -1421,8 +1518,7 @@ class _ClusterVisualizer:
 
         # TODO stop ever doing fig.legend, put legend on inside of ax
         #   also maybe make it optional
-        fig.legend(loc='upper center', ncol=5,
-                   bbox_to_anchor=(0.5, 1.), fancybox=True)
+        ax.legend(loc='lower center', ncol=5, fancybox=True)
 
         return fig
 
@@ -2526,7 +2622,7 @@ class CIModelVisualizer(_ClusterVisualizer):
                     slc_grp.create_dataset('dNdm', data=rbin['dNdm'])
 
     @classmethod
-    def load(cls, filename, validate=False):
+    def load(cls, filename, observations=None, validate=False):
         ''' load the CI from a file which was `save`d, to avoid rerunning models
         validate: check while loading that all datasets are there, error if not
         '''
@@ -2541,7 +2637,9 @@ class CIModelVisualizer(_ClusterVisualizer):
                 raise RuntimeError(mssg) from err
 
             # init class
-            obs = Observations(modelgrp['metadata'].attrs['cluster'])
+            if (obs := observations) is None:
+                obs = Observations(modelgrp['metadata'].attrs['cluster'])
+
             viz = cls(obs)
 
             # Get metadata

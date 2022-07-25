@@ -544,7 +544,7 @@ class MCMCRun(_RunAnalysis):
         import multiprocessing
 
         if load:
-            return CIModelVisualizer.load(self._filename)
+            return CIModelVisualizer.load(self._filename, observations=self.obs)
 
         else:
 
@@ -1250,7 +1250,7 @@ class NestedRun(_RunAnalysis):
         import multiprocessing
 
         if load:
-            return CIModelVisualizer.load(self._filename)
+            return CIModelVisualizer.load(self._filename, observations=self.obs)
 
         else:
             labels, chain = self._get_equal_weight_chains(add_errors=add_errors)
