@@ -962,9 +962,10 @@ class _ClusterVisualizer:
                                         res_kwargs=res_kwargs, **kwargs)
 
         if show_background:
-            # TODO this doesnt use the newer general dataset filtering
+            # TODO this doesnt use the newer more general dataset filtering
             try:
-                background = self.obs['number_density'].mdata['background']
+                nd = self.obs['number_density']
+                background = nd.mdata['background'] << nd['Σ'].unit
                 ax.axhline(y=background, ls='--', c='black', alpha=0.66)
 
             except KeyError:
@@ -1015,7 +1016,10 @@ class _ClusterVisualizer:
                                  blank_xaxis=True, show_background=True,
                                  **kwargs)
 
-        axes[0, 0].set_ylim(bottom=self.numdens[..., :-2].min())
+        nd = self.obs['number_density']
+        bg = 0.9 * nd.mdata['background'] << nd['Σ'].unit
+        axes[0, 0].set_ylim(bottom=min([bg,
+                                        np.abs(self.numdens[..., :-2].min())]))
 
         # Line-of-Sight Velocity Dispersion
 
@@ -1029,7 +1033,7 @@ class _ClusterVisualizer:
         self.plot_pm_ratio(fig=fig, ax=axes[2, 0], label_position='left',
                            **kwargs)
 
-        axes[2, 0].set_ylim(bottom=0.3)
+        axes[2, 0].set_ylim(bottom=0.3, top=max(axes[2, 0].get_ylim()[1], 1.1))
 
         # ------------------------------------------------------------------
         # Right Plots
