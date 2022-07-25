@@ -742,7 +742,8 @@ class MCMCRun(_RunAnalysis):
         fig, ax = self._setup_multi_artist(fig, shape=None,
                                            constrained_layout=False)
 
-        labels, chain = self._get_chains()
+        labels = self._get_labels(math_labels=True, label_fixed=False)
+        _, chain = self._get_chains()
 
         chain = chain.reshape((-1, chain.shape[-1]))
 
@@ -1272,10 +1273,12 @@ class NestedRun(_RunAnalysis):
         fig, ax = self._setup_multi_artist(fig, shape=None,
                                            constrained_layout=False)
 
+        labels = self._get_labels(math_labels=True, label_fixed=False)
+
         if full_volume:
-            labels, chain = self._get_chains()
+            _, chain = self._get_chains()
         else:
-            labels, chain = self._get_equal_weight_chains()
+            _, chain = self._get_equal_weight_chains()
 
         chain = chain.reshape((-1, chain.shape[-1]))
 
