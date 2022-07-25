@@ -2573,7 +2573,7 @@ class RunCollection(_RunAnalysis):
             yield (fig, run) if yield_run else fig
 
     def save_plots(self, plot_func, fn_pattern=None, save_kw=None, size=None,
-                   *args, **kwargs):
+                   remove_name=True, *args, **kwargs):
         '''
         fn_pattern is format string which will be passed the kw "cluster" name
             (i.e. `fn_pattern.format(cluster=run.name)`)
@@ -2591,6 +2591,9 @@ class RunCollection(_RunAnalysis):
 
             if size is not None:
                 fig.set_size_inches(size)
+
+            if remove_name:
+                fig.suptitle(None)
 
             save_kw['fname'] = fn_pattern.format(cluster=run.name)
 
