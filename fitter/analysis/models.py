@@ -1115,6 +1115,8 @@ class _ClusterVisualizer:
 
             self.plot_MF_fields(fig, ax, **field_kw)
 
+            ax.set_aspect('equal')
+
             ax_ind += 1
 
         # ------------------------------------------------------------------
@@ -1207,6 +1209,9 @@ class _ClusterVisualizer:
 
                 ax.set_xlabel(None)
 
+                # TODO would be nice to use scientific notation on yaxis, but
+                #   it's hard to get it working nicely
+
                 # ----------------------------------------------------------
                 # "Label" each bin with it's radial bounds.
                 # Uses fake text to allow for using loc='best' from `legend`.
@@ -1244,7 +1249,8 @@ class _ClusterVisualizer:
         return fig
 
     @_support_units
-    def plot_MF_fields(self, fig=None, ax=None, *, radii=("rh",), grid=True):
+    def plot_MF_fields(self, fig=None, ax=None, *, radii=("rh",),
+                       grid=True, label_grid=True):
         '''plot all mass function fields in this observation
         '''
         import shapely.geometry as geom
@@ -1305,8 +1311,9 @@ class _ClusterVisualizer:
                 circle = np.array(geom.Point(0, 0).buffer(gr).exterior.coords).T
                 gr_line, = ax.plot(*circle, **grid_kw)
 
-                ax.annotate(f'{gr:.0f}"', xy=(circle[0].max(), 0),
-                            color=grid_kw['color'])
+                if label_grid:
+                    ax.annotate(f'{gr:.0f}"', xy=(circle[0].max(), 0),
+                                color=grid_kw['color'])
 
         # ------------------------------------------------------------------
         # Try to plot the various radii quantities from this model, if desired
@@ -1331,8 +1338,8 @@ class _ClusterVisualizer:
         # Add plot labels and legends
         # ------------------------------------------------------------------
 
-        ax.set_xlabel('RA [arcmin]')
-        ax.set_ylabel('DEC [arcmin]')
+        ax.set_xlabel(r'$δ\,\mathrm{RA}\ [\mathrm{arcmin}]$')
+        ax.set_ylabel(r'$δ\,\mathrm{DEC}\ [\mathrm{arcmin}]$')
 
         # TODO figure out a better way of handling this always using best? (75)
         ax.legend(loc='upper left' if grid else 'best')
@@ -1511,8 +1518,7 @@ class _ClusterVisualizer:
 
         # TODO stop ever doing fig.legend, put legend on inside of ax
         #   also maybe make it optional
-        fig.legend(loc='upper center', ncol=5,
-                   bbox_to_anchor=(0.5, 1.), fancybox=True)
+        ax.legend(loc='lower center', ncol=5, fancybox=True)
 
         return fig
 
