@@ -947,32 +947,6 @@ class _ClusterVisualizer:
 
         # TODO add minor ticks to y axis
 
-        # compute K-scale
-
-        if obs_nd := self.obs.filter_datasets('*number_density'):
-            obs_nd = list(obs_nd.values())[-1]
-            obs_r = obs_nd['r'].to(self.r.unit)
-            Σ_unit = obs_nd['Σ'].unit
-
-            # TODO this doesn't handle multiple mass bins, if that matters
-
-            model_nd = self._get_median(self.numdens[self.star_bin])
-            nd_interp = util.QuantitySpline(self.r, model_nd.to(Σ_unit))
-
-            K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_nd['Σ']**2)
-                 / np.nansum(nd_interp(obs_r)**2 / obs_nd['Σ']**2)).value
-
-        else:
-            K = 1.
-
-        def scale2data(density):
-            '''K-scaling, bring model number density to data'''
-            return K * density
-
-        def scale2model(density):
-            '''revert the K scaling, bring everything back to model scale'''
-            return density / K
-
         def quad_nuisance(err):
             return np.sqrt(err**2 + (self.s2 << err.unit**2))
 
@@ -1021,9 +995,35 @@ class _ClusterVisualizer:
         #   transform/convert ticks, could be a formattor that works better
         #   Notably, this doesn't change what shows as pointer coordinate
         if model_scale:
-            tick_loc = 'right' if label_position == 'right' else 'left'
+
+            # compute K-scale
+
+            if obs_nd := self.obs.filter_datasets('*number_density'):
+                obs_nd = list(obs_nd.values())[-1]
+                obs_r = obs_nd['r'].to(self.r.unit)
+                Σ_unit = obs_nd['Σ'].unit
+
+                # TODO this doesn't handle multiple mass bins, if that matters
+
+                model_nd = self._get_median(self.numdens[self.star_bin])
+                nd_interp = util.QuantitySpline(self.r, model_nd.to(Σ_unit))
+
+                K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_nd['Σ']**2)
+                     / np.nansum(nd_interp(obs_r)**2 / obs_nd['Σ']**2)).value
+
+            else:
+                K = 1.
+
+            def scale2data(density):
+                '''K-scaling, bring model number density to data'''
+                return K * density
+
+            def scale2model(density):
+                '''revert the K scaling, bring everything back to model scale'''
+                return density / K
 
             # create new (un-K-scaled) yaxis
+            tick_loc = 'right' if label_position == 'right' else 'left'
             y_ax = ax.secondary_yaxis(location=tick_loc,
                                       functions=(scale2data, scale2model))
 
