@@ -222,7 +222,14 @@ class _ClusterVisualizer:
         if label_position == 'top':
 
             ax.set_ylabel('')
-            ax.set_title(label)
+
+            try:
+                ax.set_title(label)
+            except AttributeError as err:
+                try:
+                    ax._parent.set_title(label)
+                except AttributeError:
+                    raise err
 
         else:
 
@@ -934,11 +941,37 @@ class _ClusterVisualizer:
     @_support_units
     def plot_number_density(self, fig=None, ax=None, show_background=False,
                             show_obs=True, residuals=False, *,
-                            x_unit='pc',
+                            x_unit='pc', model_scale=True,
                             label_position='top', verbose_label=True,
                             blank_xaxis=False, res_kwargs=None, **kwargs):
 
         # TODO add minor ticks to y axis
+
+        # compute K-scale
+
+        if obs_nd := self.obs.filter_datasets('*number_density'):
+            obs_nd = list(obs_nd.values())[-1]
+            obs_r = obs_nd['r'].to(self.r.unit)
+            Σ_unit = obs_nd['Σ'].unit
+
+            # TODO this doesn't handle multiple mass bins, if that matters
+
+            model_nd = self._get_median(self.numdens[self.star_bin])
+            nd_interp = util.QuantitySpline(self.r, model_nd.to(Σ_unit))
+
+            K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_nd['Σ']**2)
+                 / np.nansum(nd_interp(obs_r)**2 / obs_nd['Σ']**2)).value
+
+        else:
+            K = 1.
+
+        def scale2data(density):
+            '''K-scaling, bring model number density to data'''
+            return K * density
+
+        def scale2model(density):
+            '''revert the K scaling, bring everything back to model scale'''
+            return density / K
 
         def quad_nuisance(err):
             return np.sqrt(err**2 + (self.s2 << err.unit**2))
@@ -962,27 +995,58 @@ class _ClusterVisualizer:
                                         res_kwargs=res_kwargs, **kwargs)
 
         if show_background:
-            # TODO this doesnt use the newer more general dataset filtering
             try:
-                nd = self.obs['number_density']
+                nd = list(self.obs.filter_datasets('*number*').values())[-1]
                 background = nd.mdata['background'] << nd['Σ'].unit
                 ax.axhline(y=background, ls='--', c='black', alpha=0.66)
 
-            except KeyError:
+            except IndexError as err:
+                mssg = ('No number density profile data found, '
+                        'cannot compute background')
+                raise RuntimeError(mssg) from err
+            except KeyError as err:
                 mssg = 'No background level found in number density metadata'
-                raise RuntimeError(mssg)
+                raise RuntimeError(mssg) from err
+
+        leg = ax.legend()
+        if not leg.legendHandles:
+            leg.remove()
 
         if verbose_label:
             label = 'Number Density'
         else:
             label = r'$\Sigma$'
 
-        self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
-        self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
+        # TODO not entirely sure a bunch of secondary axes is best way to
+        #   transform/convert ticks, could be a formattor that works better
+        #   Notably, this doesn't change what shows as pointer coordinate
+        if model_scale:
+            tick_loc = 'right' if label_position == 'right' else 'left'
 
-        leg = ax.legend()
-        if not leg.legendHandles:
-            leg.remove()
+            # create new (un-K-scaled) yaxis
+            y_ax = ax.secondary_yaxis(location=tick_loc,
+                                      functions=(scale2data, scale2model))
+
+            # steal axis labels
+            y_ax.set_ylabel(ax.get_ylabel())
+
+            # get rid of all traces of the old axis ticks
+            clear_ticks = dict(left=False, labelleft=False,
+                               right=False, labelright=False)
+            ax.yaxis.set_tick_params(which='both', **clear_ticks)
+            ax.set_ylabel(None)
+
+            # add another placeholder ax to the right to get ticks on all sides
+            oax = ax.secondary_yaxis('left' if tick_loc == 'right' else 'right',
+                                     functions=(scale2data, scale2model))
+            oax.yaxis.set_tick_params(which='both',
+                                      labelright=False, labelleft=False)
+
+        else:
+            y_ax = ax
+
+        self._set_ylabel(y_ax, label, label_position, residual_ax=res_ax)
+        self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
 
         return fig
 
