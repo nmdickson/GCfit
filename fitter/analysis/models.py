@@ -1003,13 +1003,15 @@ class _ClusterVisualizer:
                 obs_r = obs_nd['r'].to(self.r.unit)
                 Σ_unit = obs_nd['Σ'].unit
 
+                obs_err = quad_nuisance(obs_nd['ΔΣ'])
+
                 # TODO this doesn't handle multiple mass bins, if that matters
 
                 model_nd = self._get_median(self.numdens[self.star_bin])
                 nd_interp = util.QuantitySpline(self.r, model_nd.to(Σ_unit))
 
-                K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_nd['Σ']**2)
-                     / np.nansum(nd_interp(obs_r)**2 / obs_nd['Σ']**2)).value
+                K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_err**2)
+                     / np.nansum(nd_interp(obs_r)**2 / obs_err**2)).value
 
             else:
                 K = 1.
@@ -1892,12 +1894,15 @@ class ModelVisualizer(_ClusterVisualizer):
             obs_nd = list(obs_nd.values())[-1]
             obs_r = obs_nd['r'].to(model.r.unit)
 
+            s2 = model.theta['s2']
+            obs_err = np.sqrt(obs_nd['ΔΣ']**2 + (s2 * obs_nd['ΔΣ'].unit**2))
+
             for mbin in range(model_nd.shape[0]):
 
                 nd_interp = util.QuantitySpline(model.r, model_nd[mbin, :])
 
-                K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_nd['Σ']**2)
-                     / np.nansum(nd_interp(obs_r)**2 / obs_nd['Σ']**2))
+                K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_err**2)
+                     / np.nansum(nd_interp(obs_r)**2 / obs_err**2))
 
                 nd[mbin, 0, :] = K * model_nd[mbin, :]
 
@@ -2514,8 +2519,11 @@ class CIModelVisualizer(_ClusterVisualizer):
             obs_nd = list(obs_nd.values())[-1]
             obs_r = obs_nd['r'].to(model.r.unit, equivs)
 
-            K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_nd['Σ']**2)
-                 / np.nansum(nd_interp(obs_r)**2 / obs_nd['Σ']**2))
+            s2 = model.theta['s2']
+            obs_err = np.sqrt(obs_nd['ΔΣ']**2 + (s2 * obs_nd['ΔΣ'].unit**2))
+
+            K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_err**2)
+                 / np.nansum(nd_interp(obs_r)**2 / obs_err**2))
 
         else:
             mssg = 'No number density datasets found, setting K=1'
