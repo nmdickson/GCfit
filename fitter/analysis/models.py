@@ -948,7 +948,7 @@ class _ClusterVisualizer:
         # TODO add minor ticks to y axis
 
         def quad_nuisance(err):
-            return np.sqrt(err**2 + (self.s2 << u.arcmin**-2))
+            return np.sqrt(err**2 + (self.s2 << u.arcmin**-4))
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -1771,7 +1771,7 @@ class _ClusterVisualizer:
         # TODO seems to produce alot of infs?
 
         def numdens_nuisance(err):
-            return np.sqrt(err**2 + (self.s2 << u.arcmin**-2))
+            return np.sqrt(err**2 + (self.s2 << u.arcmin**-4))
 
         all_components = [
             {'ds_pattern': '*velocity_dispersion*', 'y_key': 'σ',
@@ -1894,7 +1894,7 @@ class ModelVisualizer(_ClusterVisualizer):
             obs_nd = list(obs_nd.values())[-1]
             obs_r = obs_nd['r'].to(model.r.unit)
 
-            s2 = model.theta['s2'] << u.arcmin**-2
+            s2 = model.theta['s2'] << u.arcmin**-4
             obs_err = np.sqrt(obs_nd['ΔΣ']**2 + s2)
 
             for mbin in range(model_nd.shape[0]):
@@ -2519,7 +2519,7 @@ class CIModelVisualizer(_ClusterVisualizer):
             obs_nd = list(obs_nd.values())[-1]
             obs_r = obs_nd['r'].to(model.r.unit, equivs)
 
-            s2 = model.theta['s2'] << u.arcmin**-2
+            s2 = model.theta['s2'] << u.arcmin**-4
             obs_err = np.sqrt(obs_nd['ΔΣ']**2 + s2)
 
             K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_err**2)
