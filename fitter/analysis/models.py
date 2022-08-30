@@ -391,7 +391,7 @@ class _ClusterVisualizer:
         ydata = dataset[y_key] * scale
 
         xerr = self._get_err(dataset, x_key)
-        yerr = self._get_err(dataset, y_key)
+        yerr = self._get_err(dataset, y_key) * scale
 
         # ------------------------------------------------------------------
         # Convert any units desired
@@ -1848,7 +1848,7 @@ class ModelVisualizer(_ClusterVisualizer):
         model_nd = model.Sigmaj / model.mj[:, np.newaxis]
 
         nd = model_nd[:, np.newaxis, :]
-        K = np.empty(nd.shape[0]) << u.Unit('pc2 / arcmin2')  # one each mbin
+        K = np.empty(nd.shape[0]) << u.dimensionless_unscaled  # one each mbin
         # TODO this K is only valid for the same mj as numdens obs anyways...
 
         # Check for observational numdens profiles, to compute scaling factors K
@@ -1870,8 +1870,10 @@ class ModelVisualizer(_ClusterVisualizer):
 
                 nd_interp = util.QuantitySpline(model.r, model_nd[mbin, :])
 
-                Kj = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_err**2)
-                      / np.nansum(nd_interp(obs_r)**2 / obs_err**2))
+                interpolated = nd_interp(obs_r).to(obs_nd['Σ'].unit)
+
+                Kj = (np.nansum(obs_nd['Σ'] * interpolated / obs_err**2)
+                      / np.nansum(interpolated**2 / obs_err**2))
 
                 K[mbin] = Kj
 
@@ -2169,7 +2171,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         # number density
 
         numdens = np.full((1, N, Nr), np.nan) << u.pc**-2
-        K_scale = np.full((1,), np.nan) << u.Unit('pc2 / arcmin2')
+        K_scale = np.full((1,), np.nan) << u.dimensionless_unscaled
         # K_scale = np.full((Nm), np.nan) << u.Unit('pc2 / arcmin2')
 
         # mass function
@@ -2506,8 +2508,10 @@ class CIModelVisualizer(_ClusterVisualizer):
             s2 = self.s2 << u.arcmin**-4
             obs_err = np.sqrt(obs_nd['ΔΣ']**2 + s2)
 
-            K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_err**2)
-                 / np.nansum(nd_interp(obs_r)**2 / obs_err**2))
+            interpolated = nd_interp(obs_r).to(obs_nd['Σ'].unit)
+
+            K = (np.nansum(obs_nd['Σ'] * interpolated / obs_err**2)
+                 / np.nansum(interpolated**2 / obs_err**2))
 
         else:
             mssg = 'No number density datasets found, setting K=1'
