@@ -306,7 +306,7 @@ class _ClusterVisualizer:
                 return None
 
     def _plot_model(self, ax, data, intervals=None, *,
-                    x_data=None, x_unit='pc', y_unit=None,
+                    x_data=None, x_unit='pc', y_unit=None, scale=1.0,
                     CI_kwargs=None, **kwargs):
 
         CI_kwargs = dict() if CI_kwargs is None else CI_kwargs
@@ -338,6 +338,8 @@ class _ClusterVisualizer:
         # ------------------------------------------------------------------
         # Convert any units desired
         # ------------------------------------------------------------------
+
+        data *= scale
 
         x_domain = self.r if x_data is None else x_data
 
@@ -379,14 +381,14 @@ class _ClusterVisualizer:
 
     def _plot_data(self, ax, dataset, y_key, *,
                    x_key='r', x_unit='pc', y_unit=None,
-                   err_transform=None, **kwargs):
+                   err_transform=None, scale=1.0, **kwargs):
 
         # ------------------------------------------------------------------
         # Get data and relevant errors for plotting
         # ------------------------------------------------------------------
 
         xdata = dataset[x_key]
-        ydata = dataset[y_key]
+        ydata = dataset[y_key] * scale
 
         xerr = self._get_err(dataset, x_key)
         yerr = self._get_err(dataset, y_key)
@@ -430,7 +432,7 @@ class _ClusterVisualizer:
                            label=label, **kwargs)
 
     def _plot_profile(self, ax, ds_pattern, y_key, model_data, *,
-                      y_unit=None, residuals=False, err_transform=None,
+                      y_unit=None, residuals=False,
                       res_kwargs=None, data_kwargs=None, model_kwargs=None,
                       color=None, data_color=None, model_color=None,
                       **kwargs):
@@ -505,7 +507,6 @@ class _ClusterVisualizer:
             # plot the data
             try:
                 line = self._plot_data(ax, dset, y_key, marker=mrk, color=clr,
-                                       err_transform=err_transform,
                                        y_unit=y_unit, **data_kwargs, **kwargs)
 
             except KeyError as err:
