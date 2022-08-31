@@ -2512,7 +2512,7 @@ class CIModelVisualizer(_ClusterVisualizer):
             s2 = self.s2 << u.arcmin**-4
             obs_err = np.sqrt(obs_nd['ΔΣ']**2 + s2)
 
-            interpolated = nd_interp(obs_r).to(obs_nd['Σ'].unit)
+            interpolated = nd_interp(obs_r).to(obs_nd['Σ'].unit, equivs)
 
             K = (np.nansum(obs_nd['Σ'] * interpolated / obs_err**2)
                  / np.nansum(interpolated**2 / obs_err**2))
