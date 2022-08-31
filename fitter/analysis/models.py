@@ -969,15 +969,19 @@ class _ClusterVisualizer:
             pattern = var = None
             strict = False
 
-        if scale_to == 'model':
-            if data_kwargs is None:
-                data_kwargs = {}
-            data_kwargs.setdefault('scale', 1 / self.K_scale[self.star_bin])
+        try:
+            if scale_to == 'model':
+                if data_kwargs is None:
+                    data_kwargs = {}
+                data_kwargs.setdefault('scale', 1 / self.K_scale[self.star_bin])
 
-        elif scale_to == 'data':
-            if model_kwargs is None:
-                model_kwargs = {}
-            model_kwargs.setdefault('scale', self.K_scale[self.star_bin])
+            elif scale_to == 'data':
+                if model_kwargs is None:
+                    model_kwargs = {}
+                model_kwargs.setdefault('scale', self.K_scale[self.star_bin])
+
+        except TypeError:
+            pass
 
         ax, res_ax = self._plot_profile(ax, pattern, var, self.numdens,
                                         strict=strict, residuals=residuals,
@@ -991,7 +995,7 @@ class _ClusterVisualizer:
                 nd = list(self.obs.filter_datasets('*number*').values())[-1]
                 background = nd.mdata['background'] << nd['Σ'].unit
 
-                if scale_to == 'model':
+                if scale_to == 'model' and self.K_scale is not None:
                     background /= self.K_scale[self.star_bin]
 
                 ax.axhline(y=background, ls='--', c='black', alpha=0.66)
