@@ -2647,7 +2647,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             quant_keys = (
                 'f_rem', 'BH_mass', 'BH_num',
-                'r0', 'rt', 'rhp', 'rv', 'mmean', 'volume'
+                'r0', 'rt', 'rhp', 'rv', 'mmean', 'volume',
                 'K_scale'
             )
 
