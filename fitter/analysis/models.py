@@ -306,7 +306,7 @@ class _ClusterVisualizer:
                 return None
 
     def _plot_model(self, ax, data, intervals=None, *,
-                    x_data=None, x_unit='pc', y_unit=None,
+                    x_data=None, x_unit='pc', y_unit=None, scale=1.0,
                     CI_kwargs=None, **kwargs):
 
         CI_kwargs = dict() if CI_kwargs is None else CI_kwargs
@@ -338,6 +338,8 @@ class _ClusterVisualizer:
         # ------------------------------------------------------------------
         # Convert any units desired
         # ------------------------------------------------------------------
+
+        data *= scale
 
         x_domain = self.r if x_data is None else x_data
 
@@ -379,17 +381,17 @@ class _ClusterVisualizer:
 
     def _plot_data(self, ax, dataset, y_key, *,
                    x_key='r', x_unit='pc', y_unit=None,
-                   err_transform=None, **kwargs):
+                   err_transform=None, scale=1.0, **kwargs):
 
         # ------------------------------------------------------------------
         # Get data and relevant errors for plotting
         # ------------------------------------------------------------------
 
         xdata = dataset[x_key]
-        ydata = dataset[y_key]
+        ydata = dataset[y_key] * scale
 
         xerr = self._get_err(dataset, x_key)
-        yerr = self._get_err(dataset, y_key)
+        yerr = self._get_err(dataset, y_key) * scale
 
         # ------------------------------------------------------------------
         # Convert any units desired
@@ -430,7 +432,7 @@ class _ClusterVisualizer:
                            label=label, **kwargs)
 
     def _plot_profile(self, ax, ds_pattern, y_key, model_data, *,
-                      y_unit=None, residuals=False, err_transform=None,
+                      y_unit=None, residuals=False,
                       res_kwargs=None, data_kwargs=None, model_kwargs=None,
                       color=None, data_color=None, model_color=None,
                       **kwargs):
@@ -505,7 +507,6 @@ class _ClusterVisualizer:
             # plot the data
             try:
                 line = self._plot_data(ax, dset, y_key, marker=mrk, color=clr,
-                                       err_transform=err_transform,
                                        y_unit=y_unit, **data_kwargs, **kwargs)
 
             except KeyError as err:
@@ -941,14 +942,15 @@ class _ClusterVisualizer:
     @_support_units
     def plot_number_density(self, fig=None, ax=None, show_background=False,
                             show_obs=True, residuals=False, *,
-                            x_unit='pc', model_scale=True,
+                            x_unit='pc', y_unit='1/pc2', scale_to='model',
                             label_position='top', verbose_label=True,
-                            blank_xaxis=False, res_kwargs=None, **kwargs):
+                            blank_xaxis=False, res_kwargs=None,
+                            data_kwargs=None, model_kwargs=None, **kwargs):
 
         # TODO add minor ticks to y axis
 
         def quad_nuisance(err):
-            return np.sqrt(err**2 + (self.s2 << err.unit**2))
+            return np.sqrt(err**2 + (self.s2 << u.arcmin**-4))
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -957,21 +959,45 @@ class _ClusterVisualizer:
         if show_obs:
             pattern, var = '*number_density*', 'Σ'
             strict = show_obs == 'strict'
-            kwargs.setdefault('err_transform', quad_nuisance)
+
+            if data_kwargs is None:
+                data_kwargs = {}
+
+            data_kwargs.setdefault('err_transform', quad_nuisance)
 
         else:
             pattern = var = None
             strict = False
 
+        try:
+            if scale_to == 'model':
+                if data_kwargs is None:
+                    data_kwargs = {}
+                data_kwargs.setdefault('scale', 1 / self.K_scale[self.star_bin])
+
+            elif scale_to == 'data':
+                if model_kwargs is None:
+                    model_kwargs = {}
+                model_kwargs.setdefault('scale', self.K_scale[self.star_bin])
+
+        except TypeError:
+            pass
+
         ax, res_ax = self._plot_profile(ax, pattern, var, self.numdens,
                                         strict=strict, residuals=residuals,
-                                        x_unit=x_unit,
+                                        x_unit=x_unit, y_unit=y_unit,
+                                        model_kwargs=model_kwargs,
+                                        data_kwargs=data_kwargs,
                                         res_kwargs=res_kwargs, **kwargs)
 
         if show_background:
             try:
                 nd = list(self.obs.filter_datasets('*number*').values())[-1]
                 background = nd.mdata['background'] << nd['Σ'].unit
+
+                if scale_to == 'model' and self.K_scale is not None:
+                    background /= self.K_scale[self.star_bin]
+
                 ax.axhline(y=background, ls='--', c='black', alpha=0.66)
 
             except IndexError as err:
@@ -991,61 +1017,7 @@ class _ClusterVisualizer:
         else:
             label = r'$\Sigma$'
 
-        # TODO not entirely sure a bunch of secondary axes is best way to
-        #   transform/convert ticks, could be a formattor that works better
-        #   Notably, this doesn't change what shows as pointer coordinate
-        if model_scale:
-
-            # compute K-scale
-
-            if obs_nd := self.obs.filter_datasets('*number_density'):
-                obs_nd = list(obs_nd.values())[-1]
-                obs_r = obs_nd['r'].to(self.r.unit)
-                Σ_unit = obs_nd['Σ'].unit
-
-                # TODO this doesn't handle multiple mass bins, if that matters
-
-                model_nd = self._get_median(self.numdens[self.star_bin])
-                nd_interp = util.QuantitySpline(self.r, model_nd.to(Σ_unit))
-
-                K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_nd['Σ']**2)
-                     / np.nansum(nd_interp(obs_r)**2 / obs_nd['Σ']**2)).value
-
-            else:
-                K = 1.
-
-            def scale2data(density):
-                '''K-scaling, bring model number density to data'''
-                return K * density
-
-            def scale2model(density):
-                '''revert the K scaling, bring everything back to model scale'''
-                return density / K
-
-            # create new (un-K-scaled) yaxis
-            tick_loc = 'right' if label_position == 'right' else 'left'
-            y_ax = ax.secondary_yaxis(location=tick_loc,
-                                      functions=(scale2data, scale2model))
-
-            # steal axis labels
-            y_ax.set_ylabel(ax.get_ylabel())
-
-            # get rid of all traces of the old axis ticks
-            clear_ticks = dict(left=False, labelleft=False,
-                               right=False, labelright=False)
-            ax.yaxis.set_tick_params(which='both', **clear_ticks)
-            ax.set_ylabel(None)
-
-            # add another placeholder ax to the right to get ticks on all sides
-            oax = ax.secondary_yaxis('left' if tick_loc == 'right' else 'right',
-                                     functions=(scale2data, scale2model))
-            oax.yaxis.set_tick_params(which='both',
-                                      labelright=False, labelleft=False)
-
-        else:
-            y_ax = ax
-
-        self._set_ylabel(y_ax, label, label_position, residual_ax=res_ax)
+        self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
         self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
 
         return fig
@@ -1769,7 +1741,7 @@ class _ClusterVisualizer:
         # TODO seems to produce alot of infs?
 
         def numdens_nuisance(err):
-            return np.sqrt(err**2 + (self.s2 << err.unit**2))
+            return np.sqrt(err**2 + (self.s2 << u.arcmin**-4))
 
         all_components = [
             {'ds_pattern': '*velocity_dispersion*', 'y_key': 'σ',
@@ -1879,9 +1851,12 @@ class ModelVisualizer(_ClusterVisualizer):
 
         model_nd = model.Sigmaj / model.mj[:, np.newaxis]
 
-        nd = np.empty(model_nd.shape)[:, np.newaxis, :] << model_nd.unit
+        nd = model_nd[:, np.newaxis, :]
+        K = np.empty(nd.shape[0]) << u.dimensionless_unscaled  # one each mbin
+        # TODO this K is only valid for the same mj as numdens obs anyways...
 
-        # Check for observational numdens profiles, to compute scaling factor K
+        # Check for observational numdens profiles, to compute scaling factors K
+        #   but do not apply them to the numdens yet.
         if obs_nd := observations.filter_datasets('*number_density'):
 
             if len(obs_nd) > 1:
@@ -1892,22 +1867,28 @@ class ModelVisualizer(_ClusterVisualizer):
             obs_nd = list(obs_nd.values())[-1]
             obs_r = obs_nd['r'].to(model.r.unit)
 
+            s2 = model.theta['s2'] << u.arcmin**-4
+            obs_err = np.sqrt(obs_nd['ΔΣ']**2 + s2)
+
             for mbin in range(model_nd.shape[0]):
 
                 nd_interp = util.QuantitySpline(model.r, model_nd[mbin, :])
 
-                K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_nd['Σ']**2)
-                     / np.nansum(nd_interp(obs_r)**2 / obs_nd['Σ']**2))
+                interpolated = nd_interp(obs_r).to(obs_nd['Σ'].unit)
 
-                nd[mbin, 0, :] = K * model_nd[mbin, :]
+                Kj = (np.nansum(obs_nd['Σ'] * interpolated / obs_err**2)
+                      / np.nansum(interpolated**2 / obs_err**2))
+
+                K[mbin] = Kj
 
         else:
             mssg = 'No number density datasets found, setting K=1'
             logging.info(mssg)
 
-            nd[:, 0, :] = model_nd[:, :]
+            K[:] = 1
 
         self.numdens = nd
+        self.K_scale = K
 
     @_ClusterVisualizer._support_units
     def _init_massfunc(self, model, observations):
@@ -2135,6 +2116,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         viz.star_bin = 0
 
         # mj only contains nms and tracer bins (the only ones we plot anyways)
+        # TODO right now tracers only used for velocities, and not numdens
         mj_MS = huge_model.mj[huge_model._star_bins][-1]
         mj_tracer = huge_model.mj[huge_model._tracer_bins]
 
@@ -2193,6 +2175,8 @@ class CIModelVisualizer(_ClusterVisualizer):
         # number density
 
         numdens = np.full((1, N, Nr), np.nan) << u.pc**-2
+        K_scale = np.full((1,), np.nan) << u.dimensionless_unscaled
+        # K_scale = np.full((Nm), np.nan) << u.Unit('pc2 / arcmin2')
 
         # mass function
 
@@ -2348,6 +2332,8 @@ class CIModelVisualizer(_ClusterVisualizer):
         viz.cum_M_NS = np.transpose(perc(cum_M_NS, q, axis=1), axes)
 
         viz.numdens = np.transpose(perc(numdens, q, axis=1), axes)
+        K_scale[:] = viz._init_K_scale(viz.numdens)
+        viz.K_scale = K_scale
 
         viz.mass_func = massfunc
 
@@ -2504,6 +2490,14 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         nd_interp = util.QuantitySpline(model.r, model_nd)
 
+        return nd_interp(self.r).to('pc-2', equivs)
+
+    def _init_K_scale(self, numdens):
+
+        nd_interp = util.QuantitySpline(self.r, self._get_median(numdens[0]))
+
+        equivs = util.angular_width(self.d)
+
         if obs_nd := self.obs.filter_datasets('*number_density'):
 
             if len(obs_nd) > 1:
@@ -2512,10 +2506,16 @@ class CIModelVisualizer(_ClusterVisualizer):
                 logging.warning(mssg)
 
             obs_nd = list(obs_nd.values())[-1]
-            obs_r = obs_nd['r'].to(model.r.unit, equivs)
+            obs_r = obs_nd['r'].to(self.r.unit, equivs)
 
-            K = (np.nansum(obs_nd['Σ'] * nd_interp(obs_r) / obs_nd['Σ']**2)
-                 / np.nansum(nd_interp(obs_r)**2 / obs_nd['Σ']**2))
+            # TODO this s2 isn't technically 100% accurate here
+            s2 = self.s2 << u.arcmin**-4
+            obs_err = np.sqrt(obs_nd['ΔΣ']**2 + s2)
+
+            interpolated = nd_interp(obs_r).to(obs_nd['Σ'].unit, equivs)
+
+            K = (np.nansum(obs_nd['Σ'] * interpolated / obs_err**2)
+                 / np.nansum(interpolated**2 / obs_err**2))
 
         else:
             mssg = 'No number density datasets found, setting K=1'
@@ -2523,7 +2523,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             K = 1
 
-        return (K * nd_interp(self.r)).to('pc-2', equivs)
+        return K
 
     def _prep_massfunc(self, observations):
 
@@ -2647,7 +2647,8 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             quant_keys = (
                 'f_rem', 'BH_mass', 'BH_num',
-                'r0', 'rt', 'rhp', 'rv', 'mmean', 'volume'
+                'r0', 'rt', 'rhp', 'rv', 'mmean', 'volume',
+                'K_scale'
             )
 
             for key in quant_keys:
@@ -2808,6 +2809,8 @@ class ObservationsVisualizer(_ClusterVisualizer):
                 # fake it till ya make it
                 this_slc['dNdm'] = np.array([[]])
 
+                this_slc['mj'] = np.array([])
+
                 self.mass_func[key].append(this_slc)
 
     def __init__(self, observations, d=None):
@@ -2829,6 +2832,8 @@ class ObservationsVisualizer(_ClusterVisualizer):
         self.pm_ratio = None
         self.LOS = None
         self.numdens = None
+
+        self.K_scale = None
 
         self._init_massfunc(observations)
 
