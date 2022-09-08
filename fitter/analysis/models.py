@@ -1828,6 +1828,7 @@ class ModelVisualizer(_ClusterVisualizer):
         self.mj = model.mj
 
         self.f_rem = np.sum(model.Mj[model._remnant_bins]) / model.M
+        self.f_BH = np.sum(model.BH_Mj) / model.M
 
         self.LOS = np.sqrt(self.model.v2pj)[:, np.newaxis, :]
         self.pm_T = np.sqrt(model.v2Tj)[:, np.newaxis, :]
@@ -2038,6 +2039,19 @@ class CIModelVisualizer(_ClusterVisualizer):
         return fig
 
     @_ClusterVisualizer._support_units
+    def plot_f_BH(self, fig=None, ax=None, bins='auto', color='tab:blue'):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        color = mpl_clr.to_rgb(color)
+        facecolor = color + (0.33, )
+
+        ax.hist(self.f_BH, histtype='stepfilled',
+                bins=bins, ec=color, fc=facecolor, lw=2)
+
+        return fig
+
+    @_ClusterVisualizer._support_units
     def plot_BH_mass(self, fig=None, ax=None, bins='auto', color='tab:blue'):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -2171,6 +2185,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         frac_M_rem = frac_M_MS.copy()
 
         f_rem = np.full(N, np.nan) << u.dimensionless_unscaled
+        f_BH = np.full(N, np.nan) << u.dimensionless_unscaled
 
         # number density
 
@@ -2282,6 +2297,7 @@ class CIModelVisualizer(_ClusterVisualizer):
             frac_M_MS[slc], frac_M_rem[slc] = viz._init_mass_frac(model)
 
             f_rem[model_ind] = np.sum(model.Mj[model._remnant_bins]) / model.M
+            f_BH[model_ind] = np.sum(model.BH_Mj) / model.M
 
             # Black holes
 
@@ -2346,6 +2362,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         viz.frac_M_rem = perc(frac_M_rem, q, axis=1)
 
         viz.f_rem = f_rem
+        viz.f_BH = f_BH
 
         viz.BH_mass = BH_mass
         viz.BH_num = BH_num
@@ -2646,7 +2663,7 @@ class CIModelVisualizer(_ClusterVisualizer):
             quant_grp = modelgrp.create_group('quantities')
 
             quant_keys = (
-                'f_rem', 'BH_mass', 'BH_num',
+                'f_rem', 'f_BH', 'BH_mass', 'BH_num',
                 'r0', 'rt', 'rhp', 'rv', 'mmean', 'volume',
                 'K_scale'
             )

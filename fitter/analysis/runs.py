@@ -2422,7 +2422,7 @@ class RunCollection(_RunAnalysis):
             'a1': r'$\alpha_1$',
             'a2': r'$\alpha_2$',
             'a3': r'$\alpha_3$',
-            'BHret': r'$\mathrm{BH}_{ret}$',
+            'BHret': r'$\mathrm{BH}_{ret}\ [\%]$',
             'd': r'$d$',
             'FeH': r'$[\mathrm{Fe}/\mathrm{H}]$',
             'Ndot': r'$\dot{N}$',
@@ -2432,6 +2432,7 @@ class RunCollection(_RunAnalysis):
             'BH_mass': r'$\mathrm{M}_{BH}\ [M_\odot]$',
             'BH_num': r'$\mathrm{N}_{BH}$',
             'f_rem': r'$f_{\mathrm{remn}}$',
+            'f_BH': r'$f_{\mathrm{BH}}$',
             'r0': r'$r_0\ [\mathrm{pc}]$',
             'rt': r'$r_t\ [\mathrm{pc}]$',
             'rv': r'$r_v\ [\mathrm{pc}]$',
@@ -3069,7 +3070,7 @@ class RunCollection(_RunAnalysis):
             labels = ['FeH'] + labels
 
         if include_BH:
-            labels += ['BH_mass', 'BH_num', 'f_rem']
+            labels += ['BH_mass', 'BH_num', 'f_rem', 'f_BH']
 
         # Fill in a dictionary of column data
 
