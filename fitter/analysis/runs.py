@@ -449,7 +449,7 @@ class MCMCRun(_RunAnalysis):
                 'W0': r'$\hat{\phi}_0$',
                 'M': r'$M$',
                 'rh': r'$r_h$',
-                'ra': r'$\log\left(\hat{r_a}\right)$',
+                'ra': r'$\log\left(\hat{r}_a\right)$',
                 'g': r'$g$',
                 'delta': r'$\delta$',
                 's2': r'$s^2$',
@@ -1119,7 +1119,7 @@ class NestedRun(_RunAnalysis):
                 'W0': r'$\hat{\phi}_0$',
                 'M': r'$M$',
                 'rh': r'$r_h$',
-                'ra': r'$\log\left(\hat{r_a}\right)$',
+                'ra': r'$\log\left(\hat{r}_a\right)$',
                 'g': r'$g$',
                 'delta': r'$\delta$',
                 's2': r'$s^2$',
@@ -2343,6 +2343,7 @@ class RunCollection(_RunAnalysis):
 
         return out
 
+    # TODO how to specify if we want dimensionless sampler logra or model ra?
     def _get_param_chains(self, param, *, from_model=True, logged=False,
                           **kwargs):
         '''return the full chain for a θ, metadata or model quntity "param"
@@ -2414,7 +2415,7 @@ class RunCollection(_RunAnalysis):
             'W0': r'$\hat{\phi}_0$',
             'M': r'$M\ [10^6\ M_\odot]$',
             'rh': r'$r_h\ [\mathrm{pc}]$',
-            'ra': r'$\log_{10}\left(\hat{r_a}\right)$',
+            'ra': r'$\log_{10}\left(\hat{r}_a\right)$',
             'g': r'$g$',
             'delta': r'$\delta$',
             's2': r'$s^2$',
