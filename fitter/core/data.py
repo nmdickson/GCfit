@@ -942,6 +942,7 @@ class Model(lp.limepy):
 
         self._assign_units()
 
+        # TODO this is only equal to 10^θ['ra'] if < model.ramax (1e8)
         self.unscaled_ra = self.ra / self.rs
 
         # ------------------------------------------------------------------
