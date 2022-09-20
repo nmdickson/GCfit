@@ -2283,11 +2283,26 @@ class RunCollection(_RunAnalysis):
     # ----------------------------------------------------------------------
 
     def _get_from_run(self, param):
-        '''
-        get a property from each run (BIC, AIC, ESS, etc),
-        in the form of a one-element chain
-        '''
-        return [[getattr(run, param), ] for run in self.runs]
+
+        # try to get it from the best-fit params or metadata
+        try:
+            chains = [
+                {**self._params[ind], **self._mdata[ind]}[param]
+                for ind, run in enumerate(self.runs)
+            ]
+
+        except KeyError as err:
+
+            # otherwise try to get from model properties
+
+            try:
+                chains = [[getattr(run, param), ] for run in self.runs]
+
+            except AttributeError:
+                mssg = f'No such parameter "{param}" was found'
+                raise ValueError(mssg) from err
+
+        return chains
 
     def _get_from_model(self, param, *, with_units=True, **kwargs):
         '''get chains one of the attributes from models (like BH mass)
@@ -2320,16 +2335,13 @@ class RunCollection(_RunAnalysis):
         # return the full dataset for each run
         return data
 
-    def _get_param(self, param, *, from_model=True, **kwargs):
+    def _get_param(self, param, **kwargs):
         '''return the median, -1σ, +1σ for a θ, metadata or model quntity
         "param" for all runs
-
-        from_model=False if you want to really avoid model params (i.e. dont
-        want to compute the models) all kwargs are passed to get_model otherwise
         '''
 
         # get parameter chains
-        chains = self._get_param_chains(param, from_model=from_model, **kwargs)
+        chains = self._get_param_chains(param, **kwargs)
 
         # Keep units, if they've got them (optional kwarg to _get_from_model)
         base = u.Quantity if isinstance(chains[0], u.Quantity) else np.array
@@ -2343,14 +2355,17 @@ class RunCollection(_RunAnalysis):
 
         return out
 
-    # TODO how to specify if we want dimensionless sampler logra or model ra?
-    def _get_param_chains(self, param, *, from_model=True, logged=False,
+    def _get_param_chains(self, param, *, logged=False,
+                          allow_model=True, force_model=False,
                           **kwargs):
         '''return the full chain for a θ, metadata or model quntity "param"
         for all runs
 
-        from_model=False if you want to really avoid model params (i.e. dont
+        allow_model=False if you want to really avoid model params (i.e. dont
         want to compute the models) all kwargs are passed to get_model otherwise
+
+        force_model=True if you want to skip the run params entirely and force
+        `_get_from_model` (useful for getting some things like scaled `ra`)
         '''
 
         try:
@@ -2361,34 +2376,23 @@ class RunCollection(_RunAnalysis):
             logged = False
             pass
 
-        err_mssg = f'No such parameter "{param}" was found'
-
-        # try to get it from the best-fit params or metadata
+        # try to get it from the best-fit params, metadata or run stats
         try:
-
-            # join the param and metadata dicts (union in 3.9)
-            chains = [
-                {**self._params[ind], **self._mdata[ind]}[param]
-                for ind, run in enumerate(self.runs)
-            ]
+            chains = self._get_from_run(param)
 
         # otherwise try to get from model properties
         # this is only worst case because may take a long time to gen models
-        except KeyError as err:
+        except ValueError as err:
 
-            try:
-                chains = self._get_from_run(param)
-            except AttributeError:
+            if allow_model:
+                try:
+                    chains = self._get_from_model(param, **kwargs)
 
-                if from_model:
-                    try:
-
-                        chains = self._get_from_model(param, **kwargs)
-
-                    except AttributeError:
-                        raise ValueError(err_mssg)
-                else:
-                    raise ValueError(err_mssg) from err
+                except AttributeError:
+                    mssg = f'No such parameter "{param}" was found'
+                    raise ValueError(mssg)
+            else:
+                raise err
 
         if logged:
 
