@@ -2378,6 +2378,10 @@ class RunCollection(_RunAnalysis):
 
         # try to get it from the best-fit params, metadata or run stats
         try:
+            if force_model:
+                mssg = '`force_model` is True, must set `allow_model=True`'
+                raise ValueError(mssg)
+
             chains = self._get_from_run(param)
 
         # otherwise try to get from model properties
@@ -2389,7 +2393,7 @@ class RunCollection(_RunAnalysis):
                     chains = self._get_from_model(param, **kwargs)
 
                 except AttributeError:
-                    mssg = f'No such parameter "{param}" was found'
+                    mssg = f'No such parameter "{param}" was found in models'
                     raise ValueError(mssg)
             else:
                 raise err
