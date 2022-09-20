@@ -2408,7 +2408,7 @@ class RunCollection(_RunAnalysis):
 
         return chains
 
-    def _get_latex_labels(self, param):
+    def _get_latex_labels(self, param, *, with_units=True, force_model=False):
         '''return the param names in math mode, for plotting'''
 
         try:
@@ -2420,35 +2420,59 @@ class RunCollection(_RunAnalysis):
             pass
 
         math_mapping = {
-            'W0': r'$\hat{\phi}_0$',
-            'M': r'$M\ [10^6\ M_\odot]$',
-            'rh': r'$r_h\ [\mathrm{pc}]$',
-            'ra': r'$\log_{10}\left(\hat{r}_a\right)$',
-            'g': r'$g$',
-            'delta': r'$\delta$',
-            's2': r'$s^2$',
-            'F': r'$F$',
-            'a1': r'$\alpha_1$',
-            'a2': r'$\alpha_2$',
-            'a3': r'$\alpha_3$',
-            'BHret': r'$\mathrm{BH}_{ret}$',
-            'd': r'$d$',
-            'FeH': r'$[\mathrm{Fe}/\mathrm{H}]$',
-            'Ndot': r'$\dot{N}$',
-            'RA': r'RA $[\deg]$',
-            'DEC': r'DEC $[\deg]$',
-            'chi2': r'$\chi^2$',
-            'BH_mass': r'$\mathrm{M}_{BH}\ [M_\odot]$',
-            'BH_num': r'$\mathrm{N}_{BH}$',
-            'f_rem': r'$f_{\mathrm{remn}}$',
-            'r0': r'$r_0\ [\mathrm{pc}]$',
-            'rt': r'$r_t\ [\mathrm{pc}]$',
-            'rv': r'$r_v\ [\mathrm{pc}]$',
-            'rhp': r'$r_{hp}\ [\mathrm{pc}]$',
-            'mmean': r'$\bar{m}\ [M_\odot]$',
+            'W0': r'\hat{\phi}_0',
+            'M': r'M',
+            'rh': r'r_h',
+            'ra': r'r_a' if force_model else r'\log_{10}\left(\hat{r}_a\right)',
+            'g': r'g',
+            'delta': r'\delta',
+            's2': r's^2',
+            'F': r'F',
+            'a1': r'\alpha_1',
+            'a2': r'\alpha_2',
+            'a3': r'\alpha_3',
+            'BHret': r'\mathrm{BH}_{ret}',
+            'd': r'd',
+            'FeH': r'[\mathrm{Fe}/\mathrm{H}]',
+            'Ndot': r'\dot{N}',
+            'RA': r'\mathrm{RA}',
+            'DEC': r'\mathrm{DEC}',
+            'chi2': r'\chi^2',
+            'BH_mass': r'\mathrm{M}_{BH}',
+            'BH_num': r'\mathrm{N}_{BH}',
+            'f_rem': r'f_{\mathrm{remn}}',
+            'r0': r'r_0',
+            'rt': r'r_t',
+            'rv': r'r_v',
+            'rhp': r'r_{hp}',
+            'mmean': r'\bar{m}',
         }
 
-        label = math_mapping.get(param, param)
+        unit_mapping = {
+            'M': r'10^6\ M_\odot',
+            'rh': r'\mathrm{pc}',
+            'ra': r'\mathrm{pc}' if force_model else None,
+            's2': r'\mathrm{arcmin^{-4}}',
+            'BHret': r'\%',
+            'd': r'\mathrm{kpc}',
+            'Ndot': r'\dot{N}',
+            'RA': r'\deg',
+            'DEC': r'\deg',
+            'BH_mass': r'M_\odot',
+            'r0': r'\mathrm{pc}',
+            'rt': r'\mathrm{pc}',
+            'rv': r'\mathrm{pc}',
+            'rhp': r'\mathrm{pc}',
+            'mmean': r'M_\odot',
+        }
+
+        name = math_mapping.get(param, param)
+        unit = unit_mapping.get(param, None)
+
+        if with_units and unit is not None:
+            label = rf'${name}\ \left[{unit}\right]$'
+        else:
+            label = rf'${name}$'
 
         if logged:
             label = fr'$\log_{{10}}\left( {label.strip("$")} \right)$'
