@@ -2198,6 +2198,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         r0 = np.full(N, np.nan) << huge_model.r0.unit
         rt = np.full(N, np.nan) << huge_model.rt.unit
+        rh = np.full(N, np.nan) << huge_model.rh.unit
         rhp = np.full(N, np.nan) << huge_model.rhp.unit
         ra = np.full(N, np.nan) << huge_model.ra.unit
         rv = np.full(N, np.nan) << huge_model.rv.unit
@@ -2293,6 +2294,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             r0[model_ind] = model.r0
             rt[model_ind] = model.rt
+            rh[model_ind] = model.rh
             rhp[model_ind] = model.rhp
             ra[model_ind] = model.ra
             rv[model_ind] = model.rv
@@ -2354,6 +2356,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         viz.r0 = r0
         viz.rt = rt
+        viz.rh = rh
         viz.rhp = rhp
         viz.ra = ra
         viz.rv = rv
@@ -2650,7 +2653,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             quant_keys = (
                 'f_rem', 'BH_mass', 'BH_num',
-                'r0', 'rt', 'rhp', 'ra', 'rv', 'mmean', 'volume',
+                'r0', 'rt', 'rh', 'rhp', 'ra', 'rv', 'mmean', 'volume',
                 'K_scale'
             )
 
