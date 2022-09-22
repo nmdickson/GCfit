@@ -2355,9 +2355,40 @@ class RunCollection(_RunAnalysis):
 
         return out
 
-    def _get_param_chains(self, param, *, logged=False,
-                          allow_model=True, force_model=False,
-                          **kwargs):
+    def _check_for_operator(func):
+        import functools
+        import operator
+
+        opers = {'+': operator.add, '-': operator.sub,
+                 '*': operator.mul, '/': operator.truediv}
+
+        @functools.wraps(func)
+        def _operator_decorator(self, param, *args, **kwargs):
+
+            if found_op := (set(param) & opers.keys()):
+
+                if len(found_op) > 1:
+                    mssg = "More than one operation not supported"
+                    raise ValueError(mssg)
+
+                op_name = found_op.pop()
+
+                param1, param2 = param.split(op_name)
+                res1 = func(self, param1.strip(), *args, **kwargs)
+                res2 = func(self, param2.strip(), *args, **kwargs)
+
+                final = list(map(opers[op_name], res1, res2))
+
+            else:
+                final = func(self, param, *args, **kwargs)
+
+            return final
+
+        return _operator_decorator
+
+    @_check_for_operator
+    def _get_param_chains(self, param, *,
+                          allow_model=True, force_model=False, **kwargs):
         '''return the full chain for a θ, metadata or model quntity "param"
         for all runs
 
@@ -2394,7 +2425,7 @@ class RunCollection(_RunAnalysis):
 
                 except AttributeError:
                     mssg = f'No such parameter "{param}" was found in models'
-                    raise ValueError(mssg)
+                    raise ValueError(mssg) from err
             else:
                 raise err
 
@@ -2660,7 +2691,7 @@ class RunCollection(_RunAnalysis):
         return fig
 
     def plot_relation(self, param1, param2, fig=None, ax=None, *,
-                      errors='bars', show_pearsonr=False,
+                      errors='bars', show_pearsonr=False, force_model=False,
                       annotate=False, annotate_kwargs=None,
                       clr_param=None, clr_kwargs=None, **kwargs):
         '''plot correlation between two param means with all runs
@@ -2670,14 +2701,14 @@ class RunCollection(_RunAnalysis):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        x, *dx = self._get_param(param1)
-        y, *dy = self._get_param(param2)
+        x, *dx = self._get_param(param1, force_model=force_model)
+        y, *dy = self._get_param(param2, force_model=force_model)
 
         errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', **kwargs)
         points = ax.scatter(x, y, picker=True, **kwargs)
 
-        ax.set_xlabel(self._get_latex_labels(param1))
-        ax.set_ylabel(self._get_latex_labels(param2))
+        ax.set_xlabel(self._get_latex_labels(param1, force_model=force_model))
+        ax.set_ylabel(self._get_latex_labels(param2, force_model=force_model))
 
         if clr_param is not None:
 
@@ -2710,7 +2741,7 @@ class RunCollection(_RunAnalysis):
                       clr_param=None, clr_kwargs=None,
                       annotate=False, annotate_kwargs=None,
                       residuals=False, inset=False, diagonal=True,
-                      **kwargs):
+                      force_model=False, **kwargs):
         '''plot a x-y comparison against provided literature values
 
         Meant to compare 1-1 the same parameter (i.e. mass vs mass, etc)
@@ -2718,7 +2749,7 @@ class RunCollection(_RunAnalysis):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        x, *dx = self._get_param(param)
+        x, *dx = self._get_param(param, force_model=force_model)
         y, dy = truths, e_truths
 
         errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', **kwargs)
@@ -2734,7 +2765,7 @@ class RunCollection(_RunAnalysis):
             }
             ax.axline((0, 0), (1, 1), **grid_kw)
 
-        prm_lbl = self._get_latex_labels(param)
+        prm_lbl = self._get_latex_labels(param, force_model=force_model)
 
         ax.set_xlabel(prm_lbl)
         ax.set_ylabel(prm_lbl + (f' ({src_truths})' if src_truths else ''))
@@ -2770,7 +2801,8 @@ class RunCollection(_RunAnalysis):
                           lit, e_lit=None, param_lit='', src_lit='',
                           fig=None, ax=None, *, lit_on_x=False,
                           clr_param=None, clr_kwargs=None, residuals=False,
-                          annotate=False, annotate_kwargs=None, **kwargs):
+                          annotate=False, annotate_kwargs=None,
+                          force_model=False, **kwargs):
         '''plot a relation plot against provided literature values
 
         Meant to compare two different parameters, with one from outside source
@@ -2778,11 +2810,11 @@ class RunCollection(_RunAnalysis):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        x, *dx = self._get_param(param)
+        x, *dx = self._get_param(param, force_model=force_model)
         y, dy = lit, e_lit
 
-        xlabel = self._get_latex_labels(param)
-        ylabel = (self._get_latex_labels(param_lit)
+        xlabel = self._get_latex_labels(param, force_model=force_model)
+        ylabel = (self._get_latex_labels(param_lit, force_model=force_model)
                   + (f' ({src_lit})' if src_lit else ''))
 
         # optionally flip the x and y
@@ -2826,11 +2858,12 @@ class RunCollection(_RunAnalysis):
     # ----------------------------------------------------------------------
 
     def plot_param_means(self, param, fig=None, ax=None,
-                         clr_param=None, clr_kwargs=None, **kwargs):
+                         clr_param=None, clr_kwargs=None,
+                         force_model=False, **kwargs):
         '''plot mean and std errorbars for each run of the given param'''
         fig, ax = self._setup_artist(fig, ax)
 
-        mean, *err = self._get_param(param)
+        mean, *err = self._get_param(param, force_model=force_model)
 
         xticks = np.arange(len(self.runs))
 
@@ -2854,22 +2887,23 @@ class RunCollection(_RunAnalysis):
 
         ax.grid(axis='x')
 
-        ax.set_ylabel(self._get_latex_labels(param))
+        ax.set_ylabel(self._get_latex_labels(param, force_model=force_model))
 
         return fig
 
     def plot_param_bar(self, param, fig=None, ax=None,
-                       clr_param=None, clr_kwargs=None, *args, **kwargs):
+                       clr_param=None, clr_kwargs=None,
+                       force_model=False, **kwargs):
         '''plot mean and std bar chart for each run of the given param'''
         fig, ax = self._setup_artist(fig, ax)
 
-        mean, *err = self._get_param(param)
+        mean, *err = self._get_param(param, force_model=force_model)
 
         xticks = np.arange(len(self.runs))
 
         labels = self.names
 
-        bars = ax.bar(x=xticks, height=mean, yerr=err, *args, **kwargs)
+        bars = ax.bar(x=xticks, height=mean, yerr=err, **kwargs)
 
         if clr_param is not None:
 
@@ -2884,18 +2918,19 @@ class RunCollection(_RunAnalysis):
         ax.set_xticks(xticks, labels=labels, rotation=45,
                       ha='right', rotation_mode="anchor")
 
-        ax.set_ylabel(self._get_latex_labels(param))
+        ax.set_ylabel(self._get_latex_labels(param, force_model=force_model))
 
         return fig
 
     def plot_param_violins(self, param, fig=None, ax=None,
                            clr_param=None, clr_kwargs=None, alpha=0.3,
                            quantiles=[0.9772, 0.8413, 0.5, 0.1587, 0.0228],
-                           *args, **kwargs):
+                           force_model=False, **kwargs):
         '''plot violins for each run of the given param'''
         fig, ax = self._setup_artist(fig, ax)
 
-        chains = self._get_param_chains(param, with_units=False)
+        chains = self._get_param_chains(param, with_units=False,
+                                        force_model=force_model)
 
         # filter out all nans (causes violinplot to fail silently)
         chains = [ch[~np.isnan(ch)] for ch in chains]
@@ -2913,7 +2948,7 @@ class RunCollection(_RunAnalysis):
         kwargs.setdefault('showextrema', False)
 
         parts = ax.violinplot(chains, positions=xticks, quantiles=quantiles,
-                              *args, **kwargs)
+                              **kwargs)
 
         # optionally draw a vert between max quantiles
         if 'cbars' not in parts and 'cquantiles' in parts:
@@ -2963,11 +2998,12 @@ class RunCollection(_RunAnalysis):
 
         ax.grid(axis='x')
 
-        ax.set_ylabel(self._get_latex_labels(param))
+        ax.set_ylabel(self._get_latex_labels(param, force_model=force_model))
 
         return fig
 
-    def plot_param_hist(self, param, fig=None, ax=None, kde=False, **kwargs):
+    def plot_param_hist(self, param, fig=None, ax=None, kde=False,
+                        force_model=False, **kwargs):
         '''
         plot a kde representing the sum (convolution) of all run's
         distributions (kde) of this parameter
@@ -2976,7 +3012,7 @@ class RunCollection(_RunAnalysis):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        chains = self._get_param_chains(param)
+        chains = self._get_param_chains(param, force_model=force_model)
         chains = [ch[~np.isnan(ch)] for ch in chains]
         chains = np.concatenate(chains)
 
@@ -3003,11 +3039,13 @@ class RunCollection(_RunAnalysis):
 
             ax.hist(chains, **kwargs)
 
+        ax.set_ylabel(self._get_latex_labels(param, force_model=force_model))
+
         return fig
 
     def plot_param_corner(self, params=None, fig=None, *,
                           include_FeH=True, include_BH=False, include_rt=False,
-                          log_radii=False, **kwargs):
+                          log_radii=False, force_model=False, **kwargs):
         '''
         plot corner plot of all params for all runs
         if params is none, default params used are:
@@ -3069,20 +3107,23 @@ class RunCollection(_RunAnalysis):
 
                 else:
 
-                    self.plot_relation(px, py, fig=fig, ax=ax, **kwargs)
+                    self.plot_relation(px, py, fig=fig, ax=ax,
+                                       force_model=force_model, **kwargs)
 
                 # set labels on bottom row
                 if i + 1 == Nrows:
+                    xlabel = self._get_latex_labels(px, force_model=force_model)
                     # rotate_ticks(ax, 'x')
-                    ax.set_xlabel(self._get_latex_labels(px))
+                    ax.set_xlabel(xlabel)
                     # ax.xaxis.set_label_coords(0.5, -0.3)
                 else:
                     ax.set_xlabel('')
 
                 # Set labels on leftmost col
                 if j == 0:
+                    ylabel = self._get_latex_labels(py, force_model=force_model)
                     # rotate_ticks(ax, 'y')
-                    ax.set_ylabel(self._get_latex_labels(py))
+                    ax.set_ylabel(ylabel)
                     # ax.yaxis.set_label_coords(-0.3, 0.5)
                 else:
                     ax.set_ylabel('')
