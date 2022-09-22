@@ -2362,6 +2362,8 @@ class RunCollection(_RunAnalysis):
         opers = {'+': operator.add, '-': operator.sub,
                  '*': operator.mul, '/': operator.truediv}
 
+        # TODO also need to implement this for latex_label if want that to work
+
         @functools.wraps(func)
         def _operator_decorator(self, param, *args, **kwargs):
 
@@ -2397,6 +2399,9 @@ class RunCollection(_RunAnalysis):
 
         force_model=True if you want to skip the run params entirely and force
         `_get_from_model` (useful for getting some things like scaled `ra`)
+
+        One operation (+-*/) can be included to return two different parameters
+        combined with said operation.
         '''
 
         try:
@@ -2506,6 +2511,7 @@ class RunCollection(_RunAnalysis):
             label = rf'${name}$'
 
         if logged:
+            # TODO obviously currently fails for operation-param pairs
             label = fr'$\log_{{10}}\left( {label.strip("$")} \right)$'
 
         return label
