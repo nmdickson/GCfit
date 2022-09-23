@@ -449,7 +449,7 @@ class MCMCRun(_RunAnalysis):
                 'W0': r'$\hat{\phi}_0$',
                 'M': r'$M$',
                 'rh': r'$r_h$',
-                'ra': r'$\log\left(r_a\right)$',
+                'ra': r'$\log\left(\hat{r}_a\right)$',
                 'g': r'$g$',
                 'delta': r'$\delta$',
                 's2': r'$s^2$',
@@ -1119,7 +1119,7 @@ class NestedRun(_RunAnalysis):
                 'W0': r'$\hat{\phi}_0$',
                 'M': r'$M$',
                 'rh': r'$r_h$',
-                'ra': r'$\log\left(r_a\right)$',
+                'ra': r'$\log\left(\hat{r}_a\right)$',
                 'g': r'$g$',
                 'delta': r'$\delta$',
                 's2': r'$s^2$',
@@ -2283,11 +2283,26 @@ class RunCollection(_RunAnalysis):
     # ----------------------------------------------------------------------
 
     def _get_from_run(self, param):
-        '''
-        get a property from each run (BIC, AIC, ESS, etc),
-        in the form of a one-element chain
-        '''
-        return [[getattr(run, param), ] for run in self.runs]
+
+        # try to get it from the best-fit params or metadata
+        try:
+            chains = [
+                {**self._params[ind], **self._mdata[ind]}[param]
+                for ind, run in enumerate(self.runs)
+            ]
+
+        except KeyError as err:
+
+            # otherwise try to get from model properties
+
+            try:
+                chains = [[getattr(run, param), ] for run in self.runs]
+
+            except AttributeError:
+                mssg = f'No such parameter "{param}" was found'
+                raise ValueError(mssg) from err
+
+        return chains
 
     def _get_from_model(self, param, *, with_units=True, **kwargs):
         '''get chains one of the attributes from models (like BH mass)
@@ -2320,16 +2335,13 @@ class RunCollection(_RunAnalysis):
         # return the full dataset for each run
         return data
 
-    def _get_param(self, param, *, from_model=True, **kwargs):
+    def _get_param(self, param, **kwargs):
         '''return the median, -1σ, +1σ for a θ, metadata or model quntity
         "param" for all runs
-
-        from_model=False if you want to really avoid model params (i.e. dont
-        want to compute the models) all kwargs are passed to get_model otherwise
         '''
 
         # get parameter chains
-        chains = self._get_param_chains(param, from_model=from_model, **kwargs)
+        chains = self._get_param_chains(param, **kwargs)
 
         # Keep units, if they've got them (optional kwarg to _get_from_model)
         base = u.Quantity if isinstance(chains[0], u.Quantity) else np.array
@@ -2343,13 +2355,53 @@ class RunCollection(_RunAnalysis):
 
         return out
 
-    def _get_param_chains(self, param, *, from_model=True, logged=False,
-                          **kwargs):
+    def _check_for_operator(func):
+        import functools
+        import operator
+
+        opers = {'+': operator.add, '-': operator.sub,
+                 '*': operator.mul, '/': operator.truediv}
+
+        # TODO also need to implement this for latex_label if want that to work
+
+        @functools.wraps(func)
+        def _operator_decorator(self, param, *args, **kwargs):
+
+            if found_op := (set(param) & opers.keys()):
+
+                if len(found_op) > 1:
+                    mssg = "More than one operation not supported"
+                    raise ValueError(mssg)
+
+                op_name = found_op.pop()
+
+                param1, param2 = param.split(op_name)
+                res1 = func(self, param1.strip(), *args, **kwargs)
+                res2 = func(self, param2.strip(), *args, **kwargs)
+
+                final = list(map(opers[op_name], res1, res2))
+
+            else:
+                final = func(self, param, *args, **kwargs)
+
+            return final
+
+        return _operator_decorator
+
+    @_check_for_operator
+    def _get_param_chains(self, param, *,
+                          allow_model=True, force_model=False, **kwargs):
         '''return the full chain for a θ, metadata or model quntity "param"
         for all runs
 
-        from_model=False if you want to really avoid model params (i.e. dont
+        allow_model=False if you want to really avoid model params (i.e. dont
         want to compute the models) all kwargs are passed to get_model otherwise
+
+        force_model=True if you want to skip the run params entirely and force
+        `_get_from_model` (useful for getting some things like scaled `ra`)
+
+        One operation (+-*/) can be included to return two different parameters
+        combined with said operation.
         '''
 
         try:
@@ -2360,34 +2412,27 @@ class RunCollection(_RunAnalysis):
             logged = False
             pass
 
-        err_mssg = f'No such parameter "{param}" was found'
-
-        # try to get it from the best-fit params or metadata
+        # try to get it from the best-fit params, metadata or run stats
         try:
+            if force_model:
+                mssg = '`force_model` is True, must set `allow_model=True`'
+                raise ValueError(mssg)
 
-            # join the param and metadata dicts (union in 3.9)
-            chains = [
-                {**self._params[ind], **self._mdata[ind]}[param]
-                for ind, run in enumerate(self.runs)
-            ]
+            chains = self._get_from_run(param)
 
         # otherwise try to get from model properties
         # this is only worst case because may take a long time to gen models
-        except KeyError as err:
+        except ValueError as err:
 
-            try:
-                chains = self._get_from_run(param)
-            except AttributeError:
+            if allow_model:
+                try:
+                    chains = self._get_from_model(param, **kwargs)
 
-                if from_model:
-                    try:
-
-                        chains = self._get_from_model(param, **kwargs)
-
-                    except AttributeError:
-                        raise ValueError(err_mssg)
-                else:
-                    raise ValueError(err_mssg) from err
+                except AttributeError:
+                    mssg = f'No such parameter "{param}" was found in models'
+                    raise ValueError(mssg) from err
+            else:
+                raise err
 
         if logged:
 
@@ -2399,7 +2444,7 @@ class RunCollection(_RunAnalysis):
 
         return chains
 
-    def _get_latex_labels(self, param):
+    def _get_latex_labels(self, param, *, with_units=True, force_model=False):
         '''return the param names in math mode, for plotting'''
 
         try:
@@ -2411,37 +2456,62 @@ class RunCollection(_RunAnalysis):
             pass
 
         math_mapping = {
-            'W0': r'$\hat{\phi}_0$',
-            'M': r'$M\ [10^6\ M_\odot]$',
-            'rh': r'$r_h\ [\mathrm{pc}]$',
-            'ra': r'$\log_{10}\left(r_a\ [\mathrm{pc}]\right)$',
-            'g': r'$g$',
-            'delta': r'$\delta$',
-            's2': r'$s^2$',
-            'F': r'$F$',
-            'a1': r'$\alpha_1$',
-            'a2': r'$\alpha_2$',
-            'a3': r'$\alpha_3$',
-            'BHret': r'$\mathrm{BH}_{ret}$',
-            'd': r'$d$',
-            'FeH': r'$[\mathrm{Fe}/\mathrm{H}]$',
-            'Ndot': r'$\dot{N}$',
-            'RA': r'RA $[\deg]$',
-            'DEC': r'DEC $[\deg]$',
-            'chi2': r'$\chi^2$',
-            'BH_mass': r'$\mathrm{M}_{BH}\ [M_\odot]$',
-            'BH_num': r'$\mathrm{N}_{BH}$',
-            'f_rem': r'$f_{\mathrm{remn}}$',
-            'r0': r'$r_0\ [\mathrm{pc}]$',
-            'rt': r'$r_t\ [\mathrm{pc}]$',
-            'rv': r'$r_v\ [\mathrm{pc}]$',
-            'rhp': r'$r_{hp}\ [\mathrm{pc}]$',
-            'mmean': r'$\bar{m}\ [M_\odot]$',
+            'W0': r'\hat{\phi}_0',
+            'M': r'M',
+            'rh': r'r_h',
+            'ra': r'r_a' if force_model else r'\log_{10}\left(\hat{r}_a\right)',
+            'g': r'g',
+            'delta': r'\delta',
+            's2': r's^2',
+            'F': r'F',
+            'a1': r'\alpha_1',
+            'a2': r'\alpha_2',
+            'a3': r'\alpha_3',
+            'BHret': r'\mathrm{BH}_{ret}',
+            'd': r'd',
+            'FeH': r'[\mathrm{Fe}/\mathrm{H}]',
+            'Ndot': r'\dot{N}',
+            'RA': r'\mathrm{RA}',
+            'DEC': r'\mathrm{DEC}',
+            'chi2': r'\chi^2',
+            'BH_mass': r'\mathrm{M}_{BH}',
+            'BH_num': r'\mathrm{N}_{BH}',
+            'f_rem': r'f_{\mathrm{remn}}',
+            'r0': r'r_0',
+            'rt': r'r_t',
+            'rv': r'r_v',
+            'rhp': r'r_{hp}',
+            'mmean': r'\bar{m}',
         }
 
-        label = math_mapping.get(param, param)
+        unit_mapping = {
+            'M': r'10^6\ M_\odot',
+            'rh': r'\mathrm{pc}',
+            'ra': r'\mathrm{pc}' if force_model else None,
+            's2': r'\mathrm{arcmin^{-4}}',
+            'BHret': r'\%',
+            'd': r'\mathrm{kpc}',
+            'Ndot': r'\dot{N}',
+            'RA': r'\deg',
+            'DEC': r'\deg',
+            'BH_mass': r'M_\odot',
+            'r0': r'\mathrm{pc}',
+            'rt': r'\mathrm{pc}',
+            'rv': r'\mathrm{pc}',
+            'rhp': r'\mathrm{pc}',
+            'mmean': r'M_\odot',
+        }
+
+        name = math_mapping.get(param, param)
+        unit = unit_mapping.get(param, None)
+
+        if with_units and unit is not None:
+            label = rf'${name}\ \left[{unit}\right]$'
+        else:
+            label = rf'${name}$'
 
         if logged:
+            # TODO obviously currently fails for operation-param pairs
             label = fr'$\log_{{10}}\left( {label.strip("$")} \right)$'
 
         return label
@@ -2627,7 +2697,7 @@ class RunCollection(_RunAnalysis):
         return fig
 
     def plot_relation(self, param1, param2, fig=None, ax=None, *,
-                      errors='bars', show_pearsonr=False,
+                      errors='bars', show_pearsonr=False, force_model=False,
                       annotate=False, annotate_kwargs=None,
                       clr_param=None, clr_kwargs=None, **kwargs):
         '''plot correlation between two param means with all runs
@@ -2637,14 +2707,14 @@ class RunCollection(_RunAnalysis):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        x, *dx = self._get_param(param1)
-        y, *dy = self._get_param(param2)
+        x, *dx = self._get_param(param1, force_model=force_model)
+        y, *dy = self._get_param(param2, force_model=force_model)
 
         errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', **kwargs)
         points = ax.scatter(x, y, picker=True, **kwargs)
 
-        ax.set_xlabel(self._get_latex_labels(param1))
-        ax.set_ylabel(self._get_latex_labels(param2))
+        ax.set_xlabel(self._get_latex_labels(param1, force_model=force_model))
+        ax.set_ylabel(self._get_latex_labels(param2, force_model=force_model))
 
         if clr_param is not None:
 
@@ -2677,7 +2747,7 @@ class RunCollection(_RunAnalysis):
                       clr_param=None, clr_kwargs=None,
                       annotate=False, annotate_kwargs=None,
                       residuals=False, inset=False, diagonal=True,
-                      **kwargs):
+                      force_model=False, **kwargs):
         '''plot a x-y comparison against provided literature values
 
         Meant to compare 1-1 the same parameter (i.e. mass vs mass, etc)
@@ -2685,7 +2755,7 @@ class RunCollection(_RunAnalysis):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        x, *dx = self._get_param(param)
+        x, *dx = self._get_param(param, force_model=force_model)
         y, dy = truths, e_truths
 
         errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', **kwargs)
@@ -2701,7 +2771,7 @@ class RunCollection(_RunAnalysis):
             }
             ax.axline((0, 0), (1, 1), **grid_kw)
 
-        prm_lbl = self._get_latex_labels(param)
+        prm_lbl = self._get_latex_labels(param, force_model=force_model)
 
         ax.set_xlabel(prm_lbl)
         ax.set_ylabel(prm_lbl + (f' ({src_truths})' if src_truths else ''))
@@ -2737,7 +2807,8 @@ class RunCollection(_RunAnalysis):
                           lit, e_lit=None, param_lit='', src_lit='',
                           fig=None, ax=None, *, lit_on_x=False,
                           clr_param=None, clr_kwargs=None, residuals=False,
-                          annotate=False, annotate_kwargs=None, **kwargs):
+                          annotate=False, annotate_kwargs=None,
+                          force_model=False, **kwargs):
         '''plot a relation plot against provided literature values
 
         Meant to compare two different parameters, with one from outside source
@@ -2745,11 +2816,11 @@ class RunCollection(_RunAnalysis):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        x, *dx = self._get_param(param)
+        x, *dx = self._get_param(param, force_model=force_model)
         y, dy = lit, e_lit
 
-        xlabel = self._get_latex_labels(param)
-        ylabel = (self._get_latex_labels(param_lit)
+        xlabel = self._get_latex_labels(param, force_model=force_model)
+        ylabel = (self._get_latex_labels(param_lit, force_model=force_model)
                   + (f' ({src_lit})' if src_lit else ''))
 
         # optionally flip the x and y
@@ -2793,11 +2864,12 @@ class RunCollection(_RunAnalysis):
     # ----------------------------------------------------------------------
 
     def plot_param_means(self, param, fig=None, ax=None,
-                         clr_param=None, clr_kwargs=None, **kwargs):
+                         clr_param=None, clr_kwargs=None,
+                         force_model=False, **kwargs):
         '''plot mean and std errorbars for each run of the given param'''
         fig, ax = self._setup_artist(fig, ax)
 
-        mean, *err = self._get_param(param)
+        mean, *err = self._get_param(param, force_model=force_model)
 
         xticks = np.arange(len(self.runs))
 
@@ -2821,22 +2893,23 @@ class RunCollection(_RunAnalysis):
 
         ax.grid(axis='x')
 
-        ax.set_ylabel(self._get_latex_labels(param))
+        ax.set_ylabel(self._get_latex_labels(param, force_model=force_model))
 
         return fig
 
     def plot_param_bar(self, param, fig=None, ax=None,
-                       clr_param=None, clr_kwargs=None, *args, **kwargs):
+                       clr_param=None, clr_kwargs=None,
+                       force_model=False, **kwargs):
         '''plot mean and std bar chart for each run of the given param'''
         fig, ax = self._setup_artist(fig, ax)
 
-        mean, *err = self._get_param(param)
+        mean, *err = self._get_param(param, force_model=force_model)
 
         xticks = np.arange(len(self.runs))
 
         labels = self.names
 
-        bars = ax.bar(x=xticks, height=mean, yerr=err, *args, **kwargs)
+        bars = ax.bar(x=xticks, height=mean, yerr=err, **kwargs)
 
         if clr_param is not None:
 
@@ -2851,18 +2924,19 @@ class RunCollection(_RunAnalysis):
         ax.set_xticks(xticks, labels=labels, rotation=45,
                       ha='right', rotation_mode="anchor")
 
-        ax.set_ylabel(self._get_latex_labels(param))
+        ax.set_ylabel(self._get_latex_labels(param, force_model=force_model))
 
         return fig
 
     def plot_param_violins(self, param, fig=None, ax=None,
                            clr_param=None, clr_kwargs=None, alpha=0.3,
                            quantiles=[0.9772, 0.8413, 0.5, 0.1587, 0.0228],
-                           *args, **kwargs):
+                           force_model=False, **kwargs):
         '''plot violins for each run of the given param'''
         fig, ax = self._setup_artist(fig, ax)
 
-        chains = self._get_param_chains(param, with_units=False)
+        chains = self._get_param_chains(param, with_units=False,
+                                        force_model=force_model)
 
         # filter out all nans (causes violinplot to fail silently)
         chains = [ch[~np.isnan(ch)] for ch in chains]
@@ -2880,7 +2954,7 @@ class RunCollection(_RunAnalysis):
         kwargs.setdefault('showextrema', False)
 
         parts = ax.violinplot(chains, positions=xticks, quantiles=quantiles,
-                              *args, **kwargs)
+                              **kwargs)
 
         # optionally draw a vert between max quantiles
         if 'cbars' not in parts and 'cquantiles' in parts:
@@ -2930,11 +3004,12 @@ class RunCollection(_RunAnalysis):
 
         ax.grid(axis='x')
 
-        ax.set_ylabel(self._get_latex_labels(param))
+        ax.set_ylabel(self._get_latex_labels(param, force_model=force_model))
 
         return fig
 
-    def plot_param_hist(self, param, fig=None, ax=None, kde=False, **kwargs):
+    def plot_param_hist(self, param, fig=None, ax=None, kde=False,
+                        force_model=False, **kwargs):
         '''
         plot a kde representing the sum (convolution) of all run's
         distributions (kde) of this parameter
@@ -2943,7 +3018,7 @@ class RunCollection(_RunAnalysis):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        chains = self._get_param_chains(param)
+        chains = self._get_param_chains(param, force_model=force_model)
         chains = [ch[~np.isnan(ch)] for ch in chains]
         chains = np.concatenate(chains)
 
@@ -2970,11 +3045,13 @@ class RunCollection(_RunAnalysis):
 
             ax.hist(chains, **kwargs)
 
+        ax.set_ylabel(self._get_latex_labels(param, force_model=force_model))
+
         return fig
 
     def plot_param_corner(self, params=None, fig=None, *,
                           include_FeH=True, include_BH=False, include_rt=False,
-                          log_radii=False, **kwargs):
+                          log_radii=False, force_model=False, **kwargs):
         '''
         plot corner plot of all params for all runs
         if params is none, default params used are:
@@ -3036,20 +3113,23 @@ class RunCollection(_RunAnalysis):
 
                 else:
 
-                    self.plot_relation(px, py, fig=fig, ax=ax, **kwargs)
+                    self.plot_relation(px, py, fig=fig, ax=ax,
+                                       force_model=force_model, **kwargs)
 
                 # set labels on bottom row
                 if i + 1 == Nrows:
+                    xlabel = self._get_latex_labels(px, force_model=force_model)
                     # rotate_ticks(ax, 'x')
-                    ax.set_xlabel(self._get_latex_labels(px))
+                    ax.set_xlabel(xlabel)
                     # ax.xaxis.set_label_coords(0.5, -0.3)
                 else:
                     ax.set_xlabel('')
 
                 # Set labels on leftmost col
                 if j == 0:
+                    ylabel = self._get_latex_labels(py, force_model=force_model)
                     # rotate_ticks(ax, 'y')
-                    ax.set_ylabel(self._get_latex_labels(py))
+                    ax.set_ylabel(ylabel)
                     # ax.yaxis.set_label_coords(-0.3, 0.5)
                 else:
                     ax.set_ylabel('')
