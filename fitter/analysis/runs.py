@@ -3149,7 +3149,7 @@ class RunCollection(_RunAnalysis):
             labels = ['FeH'] + labels
 
         if include_BH:
-            labels += ['BH_mass', 'BH_num', 'f_rem']
+            labels += ['BH_mass', 'BH_num', 'f_rem', 'f_BH']
 
         # Fill in a dictionary of column data
 

@@ -525,7 +525,6 @@ def likelihood_number_density(model, ndensity, *,
         vol. 491, no. 1, pp. 113–128, 2020.
 
     '''
-    # TODO the units are all messed up on this one, simply being ignored
 
     if mass_bin is None:
         if 'm' in ndensity.mdata:

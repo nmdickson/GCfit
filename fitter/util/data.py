@@ -1454,6 +1454,8 @@ class Dataset:
                 first key is an error on the second. This changes what is passed
                 to the `error_base` arg of `add_variable`
             '''
+            # TODO this is often the final method, but some of these kwargs
+            #   conflict with kwargs that would be passed to, say, pd.read_table
 
             if units is None:
                 units = {}
