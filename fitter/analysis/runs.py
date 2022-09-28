@@ -2859,6 +2859,85 @@ class RunCollection(_RunAnalysis):
 
         return fig
 
+    def plot_lit_dist(self, param, truths, e_truths=None, src_truths='',
+                      fig=None, ax=None, *,
+                      kde=True, show_normal=True, kde_color='tab:blue',
+                      clr_param=None, clr_kwargs=None,
+                      annotate=False, annotate_kwargs=None,
+                      residuals=False, inset=False, diagonal=True,
+                      **kwargs):
+        '''plot a histogram of the fractional difference distribution of
+        this param vs literature sources
+
+        i.e. (param - truths) / sqrt(e_param^2 + e_truths^2)
+
+        which, if in perfect agreement, should resemble a Gaussian centred on
+        0 with a width of 1.
+        '''
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        x, *dx = self._get_param(param, with_units=False)
+        dx = np.mean(dx, axis=0)
+        y, dy = truths, e_truths
+
+        if dy is None:
+            dy = np.zeros_like(dx)
+
+        if dy.ndim >= 2:
+            dy = np.mean(dy, axis=0)
+
+        frac = (x - y) / np.sqrt(dx**2 + dy**2)
+
+        prm_lbl = self._get_latex_labels(param, with_units=False).strip('$')
+        lit_lbl = (fr'{prm_lbl[:-1]},\mathrm{{lit}}}}' if '_' in prm_lbl
+                   else fr'{prm_lbl}_{{\mathrm{{lit}}}}')  # tempermental
+        label = (
+            fr'$\frac{{{prm_lbl} - {lit_lbl}}}'
+            fr'{{\sigma_{{{prm_lbl} - {lit_lbl}}}}}$'
+        )
+
+        # Plot a filled KDE distribution
+        if kde:
+            from scipy.stats import gaussian_kde, norm
+            import scipy.interpolate as interp
+
+            color = mpl_clr.to_rgb(kde_color)
+            facecolor = color + (0.33, )
+
+            # get param distributions
+            domain = np.linspace(-1.1 * frac.max(), frac.max() * 1.1, 500)
+
+            distribution = gaussian_kde(frac)(domain)
+
+            distribution /= interp.UnivariateSpline(
+                domain, distribution, k=1, s=0, ext=1
+            ).integral(-np.inf, np.inf)
+
+            ax.fill_between(domain, 0, distribution, label=label,
+                            color=color, facecolor=facecolor, **kwargs)
+
+            if show_normal:
+
+                normal = norm.pdf(domain)
+                normal /= interp.UnivariateSpline(
+                    domain, distribution, k=1, s=0, ext=1
+                ).integral(-np.inf, np.inf)
+
+                ax.plot(domain, normal, 'k--')
+
+            ax.set_ylim(bottom=0)
+
+        # plot a simple histogram
+        else:
+
+            ax.hist(frac, label=label, **kwargs)
+
+        ax.set_title(src_truths)
+        ax.legend()
+
+        return fig
+
     # ----------------------------------------------------------------------
     # Summary plots
     # ----------------------------------------------------------------------
