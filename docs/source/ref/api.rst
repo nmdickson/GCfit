@@ -14,5 +14,5 @@ This page details the methods and classes provided by the ``GCfit`` module.
 
    core
    probabilities
-   visualize
+   analysis
    util

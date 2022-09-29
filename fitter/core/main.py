@@ -9,6 +9,7 @@ import numpy as np
 import dynesty
 import dynesty.dynamicsampler as dysamp
 
+import os
 import sys
 import time
 import shutil
@@ -565,6 +566,8 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
         backend.store_metadata('cluster', cluster)
 
+        backend.store_metadata('GCFIT_DIR', os.getenv('GCFIT_DIR', 'CORE'))
+
         backend.store_metadata('mpi', mpi)
         backend.store_metadata('Ncpu', Ncpu)
 
@@ -663,8 +666,8 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     # ----------------------------------------------------------------------
 
     if verbose:
-        from .. import visualize as viz
-        viz.MCMCVisualizer(backend_fn, observations).print_summary()
+        from .. import analysis
+        analysis.MCMCRun(backend_fn, observations).print_summary()
 
     logging.info("FINISHED")
 
@@ -894,6 +897,8 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
         backend.store_metadata('cluster', cluster)
 
+        backend.store_metadata('GCFIT_DIR', os.getenv('GCFIT_DIR', 'CORE'))
+
         backend.store_metadata('mpi', mpi)
         backend.store_metadata('Ncpu', Ncpu)
 
@@ -955,7 +960,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
         t0 = time.time()
 
-        stop_kw = {'pfrac': pfrac, 'n_mc': 0, 'target_neff': eff_samples}
+        stop_kw = {'pfrac': pfrac, 'n_mc': 0, 'target_n_effective': eff_samples}
         weight_kw = {'pfrac': pfrac, 'maxfrac': maxfrac}
 
         # TODO have to atleast supply nlive here? so maybe add to defaults
@@ -965,7 +970,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         backend.store_results(sampler.results)
 
         tn = datetime.timedelta(seconds=time.time() - t0)
-        logging.info("Beginning dynamic batch sampling ({tn})")
+        logging.info(f"Beginning dynamic batch sampling ({tn})")
 
         # run the dynamic sampler in batches, until the stop condition is met
         while not dysamp.stopping_function(sampler.results, args=stop_kw,
@@ -982,7 +987,8 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
                 # Shouldn't store entire results until they're combined below
                 backend.update_current_batch(results)
 
-            logging.info("Combining batch with existing results")
+            logging.info(f"Combining batch with existing results "
+                         f"(ESS={sampler.n_effective})")
 
             # add new samples to previous results, save in backend
             sampler.combine_runs()
@@ -1005,7 +1011,8 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
     # ----------------------------------------------------------------------
 
     if verbose:
-        from .. import visualize as viz
-        viz.NestedVisualizer(backend_fn, observations).print_summary()
+        from .. import analysis
+        # TODO would be nice to create/save CI here but may be trouble with mpi
+        analysis.NestedRun(backend_fn, observations).print_summary()
 
     logging.info("FINISHED")

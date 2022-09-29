@@ -478,6 +478,11 @@ def likelihood_number_density(model, ndensity, *,
     add a constant error component and minimize the background effects present
     near the outskirts of the cluster.
 
+    Optionally, a background level can be provided in the dataset metadata
+    (`ndensity.mdata["background"]`) which will be subtracted from all
+    observations before calculation of the likelihood. By default, will be
+    assumed to have same units as Σ.
+
     parameters
     ----------
     model : fitter.Model
@@ -520,7 +525,6 @@ def likelihood_number_density(model, ndensity, *,
         vol. 491, no. 1, pp. 113–128, 2020.
 
     '''
-    # TODO the units are all messed up on this one, simply being ignored
 
     if mass_bin is None:
         if 'm' in ndensity.mdata:
@@ -533,16 +537,15 @@ def likelihood_number_density(model, ndensity, *,
     else:
         likelihood = util.gaussian_likelihood
 
-    # Set cutoff to avoid fitting flat end of data
-    # TODO should do this cutoff based on a flatness, rather than a set value
-    valid = (ndensity['Σ'].value > 0.1)
+    background = ndensity.mdata.get('background', 0.0) << ndensity['Σ'].unit
 
-    obs_r = ndensity['r'][valid]
-    obs_Σ = ndensity['Σ'][valid]
-    obs_err = ndensity['ΔΣ'][valid]
+    obs_r = ndensity['r']
+    obs_Σ = ndensity['Σ'] - background
+    obs_err = ndensity['ΔΣ']
 
-    # Now nuisance parameter
-    yerr = np.sqrt(obs_err**2 + (model.s2 * obs_err.unit**2))
+    # Now nuisance parameter (from θ, not the model velocity scale)
+    s2 = model.theta['s2'] << u.arcmin**-4
+    yerr = np.sqrt(obs_err**2 + s2)
 
     model_r = model.r.to(obs_r.unit)
     model_Σ = model.Sigmaj[mass_bin] / model.mj[mass_bin]
@@ -992,7 +995,7 @@ def likelihood_mass_func(model, mf, field, *, hyperparams=False):
 
         N_data[r_mask] = N[r_mask]
         N_model[r_mask] = N_spline(mbin_mean[r_mask])
-        err[r_mask] = model.F * ΔN[r_mask]
+        err[r_mask] = model.theta['F'] * ΔN[r_mask]
 
     return likelihood(N_data, N_model, err)
 

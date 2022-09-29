@@ -6,7 +6,6 @@ import shutil
 import pathlib
 import logging
 import fnmatch
-from importlib import resources
 
 import h5py
 import numpy as np
@@ -48,7 +47,12 @@ def bibcode2bibtex(bibcode):
 
     query = ads.ExportQuery(bibcode, format='bibtex')
 
-    return query.execute()
+    try:
+        return query.execute()
+
+    except ads.exceptions.APIResponseError as err:
+        mssg = "Failed to retrieve citation from ads"
+        raise RuntimeError(mssg) from err
 
 
 def bibcode2cite(bibcode):
@@ -67,16 +71,22 @@ def bibcode2cite(bibcode):
     query = ads.ExportQuery(bibcode, format='aastex')
 
     cites = []
-    for entry in query.execute().strip().split('\n'):
-        entry = entry.replace('\\', '')
 
-        # Grab citation from initial square brackets of aastex format
-        entry = entry[entry.index('[') + 1: entry.index(']')]
+    try:
+        for entry in query.execute().strip().split('\n'):
+            entry = entry.replace('\\', '')
 
-        # Add a space between the authors and the year
-        entry = f"{entry[:entry.index('(')]} {entry[entry.index('('):]}"
+            # Grab citation from initial square brackets of aastex format
+            entry = entry[entry.index('[') + 1: entry.index(']')]
 
-        cites.append(entry)
+            # Add a space between the authors and the year
+            entry = f"{entry[:entry.index('(')]} {entry[entry.index('('):]}"
+
+            cites.append(entry)
+
+    except ads.exceptions.APIResponseError as err:
+        mssg = "Failed to retrieve citation from ads"
+        raise RuntimeError(mssg) from err
 
     return '; '.join(cites)
 
@@ -85,10 +95,27 @@ def bibcode2cite(bibcode):
 # Data file utilities
 # --------------------------------------------------------------------------
 
+def _open_resources():
+    '''Quick and dirty backwards-compatible solution to resources in directories
+    See github.com/python/importlib_resources/issues/58 and
+    bugs.python.org/issue44162 for more detail
+    '''
+    from importlib import resources
+
+    try:
+        # Python >= 3.9
+        return resources.files('fitter') / 'resources'
+
+    except AttributeError:
+        # Python >= 3.7
+        # we don't support lower than 3.7 (when resources was added) anyways
+        return resources.path('fitter', 'resources')
+
 
 def core_cluster_list():
     '''Return a list of cluster names, useable by `fitter.Observations`'''
-    with resources.path('fitter', 'resources') as datadir:
+
+    with _open_resources() as datadir:
         return [f.stem for f in pathlib.Path(datadir).glob('[!TEST]*.hdf')]
 
 
@@ -168,7 +195,7 @@ def hdf_view(cluster, attrs=False, spacing='normal', *, outfile="stdout"):
     # ----------------------------------------------------------------------
 
     # TODO use get_std_cluster_name here
-    with resources.path('fitter', 'resources') as datadir:
+    with _open_resources() as datadir:
         with h5py.File(f'{datadir}/{cluster}.hdf', 'r') as file:
 
             out = f"{f' {cluster} ':=^40}\n\n"
@@ -309,7 +336,7 @@ def get_std_cluster_name(name):
     return name
 
 
-def get_cluster_path(name, standardize_name=True, restrict_to='local'):
+def get_cluster_path(name, standardize_name=True, restrict_to=None):
     '''Based on a cluster name return the path of the corresponding cluster file
 
     Given a cluster name, search the relevant directories for the corresponding
@@ -350,6 +377,7 @@ def get_cluster_path(name, standardize_name=True, restrict_to='local'):
     # Get file paths of prospective local and core cluster files
     # ----------------------------------------------------------------------
 
+    # TODO maybe this shouldn't be made if it doesnt exists, its just clutter
     local_dir = pathlib.Path(GCFIT_DIR, 'clusters')
     local_dir.mkdir(parents=True, exist_ok=True)
 
@@ -366,7 +394,7 @@ def get_cluster_path(name, standardize_name=True, restrict_to='local'):
     # Get full paths to each file
     local_file = pathlib.Path(local_dir, filename)
 
-    with resources.path('fitter', 'resources') as core_dir:
+    with _open_resources() as core_dir:
         core_file = pathlib.Path(core_dir, std_filename)
 
     # ----------------------------------------------------------------------
@@ -497,8 +525,9 @@ class ClusterFile:
             logging.info(f'{name} is a core cluster, making a new local copy')
 
             # TODO Add a flag that this is a local file? or only n Observations?
-            with resources.path('fitter', 'resources') as core_dir:
-                core_file = pathlib.Path(core_dir, name).with_suffix('.hdf')
+
+            with _open_resources() as core_dir:
+                core_file = pathlib.Path(core_dir, std_name).with_suffix('.hdf')
                 shutil.copyfile(core_file, local_file)
 
                 self.file = h5py.File(local_file, 'r+')
@@ -1069,7 +1098,7 @@ class ClusterFile:
     def _test_dataset(self, key, dataset):
         '''make all checks of this dataset'''
 
-        with resources.path('fitter', 'resources') as datadir:
+        with _open_resources() as datadir:
             with open(f'{datadir}/specification.json') as ofile:
                 fullspec = json.load(ofile)
 
@@ -1105,7 +1134,7 @@ class ClusterFile:
     def _test_metadata(self, metadata):
         '''make all checks of this metadata'''
 
-        with resources.path('fitter', 'resources') as datadir:
+        with _open_resources() as datadir:
             with open(f'{datadir}/specification.json') as ofile:
                 mdata_spec = json.load(ofile)['METADATA']
 
@@ -1129,7 +1158,7 @@ class ClusterFile:
     def _test_initials(self, initials):
         '''make all checks of these initials'''
 
-        with resources.path('fitter', 'resources') as datadir:
+        with _open_resources() as datadir:
             with open(f'{datadir}/specification.json') as ofile:
                 init_spec = json.load(ofile)['INITIALS']
 
@@ -1173,6 +1202,7 @@ class ClusterFile:
         If *any* tests fail, the reasons for failure are logged in the
         `_inv_mssg` list, and this function returns `False`.
         '''
+        # TODO test should also include non-live objects (maybe optional?)
 
         # test datasets for required variables
 
@@ -1183,6 +1213,7 @@ class ClusterFile:
         for key, dataset in self.live_datasets.items():
             valid &= self._test_dataset(key, dataset)
 
+        # TODO only testing *live* metadata means it will fail on editted files
         valid &= self._test_metadata(self.live_metadata)
 
         valid &= self._test_initials(self.live_initials)
@@ -1221,6 +1252,7 @@ class ClusterFile:
 
         logging.info("Writing live data to file")
 
+        # TODO quitting the confirm prompts seems to remove live stuff?
         self._write_datasets(confirm=confirm)
         self._write_metadata(confirm=confirm)
         self._write_initials(confirm=confirm)
@@ -1315,7 +1347,7 @@ class Dataset:
         # Store all data in the variables dict
         self.variables[varname] = {
             "data": data,
-            "unit": unit,
+            "unit": str(unit) if unit is not None else None,
             "metadata": metadata
         }
 
@@ -1422,6 +1454,8 @@ class Dataset:
                 first key is an error on the second. This changes what is passed
                 to the `error_base` arg of `add_variable`
             '''
+            # TODO this is often the final method, but some of these kwargs
+            #   conflict with kwargs that would be passed to, say, pd.read_table
 
             if units is None:
                 units = {}

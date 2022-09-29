@@ -51,10 +51,10 @@ The models used in ``GCfit`` are defined by 13 free parameters.
     * - :math:`r_h`
       - ``rh``
       - The system half-mass radius, in parsecs.
-    * - :math:`r_a`
+    * - :math:`\log(r_a)`
       - ``ra``
-      - The anisotropy-radius, which determines the amount of anisotropy in the
-        system (higher ra values indicate more isotropy)
+      - The (log) anisotropy-radius, which determines the amount of anisotropy
+        in the system (higher ra values indicate more isotropy).
     * - g
       - ``g``
       - The truncation parameter, which controls the sharpness of the outer
@@ -109,10 +109,10 @@ distribution function:
         m^{-\alpha_3} & 1\ M_\odot < m \leq 100\ M_\odot \\
     \end{cases}
 
-where the :math:`\alpha` parameters are defined by the free parameters above,
-and :math:`\xi(m) \Delta m` is the number of stars with masses within the range
-:math:`m + \Delta m`. This function determines the initial distribution of the
-cluster total mass.
+where the :math:`\alpha_i` parameters are defined by the free parameters above,
+and :math:`\xi(m) \Delta m` is the number of stars with masses within the
+interval :math:`m + \Delta m`. This function determines the initial distribution
+of the cluster total mass.
 
 To evolve to the present day population of stars, the rate of change of
 main-sequence stars in each mass bin is given by the equation:
@@ -133,16 +133,38 @@ determined from stellar evolution models, and vary with metallicity.
 Initial-final mass relations (IFMRs) for both are also determined from these
 models and are similarly metallicity-dependant. All stars within this mass
 range will form neutron stars, always with a mass of :math:`1.4\ M_\odot`.
+The amount and final mass of these remnants must then be scaled downwards to
+mimic the loss of newly formed remnants. By default a neutron star retention
+fraction of 10% is assumed.
 
-The other avenue for mass loss is through the escape of stars and
-remnants past the cluster tidal radius, lost to the potential of the host
-galaxy.
-Stellar losses are dominated by the escape of low-mass stars in the outer edges
-of the cluster. Lacking a precise method for determining the overall losses,
-which will depend on the cluster potential and galactic orbit, we opt to
-disallow the escape of any stars.
+This algorithm includes two more complicated
+prescriptions for the loss of black holes, accounting for dynamical
+ejections on top of the typical natal kicks.
+Firstly the ejection of, primarily low-mass, BHs through natal kicks is
+simulated. Beginning with the assumption that the kick velocity is drawn from a
+Maxwellian distribution with a dispersion of 265 km/s (scaled down by a
+"fallback fraction" interpolated from a grid of SSE models), the fraction of
+black holes retained in each mass bin is then found by integrating the
+kick velocity distribution from 0 to the estimated initial system escape
+velocity.
+Black holes are also ejected over time from the core of GCs due to dynamical
+interactions with one another. This
+process is simulated through the removal of BHs, beginning with the heaviest
+mean-mass bins through to the lighest. This is carried
+out iteratively until the combination of mass lost through both the natal
+kicks and these dynamical ejections equals the fraction of BHs specified by
+the :math:`\mathrm{BH}_{ret}` parameter.
 
-.. TODO Remnant losses
+The final avenue for cluster mass loss is through the escape of stars and
+remnants driven by two-body relaxation and lost to the potential of the host
+galaxy. Such losses, in a mass segregated cluster, are dominated by
+the escape of low-mass objects from the outer regions of the cluster.
+Determining the overall losses through this process is a complicated task,
+dependent on the dynamical history and orbital evolution of the cluster,
+which we do not attempt to model here.
+By default, we opt to ignore this preferential
+loss of low-mass stars and do not further model the escape of any
+stars, apart from through the processes described above.
 
 Observations
 ============
@@ -258,29 +280,36 @@ Mass Functions
 """"""""""""""
 
 To compare against the Mass function datasets, the model surface density is
-(Monte Carlo) integrated, within each dataset's corresponding field boundaries,
-over each radial bin :math:`j` (with bounds :math:`r0,\ r1`) to get the count
-:math:`N_{\rm{model},j}` of stars within this bin slice of the field:
+integrated, using a Monte Carlo method, within the area :math:`A_k` sliced from
+each dataset's photometric field boundaries by the annulus of
+the radial bin :math:`k`, to get the count :math:`N_{\rm{model},j,k}` of stars
+within this footprint in the mass bin :math:`j`:
 
 .. math::
 
-    N_{\rm{model},j} = \int_{r_0}^{r_1} \Sigma(r) dr
+    N_{\rm{model},j,k} = \int_{A_k} \Sigma_j(r) dA_k
 
-This count can be used in the usual gaussian likelihood:
+This count can then be used in the usual gaussian likelihood:
+
+.. math::
+    \ln(\mathcal{L}_i) = \frac{1}{2}
+        \sum_k^{\substack{\rm{radial}\\\rm{bins}}}
+        \sum_j^{\substack{\rm{mass}\\\rm{bins}}}
+        \left( \frac{(N_{\rm{obs},j,k} - N_{\rm{model},j,k})^2}
+                    {\delta N_{j,k}^2}
+              - \ln(\delta N_{j,k}^2) \right)
+
+
+The error term :math:`\delta N_{j,k}` must also account for unknown
+sources of error in the mass function counts. Therefore we include another
+free nuisance parameter (``F``) which scales the upwards the uncertainties:
 
 .. math::
 
-    \ln(\mathcal{L}_i) = \frac{1}{2} \sum_j^{\rm{bins}}
-        \left( \frac{(N_{\rm{obs},j} - N_{\rm{model},j})^2}{\delta N_j^2}
-              - \ln(\delta N_j^2) \right)
+    \delta N_{j,k} = \delta N_{\rm{obs},j,k} \cdot F
 
-where the error :math:`\delta N` also includes the nuisance parameter ``F``
-which acts to account for unknown sources of error in the mass function counts
-by scaling upwards the uncertainties in the counts:
-
-.. math::
-
-    \delta N_j = \delta N_{\rm{model},j} \cdot F
+This scaling boosts the errors by a constant factor, leading to larger
+relative errors in regions with lower counts.
 
 Pulsar Timings
 """"""""""""""

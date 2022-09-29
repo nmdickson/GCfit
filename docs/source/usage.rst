@@ -73,7 +73,7 @@ types of datasets, can be excluded from the posterior using the
 
 .. code-block:: python
 
-    excluded_L = ['proper_motion/gedr3', 'pulsar*']  # glob patterns can be used
+    excluded_L = ['proper_motion/GEDR3', 'pulsar*']  # glob patterns can be used
     fitter.nested_fit(cluster, excluded_likelihoods=excluded_L)
 
 
@@ -89,7 +89,7 @@ distribution.
     priors = {
         "d": ("Gaussian", 5.2, 0.01), # Gaussian priors specify mean and width 
         "M": ("Uniform", [(0, 1.2)]), # Uniform priors specify a list of bounds
-        "a2": ("Uniform", [('a1', 4)]), # Other params can be used as bounds
+        "a2": ("Uniform", [(0, 4), ('a1', 4)]), # Other params can be used as bounds
     }
 
     fitter.nested_fit(cluster, param_priors=priors)
@@ -104,7 +104,7 @@ easily parallelized in multiple ways.
 
 Local parallelization (through the multiprocessing module) can be triggered
 using the ``Ncpu`` argument, which simply accepts an integer number of processes
-to spawn.z
+to spawn.
 
 .. code-block:: python
 
@@ -177,13 +177,13 @@ for more information on each.
 *Dynamic* nested sampling allows for a targeted focusing of the sampler
 algorithm in order to more efficiently probe the posterior or evidence. This
 works by beginning with a short "baseline" static run, to define the likelihood
-surface, and then iterative batches of sampling in targetted locations of
+surface, and then iterative batches of sampling in targeted locations of
 parameter space.
 
 The exact definition of these targets depends on a number of parameters. Here
 the two most important can be specified; ``pfrac``, which defines the fraction
 of importance to give to the posterior vs the evidence, and ``maxfrac``, which
-determines the size of the targetted space.
+determines the size of the targeted space.
 
 .. code-block:: python
 
@@ -208,7 +208,7 @@ depend on the desired uses for the results. A more general stopping condition
 is thus allowed by ``dynesty`` in the form of an "effective sample size".
 
 This argument (``eff_samples``) must be set, in similar fashion to the MCMC
-``Niters`` high enough to be confident of convergence.
+``Niters``, high enough to be confident of convergence.
 
 .. code-block:: python
 
@@ -268,9 +268,9 @@ and outputs will be stored in an output HDF5 file (in the directory specified
 by ``--savedir``). This file provides everything necessary to reconstruct the
 sampler evolution and results, and the corresponding models.
 
-``GCfit`` provides utilities to read in and plot the relevant quantities from
-this output, through the ``fitter.visualize`` module.
-The visualizations/analysis is split into two categories, for analyzing the
+``GCfit`` provides utilities to read in, analyze and plot the relevant
+quantities from this output, through the ``fitter.analysis`` module.
+The analysis is split into two seperate modules, for analyzing the
 fitting runs and for visualizing the best-fitting models.
 
 All fitting functions return their corresponding figure, and multiple plots
@@ -279,7 +279,7 @@ information, and a list of all possible plots.
 
 .. code-block:: python
 
-    import fitter.visualize as viz
+    from fitter import analysis
     import matplotlib.pyplot as plt
 
     obs = fitter.Observations(cluster)
@@ -292,26 +292,23 @@ Fitting Results
 ^^^^^^^^^^^^^^^
 
 The run visualizers are split into specific classes once again for the MCMC
-(:class:`fitter.visualize.MCMCVisualizer`) and nested sampler
-(:class:`fitter.visualize.NestedVisualizer`) results.
+(:class:`fitter.analysis.MCMCRun`) and nested sampler
+(:class:`fitter.analysis.NestedRun`) results.
 
 .. code-block:: python
 
-    nestviz = viz.NestedVisualizer(f'./nested_out/{cluster}_sampler.hdf', obs)
-    mcmcviz = viz.MCMCVisualizer(f'./MCMC_out/{cluster}_sampler.hdf', obs)
+    nest_run = analysis.NestedRun(f'./nested_out/{cluster}_sampler.hdf', obs)
+    mcmc_run = analysis.MCMCRun(f'./MCMC_out/{cluster}_sampler.hdf', obs)
 
     # Plot nested sampling parameter evolution, weights and final posteriors
-    nestviz.plot_params()
+    nest_run.plot_params()
 
     # Plot MCMC walker evolution
-    mcmcviz.plot_chains()
+    mcmc_run.plot_chains()
 
     # Plot marginal distributions for both (corner plots)
-    nestviz.plot_marginals()
+    nest_run.plot_marginals()
 
-.. run visualizers
-.. common plots/stats
-.. specifics to each kind
 
 Best Fit Models
 ^^^^^^^^^^^^^^^
@@ -322,32 +319,32 @@ model. From there, plots of all observables, as well as a number of other
 cluster parameters and profiles, can be created.
 
 The median best-fit model can be visualized with the
-:class:`fitter.visualize.ModelVisualizer` class.
+:class:`fitter.analysis.ModelVisualizer` class.
 
 .. code-block:: python
 
-    mviz = nestviz.get_model(method='mean')
+    mviz = nest_run.get_model(method='mean')
 
     # Plot all radial profiles (dispersions, number density, etc)
-    civiz.plot_all()
+    mviz.plot_all()
 
     # Plot all mass functions (with fields shown)
-    civiz.plot_massfunc(show_fields=True)
+    mviz.plot_massfunc(show_fields=True)
 
     # Plot cumulative mass in all stellar components
-    civiz.plot_plot_cumulative_mass()
+    mviz.plot_plot_cumulative_mass()
 
     plt.show()
 
 
 All the same plots can instead be shown with confidence intervals on the
-model outputs (:class:`fitter.visualize.CIModelVisualizer`). The computation
+model outputs (:class:`fitter.analysis.CIModelVisualizer`). The computation
 of these intervals may be intensive, and can thus be parallelized (locally)
 using the ``Nprocesses`` keyword.
 
 .. code-block:: python
 
-    civiz = nestviz.get_CImodel(Nprocesses=4)
+    civiz = nest_run.get_CImodel(N=500, Nprocesses=4)
 
     civiz.plot_all()
 
@@ -357,5 +354,63 @@ using the ``Nprocesses`` keyword.
 
     plt.show()
 
-.. model visualizers
-.. CI visualizers
+Given the computing time it may require to compute the confidence intervals,
+these outputs can also be saved and loaded from the same results file
+
+.. code-block:: python
+
+    out_filename = nest_run.file.filename
+
+    civiz.save(out_filename)
+
+    civiz = analysis.CIModelVisualizer.load(out_filename)
+
+There also exists a handy command-line script for generating and saving
+confidence intervals to later be loaded in python. For more information,
+see the help page:
+
+.. code-block:: bash
+
+    generate_model_CI --help
+
+
+Collections of Runs
+^^^^^^^^^^^^^^^^^^^
+
+When analyzing multiple runs (for a single or many different clusters),
+the :class:`fitter.analysis.RunCollection` class allows for easy interaction
+with, and comparison of, all runs at the same time.
+
+.. code-block:: python
+
+    rc = analysis.RunCollection.from_dir('nested_out')
+
+    # Plot side-by-side comparison of all a3 parameter distributions
+    rc.plot_param_violins('a3')
+
+    # Plot a3 vs mass for all clusters
+    rc.plot_relation('M', 'a3', annotate=True)
+
+    # Iteratively plot each runs params
+    for _ in rc.iter_plots('plot_params'):
+        plt.show()
+
+    # Overplot all cluster a3 posterior distributions
+    fig = plt.figure()
+    for _ in rc.iter_plots('plot_posterior', param='a3', fig=fig, flipped=False, alpha=0.3):
+        pass
+
+This class also provides access to collections of corresponding model outputs.
+
+.. code-block:: python
+
+    mc = rc.get_CImodels(load=True)
+
+    # Iteratively plot each models profiles
+    for _ in mc.iter_plots('plot_all'):
+        plt.show()
+
+    # Compare run parameters to certain model outputs, like remnannt fractions and BH mass
+    rc.plot_relation('a3', 'f_rem')
+
+    rc.plot_param_violins('BH_mass')

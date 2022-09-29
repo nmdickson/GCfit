@@ -1,21 +1,22 @@
-Visualize
+Analysis
 =========
 
-.. currentmodule:: fitter.visualize
+.. currentmodule:: fitter.analysis
 
 
-Sampling Run Visualizations
----------------------------
+Sampling Run Analysis
+---------------------
 .. autosummary::
     :nosignatures:
     :toctree: generated/
 
-    MCMCVisualizer
-    NestedVisualizer
+    MCMCRun
+    NestedRun
+    RunCollection
 
 
-Model Visualizations
---------------------
+Model Analysis
+--------------
 .. autosummary::
     :nosignatures:
     :toctree: generated/
@@ -23,3 +24,4 @@ Model Visualizations
     ModelVisualizer
     CIModelVisualizer
     ObservationsVisualizer
+    ModelCollection
