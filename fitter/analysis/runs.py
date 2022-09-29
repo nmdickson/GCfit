@@ -2508,9 +2508,9 @@ class RunCollection(_RunAnalysis):
         unit = unit_mapping.get(param, None)
 
         if with_units and unit is not None:
-            label = rf'${name}\ \left[{unit}\right]$'
+            label = rf'${name.strip("$")}\ \left[{unit}\right]$'
         else:
-            label = rf'${name}$'
+            label = rf'${name.strip("$")}$' if name else name
 
         if logged:
             # TODO obviously currently fails for operation-param pairs
