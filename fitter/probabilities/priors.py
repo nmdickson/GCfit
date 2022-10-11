@@ -276,6 +276,10 @@ class PriorTransforms(Priors):
             flag was set on initialization
         '''
 
+        if len(U) != len(self.var_params):
+            mssg = f"Incorrect number of parameters passed: expected {len(self.var_params)}, got {len(U)}"
+            raise ValueError(mssg)
+
         if not isinstance(U, dict):
             U = dict(zip(self.var_params, U))
 
