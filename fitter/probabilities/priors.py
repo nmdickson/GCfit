@@ -60,7 +60,7 @@ class Priors:
         likelihood value.
 
         If any prior values are "invalid", that is, are less than or equal to
-        a probability of 0, or are `nan`, then the reasons for this occurance
+        a probability of 0, or are `nan`, then the reasons for this occurrence
         will be compiled and logged (or raised, if `err_on_fail` was `True`)
 
         Parameters
@@ -218,7 +218,7 @@ class PriorTransforms(Priors):
     def _compile_dependants(self, prior, U, theta=None):
         '''Transform a passed U to theta recursively, so can use dependants'''
 
-        # TODO potentially repeating alot of prior calls by not saving to theta?
+        # TODO potentially repeating a lot of prior calls by not saving to theta?
 
         if not prior.dependants:
             return {}
@@ -253,7 +253,7 @@ class PriorTransforms(Priors):
 
         If any prior values are "invalid", that is, return `nan` due to the
         input `U` being outside the [0,1] unit cube, then the reasons for
-        this occurance will be compiled and logged (or raised, if `err_on_fail`
+        this occurrence will be compiled and logged (or raised, if `err_on_fail`
         was `True`). This should not happen in normal circumstances, as long as
         `U` is correctly defined.
 
@@ -277,7 +277,9 @@ class PriorTransforms(Priors):
         '''
 
         if len(U) != len(self.var_params):
-            mssg = f"Incorrect number of parameters passed: expected {len(self.var_params)}, got {len(U)}"
+            mssg = (f"Incorrect number of parameters passed: "
+                    f"expected {len(self.var_params)}, got {len(U)}")
+
             raise ValueError(mssg)
 
         if not isinstance(U, dict):
@@ -523,7 +525,7 @@ class UniformPrior(_PriorBase):
 class ArbitraryPrior(_PriorBase):
     '''Prior function defined by arbitrary operations. NotImplemented'''
 
-    # Consists of a number of operation: value pairs which are evalutated.
+    # Consists of a number of operation: value pairs which are evaluated.
     #   operation can be anything.
 
     def __repr__(self):
@@ -644,7 +646,7 @@ class CromwellUniformPrior(_PriorBase):
 
     Cromwell's Rule states that prior probabilities with absolute 1 or 0 values
     should be avoided, to allow an infinitesimal chance for the most unlikely
-    of occurences. This function behaves exactly like `UniformPrior` with the
+    of occurrences. This function behaves exactly like `UniformPrior` with the
     notable exception of an extremely small non-zero value returned outside of
     the bounds.
 
