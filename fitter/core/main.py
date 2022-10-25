@@ -506,6 +506,8 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         backend.store_metadata('mpi', mpi)
         backend.store_metadata('Ncpu', Ncpu)
 
+        backend.store_metadata('ndim', init_pos.shape[-1])
+
         backend.store_metadata('fixed_params', fixed_initials)
         backend.store_metadata('excluded_likelihoods', excluded_likelihoods)
 
@@ -826,6 +828,8 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
             pool.wait()
             sys.exit(0)
 
+        ndim = len(variable_initials)
+
         # ----------------------------------------------------------------------
         # Write run metadata to output (backend) file
         # ----------------------------------------------------------------------
@@ -837,6 +841,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         backend.store_metadata('mpi', mpi)
         backend.store_metadata('Ncpu', Ncpu)
 
+        backend.store_metadata('ndim', ndim)
         backend.store_metadata('pfrac', pfrac)
         backend.store_metadata('maxfrac', maxfrac)
         backend.store_metadata('eff_samples', eff_samples)
@@ -867,8 +872,6 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         # ------------------------------------------------------------------
 
         logging.info("Initializing sampler")
-
-        ndim = len(variable_initials)
 
         backend.ndim = ndim
 
