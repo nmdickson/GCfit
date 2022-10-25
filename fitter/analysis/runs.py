@@ -2864,6 +2864,7 @@ class RunCollection(_RunAnalysis):
     def plot_lit_dist(self, param, truths, e_truths=None, src_truths='',
                       fig=None, ax=None, *,
                       kde=True, show_normal=True, kde_color='tab:blue',
+                      show_FWHM=True,
                       clr_param=None, clr_kwargs=None,
                       annotate=False, annotate_kwargs=None,
                       residuals=False, inset=False, diagonal=True,
@@ -2928,7 +2929,16 @@ class RunCollection(_RunAnalysis):
 
                 ax.plot(domain, normal, 'k--')
 
+                if show_FWHM:
+
+                    # diff = np.sqrt(8 * np.log(2)) * (np.std(frac) - 1)
+                    # text = fr'$\Delta \mathrm{{FWHM}} = {diff:.2f}$'
+                    div = np.sqrt(8 * np.log(2)) * (np.std(frac) / 1)
+                    text = fr'$\Delta \mathrm{{FWHM}} = {div:.2f}$'
+                    ax.add_artist(mpl_obx.AnchoredText(text, loc='upper right'))
+
             ax.set_ylim(bottom=0)
+            ax.set_xlim(domain.min(), domain.max())
 
         # plot a simple histogram
         else:
