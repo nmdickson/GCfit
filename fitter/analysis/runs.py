@@ -3149,7 +3149,7 @@ class RunCollection(_RunAnalysis):
             labels = ['FeH'] + labels
 
         if include_BH:
-            labels += ['BH_mass', 'BH_num', 'f_rem', 'f_BH']
+            labels += ['BH_mass', 'BH_num', 'f_BH', 'f_rem']
 
         # Fill in a dictionary of column data
 
@@ -3164,7 +3164,7 @@ class RunCollection(_RunAnalysis):
                    else ('-1σ_', '+1σ_'))
 
             median, σ_down, σ_up = self._get_param(param)
-            data[name] = median
+            data[f'${name}'] = median
             data[f'{sig[0]}{name}'], data[f'{sig[1]}{name}'] = σ_down, σ_up
 
         # Create dataframe
@@ -3173,7 +3173,7 @@ class RunCollection(_RunAnalysis):
 
     def output_summary(self, outfile=sys.stdout, style='latex', *,
                        include_FeH=True, include_BH=False, math_labels=False,
-                       **kwargs):
+                       substack_errors=False, **kwargs):
         '''output a table of all parameter means for each cluster'''
 
         # get dataframe
@@ -3190,6 +3190,28 @@ class RunCollection(_RunAnalysis):
             df.to_string(buf=outfile, **kwargs)
 
         elif style == 'latex':
+            if substack_errors:
+                # have to manually change to substack before outputting
+
+                # get only the actual values columns
+                for prm in df.columns[1::3]:
+
+                    # find the corresponding errors
+                    sig = ((r'$-1\sigma\_', r'$+1\sigma\_') if math_labels
+                           else ('-1σ_', '+1σ_'))
+
+                    errs = (df[f'{sig[0]}{prm[1:]}'], df[f'{sig[1]}{prm[1:]}'])
+
+                    # rewrite the column with substack errors
+                    df[prm] = [
+                        (fr'\({val:.4f}\substack'
+                         fr'{{+{errs[1][row]:.4f} \\ -{errs[0][row]:.4f}}}\)')
+                        for row, val in enumerate(df[prm])
+                    ]
+
+                    # delete the error columns
+                    del df[f'{sig[0]}{prm[1:]}'], df[f'{sig[1]}{prm[1:]}']
+
             kwargs.setdefault('escape', False)
             kwargs.setdefault('float_format', '%.4f')
             df.to_latex(buf=outfile, **kwargs)
