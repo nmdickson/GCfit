@@ -2899,6 +2899,7 @@ class RunCollection(_RunAnalysis):
             fr'$\frac{{{prm_lbl} - {lit_lbl}}}'
             fr'{{\sigma_{{{prm_lbl} - {lit_lbl}}}}}$'
         )
+        ax.set_xlabel(label)
 
         # Plot a filled KDE distribution
         if kde:
@@ -2917,7 +2918,7 @@ class RunCollection(_RunAnalysis):
                 domain, distribution, k=1, s=0, ext=1
             ).integral(-np.inf, np.inf)
 
-            ax.fill_between(domain, 0, distribution, label=label,
+            ax.fill_between(domain, 0, distribution,
                             color=color, facecolor=facecolor, **kwargs)
 
             if show_normal:
@@ -2946,7 +2947,6 @@ class RunCollection(_RunAnalysis):
             ax.hist(frac, label=label, **kwargs)
 
         ax.set_title(src_truths)
-        ax.legend()
 
         return fig
 
