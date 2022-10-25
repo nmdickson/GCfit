@@ -2458,28 +2458,30 @@ class RunCollection(_RunAnalysis):
         math_mapping = {
             'W0': r'\hat{\phi}_0',
             'M': r'M',
-            'rh': r'r_h',
-            'ra': r'r_a' if force_model else r'\log_{10}\left(\hat{r}_a\right)',
+            'rh': r'r_{h}',
+            'ra': (r'r_{a}' if force_model
+                   else r'\log_{10}\left(\hat{r}_{a}\right)'),
             'g': r'g',
             'delta': r'\delta',
-            's2': r's^2',
+            's2': r's^{2}',
             'F': r'F',
-            'a1': r'\alpha_1',
-            'a2': r'\alpha_2',
-            'a3': r'\alpha_3',
+            'a1': r'\alpha_{1}',
+            'a2': r'\alpha_{2}',
+            'a3': r'\alpha_{3}',
             'BHret': r'\mathrm{BH}_{ret}',
             'd': r'd',
             'FeH': r'[\mathrm{Fe}/\mathrm{H}]',
             'Ndot': r'\dot{N}',
             'RA': r'\mathrm{RA}',
             'DEC': r'\mathrm{DEC}',
-            'chi2': r'\chi^2',
+            'chi2': r'\chi^{2}',
             'BH_mass': r'\mathrm{M}_{BH}',
             'BH_num': r'\mathrm{N}_{BH}',
             'f_rem': r'f_{\mathrm{remn}}',
-            'r0': r'r_0',
-            'rt': r'r_t',
-            'rv': r'r_v',
+            'f_BH': r'f_{\mathrm{BH}}',
+            'r0': r'r_{0}',
+            'rt': r'r_{t}',
+            'rv': r'r_{v}',
             'rhp': r'r_{hp}',
             'mmean': r'\bar{m}',
         }
@@ -2506,9 +2508,9 @@ class RunCollection(_RunAnalysis):
         unit = unit_mapping.get(param, None)
 
         if with_units and unit is not None:
-            label = rf'${name}\ \left[{unit}\right]$'
+            label = rf'${name.strip("$")}\ \left[{unit}\right]$'
         else:
-            label = rf'${name}$'
+            label = rf'${name.strip("$")}$' if name else name
 
         if logged:
             # TODO obviously currently fails for operation-param pairs
@@ -2857,6 +2859,95 @@ class RunCollection(_RunAnalysis):
                 annotate_kwargs = {}
 
             _Annotator(fig, ax, self.runs, x, y, **annotate_kwargs)
+
+        return fig
+
+    def plot_lit_dist(self, param, truths, e_truths=None, src_truths='',
+                      fig=None, ax=None, *,
+                      kde=True, show_normal=True, kde_color='tab:blue',
+                      show_FWHM=True,
+                      clr_param=None, clr_kwargs=None,
+                      annotate=False, annotate_kwargs=None,
+                      residuals=False, inset=False, diagonal=True,
+                      **kwargs):
+        '''plot a histogram of the fractional difference distribution of
+        this param vs literature sources
+
+        i.e. (param - truths) / sqrt(e_param^2 + e_truths^2)
+
+        which, if in perfect agreement, should resemble a Gaussian centred on
+        0 with a width of 1.
+        '''
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        x, *dx = self._get_param(param, with_units=False)
+        dx = np.mean(dx, axis=0)
+        y, dy = truths, e_truths
+
+        if dy is None:
+            dy = np.zeros_like(dx)
+
+        if dy.ndim >= 2:
+            dy = np.mean(dy, axis=0)
+
+        frac = (x - y) / np.sqrt(dx**2 + dy**2)
+
+        prm_lbl = self._get_latex_labels(param, with_units=False).strip('$')
+        lit_lbl = (fr'{prm_lbl[:-1]},\mathrm{{lit}}}}' if '_' in prm_lbl
+                   else fr'{prm_lbl}_{{\mathrm{{lit}}}}')  # tempermental
+        label = (
+            fr'$\frac{{{prm_lbl} - {lit_lbl}}}'
+            fr'{{\sigma_{{{prm_lbl} - {lit_lbl}}}}}$'
+        )
+        ax.set_xlabel(label)
+
+        # Plot a filled KDE distribution
+        if kde:
+            from scipy.stats import gaussian_kde, norm
+            import scipy.interpolate as interp
+
+            color = mpl_clr.to_rgb(kde_color)
+            facecolor = color + (0.33, )
+
+            # get param distributions
+            domain = np.linspace(-1.1 * frac.max(), frac.max() * 1.1, 500)
+
+            distribution = gaussian_kde(frac)(domain)
+
+            distribution /= interp.UnivariateSpline(
+                domain, distribution, k=1, s=0, ext=1
+            ).integral(-np.inf, np.inf)
+
+            ax.fill_between(domain, 0, distribution,
+                            color=color, facecolor=facecolor, **kwargs)
+
+            if show_normal:
+
+                normal = norm.pdf(domain)
+                normal /= interp.UnivariateSpline(
+                    domain, distribution, k=1, s=0, ext=1
+                ).integral(-np.inf, np.inf)
+
+                ax.plot(domain, normal, 'k--')
+
+                if show_FWHM:
+
+                    # diff = np.sqrt(8 * np.log(2)) * (np.std(frac) - 1)
+                    # text = fr'$\Delta \mathrm{{FWHM}} = {diff:.2f}$'
+                    div = np.sqrt(8 * np.log(2)) * (np.std(frac) / 1)
+                    text = fr'$\Delta \mathrm{{FWHM}} = {div:.2f}$'
+                    ax.add_artist(mpl_obx.AnchoredText(text, loc='upper right'))
+
+            ax.set_ylim(bottom=0)
+            ax.set_xlim(domain.min(), domain.max())
+
+        # plot a simple histogram
+        else:
+
+            ax.hist(frac, label=label, **kwargs)
+
+        ax.set_title(src_truths)
 
         return fig
 
