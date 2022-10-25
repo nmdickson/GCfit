@@ -2699,7 +2699,7 @@ class RunCollection(_RunAnalysis):
     def plot_relation(self, param1, param2, fig=None, ax=None, *,
                       errors='bars', show_pearsonr=False, force_model=False,
                       annotate=False, annotate_kwargs=None,
-                      clr_param=None, clr_kwargs=None, **kwargs):
+                      clr_param=None, clr_kwargs=None, label=None, **kwargs):
         '''plot correlation between two param means with all runs
 
         errorbars, or 2d-ellipses
@@ -2710,7 +2710,8 @@ class RunCollection(_RunAnalysis):
         x, *dx = self._get_param(param1, force_model=force_model)
         y, *dy = self._get_param(param2, force_model=force_model)
 
-        errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', **kwargs)
+        errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', label=label,
+                             **kwargs)
         points = ax.scatter(x, y, picker=True, **kwargs)
 
         ax.set_xlabel(self._get_latex_labels(param1, force_model=force_model))
