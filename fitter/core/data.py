@@ -535,6 +535,12 @@ class Observations:
             try:
                 # This updates defaults with data while keeping default sort
                 self.initials = {**self.initials, **file['initials'].attrs}
+
+                if extra_init := (self.initials.keys() - DEFAULT_INITIALS.keys):
+                    mssg = (f"Stored initials do not match expected."
+                            f"Extra values found: {extra_init}")
+                    raise ValueError(mssg)
+
             except KeyError:
                 logging.info("No initial state stored, using defaults")
                 pass
