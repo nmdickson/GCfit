@@ -3256,7 +3256,7 @@ class RunCollection(_RunAnalysis):
                    else ('-1σ_', '+1σ_'))
 
             median, σ_down, σ_up = self._get_param(param)
-            data[f'${name}'] = median
+            data[f'{"$" if math_labels else ""}{name}'] = median
             data[f'{sig[0]}{name}'], data[f'{sig[1]}{name}'] = σ_down, σ_up
 
         # Create dataframe
@@ -3264,9 +3264,30 @@ class RunCollection(_RunAnalysis):
         return pd.DataFrame.from_dict(data)
 
     def output_summary(self, outfile=sys.stdout, style='latex', *,
-                       include_FeH=True, include_BH=False, math_labels=False,
+                       include_FeH=False, include_BH=False, math_labels=False,
                        substack_errors=False, **kwargs):
         '''output a table of all parameter means for each cluster'''
+
+        def _round_sf(*values, max_prec=7):
+            import decimal
+
+            # get Decimal representations of each value
+            decs = [decimal.Decimal(fi) for fi in values]
+
+            # determine the smallest precision
+            try:
+                pos = min([di.adjusted() for di in decs if di != 0.])
+            except ValueError:
+                # catch if they're all zero
+                pos = -np.inf
+
+            # limit it to max_prec
+            pos = max(pos, -max_prec)
+
+            # get pos in terms of a fixed 10**pos
+            exp = decimal.Decimal((0, (1,), pos))
+
+            return [str(di.quantize(exp)) for di in decs]
 
         # get dataframe
 
@@ -3278,7 +3299,7 @@ class RunCollection(_RunAnalysis):
 
         kwargs.setdefault('index', False)
 
-        if style in ('table' or 'dat'):
+        if style in ('table', 'dat'):
             df.to_string(buf=outfile, **kwargs)
 
         elif style == 'latex':
@@ -3289,20 +3310,24 @@ class RunCollection(_RunAnalysis):
                 for prm in df.columns[1::3]:
 
                     # find the corresponding errors
-                    sig = ((r'$-1\sigma\_', r'$+1\sigma\_') if math_labels
-                           else ('-1σ_', '+1σ_'))
+                    errnames = (
+                        (fr'$-1\sigma\_{prm[1:]}', fr'$+1\sigma\_{prm[1:]}')
+                        if math_labels else (f'-1σ_{prm}', f'+1σ_{prm}')
+                    )
 
-                    errs = (df[f'{sig[0]}{prm[1:]}'], df[f'{sig[1]}{prm[1:]}'])
+                    errs = (df[errnames[0]], df[errnames[1]])
 
                     # rewrite the column with substack errors
-                    df[prm] = [
-                        (fr'\({val:.4f}\substack'
-                         fr'{{+{errs[1][row]:.4f} \\ -{errs[0][row]:.4f}}}\)')
-                        for row, val in enumerate(df[prm])
-                    ]
+                    # TODO if include_FeH or any other with 0 err, will truncate
+                    sub = []
+                    for row, val in enumerate(df[prm]):
+                        v, eu, ed = _round_sf(val, errs[1][row], errs[0][row])
+                        sub.append(fr'\({v}\substack{{+{eu} \\ -{ed}}}\)')
+
+                    df[prm] = sub
 
                     # delete the error columns
-                    del df[f'{sig[0]}{prm[1:]}'], df[f'{sig[1]}{prm[1:]}']
+                    del df[errnames[0]], df[errnames[1]]
 
             kwargs.setdefault('escape', False)
             kwargs.setdefault('float_format', '%.4f')
