@@ -7,7 +7,6 @@ import astropy.units as u
 from astropy.constants import c
 
 import pathlib
-from importlib import resources
 import logging
 
 
@@ -114,9 +113,6 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
     # Location of the maximum acceleration along this los
     zmax = az_der.roots()
 
-    # Acceleration at zt
-    azt = az[-1]
-
     # Setup spline for the density, depending on mass bin
     if mass_bin == 0 and model.nmbin == 1:
         rho = model.rho
@@ -129,7 +125,7 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
 
     # Now compute P(a_z|R)
 
-    nr, k = nz, 3  # bit of experimenting
+    nr = nz  # bit of experimenting
 
     # Value of the maximum acceleration, at the chosen root
     azmax = az_spl(zmax[0])
