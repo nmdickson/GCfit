@@ -169,16 +169,16 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
         # going to use the second value
         Paz_dist[0] = Paz_dist[1]
 
-        outside_azt = az_domain > azt
-
+        # Normalise the distribution
         Paz_dist /= rhoz_spl.integral(0.0 << z.unit, zt).value
 
     else:
 
         # need to look at full cluster now that it's no longer symmetric
         az_domain = np.concatenate((np.flip(-az_domain[1:]), az_domain))
-        # also need the signs to pick which side of the cluster the pulsar is
-        # on, negative az means a positive z position, opposite for positive
+
+        # also need the signs to pick which side of the cluster the pulsar is on
+        # negative az means a positive z position, opposite for positive
         az_signs = np.sign(az_domain)
 
         # make sure we get the cluster DM mdata too
@@ -188,13 +188,13 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
 
         # get los pos, err using cluster DM data
         DM_los, DM_los_err = los_dm(DM, ΔDM, DM_mdata)
-
+        
         # Pulsars should alway be within the half-light radius, if not the
         # spline will just return probability of zero anyway so we should be
         # fine. We should log here anyway so that we can make sure this isn't
         # happening often.
         if DM_los.to("pc") > model.rh.to("pc"):
-            logging.warning("Pulsar LOS position outside of rh.")
+            logging.warning("Pulsar DM-based LOS position outside of rh.")
 
         z_domain = np.linspace(-model.rh, model.rh, len(az_domain))
 
@@ -204,7 +204,7 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
             x=z_domain, y=DM_gaussian, s=0, k=3, ext=1
         )
 
-        # I think we still only want positive values for the other splines
+        # We still only want positive values for the other splines
         az_domain = np.abs(az_domain)
 
         Paz_dist = np.zeros_like(az_domain.value)
@@ -218,14 +218,13 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
             )
 
         Paz_dist <<= u.dimensionless_unscaled
-        # Here we add the signs back in only for the DM splines, this allows
-        # us to select the correct side of the cluster for each az point
 
         # This new method gives a zero in at the start of the distribution
         # which I expect might do bad things to convolution, so I'm just
-        # going to use the second value
-        # print(f"{Paz_dist=}")
-        Paz_dist[0] = Paz_dist[1]
+        # going to interpolate it, this is a bit hacky but I don't see a cleaner
+        # way to do it, and this gives a nice smooth distribution
+        arg_zero = np.argmin(Paz_dist)
+        Paz_dist[arg_zero] = (Paz_dist[arg_zero+1] + Paz_dist[arg_zero-1]) / 2
 
     # Ensure Paz is normalized (slightly different for density vs DM methods)
 
