@@ -344,15 +344,16 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
     # final distribution should be normalized to 1.0, even after the conversion
     # from az to Pdot/P.
     PdotP_domain = az_domain / c
+    P_PdotP_dist = Paz_dist * c.value
 
     # put the signs back in for the DM method
     if DM is not None:
         PdotP_domain *= az_signs
 
     # Trim the peaks from numerical instability around azmax
-    Paz_dist = trim_peaks(PdotP_domain * c, Paz_dist)
+    Paz_dist = trim_peaks(PdotP_domain, P_PdotP_dist)
 
-    return PdotP_domain, Paz_dist
+    return PdotP_domain, P_PdotP_dist
 
 
 def galactic_component(lat, lon, D):
