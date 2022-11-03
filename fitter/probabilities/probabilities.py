@@ -175,9 +175,12 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
                 )
 
         except ValueError as err:
-            # temporary fix for z2 interpolation error
-
-            mssg = "Pulsar `cluster_component` failed with error:"
+            # The cluster component shouldn't be crashing nearly as often now,
+            # should only happen when Paz fails to integrate to 1.0
+            mssg = f"""
+            Pulsar `cluster_component` failed with params: "
+            {model.theta=}, {R=}, {mass_bin=}, {DM=}, with error:
+            """
             logging.warning(mssg, exc_info=err)
 
             return np.NINF

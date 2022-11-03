@@ -249,16 +249,23 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
 
         else:
             # This is the case where our probability distribution doesn't
-            # integrate to one, just don't cut anything off, log the
-            # normalization and manually normalize it.
+            # integrate to one.
+
+            # If the area is way less than 1, we should just throw an exception
+            if norm < 0.9:
+                logging.error(
+                    "Probability distribution failed to integrate "
+                    f"to 1.0, area: {norm:.6f}, too small to continue."
+                )
+                raise ValueError("Paz failed to integrate to 1.0, too small to"
+                                f"continue. Area: {norm:.6f}")
+
+            # If the area is close to 1, we should just log a warning and
+            # manually normalize it
             logging.warning(
                 "Probability distribution failed to integrate "
                 f"to 1.0, area: {norm:.6f}"
             )
-
-            # TODO: in the cases where this isn't close to 1, there's been
-            # a serious failure and we should be returning -inf, not just
-            # logging and continuing
 
             # Manual normalization
             Paz_dist /= norm
@@ -299,6 +306,16 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
             # This is the case where our probability distribution doesn't
             # integrate to one, just don't cut anything off, log the
             # normalization and manually normalize it.
+
+            # If the area is way less than 1, we should just throw an exception
+            if norm < 0.9:
+                logging.error(
+                    "Probability distribution failed to integrate "
+                    f"to 1.0, area: {norm:.6f}, too small to continue."
+                )
+                raise ValueError("Paz failed to integrate to 1.0, too small to"
+                                f"continue. Area: {norm:.6f}")
+
             logging.warning(
                 "Probability distribution failed to integrate "
                 f"to 1.0, area: {norm:.6f}"
