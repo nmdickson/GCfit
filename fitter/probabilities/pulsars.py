@@ -219,8 +219,15 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
         # which I expect might do bad things to convolution, so I'm just
         # going to interpolate it, this is a bit hacky but I don't see a cleaner
         # way to do it, and this gives a nice smooth distribution
-        arg_zero = np.argmin(Paz_dist)
-        Paz_dist[arg_zero] = (Paz_dist[arg_zero+1] + Paz_dist[arg_zero-1]) / 2
+        if np.any(Paz_dist == 0.0):
+            # get the index
+            arg_zero = np.argmin(Paz_dist)
+            # dont overflow the array
+            if 0 < arg_zero <len (Paz_dist)-1:
+                # interpolate between the two neighbouring points
+                Paz_dist[arg_zero] = (
+                    Paz_dist[arg_zero - 1] + Paz_dist[arg_zero + 1]
+                ) / 2.0
 
     # Ensure Paz is normalized (slightly different for density vs DM methods)
 
