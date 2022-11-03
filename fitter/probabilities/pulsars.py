@@ -127,8 +127,13 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
 
     nr = nz  # bit of experimenting
 
-    # Value of the maximum acceleration, at the chosen root
-    azmax = az_spl(zmax[0])
+    # There are 2 possibilities depending on R:
+    # (1) the maximum acceleration occurs within the cluster boundary, or
+    # (2) max(a_z) = a_z,t (this happens when R ~ r_t)
+    if len(zmax) > 0:
+        azmax = az_spl(zmax[0])
+    else:
+        azmax = az_spl(z[-1])
 
     # Old version here for future reference
     # increment density by 2 order of magnitude smaller than azmax
