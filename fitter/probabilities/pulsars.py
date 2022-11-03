@@ -318,7 +318,7 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
             # If the area is way less than 1, we should just throw an exception
             if norm < 0.9:
                 raise ValueError("Paz failed to integrate to 1.0, too small to"
-                                f"continue. Area: {norm:.6f}")
+                                f" continue. Area: {norm:.6f}")
 
             logging.warning(
                 "Probability distribution failed to integrate "
