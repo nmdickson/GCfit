@@ -292,7 +292,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
 
     logprobs = np.log(probs)
 
-    # Should never occur anymore, but leave it here for now just in case
+    # Replace NaNs with -inf
     logprobs[np.isnan(logprobs)] = np.NINF
 
     return np.sum(logprobs)
@@ -481,9 +481,12 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
     # Multiply all the probabilities and return the total log probability.
     # ----------------------------------------------------------------------
 
-    # Catch any NaNs
-    probs[np.isnan(probs)] = np.NINF
-    return np.sum(np.log(probs))
+    logprobs = np.log(probs)
+
+    # Replace NaNs with -inf
+    logprobs[np.isnan(logprobs)] = np.NINF
+
+    return np.sum(logprobs)
 
 
 @_angular_units
