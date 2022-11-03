@@ -388,20 +388,34 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
         # Compute the cluster component distribution, from the model
         # ------------------------------------------------------------------
 
-        if use_DM:
+        try:
+            if use_DM:
 
-            DM = pulsars['DM'][i]
-            ΔDM = pulsars['ΔDM'][i]
+                DM = pulsars['DM'][i]
+                ΔDM = pulsars['ΔDM'][i]
 
-            DM_mdata = pulsars.mdata
+                DM_mdata = pulsars.mdata
 
-            PdotP_domain, PdotP_c_prob = cluster_component(
-                model, R, DM=DM, ΔDM=ΔDM, DM_mdata=DM_mdata, mass_bin=mass_bin
-            )
-        else:
-            PdotP_domain, PdotP_c_prob = cluster_component(
-                model, R, DM=None, DM_mdata=None, mass_bin=mass_bin
-            )
+                PdotP_domain, PdotP_c_prob = cluster_component(
+                    model, R, mass_bin=mass_bin,
+                    DM=DM, ΔDM=ΔDM, DM_mdata=DM_mdata
+                )
+
+            else:
+                PdotP_domain, PdotP_c_prob = cluster_component(
+                    model, R, DM=None, DM_mdata=None, mass_bin=mass_bin
+                )
+
+        except ValueError as err:
+            # The cluster component shouldn't be crashing nearly as often now,
+            # should only happen when Paz fails to integrate to 1.0
+            mssg = f"""
+            Pulsar `cluster_component` failed with params: "
+            {model.theta=}, {R=}, {mass_bin=}, {DM=}, with error:
+            """
+            logging.warning(mssg, exc_info=err)
+
+            return np.NINF
 
         Pdot_domain = (Pb * PdotP_domain).decompose()
 
@@ -467,6 +481,8 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
     # Multiply all the probabilities and return the total log probability.
     # ----------------------------------------------------------------------
 
+    # Catch any NaNs
+    probs[np.isnan(probs)] = np.NINF
     return np.sum(np.log(probs))
 
 
