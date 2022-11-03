@@ -344,6 +344,9 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
         Paz_dist /= 2
 
     # Change the acceleration domain to a Pdot / P domain
+    # TODO (Peter): Reminder here to double check with Nolan/Vincent that this
+    # final distribution should be normalized to 1.0, even after the conversion
+    # from az to Pdot/P.
     PdotP_domain = az_domain / c
 
     # put the signs back in for the DM method
