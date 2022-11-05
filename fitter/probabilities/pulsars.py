@@ -268,13 +268,6 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
                 raise ValueError("Paz failed to integrate to 1.0, too small to"
                                 f"continue. Area: {norm:.6f}")
 
-            # If the area is close to 1, we should just log a warning and
-            # manually normalize it
-            logging.warning(
-                "Probability distribution failed to integrate "
-                f"to 1.0, area: {norm:.6f}"
-            )
-
             # Manual normalization
             Paz_dist /= norm
 
@@ -319,11 +312,6 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
             if norm < 0.9:
                 raise ValueError("Paz failed to integrate to 1.0, too small to"
                                 f" continue. Area: {norm:.6f}")
-
-            logging.warning(
-                "Probability distribution failed to integrate "
-                f"to 1.0, area: {norm:.6f}"
-            )
 
             # Manual normalization
             Paz_dist /= norm
