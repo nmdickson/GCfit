@@ -1,4 +1,5 @@
 from .data import Observations
+from ..util.data import GCFIT_DIR
 from ..probabilities import posterior, priors
 from ..util.probabilities import plateau_weight_function
 
@@ -291,7 +292,7 @@ class NestedSamplingOutput(Output):
 def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
              mpi=False, initials=None, param_priors=None, moves=None,
              fixed_params=None, excluded_likelihoods=None, hyperparams=False,
-             cont_run=False, savedir=_here, backup=False,
+             cont_run=False, savedir=_here, backup=False, restrict_to=None,
              verbose=False, progress=False):
     '''Main MCMC fitting pipeline
 
@@ -406,7 +407,7 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
     logging.info(f"Loading {cluster} data")
 
-    observations = Observations(cluster)
+    observations = Observations(cluster, restrict_to=restrict_to)
 
     logging.debug(f"Observation datasets: {observations}")
 
@@ -501,7 +502,9 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
         backend.store_metadata('cluster', cluster)
 
-        backend.store_metadata('GCFIT_DIR', os.getenv('GCFIT_DIR', 'CORE'))
+        backend.store_metadata('restrict_to', restrict_to)
+        backend.store_metadata('GCFIT_DIR',
+                               'CORE' if restrict_to == 'core' else GCFIT_DIR)
 
         backend.store_metadata('mpi', mpi)
         backend.store_metadata('Ncpu', Ncpu)
@@ -614,7 +617,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
                pfrac=1.0, maxfrac=0.8, eff_samples=5000,
                Ncpu=2, mpi=False, initials=None, param_priors=None,
                fixed_params=None, excluded_likelihoods=None, hyperparams=False,
-               savedir=_here, verbose=False):
+               savedir=_here, restrict_to=None, verbose=False):
     '''Main nested sampling fitting pipeline
 
     Execute the full nested sampling cluster fitting algorithm.
@@ -750,7 +753,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
     logging.info(f"Loading {cluster} data")
 
-    observations = Observations(cluster)
+    observations = Observations(cluster, restrict_to=restrict_to)
 
     logging.debug(f"Observation datasets: {observations}")
 
@@ -836,7 +839,9 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
         backend.store_metadata('cluster', cluster)
 
-        backend.store_metadata('GCFIT_DIR', os.getenv('GCFIT_DIR', 'CORE'))
+        backend.store_metadata('restrict_to', restrict_to)
+        backend.store_metadata('GCFIT_DIR',
+                               'CORE' if restrict_to == 'core' else GCFIT_DIR)
 
         backend.store_metadata('mpi', mpi)
         backend.store_metadata('Ncpu', Ncpu)
