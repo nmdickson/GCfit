@@ -447,18 +447,18 @@ class MCMCRun(_RunAnalysis):
 
             math_mapping = {
                 'W0': r'$\hat{\phi}_0$',
-                'M': r'$M$',
-                'rh': r'$r_h$',
+                'M': r'$M\ \left[10^6\ M_\odot\right]$',
+                'rh': r'$r_h\ \left[\mathrm{pc}\right]$',
                 'ra': r'$\log\left(\hat{r}_a\right)$',
                 'g': r'$g$',
                 'delta': r'$\delta$',
-                's2': r'$s^2$',
+                's2': r'$s^2\ \left[\mathrm{arcmin^{-4}}\right]$',
                 'F': r'$F$',
                 'a1': r'$\alpha_1$',
                 'a2': r'$\alpha_2$',
                 'a3': r'$\alpha_3$',
-                'BHret': r'$\mathrm{BH}_{ret}$',
-                'd': r'$d$',
+                'BHret': r'$\mathrm{BH}_{ret}\ \left[\%\right]$',
+                'd': r'$d\ \left[\mathrm{kpc}\right]$',
             }
 
             labels = [math_mapping[lbl] for lbl in labels]
@@ -1112,23 +1112,22 @@ class NestedRun(_RunAnalysis):
 
         labels = list(self.obs.initials)
 
-        # TODO make sure all plots are showing math, units and stuff in labels
         if math_labels:
 
             math_mapping = {
                 'W0': r'$\hat{\phi}_0$',
-                'M': r'$M$',
-                'rh': r'$r_h$',
+                'M': r'$M\ \left[10^6\ M_\odot\right]$',
+                'rh': r'$r_h\ \left[\mathrm{pc}\right]$',
                 'ra': r'$\log\left(\hat{r}_a\right)$',
                 'g': r'$g$',
                 'delta': r'$\delta$',
-                's2': r'$s^2$',
+                's2': r'$s^2\ \left[\mathrm{arcmin^{-4}}\right]$',
                 'F': r'$F$',
                 'a1': r'$\alpha_1$',
                 'a2': r'$\alpha_2$',
                 'a3': r'$\alpha_3$',
-                'BHret': r'$\mathrm{BH}_{ret}$',
-                'd': r'$d$',
+                'BHret': r'$\mathrm{BH}_{ret}\ \left[\%\right]$',
+                'd': r'$d\ \left[\mathrm{kpc}\right]$',
             }
 
             labels = [math_mapping[lbl] for lbl in labels]
@@ -2712,6 +2711,7 @@ class RunCollection(_RunAnalysis):
         x, *dx = self._get_param(param1, force_model=force_model)
         y, *dy = self._get_param(param2, force_model=force_model)
 
+        # TODO errorbar and scatter often dont accept same kwargs
         errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', label=label,
                              **kwargs)
         points = ax.scatter(x, y, picker=True, **kwargs)
