@@ -2117,7 +2117,6 @@ class CIModelVisualizer(_ClusterVisualizer):
         # very large rt. I'm not really sure yet how that might affect the CIs
         # or plots
 
-        # TODO https://github.com/nmdickson/GCfit/issues/100
         huge_model = Model(chain[np.argmax(chain[:, 4])], viz.obs)
 
         viz.r = np.r_[0, np.geomspace(1e-5, huge_model.rt.value, 99)] << u.pc
@@ -2714,7 +2713,6 @@ class CIModelVisualizer(_ClusterVisualizer):
         ''' load the CI from a file which was `save`d, to avoid rerunning models
         validate: check while loading that all datasets are there, error if not
         '''
-        # TODO load should accept an optional observations like all others
 
         with h5py.File(filename, 'r') as file:
 
@@ -2726,7 +2724,9 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             # init class
             if (obs := observations) is None:
-                obs = Observations(modelgrp['metadata'].attrs['cluster'])
+                restrict = modelgrp['metadata'].attrs.get('restrict_to', None)
+                obs = Observations(modelgrp['metadata'].attrs['cluster'],
+                                   restrict_to=restrict)
 
             viz = cls(obs)
 
