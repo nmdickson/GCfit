@@ -34,6 +34,11 @@ class _RunAnalysis:
 
     filename : path to run output file
     group : base group for sampler outputs, probably either 'nested' or 'mcmc'
+
+    if observations is None, it will be created and an educated guess will be
+    made on the source (i.e. the `restrict_to` kw) based on the file metadata.
+    If you want to restrict to a specific different place, pass in your own
+    Observations.
     '''
 
     _cmap = plt.rcParams['image.cmap']
@@ -58,8 +63,7 @@ class _RunAnalysis:
         except AttributeError:
             return "Run Results"
 
-    def __init__(self, filename, observations, group, name=None, *,
-                 strict=True, restrict_to='core'):
+    def __init__(self, filename, observations, group, name=None):
 
         self._filename = filename
         self._gname = group
@@ -74,44 +78,10 @@ class _RunAnalysis:
                         f"missing {missing_groups} groups. "
                         "Are you sure this was created by GCfit?")
 
-                if strict:
-                    raise RuntimeError(mssg)
-                else:
-                    logging.warning(mssg)
+                raise RuntimeError(mssg)
 
             # Check if this run seems to have used a local cluster data file
-            gcfit_dir = file['metadata'].attrs.get('GCFIT_DIR', 'CORE')
-
-            mssg = None
-
-            if gcfit_dir == 'CORE':
-                if restrict_to == 'core':
-                    pass
-
-                else:
-                    mssg = (f"This run used a core datafile, restricting to "
-                            f"`{restrict_to}` may use different observations")
-
-            else:
-
-                cur_gcfit_dir = os.getenv('GCFIT_DIR')
-
-                if restrict_to == 'core':
-                    mssg = (f"This run used a local datafile at `{gcfit_dir}`, "
-                            f"restricting to `{restrict_to}` may use different "
-                            f"observations")
-
-                elif cur_gcfit_dir != gcfit_dir:
-                    mssg = (f"This run used a local datafile at `{gcfit_dir}`, "
-                            f"restricting to `{restrict_to}` with "
-                            f"`GCFIT_DIR={cur_gcfit_dir}`  may use different "
-                            f"observations")
-
-            if mssg:
-                if strict:
-                    raise RuntimeError(mssg)
-                else:
-                    logging.warning(mssg)
+            restrict_to = file['metadata'].attrs.get('restrict_to', None)
 
         # Determine and init cluster observations if necessary
         if name is not None:

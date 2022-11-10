@@ -103,6 +103,10 @@ if __name__ == '__main__':
     parallel_group.add_argument("--mpi", action="store_true",
                                 help="Run with MPI rather than multiprocessing")
 
+    shared_parser.add_argument('--restrict-to', default=None,
+                               choices={None, 'local', 'core'},
+                               help='Optionally restrict datafiles used to '
+                                    '"core" or "local" cluster files')
     shared_parser.add_argument('--savedir', default=default_dir,
                                help='location of saved sampling runs')
     shared_parser.add_argument('-i', '--initials',
