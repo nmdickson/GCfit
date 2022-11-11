@@ -8,7 +8,7 @@ here = os.path.abspath(os.path.dirname(__file__))
 NAME = 'GCfit'
 VERSION = "0.10"
 
-DESCRIPTION = 'Multimass MCMC fitting of Limepy globular cluster analytic model'
+DESCRIPTION = 'Fitting of multimass equilibrium models of globular clusters'
 with io.open(os.path.join(here, 'README.md'), encoding='utf-8') as f:
     LONG_DESCRIPTION = '\n' + f.read()
 
@@ -20,10 +20,11 @@ CONTACT_EMAIL = 'nolan.dickson@smu.ca'
 # TODO document the subrequirements like geos, gsl, etc
 REQUIRED = [
     "corner",
-    "astro-limepy==0.1.1",  # TODO only until newest version is updated on pip
+    # TODO only until newest version is updated on pip
+    "astro-limepy @ git+https://github.com/mgieles/limepy.git",
     "astropy",
     "emcee",
-    "ssptools @ git+https://github.com/nmdickson/ssptools.git",
+    "ssptools @ git+https://github.com/SMU-clusters/ssptools.git",
     "schwimmbad",
     "matplotlib",
     "numpy",
@@ -31,7 +32,7 @@ REQUIRED = [
     "h5py",
     "tqdm",
     "dynesty",
-    "gala==1.3",
+    "gala",
     "shapely",
     "sphinx-toggleprompt"
 ]
