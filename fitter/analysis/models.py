@@ -1278,7 +1278,8 @@ class _ClusterVisualizer:
 
         for sf in fig.subfigs[show_fields:]:
 
-            sf.supxlabel(r'Mass [$M_\odot$]')
+            # sf.supxlabel(r'Mass [$M_\odot$]')
+            sf.axes[-1].set_xlabel(r'Mass [$M_\odot$]')
 
         fig.subfigs[show_fields].supylabel('dN/dm')
 
@@ -1374,8 +1375,8 @@ class _ClusterVisualizer:
         # Add plot labels and legends
         # ------------------------------------------------------------------
 
-        ax.set_xlabel(r'$δ\,\mathrm{RA}\ [\mathrm{arcmin}]$')
-        ax.set_ylabel(r'$δ\,\mathrm{DEC}\ [\mathrm{arcmin}]$')
+        ax.set_xlabel(r'$\Delta\,\mathrm{RA}\ [\mathrm{arcmin}]$')
+        ax.set_ylabel(r'$\Delta\,\mathrm{DEC}\ [\mathrm{arcmin}]$')
 
         # TODO figure out a better way of handling this always using best? (75)
         ax.legend(loc='upper left' if grid else 'best')
