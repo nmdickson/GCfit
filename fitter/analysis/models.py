@@ -535,10 +535,7 @@ class _ClusterVisualizer:
 
             # No data plotted, use the star_bin
             if not masses:
-                if model_data.shape[0] > 1:
-                    masses = {self.star_bin: None}
-                else:
-                    masses = {0: None}
+                masses = {self.star_bin: None}
 
             for mbin, errbars in masses.items():
 
