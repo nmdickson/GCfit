@@ -503,8 +503,8 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         backend.store_metadata('cluster', cluster)
 
         backend.store_metadata('restrict_to', restrict_to)
-        backend.store_metadata('GCFIT_DIR',
-                               'CORE' if restrict_to == 'core' else GCFIT_DIR)
+        backend.store_metadata('GCFIT_DIR', 'CORE' if restrict_to == 'core'
+                                            else str(GCFIT_DIR))
 
         backend.store_metadata('mpi', mpi)
         backend.store_metadata('Ncpu', Ncpu)
