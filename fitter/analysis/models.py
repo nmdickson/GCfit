@@ -547,7 +547,12 @@ class _ClusterVisualizer:
 
             for mbin, errbars in masses.items():
 
-                ymodel = model_data[mbin, :, :]
+                try:
+                    ymodel = model_data[mbin, :, :]
+                except IndexError:
+                    mssg = (f"Mass bin index {mbin} is out of "
+                            f"range ({self.mj.size})")
+                    raise ValueError(mssg)
 
                 # if no model color specified *and* multiple masses exists, use
                 #   corresponding data colours, otherwise use default
