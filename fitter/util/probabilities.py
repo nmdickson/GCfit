@@ -1,5 +1,5 @@
 import numpy as np
-import scipy as sp
+from .units import QuantitySpline
 
 __all__ = ['gaussian', 'RV_transform', 'gaussian_likelihood',
            'hyperparam_likelihood', 'hyperparam_effective', 'div_error',
@@ -24,7 +24,7 @@ def RV_transform(domain, f_X, h, h_prime):
 
 def find_intersections(y, x, value):
     '''Find the intersections of a function with a given value.'''
-    spl = sp.interpolate.InterpolatedUnivariateSpline(x, y - value, k=3, ext=2)
+    spl = QuantitySpline(x, y - value, k=3, ext=2)
     return spl.roots()
 
 # --------------------------------------------------------------------------

@@ -125,7 +125,7 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
 
     # Now compute P(a_z|R)
 
-    nr = nz  # bit of experimenting
+    nr = nz
 
     # There are 2 possibilities depending on R:
     # (1) the maximum acceleration occurs within the cluster boundary, or
@@ -228,7 +228,7 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
             # get the index
             arg_zero = np.argmin(Paz_dist)
             # dont overflow the array
-            if 0 < arg_zero <len (Paz_dist)-1:
+            if 0 < arg_zero < len(Paz_dist)-1:
                 # interpolate between the two neighbouring points
                 Paz_dist[arg_zero] = (
                     Paz_dist[arg_zero - 1] + Paz_dist[arg_zero + 1]
@@ -336,9 +336,6 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
         Paz_dist /= 2
 
     # Change the acceleration domain to a Pdot / P domain
-    # TODO (Peter): Reminder here to double check with Nolan/Vincent that this
-    # final distribution should be normalized to 1.0, even after the conversion
-    # from az to Pdot/P.
     PdotP_domain = az_domain / c
     P_PdotP_dist = Paz_dist * c.value
 
