@@ -1,8 +1,9 @@
 import numpy as np
+from .units import QuantitySpline
 
 __all__ = ['gaussian', 'RV_transform', 'gaussian_likelihood',
            'hyperparam_likelihood', 'hyperparam_effective', 'div_error',
-           'trim_peaks']
+           'trim_peaks', 'find_intersections']
 
 # --------------------------------------------------------------------------
 # Generic Distribution Helpers
@@ -21,6 +22,10 @@ def RV_transform(domain, f_X, h, h_prime):
     f_Y = f_X(h(domain)) * np.abs(h_prime(domain))
     return np.nan_to_num(f_Y)
 
+def find_intersections(y, x, value):
+    '''Find the intersections of a function with a given value.'''
+    spl = QuantitySpline(x, y - value, k=3, ext=2)
+    return spl.roots()
 
 # --------------------------------------------------------------------------
 # Gaussian Likelihood
