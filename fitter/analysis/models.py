@@ -1939,7 +1939,7 @@ class ModelVisualizer(_ClusterVisualizer):
                 for j in range(model.nms):
 
                     Nj = field_slice.MC_integrate(densityj[j], sample_radii)
-                    widthj = (model.mj[j] * model.mes_widths[j])
+                    widthj = (model.mj[j] * model.mbin_widths[j])
 
                     this_slc['dNdm'][0, j] = (Nj / widthj).value
 
@@ -2594,7 +2594,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             for j in range(model.nms):
                 Nj = rslice['field'].MC_integrate(densityj[j], sample_radii)
-                widthj = (model.mj[j] * model.mes_widths[j])
+                widthj = (model.mj[j] * model.mbin_widths[j])
                 dNdm[j] = (Nj / widthj).value
 
         return dNdm

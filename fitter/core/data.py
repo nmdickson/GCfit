@@ -4,7 +4,7 @@ import h5py
 import numpy as np
 import limepy as lp
 from astropy import units as u
-from ssptools import evolve_mf_3 as emf3
+from ssptools import EvolvedMF
 
 import fnmatch
 import logging
@@ -739,12 +739,10 @@ class Model(lp.limepy):
         '''Evolve the cluster mass function from it's IMF using `ssptools`'''
 
         # TODO before comparing with Kroupa we might want to discuss these:
-        m123 = [0.1, 0.5, 1.0, 100]  # Slope breakpoints for imf
-        nbin12 = [5, 5, 20]
+        m_breaks = [0.1, 0.5, 1.0, 100]  # Slope breakpoints for imf
+        nbins = [5, 5, 20]
 
-        a12 = [-a1, -a2, -a3]  # Slopes for imf
-
-        # TODO figure out which of these are cluster dependant, store in hdfs
+        a_slopes = [-a1, -a2, -a3]  # Slopes for imf
 
         # Integration settings
         N0 = 5e5  # Normalization of stars
@@ -784,18 +782,18 @@ class Model(lp.limepy):
             vesc = 90
 
         # Generate the mass function
-        return emf3.evolve_mf(
-            m123=m123,
-            a12=a12,
-            nbin12=nbin12,
+        return EvolvedMF(
+            m_breaks=m_breaks,
+            a_slopes=a_slopes,
+            nbins=nbins,
+            FeH=FeH,
             tout=np.array([age]),
-            N0=N0,
             Ndot=Ndot,
+            N0=N0,
             tcc=tcc,
             NS_ret=NS_ret,
             BH_ret_int=BH_ret_int,
             BH_ret_dyn=BH_ret_dyn,
-            FeHe=FeH,
             natal_kicks=natal_kicks,
             vesc=vesc
         )
