@@ -881,31 +881,12 @@ class Model(lp.limepy):
         self._mf = self._init_mf(theta['a1'], theta['a2'], theta['a3'],
                                  theta['BHret'])
 
-        # Set bins that should be empty to empty
-        cs = self._mf.Ns[-1] > 10 * self._mf.Nmin
-        ms, Ms = self._mf.ms[-1][cs], self._mf.Ms[-1][cs]
+        mj, Mj = self._mf.m, self._mf.M
 
-        cr = self._mf.Nr[-1] > 10 * self._mf.Nmin
-        mr, Mr = self._mf.mr[-1][cr], self._mf.Mr[-1][cr]
+        self.mbin_widths = self._mf.bin_widths
 
-        # Collect mean mass and total mass bins
-        mj = np.r_[ms, mr]
-        Mj = np.r_[Ms, Mr]
-
-        # store some necessary mass function info in the model
-        self.nms = ms.size
-        self.nmr = mr.size
-
-        # TODO these kind of slices would prob be more useful than nms elsewhere
-        self._star_bins = slice(0, self.nms)
-        self._remnant_bins = slice(self.nms, self.nms + self.nmr)
-
-        # TODO still don't entriely understand when this is to be used
-        # mj is middle of mass bins, mes are edges, widths are sizes of bins
-        # self.mbin_widths = np.diff(self._mf.mes[-1]) ??
-        # Whats the differences with `mes` and `me`?
-        # TODO is this supposed to habe units? I think so
-        self.mes_widths = np.diff(self._mf.mes[-1])
+        self.nms = self._mf.nms
+        self.nmr = self._mf.nmr
 
         # append tracer mass bins (must be appended to end to not affect nms)
         if observations is not None:
@@ -956,17 +937,16 @@ class Model(lp.limepy):
         # Split apart the stellar classes of the mass bins
         # ------------------------------------------------------------------
 
-        self.Nj = self.Mj / self.mj
+        self.Nj = self._mf.N  # consistent with M/m within floating point errs
 
-        # TODO slight difference in mf.IFMR.mBH_min and mf.mBH_min?
-        self._mBH_min = self._mf.IFMR.mBH_min << u.Msun
-        self._BH_bins = self.mj[self._remnant_bins] > self._mBH_min
+        # TODO these kind of slices would prob be more useful than nms elsewhere
+        self._star_bins = slice(0, self.nms)
+        self._remnant_bins = slice(self.nms, self.nms + self.nmr)
 
-        self._mWD_max = self._mf.IFMR.predict(self._mf.IFMR.wd_m_max) << u.Msun
-        self._WD_bins = self.mj[self._remnant_bins] < self._mWD_max
-
-        self._NS_bins = ((self._mWD_max < self.mj[self._remnant_bins])
-                         & (self.mj[self._remnant_bins] < self._mBH_min))
+        # Masked only within `remnant bins` regime to avoid issues with tracers
+        self._BH_bins = self._mf.types[self.nms:] == 'BH'
+        self._NS_bins = self._mf.types[self.nms:] == 'NS'
+        self._WD_bins = self._mf.types[self.nms:] == 'WD'
 
         # ------------------------------------------------------------------
         # Get Black Holes
