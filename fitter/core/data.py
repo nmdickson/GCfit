@@ -4,7 +4,7 @@ import h5py
 import numpy as np
 import limepy as lp
 from astropy import units as u
-from ssptools import evolve_mf_3 as emf3
+from ssptools import EvolvedMF
 
 import fnmatch
 import logging
@@ -739,12 +739,10 @@ class Model(lp.limepy):
         '''Evolve the cluster mass function from it's IMF using `ssptools`'''
 
         # TODO before comparing with Kroupa we might want to discuss these:
-        m123 = [0.1, 0.5, 1.0, 100]  # Slope breakpoints for imf
-        nbin12 = [5, 5, 20]
+        m_breaks = [0.1, 0.5, 1.0, 100]  # Slope breakpoints for imf
+        nbins = [5, 5, 20]
 
-        a12 = [-a1, -a2, -a3]  # Slopes for imf
-
-        # TODO figure out which of these are cluster dependant, store in hdfs
+        a_slopes = [-a1, -a2, -a3]  # Slopes for imf
 
         # Integration settings
         N0 = 5e5  # Normalization of stars
@@ -784,18 +782,18 @@ class Model(lp.limepy):
             vesc = 90
 
         # Generate the mass function
-        return emf3.evolve_mf(
-            m123=m123,
-            a12=a12,
-            nbin12=nbin12,
+        return EvolvedMF(
+            m_breaks=m_breaks,
+            a_slopes=a_slopes,
+            nbins=nbins,
+            FeH=FeH,
             tout=np.array([age]),
-            N0=N0,
             Ndot=Ndot,
+            N0=N0,
             tcc=tcc,
             NS_ret=NS_ret,
             BH_ret_int=BH_ret_int,
             BH_ret_dyn=BH_ret_dyn,
-            FeHe=FeH,
             natal_kicks=natal_kicks,
             vesc=vesc
         )
@@ -822,14 +820,17 @@ class Model(lp.limepy):
         self.Mj <<= M_units
         self.mc <<= M_units
         self.mmean <<= M_units
-        self.mes_widths <<= M_units
+        self.mbin_widths <<= M_units
 
         self.r <<= R_units
         self.r0 <<= R_units
+        self.r0j <<= R_units
         self.rh <<= R_units
+        self.rhj <<= R_units
         self.rhp <<= R_units
         self.rt <<= R_units
         self.ra <<= R_units
+        self.raj <<= R_units
         self.rv <<= R_units
         self.rs <<= R_units
 
@@ -880,31 +881,12 @@ class Model(lp.limepy):
         self._mf = self._init_mf(theta['a1'], theta['a2'], theta['a3'],
                                  theta['BHret'])
 
-        # Set bins that should be empty to empty
-        cs = self._mf.Ns[-1] > 10 * self._mf.Nmin
-        ms, Ms = self._mf.ms[-1][cs], self._mf.Ms[-1][cs]
+        mj, Mj = self._mf.m, self._mf.M
 
-        cr = self._mf.Nr[-1] > 10 * self._mf.Nmin
-        mr, Mr = self._mf.mr[-1][cr], self._mf.Mr[-1][cr]
+        self.mbin_widths = self._mf.bin_widths
 
-        # Collect mean mass and total mass bins
-        mj = np.r_[ms, mr]
-        Mj = np.r_[Ms, Mr]
-
-        # store some necessary mass function info in the model
-        self.nms = ms.size
-        self.nmr = mr.size
-
-        # TODO these kind of slices would prob be more useful than nms elsewhere
-        self._star_bins = slice(0, self.nms)
-        self._remnant_bins = slice(self.nms, self.nms + self.nmr)
-
-        # TODO still don't entriely understand when this is to be used
-        # mj is middle of mass bins, mes are edges, widths are sizes of bins
-        # self.mbin_widths = np.diff(self._mf.mes[-1]) ??
-        # Whats the differences with `mes` and `me`?
-        # TODO is this supposed to habe units? I think so
-        self.mes_widths = np.diff(self._mf.mes[-1])
+        self.nms = self._mf.nms
+        self.nmr = self._mf.nmr
 
         # append tracer mass bins (must be appended to end to not affect nms)
         if observations is not None:
@@ -955,17 +937,16 @@ class Model(lp.limepy):
         # Split apart the stellar classes of the mass bins
         # ------------------------------------------------------------------
 
-        self.Nj = self.Mj / self.mj
+        self.Nj = self._mf.N  # consistent with M/m within floating point errs
 
-        # TODO slight difference in mf.IFMR.mBH_min and mf.mBH_min?
-        self._mBH_min = self._mf.IFMR.mBH_min << u.Msun
-        self._BH_bins = self.mj[self._remnant_bins] > self._mBH_min
+        # TODO these kind of slices would prob be more useful than nms elsewhere
+        self._star_bins = slice(0, self.nms)
+        self._remnant_bins = slice(self.nms, self.nms + self.nmr)
 
-        self._mWD_max = self._mf.IFMR.predict(self._mf.IFMR.wd_m_max) << u.Msun
-        self._WD_bins = self.mj[self._remnant_bins] < self._mWD_max
-
-        self._NS_bins = ((self._mWD_max < self.mj[self._remnant_bins])
-                         & (self.mj[self._remnant_bins] < self._mBH_min))
+        # Masked only within `remnant bins` regime to avoid issues with tracers
+        self._BH_bins = self._mf.types[self.nms:] == 'BH'
+        self._NS_bins = self._mf.types[self.nms:] == 'NS'
+        self._WD_bins = self._mf.types[self.nms:] == 'WD'
 
         # ------------------------------------------------------------------
         # Get Black Holes
