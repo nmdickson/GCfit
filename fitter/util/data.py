@@ -96,20 +96,8 @@ def bibcode2cite(bibcode):
 # --------------------------------------------------------------------------
 
 def _open_resources():
-    '''Quick and dirty backwards-compatible solution to resources in directories
-    See github.com/python/importlib_resources/issues/58 and
-    bugs.python.org/issue44162 for more detail
-    '''
     from importlib import resources
-
-    try:
-        # Python >= 3.9
-        return resources.files('fitter') / 'resources'
-
-    except AttributeError:
-        # Python >= 3.7
-        # we don't support lower than 3.7 (when resources was added) anyways
-        return resources.path('fitter', 'resources')
+    return resources.files('fitter') / 'resources'
 
 
 def core_cluster_list():

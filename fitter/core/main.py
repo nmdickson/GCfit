@@ -430,8 +430,8 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     if initials is None:
         initials = observations.initials
     else:
-        # fill manually supplied dict with defaults (change to unions in 3.9)
-        initials = {**observations.initials, **initials}
+        # fill manually supplied dict with defaults
+        initials = observations.initials | initials
 
     logging.debug(f"Inital initals: {initials}")
 
@@ -773,8 +773,8 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
     if initials is None:
         initials = observations.initials
     else:
-        # fill manually supplied dict with defaults (change to unions in 3.9)
-        initials = {**observations.initials, **initials}
+        # fill manually supplied dict with defaults
+        initials = observations.initials | initials
 
     logging.debug(f"Inital initals: {initials}")
 
