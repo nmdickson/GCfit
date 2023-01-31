@@ -10,7 +10,7 @@ import fnmatch
 import logging
 
 
-__all__ = ['DEFAULT_INITIALS', 'Model', 'Observations']
+__all__ = ['DEFAULT_INITIALS', 'Model', 'FittableModel', 'Observations']
 
 
 # TODO maybe change the name of this to like DEFAULT_THETA
@@ -669,6 +669,7 @@ class Observations:
 # TODO The units are *quite* incomplete in Model (10)
 # TODO would be cool to get this to work with limepy's `sampling`
 # TODO what attributes should be documented?
+# TODO need some easier to init generator classmethods (with good defaults)
 
 class Model(lp.limepy):
     r'''Wrapper class around a LIMEPY model, including mass function evolution
@@ -735,69 +736,6 @@ class Model(lp.limepy):
     limepy : Distribution-function model base of this class
     '''
 
-    def _init_mf(self, a1, a2, a3, BHret):
-        '''Evolve the cluster mass function from it's IMF using `ssptools`'''
-
-        # TODO before comparing with Kroupa we might want to discuss these:
-        m_breaks = [0.1, 0.5, 1.0, 100]  # Slope breakpoints for imf
-        nbins = [5, 5, 20]
-
-        a_slopes = [-a1, -a2, -a3]  # Slopes for imf
-
-        # Integration settings
-        N0 = 5e5  # Normalization of stars
-        tcc = 0  # Core collapse time
-        NS_ret = 0.1  # Initial neutron star retention
-        BH_ret_int = 1  # Initial Black Hole retention
-        BH_ret_dyn = BHret / 100  # Dynamical Black Hole retention
-
-        natal_kicks = True
-
-        # Age
-        try:
-            age = self.observations.mdata['age'] * 1000
-        except (AttributeError, KeyError):
-            logging.debug("No cluster age stored, defaulting to 12 Gyr")
-            age = 12 * 1000
-
-        # Metallicity
-        try:
-            FeH = self.observations.mdata['FeH']
-        except (AttributeError, KeyError):
-            logging.debug("No cluster FeH stored, defaulting to -1.0")
-            FeH = -1.0
-
-        # Regulates low mass objects depletion
-        try:
-            Ndot = self.observations.mdata['Ndot']
-        except (AttributeError, KeyError):
-            logging.debug("No cluster Ndot stored, defaulting to 0 /Myr")
-            Ndot = 0
-
-        # Escape velocity for BH natal kicks
-        try:
-            vesc = self.observations.mdata['vesc']
-        except (AttributeError, KeyError):
-            logging.debug("No cluster vesc stored, defaulting to 90 km/s")
-            vesc = 90
-
-        # Generate the mass function
-        return EvolvedMF(
-            m_breaks=m_breaks,
-            a_slopes=a_slopes,
-            nbins=nbins,
-            FeH=FeH,
-            tout=np.array([age]),
-            Ndot=Ndot,
-            N0=N0,
-            tcc=tcc,
-            NS_ret=NS_ret,
-            BH_ret_int=BH_ret_int,
-            BH_ret_dyn=BH_ret_dyn,
-            natal_kicks=natal_kicks,
-            vesc=vesc
-        )
-
     def _assign_units(self):
         '''Convert most values to `astropy.Quantity` with correct units'''
 
@@ -847,39 +785,77 @@ class Model(lp.limepy):
 
         self.d <<= u.kpc
 
-    def __init__(self, theta, observations=None, *, verbose=False):
+    def __init__(self, W0, M, rh, ra, g, delta, s2, F, a1, a2, a3, BHret, d,
+                 observations=None, age=None, FeH=None,
+                 m_breaks=[0.1, 0.5, 1.0, 100], nbins=[5, 5, 20],
+                 N0=5e5, tcc=0.0, NS_ret=0.1, BH_ret_int=1.0,
+                 natal_kicks=True, Ndot=0.0, vesc=90.,
+                 meanmassdef='global', ode_maxstep=1e10, ode_rtol=1e-7):
+
+        # TODO support inputs with units (may have to strip them before limepy)
+
+        # ------------------------------------------------------------------
+        # Pack theta
+        # ------------------------------------------------------------------
+
+        self.theta = dict(W0=W0, M=M / 1e6, rh=rh, ra=np.log10(ra),
+                          g=g, delta=delta, a1=a1, a2=a2, a3=a3, BHret=BHret,
+                          s2=s2, F=F, d=d)
+
+        self.d = d
+
+        # ------------------------------------------------------------------
+        # Unpack observations, cluster specific metadata
+        # ------------------------------------------------------------------
+
+        if observations is not None:
+            if not isinstance(observations, Observations):
+                observations = Observations(observations)
+
+            # These are required, and will default to None (must be supplied)
+            if age is None:
+                age = (observations.mdata['age'] << u.Gyr).to_value(u.yr)
+
+            if FeH is None:
+                FeH = observations.mdata['FeH']
+
+            # These are maybe required, but have actual defaults from the start;
+            # if you explicitly set None and its not in obs, then that's on you
+            if Ndot is None:
+                Ndot = observations.mdata['Ndot']
+
+            if vesc is None:
+                vesc = observations.mdata['vesc']
+
+        else:
+            if age is None or FeH is None:
+                # Error here if age, FeH can't be found
+                # for Ndot, vesc, let them be, if necessary they'll fail later
+                mssg = {"Must supply either `age` and `FeH` or "
+                        "an `observations`, to read them from"}
+                raise ValueError(mssg)
 
         self.observations = observations
-
-        if self.observations is None:
-            logging.warning("No `Observations` given, if `theta` was computed "
-                            "using observations, this model will not match")
-
-        # ------------------------------------------------------------------
-        # Unpack theta
-        # ------------------------------------------------------------------
-
-        if not isinstance(theta, dict):
-            theta = dict(zip(DEFAULT_INITIALS, theta))
-
-        if missing_params := (DEFAULT_INITIALS.keys() - theta.keys()):
-            # TODO this error message is wrong if theta is given as an array
-            mssg = f"Missing required params: {missing_params}"
-            raise KeyError(mssg)
-
-        self.theta = theta
-
-        self.d = theta['d']
 
         # ------------------------------------------------------------------
         # Get mass function
         # ------------------------------------------------------------------
 
-        # TODO I think how we are handling everything with mj and bins could
-        #   be done much more nicely (maybe with some sweet masked arrays)
-
-        self._mf = self._init_mf(theta['a1'], theta['a2'], theta['a3'],
-                                 theta['BHret'])
+        self._mf = EvolvedMF(
+            m_breaks=m_breaks,
+            a_slopes=[-a1, -a2, -a3],
+            nbins=nbins,
+            FeH=FeH,
+            tout=np.array([age]),
+            Ndot=Ndot,
+            N0=N0,
+            tcc=tcc,
+            NS_ret=NS_ret,
+            BH_ret_int=BH_ret_int,
+            BH_ret_dyn=BHret / 100.,
+            natal_kicks=natal_kicks,
+            vesc=vesc
+        )
 
         mj, Mj = self._mf.m, self._mf.M
 
@@ -910,16 +886,19 @@ class Model(lp.limepy):
         # ------------------------------------------------------------------
 
         self._limepy_kwargs = dict(
-            phi0=theta['W0'],
-            g=theta['g'],
-            M=theta['M'] * 1e6,
-            rh=theta['rh'],
-            ra=10**theta['ra'],
-            delta=theta['delta'],
+            phi0=W0,
+            g=g,
+            M=M,
+            rh=rh,
+            ra=ra,
+            delta=delta,
             mj=mj,
             Mj=Mj,
             project=True,
-            verbose=verbose,
+            verbose=False,
+            meanmassdef=meanmassdef,
+            max_step=ode_maxstep,
+            ode_rtol=ode_rtol
         )
 
         super().__init__(**self._limepy_kwargs)
@@ -980,3 +959,41 @@ class Model(lp.limepy):
 
         self.NS_rhoj = self.rhoj[self._remnant_bins][self._NS_bins]
         self.NS_Sigmaj = self.Sigmaj[self._remnant_bins][self._NS_bins]
+
+
+class FittableModel(Model):
+    '''Model class valid for use in the fitting functions'''
+
+    def __init__(self, theta, observations, **kwargs):
+
+        self.observations = observations
+
+        # ------------------------------------------------------------------
+        # Unpack theta
+        # ------------------------------------------------------------------
+
+        if not isinstance(theta, dict):
+            theta = dict(zip(DEFAULT_INITIALS, theta))
+
+        else:
+            theta = theta.copy()
+
+        if missing_params := (DEFAULT_INITIALS.keys() - theta.keys()):
+            mssg = f"Missing required params: {missing_params}"
+            raise KeyError(mssg)
+
+        self.theta = theta
+
+        # ------------------------------------------------------------------
+        # Convert a few quantities
+        # ------------------------------------------------------------------
+
+        theta['M'] = theta['M'] * 1e6
+
+        theta['ra'] = 10**theta['ra']
+
+        # ------------------------------------------------------------------
+        # Create the base model
+        # ------------------------------------------------------------------
+
+        super().__init__(observations=observations, **theta, **kwargs)
