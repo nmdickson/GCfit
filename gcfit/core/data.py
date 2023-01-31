@@ -813,7 +813,7 @@ class Model(lp.limepy):
 
             # These are required, and will default to None (must be supplied)
             if age is None:
-                age = (observations.mdata['age'] << u.Gyr).to_value(u.yr)
+                age = (observations.mdata['age'] << u.Gyr).to_value(u.Myr)
 
             if FeH is None:
                 FeH = observations.mdata['FeH']
