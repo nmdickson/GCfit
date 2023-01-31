@@ -1,6 +1,6 @@
 from .. import util
 from ..probabilities import mass
-from ..core.data import Observations, Model
+from ..core.data import Observations, Model, FittableModel
 
 import h5py
 import numpy as np
@@ -20,7 +20,7 @@ __all__ = ['ModelVisualizer', 'CIModelVisualizer', 'ObservationsVisualizer',
 
 def _get_model(theta, observations):
     try:
-        return Model(theta, observations=observations)
+        return FittableModel(theta, observations=observations)
     except ValueError:
         logging.warning(f"Model did not converge with {theta=}")
         return None
@@ -1789,7 +1789,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
         theta = reduc_methods[method](chain, axis=0)
 
-        return cls(Model(theta, observations), observations)
+        return cls(FittableModel(theta, observations), observations)
 
     @classmethod
     def from_theta(cls, theta, observations):
@@ -1797,7 +1797,7 @@ class ModelVisualizer(_ClusterVisualizer):
         create a Visualizer instance based on a theta, see `Model` for allowed
         theta types
         '''
-        return cls(Model(theta, observations), observations)
+        return cls(FittableModel(theta, observations), observations)
 
     def __init__(self, model, observations=None):
         self.model = model
@@ -2118,7 +2118,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         # very large rt. I'm not really sure yet how that might affect the CIs
         # or plots
 
-        huge_model = Model(chain[np.argmax(chain[:, 4])], viz.obs)
+        huge_model = FittableModel(chain[np.argmax(chain[:, 4])], viz.obs)
 
         viz.r = np.r_[0, np.geomspace(1e-5, huge_model.rt.value, 99)] << u.pc
 

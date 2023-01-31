@@ -1,7 +1,7 @@
 from .pulsars import *
 from .priors import Priors
 from .. import util
-from ..core.data import DEFAULT_INITIALS, Model
+from ..core.data import DEFAULT_INITIALS, FittableModel
 
 import numpy as np
 import astropy.units as u
@@ -64,7 +64,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
 
     parameters
     ----------
-    model : gcfit.Model
+    model : gcfit.FittableModel
         Cluster model use to compute probability distribution
 
     pulsars : gcfit.core.data.Dataset
@@ -310,7 +310,7 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
 
     parameters
     ----------
-    model : gcfit.Model
+    model : gcfit.FittableModel
         Cluster model use to compute probability distribution
 
     pulsars : gcfit.core.data.Dataset
@@ -507,7 +507,7 @@ def likelihood_number_density(model, ndensity, *,
 
     parameters
     ----------
-    model : gcfit.Model
+    model : gcfit.FittableModel
         Cluster model use to compute probability distribution
 
     ndensity : gcfit.core.data.Dataset
@@ -597,7 +597,7 @@ def likelihood_pm_tot(model, pm, *, mass_bin=None, hyperparams=False):
 
     parameters
     ----------
-    model : gcfit.Model
+    model : gcfit.FittableModel
         Cluster model use to compute probability distribution
 
     pm : gcfit.core.data.Dataset
@@ -663,7 +663,7 @@ def likelihood_pm_ratio(model, pm, *, mass_bin=None, hyperparams=False):
 
     parameters
     ----------
-    model : gcfit.Model
+    model : gcfit.FittableModel
         Cluster model use to compute probability distribution
 
     pm : gcfit.core.data.Dataset
@@ -731,7 +731,7 @@ def likelihood_pm_T(model, pm, *, mass_bin=None, hyperparams=False):
 
     parameters
     ----------
-    model : gcfit.Model
+    model : gcfit.FittableModel
         Cluster model use to compute probability distribution
 
     pm : gcfit.core.data.Dataset
@@ -790,7 +790,7 @@ def likelihood_pm_R(model, pm, *, mass_bin=None, hyperparams=False):
 
     parameters
     ----------
-    model : gcfit.Model
+    model : gcfit.FittableModel
         Cluster model use to compute probability distribution
 
     pm : gcfit.core.data.Dataset
@@ -849,7 +849,7 @@ def likelihood_LOS(model, vlos, *, mass_bin=None, hyperparams=False):
 
     parameters
     ----------
-    model : gcfit.Model
+    model : gcfit.FittableModel
         Cluster model use to compute probability distribution
 
     vlos : gcfit.core.data.Dataset
@@ -914,7 +914,7 @@ def likelihood_mass_func(model, mf, field, *, hyperparams=False):
 
     parameters
     ----------
-    model : gcfit.Model
+    model : gcfit.FittableModel
         Cluster model use to compute probability distribution
 
     mf : gcfit.core.data.Dataset
@@ -1034,7 +1034,7 @@ def log_likelihood(theta, observations, L_components, hyperparams):
     '''
 
     try:
-        model = Model(theta, observations)
+        model = FittableModel(theta, observations)
     except ValueError:
         logging.debug(f"Model did not converge with {theta=}")
         return -np.inf, -np.inf * np.ones(len(L_components))
