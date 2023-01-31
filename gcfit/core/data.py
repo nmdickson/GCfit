@@ -312,9 +312,9 @@ class Observations:
     relevant likelihoods.
 
     The relevant cluster data files will be found using the
-    `fitter.util.get_cluster_path` function, and can likewise be retricted to
+    `gcfit.util.get_cluster_path` function, and can likewise be retricted to
     "core" or "local" files. The data file used *must* be considered valid
-    (i.e. pass all tests within `fitter.utils.data.ClusterFile.test`).
+    (i.e. pass all tests within `gcfit.utils.data.ClusterFile.test`).
 
     Parameters
     ----------
@@ -329,7 +329,7 @@ class Observations:
 
     restrict_to : {None, 'local', 'core'}
         Where to search for the cluster data file, see
-        `fitter.util.get_cluster_path` for more information.
+        `gcfit.util.get_cluster_path` for more information.
 
     Attributes
     ----------
@@ -342,8 +342,8 @@ class Observations:
 
     See Also
     --------
-    fitter.util.get_cluster_path : Locating of data file based on `cluster` name
-    fitter.util.data.ClusterFile : Handling of data file creation and editing
+    gcfit.util.get_cluster_path : Locating of data file based on `cluster` name
+    gcfit.util.data.ClusterFile : Handling of data file creation and editing
     '''
     # TODO interesting errors occur when trying to iterate over Observ
 

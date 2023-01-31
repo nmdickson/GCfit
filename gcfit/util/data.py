@@ -97,11 +97,11 @@ def bibcode2cite(bibcode):
 
 def _open_resources():
     from importlib import resources
-    return resources.files('fitter') / 'resources'
+    return resources.files('gcfit') / 'resources'
 
 
 def core_cluster_list():
-    '''Return a list of cluster names, useable by `fitter.Observations`'''
+    '''Return a list of cluster names, useable by `gcfit.Observations`'''
 
     with _open_resources() as datadir:
         return [f.stem for f in pathlib.Path(datadir).glob('[!TEST]*.hdf')]
@@ -423,7 +423,7 @@ class ClusterFile:
     '''Create, edit and manage hdf cluster data files
 
     Contains all necessary methods for interacting with cluster data files,
-    the backend of all `fitter.Observations` classes. Includes functions for
+    the backend of all `gcfit.Observations` classes. Includes functions for
     creating, reading, writing, deleting and testing all data and metadata
     associated with a cluster.
 
@@ -431,7 +431,7 @@ class ClusterFile:
     searches for all files within the `GCFIT_DIR` directory.
 
     The observational data must be stored in a strict format in order to be
-    read by `fitter.Observations` and used in all relevant likelihood functions.
+    read by `gcfit.Observations` and used in all relevant likelihood functions.
     As such, an extensive "testing" regime exists here, which acts to
     ensure all data stored in these cluster files follows the standards defined
     in the `specification.json` resource file.
@@ -1246,7 +1246,7 @@ class ClusterFile:
         self._write_initials(confirm=confirm)
 
 
-# TODO *really* don't like the potential conflict with this and `fitter.Dataset`
+# TODO *really* don't like the potential conflict with this and `gcfit.Dataset`
 class Dataset:
     '''Read and manage representation of a complete dataset
 

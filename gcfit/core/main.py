@@ -309,12 +309,12 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     stored the individual likelihood values of each used likelihood function.
 
     The MCMC sampler is sampled for `Niters` iterations, parallelized over
-    `Ncpu` or using `mpi`, with calls to `fitter.posterior`.
+    `Ncpu` or using `mpi`, with calls to `gcfit.posterior`.
 
     parameters
     ----------
     cluster : str
-        Cluster common name, as used to load `fitter.Observations`
+        Cluster common name, as used to load `gcfit.Observations`
 
     Niters : int
         Number of sampler iterations
@@ -639,13 +639,13 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
     importance weight peak.
 
     The sampling is parallelized over `Ncpu` or using `mpi`, with calls to
-    `fitter.posterior` defined based on a uniform sampling of the
+    `gcfit.posterior` defined based on a uniform sampling of the
     `PriorTransforms`.
 
     parameters
     ----------
     cluster : str
-        Cluster common name, as used to load `fitter.Observations`
+        Cluster common name, as used to load `gcfit.Observations`
 
     bound_type : {'none', 'single', 'multi', 'balls', 'cubes'}, optional
         Method used to approximately bound the prior using the current

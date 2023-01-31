@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from fitter import analysis
+from gcfit import analysis
 
 import logging
 import argparse

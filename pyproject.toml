@@ -53,4 +53,4 @@ requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.package-data]
-"fitter.resources" = ["*.hdf", "*msp.dat"]
+"gcfit.resources" = ["*.hdf", "*msp.dat"]
