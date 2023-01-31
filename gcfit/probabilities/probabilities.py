@@ -1,7 +1,7 @@
 from .pulsars import *
 from .priors import Priors
 from .. import util
-from ..core.data import DEFAULT_INITIALS, FittableModel
+from ..core.data import DEFAULT_THETA, FittableModel
 
 import numpy as np
 import astropy.units as u
@@ -1083,8 +1083,8 @@ def posterior(theta, observations, fixed_initials=None,
             return -np.inf
 
     # get a list of variable params, sorted for the unpacking of theta
-    variable_params = DEFAULT_INITIALS.keys() - fixed_initials.keys()
-    params = sorted(variable_params, key=list(DEFAULT_INITIALS).index)
+    variable_params = DEFAULT_THETA.keys() - fixed_initials.keys()
+    params = sorted(variable_params, key=list(DEFAULT_THETA).index)
 
     # TODO add type check on theta, cause those exceptions aren't very pretty
     theta = dict(zip(params, theta)) | fixed_initials

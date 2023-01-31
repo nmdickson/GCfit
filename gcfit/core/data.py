@@ -10,12 +10,11 @@ import fnmatch
 import logging
 
 
-__all__ = ['DEFAULT_INITIALS', 'Model', 'FittableModel', 'Observations']
+__all__ = ['DEFAULT_THETA', 'Model', 'FittableModel', 'Observations']
 
 
-# TODO maybe change the name of this to like DEFAULT_THETA
 # The order of this is important!
-DEFAULT_INITIALS = {
+DEFAULT_THETA = {
     'W0': 6.0,
     'M': 0.69,
     'rh': 2.88,
@@ -519,7 +518,7 @@ class Observations:
 
         self.mdata = {}
         self._dict_datasets = {}
-        self.initials = DEFAULT_INITIALS.copy()
+        self.initials = DEFAULT_THETA.copy()
 
         filename = util.get_cluster_path(cluster, standardize_name, restrict_to)
 
@@ -536,7 +535,7 @@ class Observations:
                 # This updates defaults with data while keeping default sort
                 self.initials = {**self.initials, **file['initials'].attrs}
 
-                if extras := (self.initials.keys() - DEFAULT_INITIALS.keys()):
+                if extras := (self.initials.keys() - DEFAULT_THETA.keys()):
                     mssg = (f"Stored initials do not match expected."
                             f"Extra values found: {extras}")
                     raise ValueError(mssg)
@@ -690,7 +689,7 @@ class Model(lp.limepy):
     ----------
     theta : dict or list
         The model input parameters. Must either be a dict, or a full list of
-        all parameters, in the exact same order as `DEFAULT_INITIALS`.
+        all parameters, in the exact same order as `DEFAULT_THETA`.
         See package background documentation for explanation of all possible
         input parameters.
 
@@ -973,12 +972,12 @@ class FittableModel(Model):
         # ------------------------------------------------------------------
 
         if not isinstance(theta, dict):
-            theta = dict(zip(DEFAULT_INITIALS, theta))
+            theta = dict(zip(DEFAULT_THETA, theta))
 
         else:
             theta = theta.copy()
 
-        if missing_params := (DEFAULT_INITIALS.keys() - theta.keys()):
+        if missing_params := (DEFAULT_THETA.keys() - theta.keys()):
             mssg = f"Missing required params: {missing_params}"
             raise KeyError(mssg)
 
