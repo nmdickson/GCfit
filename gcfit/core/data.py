@@ -840,6 +840,7 @@ class Model(lp.limepy):
         # Get mass function
         # ------------------------------------------------------------------
 
+        # TODO would be better if this could be scaled to M from the start
         self._mf = EvolvedMF(
             m_breaks=m_breaks,
             a_slopes=[-a1, -a2, -a3],
@@ -915,7 +916,8 @@ class Model(lp.limepy):
         # Split apart the stellar classes of the mass bins
         # ------------------------------------------------------------------
 
-        self.Nj = self._mf.N  # consistent with M/m within floating point errs
+        # Recompute to account for physical scaling applied by limepy
+        self.Nj = self.Mj / self.mj
 
         # TODO these kind of slices would prob be more useful than nms elsewhere
         self._star_bins = slice(0, self.nms)
