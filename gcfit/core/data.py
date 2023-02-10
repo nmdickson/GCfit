@@ -8,6 +8,8 @@ from ssptools import EvolvedMF
 
 import fnmatch
 import logging
+import itertools
+from collections import namedtuple
 
 
 __all__ = ['DEFAULT_THETA', 'Model', 'FittableModel', 'Observations']
@@ -756,6 +758,7 @@ class Model(lp.limepy):
         self.mj <<= M_units
         self.Mj <<= M_units
         self.mc <<= M_units
+        self.mcj <<= M_units
         self.mmean <<= M_units
         self.mbin_widths <<= M_units
 
@@ -778,6 +781,7 @@ class Model(lp.limepy):
         self.v2Rj <<= V2_units
         self.v2pj <<= V2_units
         self.s2 <<= V2_units
+        self.s2j <<= V2_units
 
         self.rhoj <<= (M_units / R_units**3)
         self.Sigmaj <<= (M_units / R_units**2)
@@ -901,6 +905,7 @@ class Model(lp.limepy):
             ode_rtol=ode_rtol
         )
 
+        # TODO should actually do a check for `convergence` (Gieles+2015, pg.10)
         super().__init__(**self._limepy_kwargs)
 
         # ------------------------------------------------------------------
@@ -961,9 +966,32 @@ class Model(lp.limepy):
         self.NS_rhoj = self.rhoj[self._remnant_bins][self._NS_bins]
         self.NS_Sigmaj = self.Sigmaj[self._remnant_bins][self._NS_bins]
 
+    # ----------------------------------------------------------------------
+    # Model sampling
+    # ----------------------------------------------------------------------
+
+    def sample(self, *, seed=None, pool=None, verbose=False):
+        return SampledModel.sample_model(self, seed=seed, pool=pool)
+
 
 class FittableModel(Model):
-    '''Model class valid for use in the fitting functions'''
+    '''Model class valid for use in the fitting functions
+
+    Parameters
+    ----------
+    theta : dict or list
+        The model input parameters. Must either be a dict, or a full list of
+        all parameters, in the exact same order as `DEFAULT_THETA`.
+        See `Model` or package background documentation for explanation of
+        all possible input parameters.
+
+    observations : Observations
+        The `Observations` instance corresponding to this cluster. While not
+        necessary for solving a theoretical model, the observations must be
+        provided for any models used in fitting/sampling procedures, as
+        including them has important impacts on the mass function makeup.
+
+    '''
 
     def __init__(self, theta, observations, **kwargs):
 
@@ -998,3 +1026,311 @@ class FittableModel(Model):
         # ------------------------------------------------------------------
 
         super().__init__(observations=observations, **theta, **kwargs)
+
+
+_position = namedtuple('position', ['x', 'y', 'z', 'r', 'theta', 'phi'],
+                       defaults=[None, ] * 6)
+_direction = namedtuple('direction', ['x', 'y', 'z', 'r', 't', 'theta', 'phi'],
+                        defaults=[None, ] * 7)
+
+
+# class SampledModel(Model):
+class SampledModel:
+    '''representation of a cluster based on sampling a Model'''
+
+    def _sample_rkvφ(self, model, pool=None):
+        from scipy.special import dawsn, gammainc
+
+        def _Eg(x):
+            expx = np.exp(x)
+            return expx * gammainc(self.g, x) if self.g > 0 else expx
+
+        def _pdf_k32(x, r, phihat, p, sig2fac):
+            '''
+            PDF of k^3/2
+
+            r=sampled self.r
+            f = sampled phihat
+            x = x
+            j = mass bin j
+            '''
+
+            x13, x23 = x**(1. / 3), x**(2. / 3)
+
+            E = (phihat - x23) * sig2fac
+
+            c = (x > 0)
+
+            prob = np.full_like(x, np.nan)
+
+            # If anisotropic, use full PDF
+            if self.ani:
+
+                # Where x > 0, compute full PDF
+                F = dawsn(x13 * p * np.sqrt(sig2fac)) / p
+                prob[c] = F[c] / (x13[c] * np.sqrt(sig2fac[c])) * _Eg(E[c])
+
+                # Where x=0, only need to compute Eg term (x should never be <0)
+                prob[~c] = _Eg(E[~c])
+
+            # if isotropic, only need to compute E term, same for all x
+            else:
+                prob = _Eg(E)
+
+            return prob
+
+        # _sample_r -------------------------
+
+        mcj_norm = model.mcj / model.mcj[:, -1, np.newaxis]
+        r = np.concatenate([
+            np.interp(self.rng.uniform(size=N), mcj_norm[j], model.r)
+            for j, N in enumerate(self.Nj)
+        ])
+
+        phihat = model.interp_phi(r) / model.s2.value
+
+        # _sample_v ----------------------------
+
+        segmax = phihat**1.5
+        nseg = 10
+
+        xseg = np.outer(np.linspace(0, 1, nseg + 1), segmax)
+
+        k = np.full_like(r.value, np.nan)
+        v = np.full_like(r.value, np.nan)
+
+        # TODO add multiprocessing over this loop
+        for j in range(model.nmbin):
+
+            # only do for this mass bin
+            mask = (self.mbins == j)
+
+            xj = xseg[:, mask]
+            rj = r[mask]
+            phij = phihat[mask]
+
+            kj = k[mask]
+            vj = v[mask]
+
+            # Helper normalization quantities to avoid recomputing
+            pj = rj / self.raj[mask]
+            s2fj = self.σ2_factor[mask]
+
+            # shouldnt need to pass j, should just use passed arrays already cut
+            # TODO why are these vstack needed? the last ind isn't even used?
+            yj = _pdf_k32(xj[:-1], rj, phij, pj,
+                          np.repeat(s2fj[None, ...], nseg, axis=0).value)
+            yj = np.vstack((yj, np.zeros(yj.shape[1]), xj[-1]))
+
+            # cdf
+            ycumj = np.cumsum(yj[:-2] * np.diff(xj, axis=0), axis=0)
+            ycumj = np.vstack((np.zeros(yj.shape[1]), ycumj))
+
+            # sample k
+
+            to_sample = np.full(yj.shape[-1], True)
+
+            while to_sample.any():
+
+                # unpack quantities for stars left to be sampled
+
+                rtmp = rj[to_sample]
+                phitmp = phij[to_sample]
+
+                yj_samp = yj[:, to_sample]
+                xj_samp = xj[:, to_sample]
+                ycumj_samp = ycumj[:, to_sample]
+
+                kj_samp = kj[to_sample]
+                vj_samp = vj[to_sample]
+
+                # Helper normalization quantities to avoid recomputing
+                pj_samp = pj[to_sample]
+                s2fj_samp = s2fj[to_sample]
+
+                # generate first random value
+
+                # R = random.rand(Nsamples) * ycumj_samp[-1]
+                R = self.rng.uniform(0, ycumj_samp[-1])
+
+                xtmp = np.zeros(yj_samp.shape[1])
+                P = np.zeros(yj_samp.shape[1])
+
+                # Check value of R against all segment bounds
+
+                for i in range(nseg):
+
+                    btwn = (ycumj_samp[i] <= R) & (R < ycumj_samp[i + 1])
+
+                    # if btwn.any():
+                    P[btwn] = yj_samp[i, btwn]
+
+                    prop = (R[btwn] - ycumj_samp[i, btwn]) / yj_samp[i, btwn]
+                    xtmp[btwn] = xj_samp[i, btwn] + prop
+
+                # generate second random value between 0 and PDF at highest btwn
+
+                R2 = self.rng.uniform(0, P)
+
+                # compute pdf at sampled x's
+
+                # TODO could maybe mask out all xtmp==not set above??
+                f = _pdf_k32(xtmp, rtmp, phitmp, pj_samp, s2fj_samp.value)
+
+                # if PDF(sampled x's) > R2, keep this sample
+
+                check = (f > R2)
+
+                # TODO painful I cant simply combine many masks here at once
+                kj_samp[check] = xtmp[check]**(2 / 3.)
+                vj_samp[check] = np.sqrt(2 * xtmp[check]**(2 / 3.) * model.s2)
+
+                kj[to_sample] = kj_samp
+                vj[to_sample] = vj_samp
+
+                # Continue until all stars sampled once
+
+                to_sample[to_sample] = ~check
+
+            k[mask] = kj
+            v[mask] = vj
+
+            # shuffle all the vels/rad computed in this mass bin (why exactly?)
+
+            shuffle_key = self.rng.permutation(r[mask].size)
+            k[mask] = k[mask][shuffle_key]
+            v[mask] = v[mask][shuffle_key]
+            r[mask] = r[mask][shuffle_key]
+
+            phihat[mask] = phihat[mask][shuffle_key]
+
+        return r, k, v, phihat
+
+    def _sample_coordinates(self, model, pool=None):
+        from scipy import optimize
+
+        def _pdf_angle(q, a, R):
+            # Sample random values for: q = cos(theta)
+            # P(q) = erfi(sqrt(k)*p*q)/erfi(sqrt(k)*p)
+            from scipy.special import erfi
+            return R - erfi(a * q) / erfi(a)
+
+        def solver(a, R):
+            return optimize.brentq(_pdf_angle, 0, 1, args=(a, R))
+
+        # Sample angles (for radial/tangential velocities)
+
+        R = self.rng.uniform(size=self.Nstars)
+
+        # Anisotropic systems sample angles:
+        #   cdf(q) = erfi(a*q)/erfi(a), a = sqrt(k)*p
+        #   where q = cos(theta)
+        if self.ani:
+            p = self.r / self.raj
+            a = (p * np.sqrt(self.k) * np.sqrt(self.σ2_factor)).value
+            # TODO using a quantity vs array for a slows this down x1000, wtf?
+
+            # q = optimize.root(_pdf_angle, np.zeros(self.Nstars), args=(a, R))
+
+            _map = pool.starmap if pool else itertools.starmap
+
+            # TODO multiprocessing doesn't seem to increase speed at all?
+            q = np.fromiter(_map(solver, np.transpose([a, R])), dtype=float)
+
+            # TODO must be better way; vectorized opt.root takes 15Tb of mem
+            # q = np.zeros(self.Nstars)
+            # for i in range(self.Nstars):
+            #     q[i] = optimize.brentq(_pdf_angle, 0, 1, args=(a[i], R[i]))
+
+        else:
+            # Isotropic: cdf(q) = q
+            q = R
+
+        # TODO should q (cos(θ), but not that θ) also be saved? Interesting?
+        vr = self.v * q * self.rng.choice((-1, 1), size=self.Nstars)
+        vt = self.v * np.sqrt(1 - q**2)
+
+        # sample positions (from random angles)
+
+        R1 = self.rng.uniform(size=self.Nstars)
+        R2 = self.rng.uniform(size=self.Nstars)
+
+        x = (1 - 2 * R1) * self.r
+        y = np.sqrt(self.r**2 - x**2) * np.cos(2 * np.pi * R2)
+        z = np.sqrt(self.r**2 - x**2) * np.sin(2 * np.pi * R2)
+
+        theta = np.arccos(z / self.r)
+        phi = np.arctan2(y, x)
+
+        # sample velocities (from random angles and vr/vt)
+
+        # TODO limepy only compute these if anisotropic, why? not intersted?
+        vphi = vt * np.cos(2 * np.pi * R1)
+        vtheta = vt * np.sin(2 * np.pi * R1)
+
+        if self.ani:
+
+            R1 = self.rng.uniform(size=self.Nstars)
+
+            vx = (vr * np.sin(theta) * np.cos(phi)
+                  + vtheta * np.cos(theta) * np.cos(phi)
+                  - vphi * np.sin(phi))
+            vy = (vr * np.sin(theta) * np.sin(phi)
+                  + vtheta * np.cos(theta) * np.sin(phi)
+                  + vphi * np.cos(phi))
+            vz = vr * np.cos(theta) - vtheta * np.sin(theta)
+
+        else:
+
+            R1 = self.rng.uniform(size=self.Nstars)
+            R2 = self.rng.uniform(size=self.Nstars)
+
+            vx = (1 - 2 * R1) * self.v
+            vy = np.sqrt(self.v**2 - vx**2) * np.cos(2 * np.pi * R2)
+            vz = np.sqrt(self.v**2 - vx**2) * np.sin(2 * np.pi * R2)
+
+        p = _position(x=x, y=y, z=z, r=self.r, theta=theta, phi=phi)
+        v = _direction(x=vx, y=vy, z=vz, r=vr, t=vt, phi=vphi, theta=vtheta)
+
+        return p, v
+
+    @classmethod
+    def sample_model(cls, model, *, seed=None, pool=None, verbose=False):
+        '''Sample N stars with positions and velocities from this model'''
+
+        self = cls()
+
+        self.rng = np.random.default_rng(seed)
+
+        # _set_params_and_init ----------------
+
+        # TODO make sure this actually sums up to N?
+        # TODO allow other N's, would need to match Nj proportions?
+        self.Nj = model.Nj.astype(int)
+        self.Nstars = self.Nj.sum()
+
+        self.ani = True if min(model.raj) / model.rt < 3 else False
+
+        # TODO unpack any useful model quantties, like radii, masses
+        self.g = model.g
+
+        # _set_masses ----------------------
+
+        self.m = np.repeat(model.mj, self.Nj)
+        self.mbins = np.repeat(range(model.nmbin), self.Nj)
+
+        self.raj = np.repeat(model.raj, self.Nj)
+        self.s2j = np.repeat(model.s2j, self.Nj)
+        self.σ2_factor = model.s2 / self.s2j
+
+        # sample important quantities (r, k, v, phihat)
+
+        self.r, self.k, self.v, self.phihat = self._sample_rkvφ(model)
+
+        self.phi = -self.phihat * model.s2 - model.G * model.M / model.rt
+
+        # _sample coordinates for positions and velocities
+
+        self.pos, self.vel = self._sample_coordinates(model)
+
+        return self
