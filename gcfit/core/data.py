@@ -1038,6 +1038,9 @@ _direction = namedtuple('direction', ['x', 'y', 'z', 'r', 't', 'theta', 'phi'],
 class SampledModel:
     '''representation of a cluster based on sampling a Model'''
 
+    # TODO get initial masses as well, so can add stuff like photometry
+    # TODO allow splitting up of remnants and stars, applying of labels
+
     def _sample_rkvφ(self, model, pool=None):
         from scipy.special import dawsn, gammainc
 
@@ -1230,14 +1233,14 @@ class SampledModel:
             a = (p * np.sqrt(self.k) * np.sqrt(self.σ2_factor)).value
             # TODO using a quantity vs array for a slows this down x1000, wtf?
 
-            # q = optimize.root(_pdf_angle, np.zeros(self.Nstars), args=(a, R))
-
             _map = pool.starmap if pool else itertools.starmap
 
             # TODO multiprocessing doesn't seem to increase speed at all?
             q = np.fromiter(_map(solver, np.transpose([a, R])), dtype=float)
 
             # TODO must be better way; vectorized opt.root takes 15Tb of mem
+            # q = optimize.root(_pdf_angle, np.zeros(self.Nstars), args=(a, R))
+            #
             # q = np.zeros(self.Nstars)
             # for i in range(self.Nstars):
             #     q[i] = optimize.brentq(_pdf_angle, 0, 1, args=(a[i], R[i]))
@@ -1299,6 +1302,9 @@ class SampledModel:
 
         self.rng = np.random.default_rng(seed)
 
+        # store ref to base model, just in case
+        self._basemodel = model
+
         # _set_params_and_init ----------------
 
         # TODO make sure this actually sums up to N?
@@ -1308,13 +1314,21 @@ class SampledModel:
 
         self.ani = True if min(model.raj) / model.rt < 3 else False
 
-        # TODO unpack any useful model quantties, like radii, masses
         self.g = model.g
+        self.d = model.d
+
+        self.rh = model.rh
+        self.rhj = model.rhj
+        self.rhp = model.rhp
+        self.rt = model.rt
 
         # _set_masses ----------------------
 
         self.m = np.repeat(model.mj, self.Nj)
         self.mbins = np.repeat(range(model.nmbin), self.Nj)
+
+        # Recompute actual total mass
+        self.M = self.m.sum()
 
         self.raj = np.repeat(model.raj, self.Nj)
         self.s2j = np.repeat(model.s2j, self.Nj)
