@@ -971,7 +971,7 @@ class Model(lp.limepy):
     # ----------------------------------------------------------------------
 
     def sample(self, *, seed=None, pool=None, verbose=False):
-        return SampledModel.sample_model(self, seed=seed, pool=pool)
+        return SampledModel(self, seed=seed, pool=pool)
 
 
 class FittableModel(Model):
@@ -1294,11 +1294,8 @@ class SampledModel:
 
         return p, v
 
-    @classmethod
-    def sample_model(cls, model, *, seed=None, pool=None, verbose=False):
+    def __init__(self, model, *, seed=None, pool=None, verbose=False):
         '''Sample N stars with positions and velocities from this model'''
-
-        self = cls()
 
         self.rng = np.random.default_rng(seed)
 
@@ -1332,5 +1329,3 @@ class SampledModel:
         # _sample coordinates for positions and velocities
 
         self.pos, self.vel = self._sample_coordinates(model)
-
-        return self
