@@ -1025,6 +1025,10 @@ class FittableModel(Model):
         # Create the base model
         # ------------------------------------------------------------------
 
+        kwargs = kwargs.copy()
+        kwargs.setdefault('vesc', None)
+        kwargs.setdefault('Ndot', None)
+
         super().__init__(observations=observations, **theta, **kwargs)
 
 
