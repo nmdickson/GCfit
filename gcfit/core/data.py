@@ -668,7 +668,6 @@ class Observations:
 # --------------------------------------------------------------------------
 
 # TODO The units are *quite* incomplete in Model (10)
-# TODO would be cool to get this to work with limepy's `sampling`
 # TODO what attributes should be documented?
 # TODO need some easier to init generator classmethods (with good defaults)
 
@@ -972,6 +971,97 @@ class Model(lp.limepy):
 
     def sample(self, *, seed=None, pool=None, verbose=False):
         return SampledModel(self, seed=seed, pool=pool)
+
+
+class SingleMassModel(lp.limepy):
+    '''like model, but without all the nice mass stuff. please, dont use
+    these aren't physical, think about what you're doing man.
+    '''
+
+    def _assign_units(self):
+        '''Convert most values to `astropy.Quantity` with correct units'''
+
+        # TODO this needs to be much more general
+        #   Right now it is only applied to those params we use in likelihoods?
+        #   Also the actualy units used are being set manually
+
+        if not self.scale:
+            return
+
+        G_units = u.Unit('(pc km2) / (s2 Msun)')
+        R_units = u.pc
+        M_units = u.Msun
+        V2_units = G_units * M_units / R_units
+
+        self.G <<= G_units
+
+        self.M <<= M_units
+        self.mc <<= M_units
+
+        self.r <<= R_units
+        self.r0 <<= R_units
+        self.rh <<= R_units
+        self.rhp <<= R_units
+        self.rt <<= R_units
+        self.ra <<= R_units
+        self.rv <<= R_units
+        self.rs <<= R_units
+
+        # TODO this may be wrong (it's "phase-space" volume)
+        self.volume <<= R_units**3
+
+        # TODO also put these non-j quantities into multimass model assign_units
+        self.v2T <<= V2_units
+        self.v2R <<= V2_units
+        self.v2p <<= V2_units
+        self.s2 <<= V2_units
+
+        self.rho <<= (M_units / R_units**3)
+        self.Sigma <<= (M_units / R_units**2)
+
+        self.d <<= u.kpc
+
+    def __init__(self, W0, M, rh, ra, g, d, *,
+                 ode_maxstep=1e10, ode_rtol=1e-7):
+
+        # TODO support inputs with units (may have to strip them before limepy)
+
+        # ------------------------------------------------------------------
+        # Pack theta
+        # ------------------------------------------------------------------
+
+        self.theta = dict(W0=W0, M=M / 1e6, rh=rh, ra=np.log10(ra), g=g,
+                          delta=None, a1=None, a2=None, a3=None, BHret=None,
+                          s2=None, F=None, d=d)
+
+        self.d = d
+
+        # ------------------------------------------------------------------
+        # Create the limepy model base
+        # ------------------------------------------------------------------
+
+        self._limepy_kwargs = dict(
+            phi0=W0,
+            g=g,
+            M=M,
+            rh=rh,
+            ra=ra,
+            project=True,
+            verbose=False,
+            max_step=ode_maxstep,
+            ode_rtol=ode_rtol
+        )
+
+        # TODO should actually do a check for `convergence` (Gieles+2015, pg.10)
+        super().__init__(**self._limepy_kwargs)
+
+        # ------------------------------------------------------------------
+        # Assign units to model values
+        # ------------------------------------------------------------------
+
+        self._assign_units()
+
+        self.unscaled_ra = self.ra / self.rs
 
 
 class FittableModel(Model):
