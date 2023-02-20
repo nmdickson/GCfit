@@ -664,12 +664,17 @@ class Observations:
 
 
 # --------------------------------------------------------------------------
-# Cluster Modelled data
+# Cluster modelled data
 # --------------------------------------------------------------------------
 
 # TODO The units are *quite* incomplete in Model (10)
 # TODO what attributes should be documented?
 # TODO need some easier to init generator classmethods (with good defaults)
+
+# --------------------------------------------------------------------------
+# Base model
+# --------------------------------------------------------------------------
+
 
 class Model(lp.limepy):
     r'''Wrapper class around a LIMEPY model, including mass function evolution
@@ -787,8 +792,8 @@ class Model(lp.limepy):
 
         self.d <<= u.kpc
 
-    def __init__(self, W0, M, rh, ra, g, delta, s2, F, a1, a2, a3, BHret, d,
-                 observations=None, age=None, FeH=None,
+    def __init__(self, W0, M, rh, ra, g, delta, a1, a2, a3, BHret, d,
+                 s2=0., F=1., *, observations=None, age=None, FeH=None,
                  m_breaks=[0.1, 0.5, 1.0, 100], nbins=[5, 5, 20],
                  N0=5e5, tcc=0.0, NS_ret=0.1, BH_ret_int=1.0,
                  natal_kicks=True, Ndot=0.0, vesc=90.,
@@ -966,11 +971,75 @@ class Model(lp.limepy):
         self.NS_Sigmaj = self.Sigmaj[self._remnant_bins][self._NS_bins]
 
     # ----------------------------------------------------------------------
+    # Alternative generators
+    # ----------------------------------------------------------------------
+
+    # TODO how to combine stuff like canonical/others ?
+    #   almost feels like these should just be some combo of default kwargs
+
+    @classmethod
+    def isotropic(cls, W0, M, rh, g, delta, a1, a2, a3, BHret, d, **kw):
+        '''initialize with no anisotropy'''
+        ra = 1e8
+        return cls(W0, M, rh, ra, g, delta, a1, a2, a3, BHret, d, **kw)
+
+    @classmethod
+    def canonical(cls, W0, M, rh, ra, g, delta, BHret, d, imf='kroupa', **kw):
+        '''initialize with canonical mass function params'''
+        if imf.lower() == 'kroupa':
+            a1, a2, a3 = 1.3, 2.3, 2.3
+            m_breaks = [0.08, 0.5, 1.0, 100]  # only upper two kroupa exponents
+
+        elif imf.lower() == 'salpeter':
+            # TODO once evolve_mf supports any number of exponents, use 1 here
+            a1 = a2 = a3 = 2.35
+
+        elif imf.lower() == 'baumgardt':
+            a1, a2, a3 = 0.3, 1.65, 2.35
+            m_breaks = [0.1, 0.4, 1.0, 100]
+
+        else:
+            mssg = f"Unknown IMF: {imf}"
+            raise ValueError(mssg)
+
+        return cls(W0, M, rh, ra, g, delta, a1, a2, a3, BHret, d,
+                   m_breaks=m_breaks, **kw)
+
+    @classmethod
+    def woolley(cls, W0, M, rh, delta, a1, a2, a3, BHret, d, **kw):
+        '''g=0, isotropic'''
+        g = 0
+        return cls.isotropic(W0, M, rh, g, delta, a1, a2, a3, BHret, d, **kw)
+
+    @classmethod
+    def king(cls, W0, M, rh, delta, a1, a2, a3, BHret, d, **kw):
+        '''g=1, isotropic'''
+        g = 1
+        return cls.isotropic(W0, M, rh, g, delta, a1, a2, a3, BHret, d, **kw)
+
+    @classmethod
+    def wilson(cls, W0, M, rh, delta, a1, a2, a3, BHret, d, **kw):
+        '''g=2, isotropic'''
+        g = 2
+        return cls.isotropic(W0, M, rh, g, delta, a1, a2, a3, BHret, d, **kw)
+
+    @classmethod
+    def michieking(cls, W0, M, rh, ra, delta, a1, a2, a3, BHret, d, **kw):
+        '''g=1, anisotropic'''
+        g = 1
+        return cls(W0, M, rh, ra, g, delta, a1, a2, a3, BHret, d, **kw)
+
+    # ----------------------------------------------------------------------
     # Model sampling
     # ----------------------------------------------------------------------
 
     def sample(self, *, seed=None, pool=None, verbose=False):
         return SampledModel(self, seed=seed, pool=pool)
+
+
+# --------------------------------------------------------------------------
+# Single-mass version of base model
+# --------------------------------------------------------------------------
 
 
 class SingleMassModel(lp.limepy):
@@ -1063,6 +1132,45 @@ class SingleMassModel(lp.limepy):
 
         self.unscaled_ra = self.ra / self.rs
 
+    # ----------------------------------------------------------------------
+    # Alternative generators
+    # ----------------------------------------------------------------------
+
+    @classmethod
+    def isotropic(cls, W0, M, rh, g, d, **kw):
+        '''initialize with no anisotropy'''
+        ra = 1e8
+        return cls(W0, M, rh, ra, g, d, **kw)
+
+    @classmethod
+    def woolley(cls, W0, M, rh, d, **kw):
+        '''g=0, isotropic'''
+        g = 0
+        return cls.isotropic(W0, M, rh, g, d, **kw)
+
+    @classmethod
+    def king(cls, W0, M, rh, d, **kw):
+        '''g=1, isotropic'''
+        g = 1
+        return cls.isotropic(W0, M, rh, g, d, **kw)
+
+    @classmethod
+    def wilson(cls, W0, M, rh, d, **kw):
+        '''g=2, isotropic'''
+        g = 2
+        return cls.isotropic(W0, M, rh, g, d, **kw)
+
+    @classmethod
+    def michieking(cls, W0, M, rh, ra, d, **kw):
+        '''g=1, anisotropic'''
+        g = 1
+        return cls(W0, M, rh, ra, g, d, **kw)
+
+
+# --------------------------------------------------------------------------
+# Model to be used in fitting to observations
+# --------------------------------------------------------------------------
+
 
 class FittableModel(Model):
     '''Model class valid for use in the fitting functions
@@ -1120,6 +1228,11 @@ class FittableModel(Model):
         kwargs.setdefault('Ndot', None)
 
         super().__init__(observations=observations, **theta, **kwargs)
+
+
+# --------------------------------------------------------------------------
+# Sampled model
+# --------------------------------------------------------------------------
 
 
 # Some helpful namespaces for SampledModel
