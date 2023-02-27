@@ -872,6 +872,8 @@ class Model(lp.limepy):
         self.nms = self._mf.nms
         self.nmr = self._mf.nmr
 
+        self.star_types = self._mf.types
+
         # append tracer mass bins (must be appended to end to not affect nms)
         if observations is not None:
 
@@ -883,6 +885,9 @@ class Model(lp.limepy):
 
             mj = np.concatenate((mj, tracer_mj))
             Mj = np.concatenate((Mj, 0.1 * np.ones_like(tracer_mj)))
+
+            self.star_types = np.concatenate((self.star_types,
+                                              ['TR'] * tracer_mj.size))
 
             self._tracer_bins = slice(self.nms + self.nmr, None)
 
@@ -1632,7 +1637,14 @@ class SampledModel:
         # TODO make sure this actually sums up to N?
         # TODO allow other desired N's, would need to match Nj proportions?
         self.Nj = model.Nj.astype(int)
-        self.Nstars = self.Nj.sum()
+
+        # Determine stellar types for each star (MS, WD, NS, BH)
+        self.star_types = np.repeat(model.star_types, self.Nj)
+        self.star_mask = (self.star_types == 'MS')
+
+        self.N = self.Nj.sum()
+        self.Nstars = self.Nj[self.star_mask].sum()
+        self.Nrems = self.N - self.Nstars
 
         self.ani = True if min(model.raj) / model.rt < 3 else False
 
