@@ -1474,7 +1474,7 @@ class SampledModel:
         # Sampling of angles for radial/tangential velocities
         # ------------------------------------------------------------------
 
-        R = self.rng.uniform(size=self.Nstars)
+        R = self.rng.uniform(size=self.N)
 
         # Anisotropic systems sample angles:
         #   cdf(q) = erfi(a*q)/erfi(a)
@@ -1492,10 +1492,10 @@ class SampledModel:
             q = np.fromiter(_map(solver, np.transpose([a, R])), dtype=float)
 
             # TODO must be better way; vectorized opt.root takes 15Tb of mem
-            # q = optimize.root(_pdf_angle, np.zeros(self.Nstars), args=(a, R))
+            # q = optimize.root(_pdf_angle, np.zeros(self.N), args=(a, R))
             #
-            # q = np.zeros(self.Nstars)
-            # for i in range(self.Nstars):
+            # q = np.zeros(self.N)
+            # for i in range(self.N):
             #     q[i] = optimize.brentq(_pdf_angle, 0, 1, args=(a[i], R[i]))
 
         # Isotropic: cdf(q) = q
@@ -1506,7 +1506,7 @@ class SampledModel:
         # Compute radial and tangential velocities from sampled angles
 
         # TODO should q (cos(θ), but not that θ) also be saved? Interesting?
-        vr = self.v * q * self.rng.choice((-1, 1), size=self.Nstars)
+        vr = self.v * q * self.rng.choice((-1, 1), size=self.N)
         vt = self.v * np.sqrt(1 - q**2)
 
         # ------------------------------------------------------------------
@@ -1515,8 +1515,8 @@ class SampledModel:
 
         # Generate random angles for 3D positions
 
-        R1 = self.rng.uniform(size=self.Nstars)
-        R2 = self.rng.uniform(0, 2 * np.pi, size=self.Nstars)
+        R1 = self.rng.uniform(size=self.N)
+        R2 = self.rng.uniform(0, 2 * np.pi, size=self.N)
 
         # Compute x, y, z coordinates based on the generated angles
 
@@ -1535,7 +1535,7 @@ class SampledModel:
 
         # Compute velocities in θ, φ for the spherical coordinate system
 
-        R1 = self.rng.uniform(size=self.Nstars)
+        R1 = self.rng.uniform(size=self.N)
 
         # TODO limepy only computed these if anisotropic, why? not interesting?
         vphi = vt * np.cos(2 * np.pi * R1)
@@ -1560,8 +1560,8 @@ class SampledModel:
             # If isotropic, generate completely random angles in both directions
             # TODO why not just use same stuff for ani/iso? vr=vt, but it exists
 
-            R1 = self.rng.uniform(size=self.Nstars)
-            R2 = self.rng.uniform(size=self.Nstars)
+            R1 = self.rng.uniform(size=self.N)
+            R2 = self.rng.uniform(size=self.N)
 
             vx = (1 - 2 * R1) * self.v
             vy = np.sqrt(self.v**2 - vx**2) * np.cos(2 * np.pi * R2)
@@ -1643,7 +1643,7 @@ class SampledModel:
         self.star_mask = (self.star_types == 'MS')
 
         self.N = self.Nj.sum()
-        self.Nstars = self.Nj[self.star_mask].sum()
+        self.Nstars = self.Nj[model.star_types == 'MS'].sum()
         self.Nrems = self.N - self.Nstars
 
         self.ani = True if min(model.raj) / model.rt < 3 else False
