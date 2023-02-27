@@ -1648,6 +1648,12 @@ class SampledModel:
         self.s2j = np.repeat(model.s2j, self.Nj)
         self.σ2_factor = model.s2 / self.s2j
 
+        try:
+            self.age = model.observations.mdata['age'] << u.Gyr
+            self.feh = model.observations.mdata['FeH']
+        except (AttributeError, KeyError):
+            pass
+
         # ------------------------------------------------------------------
         # "Sample" the masses, assuming all stars are exactly mean bin mass
         # ------------------------------------------------------------------
