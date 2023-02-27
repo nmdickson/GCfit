@@ -1240,6 +1240,9 @@ _position = namedtuple('position', ['x', 'y', 'z', 'r', 'theta', 'phi'],
                        defaults=[None, ] * 6)
 _direction = namedtuple('direction', ['x', 'y', 'z', 'r', 't', 'theta', 'phi'],
                         defaults=[None, ] * 7)
+_projection = namedtuple('projection', ['lat', 'lon', 'distance',
+                                        'pm_l_cosb', 'pm_b', 'v_los'],
+                         defaults=[None, ] * 6)
 
 
 class SampledModel:
@@ -1439,6 +1442,11 @@ class SampledModel:
 
             phihat[mask] = phihat[mask][shuffle_key]
 
+        # Add units
+
+        # TODO I assume vel units are km/s, but should check
+        v <<= (u.km / u.s)
+
         return r, k, v, phihat
 
     def _sample_coordinates(self, model, pool=None):
@@ -1563,8 +1571,49 @@ class SampledModel:
 
         return p, v
 
-    def __init__(self, model, *, seed=None, pool=None, verbose=False):
-        '''Sample N stars with positions and velocities from this model'''
+    def _project(self, cen, frame='galactic'):
+        '''return projected-on-sky positions and velocities, given the centre
+        skycoord, in this frame
+        # TODO if this is slow, could switch to the erfa ufuncs pretty easily
+        # TODO doesn't actually use frame yet, only gives galactic, is that fine
+        '''
+        import astropy.coordinates as coord
+
+        cen = cen.galactic
+
+        x, y, z = cen.u - self.pos.x, cen.v - self.pos.y, cen.w - self.pos.z
+        vx, vy, vz = cen.U - self.vel.x, cen.V - self.vel.y, cen.W - self.vel.z
+
+        sk = coord.SkyCoord(u=x, v=y, w=z, U=vx, V=vy, W=vz, frame='galactic',
+                            representation_type='cartesian')
+
+        sk.representation_type = 'spherical'
+        sk.differential_type = 'sphericalcoslat'
+
+        p = _projection(lon=sk.l, lat=sk.b, distance=sk.distance,
+                        pm_l_cosb=sk.pm_l_cosb, pm_b=sk.pm_b,
+                        v_los=sk.radial_velocity)
+
+        return p
+
+    def __init__(self, model, centre=None, *, distribute_masses=True,
+                 use_model_distance=True, seed=None, pool=None, verbose=False):
+        '''Sample N stars with positions and velocities from this model
+
+        if centre is given, will determine projected/observed
+            coordinates/velocities for each star based on this centre.
+            Centre should be a SkyCoord, and also contain velocities
+            The model "distance" `d` will set the distance of the exact centre
+            of the cluster, overriding the distance in the given centre
+            skycoord, unless `use_model_distance` is False.
+        if use_model_distance is False and the distance is not very close to
+            the model distance, this will obvisouly give very weird results
+
+        frame is the frame for a skycoord, only used if centre given
+
+        if distribute_masses, masses will be uniformally sampled between all
+            the mass bins, otherwise will all have the mean value (mj)
+        '''
 
         # store ref to base model, just in case
         self._basemodel = model
@@ -1624,3 +1673,49 @@ class SampledModel:
         # ------------------------------------------------------------------
 
         self.pos, self.vel = self._sample_coordinates(model)
+
+        # ------------------------------------------------------------------
+        # If centre coordinate is given, project also into the given frame
+        # ------------------------------------------------------------------
+
+        if centre is not None:
+            import astropy.coordinates as coord
+
+            # --------------------------------------------------------------
+            # Unpack centre coordinate into a 3d SkyCoord
+            # TODO this is not very robust, must be better way to inject dist
+            # --------------------------------------------------------------
+
+            if isinstance(centre, coord.SkyCoord):
+
+                centre = centre.copy().galactic
+
+                # Convert to spherical first, so can implant our distance
+
+                if use_model_distance:
+                    centre.representation_type = 'spherical'
+                    centre.differential_type = 'sphericalcoslat'
+
+                    centre = coord.SkyCoord(
+                        l=centre.l, b=centre.b, distance=model.d,
+                        pm_l_cosb=centre.pm_l_cosb, pm_b=centre.pm_b,
+                        radial_velocity=centre.radial_velocity,
+                        frame='galactic'
+                    )
+
+                # convert to cartesian to actually use
+
+                centre.representation_type = 'cartesian'
+
+            else:
+                mssg = f"'centre' must be a 'SkyCoord', not {type(centre)}"
+                raise ValueError(mssg)
+
+            # --------------------------------------------------------------
+            # Project all the cartesian positions into this frame
+            # --------------------------------------------------------------
+
+            # TODO store this in the best possible frame/representation
+            self.centre = centre
+
+            self.galactic = self._project(centre, frame='galactic')
