@@ -1657,9 +1657,14 @@ class SampledModel:
         # ------------------------------------------------------------------
         # "Sample" the masses, assuming all stars are exactly mean bin mass
         # ------------------------------------------------------------------
-        # TODO don't like this assumption, should sample randomly between bins
 
         self.m = np.repeat(model.mj, self.Nj)
+
+        if distribute_masses:
+            halfwidth = np.repeat(model.mbin_widths / 2., self.Nj)
+            low, high = self.m - halfwidth, self.m + halfwidth
+            self.m = self.rng.uniform(low, high)
+
         self.mbins = np.repeat(range(model.nmbin), self.Nj)
 
         # Recompute actual total mass
