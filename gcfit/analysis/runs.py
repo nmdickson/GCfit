@@ -3139,6 +3139,7 @@ class RunCollection(_RunAnalysis):
         Nparams = len(params)
         Nrows = Ncols = Nparams - 1
 
+        # TODO redo this using the subplot_mosaic logic to make alot easier
         fig, axes = self._setup_multi_artist(fig, (Nrows, Ncols),
                                              constrained_layout=False,
                                              sharex='col', sharey='row')

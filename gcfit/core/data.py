@@ -1576,30 +1576,23 @@ class SampledModel:
 
         return p, v
 
-    def _project(self, cen, frame='galactic'):
+    def _project(self, cen):
         '''return projected-on-sky positions and velocities, given the centre
-        skycoord, in this frame
-        # TODO if this is slow, could switch to the erfa ufuncs pretty easily
-        # TODO doesn't actually use frame yet, only gives galactic, is that fine
+        skycoord, into the galactic frame (spherical)
+        # TODO only gives galactic, is that fine?
         '''
-        import astropy.coordinates as coord
+        import erfa
 
         cen = cen.galactic
 
         x, y, z = cen.u - self.pos.x, cen.v - self.pos.y, cen.w - self.pos.z
         vx, vy, vz = cen.U - self.vel.x, cen.V - self.vel.y, cen.W - self.vel.z
 
-        sk = coord.SkyCoord(u=x, v=y, w=z, U=vx, V=vy, W=vz, frame='galactic',
-                            representation_type='cartesian')
+        pv = util.q2pv(np.c_[x, y, z], np.c_[vx, vy, vz])
+        l, b, d, dl, db, dd = erfa.pv2s(pv)
 
-        sk.representation_type = 'spherical'
-        sk.differential_type = 'sphericalcoslat'
-
-        p = _projection(lon=sk.l, lat=sk.b, distance=sk.distance,
-                        pm_l_cosb=sk.pm_l_cosb, pm_b=sk.pm_b,
-                        v_los=sk.radial_velocity)
-
-        return p
+        return _projection(lon=l, lat=b, distance=d,
+                           pm_l_cosb=dl * np.cos(b), pm_b=db, v_los=dd)
 
     def __init__(self, model, centre=None, *, distribute_masses=True,
                  use_model_distance=True, seed=None, pool=None, verbose=False):
@@ -1614,8 +1607,6 @@ class SampledModel:
         if use_model_distance is False and the distance is not very close to
             the model distance, this will obvisouly give very weird results
 
-        frame is the frame for a skycoord, only used if centre given
-
         if distribute_masses, masses will be uniformally sampled between all
             the mass bins, otherwise will all have the mean value (mj)
         '''
@@ -1629,12 +1620,10 @@ class SampledModel:
 
         self.rng = np.random.default_rng(seed)
 
-        # _set_params_and_init ----------------
         # ------------------------------------------------------------------
         # Set and store various important quantities from the base model
         # ------------------------------------------------------------------
 
-        # TODO make sure this actually sums up to N?
         # TODO allow other desired N's, would need to match Nj proportions?
         self.Nj = model.Nj.astype(int)
 
@@ -1698,7 +1687,7 @@ class SampledModel:
         self.pos, self.vel = self._sample_coordinates(model)
 
         # ------------------------------------------------------------------
-        # If centre coordinate is given, project also into the given frame
+        # If centre coordinate is given, project also into the galactic frame
         # ------------------------------------------------------------------
 
         if centre is not None:
@@ -1741,4 +1730,4 @@ class SampledModel:
             # TODO store this in the best possible frame/representation
             self.centre = centre
 
-            self.galactic = self._project(centre, frame='galactic')
+            self.galactic = self._project(centre)
