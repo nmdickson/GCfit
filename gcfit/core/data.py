@@ -1591,8 +1591,9 @@ class SampledModel:
         pv = util.q2pv(np.c_[x, y, z], np.c_[vx, vy, vz])
         l, b, d, dl, db, dd = erfa.pv2s(pv)
 
-        return _projection(lon=l, lat=b, distance=d,
-                           pm_l_cosb=dl * np.cos(b), pm_b=db, v_los=dd)
+        return _projection(lon=l.to('deg'), lat=b.to('deg'), distance=d,
+                           pm_l_cosb=dl.to('mas/yr') * np.cos(b),
+                           pm_b=db.to('mas/yr'), v_los=dd)
 
     def __init__(self, model, centre=None, *, distribute_masses=True,
                  use_model_distance=True, seed=None, pool=None, verbose=False):
