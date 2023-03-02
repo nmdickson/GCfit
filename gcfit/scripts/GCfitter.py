@@ -81,7 +81,7 @@ class RepeatedCallHandler(logging.FileHandler):
         super().close()
 
 
-if __name__ == '__main__':
+def main():
 
     # ----------------------------------------------------------------------
     # Command line argument parsing

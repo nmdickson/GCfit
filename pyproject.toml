@@ -45,8 +45,8 @@ documentation = "https://gcfit.readthedocs.io"
 repository = "https://github.com/nmdickson/GCfit.git"
 
 [project.scripts]
-GCfitter = "bin/GCfitter"
-generate_model_CI = "bin/generate_model_CI"
+GCfitter = "gcfit.scripts:GCfitter.main"
+generate_model_CI = "gcfit.scripts:generate_model_CI.main"
 
 [build-system]
 requires = ["setuptools", "setuptools-scm"]
