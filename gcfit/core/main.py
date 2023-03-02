@@ -865,7 +865,6 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         backend.store_metadata('excluded_likelihoods', excluded_likelihoods)
 
         if initial_kwargs:
-            print(initial_kwargs)
             backend.store_metadata('initial_kwargs', initial_kwargs)
 
         if batch_kwargs:
