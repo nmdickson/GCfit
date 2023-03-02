@@ -472,8 +472,13 @@ class _ClusterVisualizer:
         # Determine the relevant datasets to the given pattern
         # ------------------------------------------------------------------
 
-        # TODO optionally exclude any "excluded_datasets"?
-        datasets = self.obs.filter_datasets(ds_pattern)
+        # If this cluster has no observations, force basically `show_obs=False`
+        if self.obs is None:
+            ds_pattern, datasets = '', {}
+
+        else:
+            # TODO optionally exclude any "excluded_datasets"?
+            datasets = self.obs.filter_datasets(ds_pattern)
 
         if strict and ds_pattern and not datasets:
             mssg = (f"No datasets matching '{ds_pattern}' exist in {self.obs}."
@@ -991,6 +996,11 @@ class _ClusterVisualizer:
                                         res_kwargs=res_kwargs, **kwargs)
 
         if show_background:
+
+            if self.obs is None:
+                mssg = "No observations for this model; cannot plot background"
+                raise RuntimeError(mssg)
+
             try:
                 nd = list(self.obs.filter_datasets('*number*').values())[-1]
                 background = nd.mdata['background'] << nd['Σ'].unit
@@ -1049,13 +1059,18 @@ class _ClusterVisualizer:
         # Number Density
 
         self.plot_number_density(fig=fig, ax=axes[0, 0], label_position='left',
-                                 blank_xaxis=True, show_background=True,
+                                 blank_xaxis=True,
+                                 show_background=(self.obs is not None),
                                  **kwargs)
 
-        nd = self.obs['number_density']
-        bg = 0.9 * nd.mdata['background'] << nd['Σ'].unit
-        axes[0, 0].set_ylim(bottom=min([bg,
-                                        np.abs(self.numdens[..., :-2].min())]))
+        if self.obs is not None:
+            nd = self.obs['number_density']
+            bg = 0.9 * nd.mdata['background'] << nd['Σ'].unit
+        else:
+            bg = np.inf
+
+        bot_lim = min([bg, np.abs(self.numdens[..., :-2].min())])
+        axes[0, 0].set_ylim(bottom=bot_lim)
 
         # Line-of-Sight Velocity Dispersion
 
@@ -1117,6 +1132,12 @@ class _ClusterVisualizer:
     def plot_mass_func(self, fig=None, show_obs=True, show_fields=True, *,
                        PI_legend=False, propid_legend=False,
                        logscaled=False, field_kw=None):
+
+        if not self.mass_func:
+            mssg = ("No mass functions fields found to plot. "
+                    "Note that plotting mass functions for models without "
+                    "observations is not currently supported")
+            raise RuntimeError(mssg)
 
         # ------------------------------------------------------------------
         # Setup axes, splitting into two columns if necessary and adding the
@@ -1802,7 +1823,7 @@ class ModelVisualizer(_ClusterVisualizer):
     def __init__(self, model, observations=None):
         self.model = model
         self.obs = observations if observations else model.observations
-        self.name = observations.cluster
+        self.name = getattr(observations, 'cluster', 'Cluster Model')
 
         # various structural model attributes
         self.r0 = model.r0
@@ -1859,7 +1880,8 @@ class ModelVisualizer(_ClusterVisualizer):
 
         # Check for observational numdens profiles, to compute scaling factors K
         #   but do not apply them to the numdens yet.
-        if obs_nd := observations.filter_datasets('*number_density'):
+        if ((observations is not None)
+                and (obs_nd := observations.filter_datasets('*umber_density'))):
 
             if len(obs_nd) > 1:
                 mssg = ('Too many number density datasets, '
@@ -1901,6 +1923,10 @@ class ModelVisualizer(_ClusterVisualizer):
         '''
 
         self.mass_func = {}
+
+        # Not sure how to handle MF without observations yet, just skip and warn
+        if observations is None:
+            return
 
         cen = (observations.mdata['RA'], observations.mdata['DEC'])
 
