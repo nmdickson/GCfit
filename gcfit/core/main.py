@@ -502,7 +502,10 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
         backend.store_metadata('cluster', cluster)
 
-        backend.store_metadata('restrict_to', restrict_to)
+        # Only store if set. Will default read to None if not stored here
+        if restrict_to is not None:
+            backend.store_metadata('restrict_to', restrict_to)
+
         backend.store_metadata('GCFIT_DIR', 'CORE' if restrict_to == 'core'
                                             else str(GCFIT_DIR))
 
@@ -839,7 +842,10 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
         backend.store_metadata('cluster', cluster)
 
-        backend.store_metadata('restrict_to', restrict_to)
+        # Only store if set. Will default read to None if not stored here
+        if restrict_to is not None:
+            backend.store_metadata('restrict_to', restrict_to)
+
         backend.store_metadata('GCFIT_DIR', 'CORE' if restrict_to == 'core'
                                             else str(GCFIT_DIR))
 
