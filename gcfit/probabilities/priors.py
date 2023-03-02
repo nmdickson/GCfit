@@ -668,7 +668,7 @@ DEFAULT_PRIORS = {
     'a2': ('uniform', [(-1, 2.35), ('a1', np.inf)]),
     'a3': ('uniform', [(1.6, 4), ('a2', np.inf)]),
     'BHret': ('uniform', [(0, 100)]),
-    'd': ('uniform', [(2, 8)])
+    'd': ('uniform', [(2, 18)])
 }
 
 _PRIORS_MAP = {
