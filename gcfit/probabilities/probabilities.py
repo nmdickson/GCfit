@@ -1002,9 +1002,8 @@ def likelihood_mass_func(model, mf, field, *, hyperparams=False):
 
         binned_N_model = np.empty(model.nms) << N_data.unit
         for j in range(model.nms):
-            # TODO units surrounding this are a little uncertain?
             Nj = field_slice.MC_integrate(densityj[j], sample=sample_radii)
-            widthj = (model.mj[j] * model.mes_widths[j])
+            widthj = (model.mj[j] * model.mbin_widths[j])
             binned_N_model[j] = Nj / widthj
 
         N_spline = util.QuantitySpline(model.mj[:model.nms],
