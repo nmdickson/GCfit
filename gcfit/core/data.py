@@ -855,7 +855,7 @@ class Model(lp.limepy):
             a_slopes=[-a1, -a2, -a3],
             nbins=nbins,
             FeH=FeH,
-            tout=np.array([age]),
+            tout=np.array([(age << u.Myr).value]),
             Ndot=Ndot,
             N0=N0,
             tcc=tcc,
