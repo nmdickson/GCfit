@@ -1,10 +1,11 @@
 # GCfit
 
-## Fitting of static equilibrium globular cluster models
+## Equilibrium Globular Cluster Models and Fitting
 
-Python package enabling the generalized fitting of distribution function based
-lowered isothermal ([LIMEPY](https://github.com/mgieles/limepy)) models to
-various observational Globular Cluster data products, via a parallelized
+`gcfit` is a Python package enabling the creation of distribution-function
+based lowered isothermal ([LIMEPY](https://github.com/mgieles/limepy)) models,
+representing globular cluster (GC) systems, and the generalized fitting of
+these models to various observational GC data products, via a parallelized
 sampling suite.
 
 ## Documentation
@@ -12,6 +13,8 @@ All documentation, including installation instructions and examples, can be
 found [here](https://GCfit.readthedocs.io).
 
 ## Attribution
+
+GCfit was first introduced in _Dickson et al. (2023; submitted)_.
 
 If you find this package useful in your research, please see the
 [documentation](https://GCfit.readthedocs.io/en/latest/citations.html) for
