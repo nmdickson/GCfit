@@ -12,7 +12,8 @@ import itertools
 from collections import namedtuple
 
 
-__all__ = ['DEFAULT_THETA', 'Model', 'FittableModel', 'Observations']
+__all__ = ['DEFAULT_THETA', 'Model', 'FittableModel', 'SingleMassModel',
+           'Observations']
 
 
 # The order of this is important!
@@ -1255,6 +1256,9 @@ class SampledModel:
 
     # TODO get initial masses as well, so can add stuff like photometry
     # TODO allow splitting up of remnants and stars, applying of labels
+
+    centre = None
+    galactic = None
 
     # ----------------------------------------------------------------------
     # Initial sampling of a given model
