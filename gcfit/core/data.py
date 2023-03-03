@@ -791,8 +791,6 @@ class Model(lp.limepy):
         self.rhoj <<= (M_units / R_units**3)
         self.Sigmaj <<= (M_units / R_units**2)
 
-        self.d <<= u.kpc
-
     def __init__(self, W0, M, rh, g=1.5, delta=0.45, ra=1e8,
                  a1=1.3, a2=2.3, a3=2.3, BHret=1.0, d=5,
                  s2=0., F=1., *, observations=None, age=None, FeH=None,
@@ -801,17 +799,26 @@ class Model(lp.limepy):
                  natal_kicks=True, Ndot=0.0, vesc=90.,
                  meanmassdef='global', ode_maxstep=1e10, ode_rtol=1e-7):
 
-        # TODO support inputs with units (may have to strip them before limepy)
+        # ------------------------------------------------------------------
+        # Add/convert units of some quantities. Supports quantities as inputs
+        # ------------------------------------------------------------------
 
-        age = age << u.Gyr
+        M <<= u.Msun
+        rh <<= u.pc
+        d <<= u.kpc
+        age <<= u.Gyr
+
+        m_breaks <<= u.Msun
+        vesc <<= (u.km / u.s)
 
         # ------------------------------------------------------------------
         # Pack theta
         # ------------------------------------------------------------------
 
-        self.theta = dict(W0=W0, M=M / 1e6, rh=rh, ra=np.log10(ra),
-                          g=g, delta=delta, a1=a1, a2=a2, a3=a3, BHret=BHret,
-                          s2=s2, F=F, d=d)
+        self.theta = dict(W0=W0, M=M.to_value('1e6 Msun'), rh=rh.value,
+                          ra=np.log10(ra), g=g, delta=delta,
+                          a1=a1, a2=a2, a3=a3, BHret=BHret,
+                          s2=s2, F=F, d=d.value)
 
         self.d = d
 
@@ -825,7 +832,7 @@ class Model(lp.limepy):
 
             # These are required, and will default to None (must be supplied)
             if age is None:
-                age = (observations.mdata['age'] << u.Gyr).to_value(u.Myr)
+                age = observations.mdata['age'] << u.Gyr
 
             if FeH is None:
                 FeH = observations.mdata['FeH']
@@ -836,7 +843,7 @@ class Model(lp.limepy):
                 Ndot = observations.mdata['Ndot']
 
             if vesc is None:
-                vesc = observations.mdata['vesc']
+                vesc = observations.mdata['vesc'] << u.km / u.s
 
         else:
             if age is None or FeH is None:
@@ -854,11 +861,11 @@ class Model(lp.limepy):
 
         # TODO would be better if this could be scaled to M from the start
         self._mf = EvolvedMF(
-            m_breaks=m_breaks,
+            m_breaks=m_breaks.value,
             a_slopes=[-a1, -a2, -a3],
             nbins=nbins,
             FeH=FeH,
-            tout=np.array([(age << u.Myr).value]),
+            tout=np.array([age.to_value('Myr')]),
             Ndot=Ndot,
             N0=N0,
             tcc=tcc,
@@ -866,7 +873,7 @@ class Model(lp.limepy):
             BH_ret_int=BH_ret_int,
             BH_ret_dyn=BHret / 100.,
             natal_kicks=natal_kicks,
-            vesc=vesc
+            vesc=vesc.value
         )
 
         mj, Mj = self._mf.m, self._mf.M
@@ -905,8 +912,8 @@ class Model(lp.limepy):
         self._limepy_kwargs = dict(
             phi0=W0,
             g=g,
-            M=M,
-            rh=rh,
+            M=M.value,
+            rh=rh.value,
             ra=ra,
             delta=delta,
             mj=mj,
@@ -998,9 +1005,6 @@ class Model(lp.limepy):
     # ----------------------------------------------------------------------
     # Alternative generators
     # ----------------------------------------------------------------------
-
-    # TODO how to combine stuff like canonical/others ?
-    #   almost feels like these should just be some combo of default kwargs
 
     @classmethod
     def isotropic(cls, W0, M, rh, **kw):
@@ -1112,12 +1116,16 @@ class SingleMassModel(lp.limepy):
         self.rho <<= (M_units / R_units**3)
         self.Sigma <<= (M_units / R_units**2)
 
-        self.d <<= u.kpc
-
     def __init__(self, W0, M, rh, ra=1e8, g=1.5, d=5, *,
                  ode_maxstep=1e10, ode_rtol=1e-7):
 
-        # TODO support inputs with units (may have to strip them before limepy)
+        # ------------------------------------------------------------------
+        # Add/convert units of some quantities. Supports quantities as inputs
+        # ------------------------------------------------------------------
+
+        M <<= u.Msun
+        rh <<= u.pc
+        d <<= u.kpc
 
         # ------------------------------------------------------------------
         # Pack theta
@@ -1136,8 +1144,8 @@ class SingleMassModel(lp.limepy):
         self._limepy_kwargs = dict(
             phi0=W0,
             g=g,
-            M=M,
-            rh=rh,
+            M=M.value,
+            rh=rh.value,
             ra=ra,
             project=True,
             verbose=False,
