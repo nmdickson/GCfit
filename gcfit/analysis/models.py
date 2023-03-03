@@ -1,6 +1,6 @@
 from .. import util
 from ..probabilities import mass
-from ..core.data import Observations, Model, FittableModel
+from ..core.data import Observations, FittableModel
 
 import h5py
 import numpy as np

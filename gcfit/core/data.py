@@ -1064,6 +1064,13 @@ class Model(lp.limepy):
     def sample(self, *args, **kwargs):
         return SampledModel(self, *args, **kwargs)
 
+    # ----------------------------------------------------------------------
+    # Model visualizers
+    # ----------------------------------------------------------------------
+
+    def get_visualizer(self):
+        from ..analysis import ModelVisualizer
+        return ModelVisualizer(self, observations=self.observations)
 
 # --------------------------------------------------------------------------
 # Single-mass version of base model
