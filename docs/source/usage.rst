@@ -3,22 +3,163 @@ Usage
 =====
 
 .. TODO add a bunch of plots here and there maybe 
+.. TODO how to get rid of the whole `gcfit.core.data` when linking `Model` etc
 
-``GCfit`` has two functionalities. The primary, to fit GC equilibrium models
-against a number of observables, and the secondary, to analyze and visualize
-the statistical fitting process and the resultant models.
+``GCfit`` has two main functionalities. The primary, to provide easy access to
+a library of GC equilibrium models, and the secondary, to fit said models
+against a number of observables.
 
-Fitting
-=======
+The package then also provides the ability to analyze and visualize
+the models, the statistical fitting process and the resultant fits.
 
-Python
-^^^^^^
+Models
+======
 
-The ``GCfit`` fitting process can be accessed through the python interface at
+The ``GCfit`` Models can be accessed through the core module at
 
 .. code-block:: python
     
     import gcfit
+
+All models are based off of the single base class :class:`gcfit.core.Model`.
+
+To begin, we can start by exploring a model with some arbitrary default
+parameters. The :class:`gcfit.core.Model` class gives default values for many
+arguments, which you may want to adjust yourself. See the documentation of said
+class for more explanation of the meaning of all available parameters.
+
+.. code-block:: python
+
+    model = gcfit.Model(W0=6.3, M=5e5, rh=6.7, age=12, FeH=-0.7)
+
+The model will automatically generate a number of mass bins, containing either
+stars or remnants of a certain type, which are used to solve the multimass
+version of the LIMEPY DF.
+
+.. code-block:: python
+
+    # Mean masses per bin
+    model.mj
+
+    # Total mass per bin
+    model.Mj
+
+    # Stellar object types (MS, NS, WD, BH)
+    model.star_types
+
+    # Total mass and number of black holes, in their repective bins
+    model.BH_Mj
+    model.BH_Nj
+
+Notice that the majority of interesting quantities in :class:`gcfit.core.Model` are
+stored as :class:`astropy.Quantity` objects, with their respective units.
+
+The radial profiles of a number of system properties, such as velocity
+dispersion, density and energy, are available for each mass bin, as well as a
+number of useful radii.
+
+.. code-block:: python
+
+    # Density profile of the most massive main-sequence stars
+    model.rhoj[model.nms - 1]
+
+    # Half-mass radius of each mass bin
+    model.rhj
+
+See :class:`gcfit.core.Model` for further description of all available properties.
+
+Models matching a number of historical DF formulations can also be created
+easily using the relevant generator functions. These functions mostly
+consist of setting a specific default value for the truncation parameter ``g``.
+
+.. code-block:: python
+
+    # Generate a King (1966) model
+    model = gcfit.Model.king(6.3, 5e5, 6.7, age=12, FeH=-0.7)
+
+
+Sampled Models
+^^^^^^^^^^^^^^
+
+These (multimass) models can also be sampled, in order to return a random
+distribution of stars matching the phase-space distribution of the models.
+
+.. code-block:: python
+
+    sampled = model.sample()
+
+    # Total number of stars in the system
+    sampled.Nstars
+
+    # Cartesian coordinates of all stars, centred on the cluster centre
+    sampled.pos.x, sampled.pos.y, sampled.pos.z
+
+    # Radial and tangential velocities of each star
+    sm.vel.r, sm.vel.t
+
+If a centre coordinate on the sky is given (as an :class:`astropy.SkyCoord`
+with both position and velocity),
+the projected positions and velocities on the sky can also be computed.
+
+.. code-block:: python
+    
+    import astropy.units import u
+    from astropy.coordinates import SkyCoord
+
+    deg, masyr, kms = u.deg, u.unit('mas/yr'), u.Unit('km/s')
+    cen = SkyCoord(l=45. * deg, b=55. * deg,
+                   pm_l_cosb=5 * masyr, pm_b=3 * masyr, radial_velocity=2 * kms,
+                   frame='galactic')
+
+    p_sampled = model.sample(centre=cen)
+
+    p_sampled.galactic.lon, p_sampled.galactic.lat
+
+    p_sampled.galactic.pm_l_cosb, p_sampled.galactic.pm_b
+
+
+Observations
+^^^^^^^^^^^^
+
+Another useful class within ``GCfit`` is the :class:`gcfit.core.Observations` class,
+which acts as a container for a number of observational datasets. These
+observations are key for all fitting (see below), but are also useful when
+working with individual models, as they contain a number of useful metadata
+fields about the cluster:
+
+.. code-block:: python
+
+    obs = gcfit.Observations('NGC104')
+
+    model = gcfit.Model(W0=6.3, M=5e5, rh=6.7, observations=obs)
+
+More information on the datafiles underlying this class, and how to create your
+own datafiles can be found at (TODO).
+
+
+Fitting
+=======
+
+While these models can be useful on their own, one of the key objectives of
+``GCfit`` is to determine the posterior distributions of the most important
+parameters defining these models.
+
+This fitting is based on top of a different model subclass;
+:class:`gcfit.core.FittableModel`.
+
+This class is nearly identical to the base ``Model``, except for how it is
+initialized: based on an array of sampled values for each of the 13 main fitting
+parameters, in a specific order, and an ``Observations`` object.
+
+Note: The order and units required of the parameters for this class may not
+match those in :class:`gcfit.core.Model`. It is recommended to only access the base
+model directly, and leave this class for use by the fitting functions below.
+
+Python
+^^^^^^
+
+The ``GCfit`` fitting process can be accessed through the python interface as
+well.
 
 There are two core fitting functions, one for each sampling method. Both come
 with many optional arguments, some shared between the two, and some specific
@@ -372,6 +513,34 @@ see the help page:
 .. code-block:: bash
 
     generate_model_CI --help
+
+
+Plotting Specific Models and Observations
+"""""""""""""""""""""""""""""""""""""""""
+
+All of these model visualizations can also be used to examine specific models,
+not necessarily based on any fitting results, though they will of course not
+have any comparisons to observed datasets.
+
+.. code-block:: python
+
+    model = gcfit.Model(W0=6.3, M=5e5, rh=6.7, age=12, FeH=-0.7)
+    
+    mv = analysis.ModelVisualizer(model)
+
+    mv.plot_cumulative_mass()
+
+
+Similarly, visualizations of observational datasets, without any corresponding
+models, can also be done.
+
+.. code-block:: python
+
+    obs = gcfit.Observations('NGC104')
+    
+    ov = analysis.ObservationsVisualizer(obs)
+
+    ov.plot_number_density(show_background=True)
 
 
 Collections of Runs

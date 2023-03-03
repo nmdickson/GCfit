@@ -793,7 +793,8 @@ class Model(lp.limepy):
 
         self.d <<= u.kpc
 
-    def __init__(self, W0, M, rh, ra, g, delta, a1, a2, a3, BHret, d,
+    def __init__(self, W0, M, rh, g=1.5, delta=0.45, ra=1e8,
+                 a1=1.3, a2=2.3, a3=2.3, BHret=1.0, d=5,
                  s2=0., F=1., *, observations=None, age=None, FeH=None,
                  m_breaks=[0.1, 0.5, 1.0, 100], nbins=[5, 5, 20],
                  N0=5e5, tcc=0.0, NS_ret=0.1, BH_ret_int=1.0,
@@ -801,6 +802,8 @@ class Model(lp.limepy):
                  meanmassdef='global', ode_maxstep=1e10, ode_rtol=1e-7):
 
         # TODO support inputs with units (may have to strip them before limepy)
+
+        age = age << u.Gyr
 
         # ------------------------------------------------------------------
         # Pack theta
@@ -984,10 +987,10 @@ class Model(lp.limepy):
     #   almost feels like these should just be some combo of default kwargs
 
     @classmethod
-    def isotropic(cls, W0, M, rh, g, delta, a1, a2, a3, BHret, d, **kw):
+    def isotropic(cls, W0, M, rh, **kw):
         '''initialize with no anisotropy'''
         ra = 1e8
-        return cls(W0, M, rh, ra, g, delta, a1, a2, a3, BHret, d, **kw)
+        return cls(W0, M, rh, ra=ra, **kw)
 
     @classmethod
     def canonical(cls, W0, M, rh, ra, g, delta, BHret, d, imf='kroupa', **kw):
@@ -1018,10 +1021,10 @@ class Model(lp.limepy):
         return cls.isotropic(W0, M, rh, g, delta, a1, a2, a3, BHret, d, **kw)
 
     @classmethod
-    def king(cls, W0, M, rh, delta, a1, a2, a3, BHret, d, **kw):
+    def king(cls, W0, M, rh, **kw):
         '''g=1, isotropic'''
         g = 1
-        return cls.isotropic(W0, M, rh, g, delta, a1, a2, a3, BHret, d, **kw)
+        return cls.isotropic(W0, M, rh, g=g, **kw)
 
     @classmethod
     def wilson(cls, W0, M, rh, delta, a1, a2, a3, BHret, d, **kw):
@@ -1039,8 +1042,8 @@ class Model(lp.limepy):
     # Model sampling
     # ----------------------------------------------------------------------
 
-    def sample(self, *, seed=None, pool=None, verbose=False):
-        return SampledModel(self, seed=seed, pool=pool)
+    def sample(self, *args, **kwargs):
+        return SampledModel(self, *args, **kwargs)
 
 
 # --------------------------------------------------------------------------
@@ -1635,6 +1638,7 @@ class SampledModel:
         # Determine stellar types for each star (MS, WD, NS, BH)
         self.star_types = np.repeat(model.star_types, self.Nj)
         self.star_mask = (self.star_types == 'MS')
+        # TODO masks for all other types
 
         self.N = self.Nj.sum()
         self.Nstars = self.Nj[model.star_types == 'MS'].sum()

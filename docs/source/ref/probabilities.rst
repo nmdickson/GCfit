@@ -1,7 +1,7 @@
 Probabilities
 =============
 
-.. currentmodule:: fitter.probabilities
+.. currentmodule:: gcfit.probabilities
 
 
 Likelihood Functions
