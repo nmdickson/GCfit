@@ -680,31 +680,158 @@ class Observations:
 class Model(lp.limepy):
     r'''Wrapper class around a LIMEPY model, including mass function evolution
 
-    Subclasses a `limepy.limepy` model defined by the input `theta` parameters,
+    Globular cluster model implemented as a subclass around a `limepy.limepy`
+    model, as defined by the input parameters,
     while including support for initial mass function evolution (through
     `ssptools`), units (through `astropy.Quantity`), tracer masses and enhanced
     metadata and mass results.
 
     The cluster mass function is evolved from it's initial mass function using
-    fixed integration settings alongside the cluster's age, metallicity and
-    low-mass loss rate as defined in the given `Observations`. The resulting
-    mass bins are arranged correctly, and have any required (by the
-    `Observations`) tracer masses added, before being used to solve the Limepy
-    distribution function.
+    fixed integration settings alongside the cluster's age, metallicity, escape
+    velocity and mass-loss rates and fractions, either as given during
+    initilization or as defined in the metadata of a given `Observations`.
+    The resulting mass bins are arranged correctly, and have any possibly
+    required (by the `Observations`) tracer masses added, before being used
+    to solve the Limepy distribution function.
+
+    Note carefully the units required in some of the parameters here, which may
+    not be the same as in other classes (such as `FittableModel`). `Quantity`
+    objects, from astropy, can also be given in most cases to ensure the units
+    are handled correctly.
 
     Parameters
     ----------
-    theta : dict or list
-        The model input parameters. Must either be a dict, or a full list of
-        all parameters, in the exact same order as `DEFAULT_THETA`.
-        See package background documentation for explanation of all possible
-        input parameters.
+
+    W0 : float or astropy.Quantity
+        The (dimensionless) central potential. Used as a boundary condition for
+        solving Poisson’s equation and defines how centrally concentrated the
+        model is.
+
+    M : float or astropy.Quantity
+        The total mass of the system, in all mass components, in Msun.
+
+    rh : float or astropy.Quantity
+        The system half-mass radius, in parsecs.
+
+    g : float, optional
+        The truncation parameter, which controls the sharpness of the outer
+        density truncation of the model. No finite models exist outside
+        0 <= g < 3.5. Defaults to 1.5.
+
+    delta : float, optional
+        Sets the mass dependance of the velocity scale for each mass component.
+        Increased value of delta (usually up to ~0.5) indicate an increased
+        degree of mass segregation present in the system.
+        Defaults to 0.45.
+
+    ra : float or astropy.Quantity, optional
+        The (dimensionless) anisotropy-radius, which determines the amount of
+        anisotropy in the system, with higher ra values indicating more
+        isotropy. This quantity is scaled based on the given `rh` in physical
+        units.
+
+    a1 : float, optional
+        The low-mass IMF exponent (representing masses between `m_breaks[0:2]`).
+        Defaults to 1.3, matching Kroupa (2001).
+
+    a2 : float, optional
+        The intermediate-mass IMF exponent (representing masses between
+        `m_breaks[1:3]`). Defaults to 2.3, matching Kroupa (2001).
+
+    a3 : float, optional
+        The high-mass IMF exponent (representing masses between
+        `m_breaks[2:4]`). Defaults to 2.3, matching Kroupa (2001).
+
+    BHret : float, optional
+        The black hole retention fraction, representing the percentage (between
+        0 and 100) of black holes retained after dynamical ejections and natal
+        kicks.
+
+    d : float or astropy.Quantity, optional
+        Distance to the cluster, from Earth, in kiloparsecs. Mainly used for any
+        conversions between observational (angular) and model (linear) units,
+        and thus mostly only required for comparing with observations.
+        Defaults to an arbitrary distance of 5 kpc.
+
+    s2 : float, optional
+        Nuisance parameter applied as an additional unknown uncertainty to all
+        number density profiles, allowing for small deviations between the
+        outer parts of the model and observations.
+        Only used for comparing with observations, not required otherwise
+        Defaults to 0.
+
+    F : float, optional
+        Nuisance parameter applied as an additional scaling (F >= 1) factor on
+        the uncertainty in all mass function profiles, encapsulating possible
+        additional sources of error.
+        Only used for comparing with observations, not required otherwise.
+        Defaults to 1.
 
     observations : Observations, optional
         The `Observations` instance corresponding to this cluster. While not
-        necessary for solving a theoretical model, the observations must be
-        provided for any models used in fitting/sampling procedures, as
-        including them has important impacts on the mass function makeup.
+        necessary for solving a model which is not meant for comparison to the
+        data, a number of optional parameters can be read from the metadata of
+        a given `Observations` instance, such as age and metallicity, and thus
+        would not need to be provided here.
+
+    age : float or astropy.Quantity, optional
+        The current age of the system, in Gyrs. This age is used by the
+        mass evolution algorithm to determine which of the initial stars, as
+        defined by the IMF, will have evolved into remnants by the present day.
+        If no `observations` are given, this quantity *must* be supplied,
+        otherwise an attempt will be made to read the age from
+        the `observations`.
+
+    FeH : float, optional
+        The cluster metallicity, in solar fraction [Fe/H]. This is used by
+        the mass evolution algorithm to determine the final masses of the
+        remnants formed over the evolution of the cluster.
+        If no `observations` are given, this quantity *must* be supplied,
+        otherwise an attempt will be made to read the metallicity from
+        the `observations`.
+
+    m_breaks : (4,) numpy.ndarray or astropy.Quantity, optional
+        The IMF break-masses (including outer bounds) in Msun, defining the
+        mass ranges of each IMF exponent. Defaults to [0.1, 0.5, 1.0, 100].
+
+    nbins : float, optional
+        Number of mass bins in each regime of the IMF, as defined by `m_breaks`.
+        This number of bins will be log-spaced between each of the break masses.
+        Defaults to [5, 5, 20].
+
+    NS_ret : float, optional
+        Neutron star retention fraction (0 to 1). Defaults to 0.1 (10%).
+
+    BH_ret_int : float, optional
+        Initial black hole retention fraction (0 to 1). Defaults to 1 (100%).
+
+    natal_kicks : bool, optional
+        Whether to account for natal kicks in the BH dynamical retention.
+        Defaults to True.
+
+    Ndot : float, optional
+        Represents rate of change of the number of stars N over time, in stars
+        per Myr. Regulates low-mass object depletion (ejection) due to dynamical
+        evolution. Do not use unless you know what you're doing.
+        Defaults to 0.
+
+    vesc : float or astropy.Quantity, optional
+        Initial cluster escape velocity, in km/s, for use in the computation of
+        the effects of BH natal kick. Defaults to 90 km/s.
+
+    meanmassdef : {'global', 'central'}, optional
+        Definition of the mean mass :math:`\bar{m}` used to define the
+        dimensionless mass of each component (:math:`\mu_j = m_j/\bar{m}`).
+        See Eqn. 26 of Gieles & Zocchi (2015) for more details.
+        Defaults to 'global', i.e. the unweighted mean mass of all stars over
+        the entire system.
+
+    ode_maxstep : float, optional
+        Maximum step size for the `limepy` ODE integrator. Defaults to 1e10.
+
+    ode_rtol : float, optional
+        Relative tolerance parameter for the `limepy` ODE integrator.
+        Defaults to 1e-7.
 
     Attributes
     ----------
@@ -800,13 +927,15 @@ class Model(lp.limepy):
                  a1=1.3, a2=2.3, a3=2.3, BHret=1.0, d=5,
                  s2=0., F=1., *, observations=None, age=None, FeH=None,
                  m_breaks=[0.1, 0.5, 1.0, 100], nbins=[5, 5, 20],
-                 N0=5e5, tcc=0.0, NS_ret=0.1, BH_ret_int=1.0,
+                 tcc=0.0, NS_ret=0.1, BH_ret_int=1.0,
                  natal_kicks=True, Ndot=0.0, vesc=90.,
                  meanmassdef='global', ode_maxstep=1e10, ode_rtol=1e-7):
 
         # ------------------------------------------------------------------
         # Add/convert units of some quantities. Supports quantities as inputs
         # ------------------------------------------------------------------
+
+        # TODO add a check for dimensionless on all the other params too
 
         M <<= u.Msun
         rh <<= u.pc
@@ -871,7 +1000,7 @@ class Model(lp.limepy):
             FeH=FeH,
             tout=np.array([age.to_value('Myr')]),
             Ndot=Ndot,
-            N0=N0,
+            N0=5e5,
             tcc=tcc,
             NS_ret=NS_ret,
             BH_ret_int=BH_ret_int,

@@ -68,7 +68,6 @@ while any other available arguments are documented in
     * - M
       - ``M``
       - The total mass of the system, in all mass components.
-        .. In units of :math:`10^6 M_\odot`.
     * - :math:`r_h`
       - ``rh``
       - The system half-mass radius, in parsecs.
