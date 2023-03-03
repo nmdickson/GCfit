@@ -195,6 +195,9 @@ class Dataset:
             mssg = f"Variable '{key}' does not exist in '{self._name}'"
             raise KeyError(mssg)
 
+    def __iter__(self):
+        raise TypeError(f"'{self.__class__.__name__}' object is not iterable")
+
     def _init_variables(self, name, var):
         '''used by group.visit'''
 
@@ -347,7 +350,6 @@ class Observations:
     gcfit.util.get_cluster_path : Locating of data file based on `cluster` name
     gcfit.util.data.ClusterFile : Handling of data file creation and editing
     '''
-    # TODO interesting errors occur when trying to iterate over Observ
 
     _valid_likelihoods = None
 
@@ -356,6 +358,9 @@ class Observations:
 
     def __str__(self):
         return f'{self.cluster} Observations'
+
+    def __iter__(self):
+        raise TypeError(f"'{self.__class__.__name__}' object is not iterable")
 
     def __getitem__(self, key):
 
