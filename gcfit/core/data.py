@@ -389,7 +389,6 @@ class Observations:
                 mssg = f"Dataset '{key}' does not exist in {self}"
                 raise KeyError(mssg) from err
 
-    # TODO a filter method for finding all datasets matching a pattern
     @property
     def datasets(self):
         '''Dictionary of all `Dataset`s contained in this class'''
@@ -444,9 +443,6 @@ class Observations:
             Whether to filter on all datasets or only those considered "valid"
             by `Observations.valid_likelihoods`
         '''
-
-        # TODO maybe `datasets` and this should only return ds list not dict?
-        #   if thats the case, make `datasets._name` public
 
         if valid_only:
             datasets = {key for (key, *_) in self.valid_likelihoods}
@@ -675,7 +671,6 @@ class Observations:
 
 # TODO The units are *quite* incomplete in Model (10)
 # TODO what attributes should be documented?
-# TODO need some easier to init generator classmethods (with good defaults)
 
 # --------------------------------------------------------------------------
 # Base model
@@ -864,7 +859,6 @@ class Model(lp.limepy):
         # Get mass function
         # ------------------------------------------------------------------
 
-        # TODO would be better if this could be scaled to M from the start
         self._mf = EvolvedMF(
             m_breaks=m_breaks.value,
             a_slopes=[-a1, -a2, -a3],
