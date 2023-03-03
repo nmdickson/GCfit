@@ -993,7 +993,7 @@ class Model(lp.limepy):
         return cls(W0, M, rh, ra=ra, **kw)
 
     @classmethod
-    def canonical(cls, W0, M, rh, ra, g, delta, BHret, d, imf='kroupa', **kw):
+    def canonical(cls, W0, M, rh, imf='kroupa', **kw):
         '''initialize with canonical mass function params'''
         if imf.lower() == 'kroupa':
             a1, a2, a3 = 1.3, 2.3, 2.3
@@ -1011,14 +1011,13 @@ class Model(lp.limepy):
             mssg = f"Unknown IMF: {imf}"
             raise ValueError(mssg)
 
-        return cls(W0, M, rh, ra, g, delta, a1, a2, a3, BHret, d,
-                   m_breaks=m_breaks, **kw)
+        return cls(W0, M, rh, a1=a1, a2=a2, a3=a3, m_breaks=m_breaks, **kw)
 
     @classmethod
-    def woolley(cls, W0, M, rh, delta, a1, a2, a3, BHret, d, **kw):
+    def woolley(cls, W0, M, rh, **kw):
         '''g=0, isotropic'''
         g = 0
-        return cls.isotropic(W0, M, rh, g, delta, a1, a2, a3, BHret, d, **kw)
+        return cls.isotropic(W0, M, rh, g=g, **kw)
 
     @classmethod
     def king(cls, W0, M, rh, **kw):
@@ -1027,16 +1026,16 @@ class Model(lp.limepy):
         return cls.isotropic(W0, M, rh, g=g, **kw)
 
     @classmethod
-    def wilson(cls, W0, M, rh, delta, a1, a2, a3, BHret, d, **kw):
+    def wilson(cls, W0, M, rh, **kw):
         '''g=2, isotropic'''
         g = 2
-        return cls.isotropic(W0, M, rh, g, delta, a1, a2, a3, BHret, d, **kw)
+        return cls.isotropic(W0, M, rh, g=g, **kw)
 
     @classmethod
-    def michieking(cls, W0, M, rh, ra, delta, a1, a2, a3, BHret, d, **kw):
+    def michieking(cls, W0, M, rh, **kw):
         '''g=1, anisotropic'''
         g = 1
-        return cls(W0, M, rh, ra, g, delta, a1, a2, a3, BHret, d, **kw)
+        return cls(W0, M, rh, g=g, **kw)
 
     # ----------------------------------------------------------------------
     # Model sampling
@@ -1099,7 +1098,7 @@ class SingleMassModel(lp.limepy):
 
         self.d <<= u.kpc
 
-    def __init__(self, W0, M, rh, ra, g, d, *,
+    def __init__(self, W0, M, rh, ra=1e8, g=1.5, d=5, *,
                  ode_maxstep=1e10, ode_rtol=1e-7):
 
         # TODO support inputs with units (may have to strip them before limepy)
@@ -1146,34 +1145,34 @@ class SingleMassModel(lp.limepy):
     # ----------------------------------------------------------------------
 
     @classmethod
-    def isotropic(cls, W0, M, rh, g, d, **kw):
+    def isotropic(cls, W0, M, rh, **kw):
         '''initialize with no anisotropy'''
         ra = 1e8
-        return cls(W0, M, rh, ra, g, d, **kw)
+        return cls(W0, M, rh, ra=ra, **kw)
 
     @classmethod
-    def woolley(cls, W0, M, rh, d, **kw):
+    def woolley(cls, W0, M, rh, **kw):
         '''g=0, isotropic'''
         g = 0
-        return cls.isotropic(W0, M, rh, g, d, **kw)
+        return cls.isotropic(W0, M, rh, g=g, **kw)
 
     @classmethod
-    def king(cls, W0, M, rh, d, **kw):
+    def king(cls, W0, M, rh, **kw):
         '''g=1, isotropic'''
         g = 1
-        return cls.isotropic(W0, M, rh, g, d, **kw)
+        return cls.isotropic(W0, M, rh, g=g, **kw)
 
     @classmethod
-    def wilson(cls, W0, M, rh, d, **kw):
+    def wilson(cls, W0, M, rh, **kw):
         '''g=2, isotropic'''
         g = 2
-        return cls.isotropic(W0, M, rh, g, d, **kw)
+        return cls.isotropic(W0, M, rh, g=g, **kw)
 
     @classmethod
-    def michieking(cls, W0, M, rh, ra, d, **kw):
+    def michieking(cls, W0, M, rh, **kw):
         '''g=1, anisotropic'''
         g = 1
-        return cls(W0, M, rh, ra, g, d, **kw)
+        return cls(W0, M, rh, g=g, **kw)
 
 
 # --------------------------------------------------------------------------
