@@ -1307,7 +1307,6 @@ class SampledModel:
     '''representation of a cluster based on sampling a Model'''
 
     # TODO get initial masses as well, so can add stuff like photometry
-    # TODO allow splitting up of remnants and stars, applying of labels
 
     centre = None
     galactic = None
@@ -1687,7 +1686,10 @@ class SampledModel:
         # Determine stellar types for each star (MS, WD, NS, BH)
         self.star_types = np.repeat(model.star_types, self.Nj)
         self.star_mask = (self.star_types == 'MS')
-        # TODO masks for all other types
+
+        self.WD_mask = (self.star_types == 'WD')
+        self.NS_mask = (self.star_types == 'NS')
+        self.BH_mask = (self.star_types == 'BH')
 
         self.N = self.Nj.sum()
         self.Nstars = self.Nj[model.star_types == 'MS'].sum()
