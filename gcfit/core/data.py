@@ -918,8 +918,24 @@ class Model(lp.limepy):
             ode_rtol=ode_rtol
         )
 
-        # TODO should actually do a check for `convergence` (Gieles+2015, pg.10)
-        super().__init__(**self._limepy_kwargs)
+        try:
+            super().__init__(**self._limepy_kwargs)
+        except ValueError as err:
+            cause = err.args[0]
+
+            if ("rmax reached in mf iteration" in cause
+                    or "maximum number of iterations reached" in cause):
+
+                mssg = ("Model solver failed to converge in time. "
+                        "Model parameters must be adjusted")
+                raise ValueError(mssg) from err
+
+            else:
+                raise err
+
+        if not self.converged:
+            mssg = "Model solver failed to converge to a finite extent"
+            raise ValueError(mssg)
 
         # ------------------------------------------------------------------
         # Assign units to model values
