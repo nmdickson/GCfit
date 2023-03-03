@@ -782,13 +782,18 @@ class Model(lp.limepy):
         # TODO this may be wrong (it's "phase-space" volume)
         self.volume <<= R_units**3
 
+        self.v2T <<= V2_units
         self.v2Tj <<= V2_units
+        self.v2R <<= V2_units
         self.v2Rj <<= V2_units
+        self.v2p <<= V2_units
         self.v2pj <<= V2_units
         self.s2 <<= V2_units
         self.s2j <<= V2_units
 
+        self.rho <<= (M_units / R_units**3)
         self.rhoj <<= (M_units / R_units**3)
+        self.Sigma <<= (M_units / R_units**2)
         self.Sigmaj <<= (M_units / R_units**2)
 
     def __init__(self, W0, M, rh, g=1.5, delta=0.45, ra=1e8,
@@ -1113,7 +1118,6 @@ class SingleMassModel(lp.limepy):
         # TODO this may be wrong (it's "phase-space" volume)
         self.volume <<= R_units**3
 
-        # TODO also put these non-j quantities into multimass model assign_units
         self.v2T <<= V2_units
         self.v2R <<= V2_units
         self.v2p <<= V2_units
