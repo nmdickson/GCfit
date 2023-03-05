@@ -1422,21 +1422,48 @@ class SingleMassModel(lp.limepy):
 
 
 class FittableModel(Model):
-    '''Model class valid for use in the fitting functions
+    '''Model subclass for use in all fitting functions
+
+    A subclass of the base `Model`, with a simplified and specific
+    initilization signature based on a single `theta` input containing the main
+    13 model parameters, in a specific order, and `observations` which the
+    model should be compared to.
+
+    Unless you have a set of paramters `theta` taken directly from the fitting
+    results, you most likely do not want to use this class directly.
 
     Parameters
     ----------
     theta : dict or list
         The model input parameters. Must either be a dict, or a full list of
         all parameters, in the exact same order as `DEFAULT_THETA`.
-        See `Model` or package background documentation for explanation of
-        all possible input parameters.
+        The 13 free parameters used here (W0, M, rh, ra, g, delta, a1, a2, a3,
+        BHret, s2, F and d) are key for defining the model structure, mass
+        evolution algorithm and fitting parameters.
+        See `Model` for further explanation of all possible input parameters.
 
-    observations : Observations
-        The `Observations` instance corresponding to this cluster. While not
-        necessary for solving a theoretical model, the observations must be
-        provided for any models used in fitting/sampling procedures, as
-        including them has important impacts on the mass function makeup.
+    observations : Observations, optional
+        The `Observations` instance corresponding to this cluster. Required at
+        initilization so that the models can be compared to these observations
+        in the most consistent way possible.
+
+    Attributes
+    ----------
+    theta : dict
+        Dictionary of input parameters.
+        Some parameters may technically also be accessible directly as
+        attributes, but that interface should not be considered stable.
+        This dictionary should be used as the only direct access to any input
+        parameters that make up theta.
+
+    Notes
+    -----
+    The units of the inputs in `theta` here do not match those in `Model`
+    directly. `M` should be in units of [1e6 Msun] and ra should actually be
+    log10(ra).
+
+    All cluster metadata parameters (such as age, vesc, etc.) will be read from
+    the observations, and should not be provided as arguments here.
 
     '''
 
