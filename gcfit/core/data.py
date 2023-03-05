@@ -1590,7 +1590,88 @@ _projection = namedtuple('projection', ['lat', 'lon', 'distance',
 
 
 class SampledModel:
-    '''representation of a cluster based on sampling a Model'''
+    '''Representation of a cluster based on sampling a Model
+
+    Based on a solved `Model`, this class gives access to the phase-space
+    coordinates of N stars and remnants, as sampled from the smooth model
+    distributions.
+
+    The number of stars, within each mass bin, is determined by the
+    `Model.Nj`.
+
+    The sampling algorithms are based heavily on those from `limepy.sample`,
+    and are described in Gieles & Zocchi (2015).
+    First, the masses are optionally sampled uniformally between the edges of
+    their respective mass bins. Then the radial distances from the centre of
+    the cluster are sampled based on the system's enclosed mass profiles. The
+    (total) velocities of the stars are then sampled based on an analytical
+    form of the (velocity analogue) PDF, using the ziggurat algorithm.
+    Finally, a number of angles are randomly sampled in order to assign
+    velocity directions and 3D positions.
+
+    Optionally, if provided with a phase-space centre for the cluster,
+    projected quantities on the sky (i.e. galactic coordinates and proper
+    motions) can be computed.
+
+    Parameters
+    ----------
+    model : Model
+        The base `Model` instance used to sample all stars from.
+
+    centre : astropy.SkyCoord, optional
+        An optional centre to the cluster, which will be used to compute
+        projected quantities (in the galactic frame) for all star positions and
+        velocities.
+        Must include full 3D position *and* velocity components.
+
+    distribute_masses : bool, optional
+        Whether to sample the masses uniformally with each mass bin. If False,
+        will simply assign each star the mean mass (`Model.mj`) for each bin.
+        Defaults to True.
+
+    seed : int, optional
+        A random seed to define the random generator used in all sampling.
+        Passed to `numpy.random.default_rng`. Defaults to None.
+
+    Attributes
+    ----------
+    Nj : (nmbin, ) astropy.Quantity
+        The number of stars sampled in each mass bin.
+
+    N : int
+        The total number of stars sampled.
+
+    Nstars, Nrem : int
+        The total number of stars and remnants sampled. N = Nstars + Nrem.
+
+    star_types : (N,) numpy.ndarray of '<U2'
+        The type of each object sampled (MS = main sequence star, WD = white
+        dwarf, NS = neutron star, BH = black hole).
+
+    m : (N,) astropy.Quantity
+        The mass of each star.
+
+    mbins : (N,) numpy.ndarray
+        The mass bin index of each star.
+
+    M : astropy.Quantity
+        The total mass of the sampled system. Will not match the base model
+        exactly, due to the discretization of the number of stars.
+
+    pos : collections.namedtuple of (N,) astropy.Quantity
+        A named tuple containing all position coordinates for each star, in both
+        cartesian and spherical coordinate systems (x, y, z, r, theta, phi).
+
+    vel : collections.namedtuple of (N,) astropy.Quantity
+    A named tuple containing all velocity vectors for each star, in both
+    cartesian and spherical coordinate systems and in the tangential direction
+    (x, y, z, r, t, theta, phi).
+
+    galactic : collections.namedtuple of (N,) astropy.Quantity
+    A named tuple containing the projected positions and velocities (in the
+    galactic frame) of each star (lon, lat, distance, pm_l_cosb, pm_b, v_los),
+    based on the given cluster centre.
+    '''
 
     # TODO get initial masses as well, so can add stuff like photometry
 
