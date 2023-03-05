@@ -694,6 +694,10 @@ class Model(lp.limepy):
     required (by the `Observations`) tracer masses added, before being used
     to solve the Limepy distribution function.
 
+    The first 13 arguments are the main model parameters, which are used by
+    the `FittableModel` as well. Most other arguments provide more fine control
+    over the mass evolution algorithm and DF ODE solver.
+
     Note carefully the units required in some of the parameters here, which may
     not be the same as in other classes (such as `FittableModel`). `Quantity`
     objects, from astropy, can also be given in most cases to ensure the units
@@ -835,6 +839,37 @@ class Model(lp.limepy):
 
     Attributes
     ----------
+
+    mj : astropy.Quantity
+        Array containing the individual mass in all mass bins, including
+        both stars and remnants, at the given age.
+
+    Mj : astropy.Quantity
+        Array containing the total mass in all mass bins, including
+        both stars and remnants, at the given age.
+
+    Nj : astropy.Quantity
+        Array containing the total number in all mass bins, including
+        both stars and remnants, at the given age.
+
+    mbin_widths : astropy.Quantity
+        The width of each mass bin, in Msun.
+
+    nms : int
+        The number of mass bins containing main sequence stars.
+        The first `nms` mass bins will be the star bins (i.e. mj[:nms-1])
+
+    nmr : int
+        The number of mass bins containing remnants.
+        The proceeding `nmr` mass bins will be the remnant bins
+        (i.e. mj[nms-1:nms + nmr])
+
+    star_types : numpy.ndarray
+        Array of 2-character strings representing the type of object in each
+        mass bin (MS, WD, NS, BH).
+        Note that this is not 100% accurate, as some remnants of different
+        types may have final masses which fall into the same mass bin.
+
     {BH,NS,WD}_mj : astropy.Quantity
         Black hole, neutron star or white dwarf component mass bin size
 
@@ -844,11 +879,34 @@ class Model(lp.limepy):
     {BH,NS,WD}_Nj : astropy.Quantity
         Black hole, neutron star or white dwarf total bin number (Mj / mj)
 
-    theta : dict
-        Dictionary of input parameters.
-        Some parameters may technically also be accessible as attributes, but
-        that interface should not be considered stable. This dictionary
-        should be used as the only access to any input parameters.
+    r : astropy.Quantity
+        The projected radial distances, in pc, from the centre of the cluster,
+        defining the domain used in all other model profiles.
+
+    phi, phij : astropy.Quantity
+        System (total, per mass bin) potential as a function of distance from
+        the centre of the cluster.
+
+    rho, rhoj : astropy.Quantity
+        System (total, per mass bin) density as a function of distance from
+        the centre of the cluster.
+
+    v2, v2j : astropy.Quantity
+        System (total, per mass bin) mean-square velocity as a function of
+        distance from the centre of the cluster.
+
+    v2r, v2rj, v2t, v2tj : astropy.Quantity
+        Radial and Tangential components of the (total, per mass bin)
+        mean-square velocity, in the plane of the sky, as a function of
+        distance from the centre of the cluster.
+
+    r0, rh, rv, rt, ra, rhp : astropy.Quantity
+        The total (King, half-mass, virial, truncation, anisotropy, projected
+        half-mass) radius of the cluster.
+
+    r0j, rhj, raj, rhpj : astropy.Quantity
+        The per mass bin (King, half-mass, anisotropy, projected half-mass)
+        radius of the cluster.
 
     Notes
     -----
@@ -862,7 +920,7 @@ class Model(lp.limepy):
             m^{-a_3} & 1.0 M_{\odot} < m \leq 100 M_{\odot}, \\
         \end{cases}
 
-    where the `a` exponents are given as input parameters in `theta`.
+    where the `a` exponents are given as input parameters.
 
     See Also
     --------
