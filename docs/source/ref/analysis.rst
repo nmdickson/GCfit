@@ -1,7 +1,7 @@
 Analysis
 =========
 
-.. currentmodule:: fitter.analysis
+.. currentmodule:: gcfit.analysis
 
 
 Sampling Run Analysis

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from fitter import analysis
+from gcfit import analysis
 
 import logging
 import argparse
@@ -17,7 +17,7 @@ def pos_int(arg):
     return int(arg)
 
 
-if __name__ == '__main__':
+def main():
 
     # ----------------------------------------------------------------------
     # Command line argument parsing

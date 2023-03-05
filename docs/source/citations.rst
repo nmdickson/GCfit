@@ -2,6 +2,8 @@
 Citations
 =========
 
+``GCfit`` was first introduced in Dickson et al. (2023; submitted).
+
 If you find this package useful in your research, please consider citing the
 relevant papers below:
 
@@ -46,14 +48,14 @@ Or the utility methods can be used directly:
 
 .. code-block:: python
 
-    >>> print(fitter.util.bibcode2bibtex(dset.mdata['source']))
+    >>> print(gcfit.util.bibcode2bibtex(dset.mdata['source']))
     @ARTICLE{2019MNRAS.485.4906D,
            author = {{de Boer}, T.~J.~L. and {Gieles}, M. and {Balbinot}, E. and {H{\'e}nault-Brunet}, V. and {Sollima}, A. and {Watkins}, L.~L. and {Claydon}, I.},
             title = "{Globular cluster number density profiles using Gaia DR2}",
     ...
           adsnote = {Provided by the SAO/NASA Astrophysics Data System}
     }
-    >>> print(fitter.util.bibcode2cite(dset.mdata['source']))
+    >>> print(gcfit.util.bibcode2cite(dset.mdata['source']))
     de Boer et al. (2019)
 
 
@@ -62,6 +64,11 @@ Models
 
 The equilibrium models used should be cited from the ``limepy`` paper:
 `2015MNRAS.454..576G <https://adsabs.harvard.edu/abs/2015MNRAS.454..576G>`_.
+
+The mass evolution algorithm (`ssptools <https://github.com/SMU-clusters/ssptools>`_)
+is based off of the algorithm first introduced in
+`2018MNRAS.474.2479B <https://ui.adsabs.harvard.edu/abs/2018MNRAS.474.2479B>`_.
+
 
 
 Samplers

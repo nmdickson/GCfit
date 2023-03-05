@@ -1,7 +1,7 @@
 Util
 ====
 
-.. currentmodule:: fitter.util
+.. currentmodule:: gcfit.util
 
 
 Units Utility Functions

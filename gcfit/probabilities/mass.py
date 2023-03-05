@@ -145,7 +145,7 @@ class Field:
 
     @classmethod
     def from_dataset(cls, dataset, cen):
-        '''Create this field from a corresponding `fitter.core.data.Dataset`'''
+        '''Create this field from a corresponding `gcfit.core.data.Dataset`'''
         import string
 
         unit = dataset.mdata['field_unit']

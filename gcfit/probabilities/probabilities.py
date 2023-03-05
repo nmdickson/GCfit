@@ -1,7 +1,7 @@
 from .pulsars import *
 from .priors import Priors
 from .. import util
-from ..core.data import DEFAULT_INITIALS, Model
+from ..core.data import DEFAULT_THETA, FittableModel
 
 import numpy as np
 import astropy.units as u
@@ -64,10 +64,10 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
 
     parameters
     ----------
-    model : fitter.Model
+    model : gcfit.FittableModel
         Cluster model use to compute probability distribution
 
-    pulsars : fitter.core.data.Dataset
+    pulsars : gcfit.core.data.Dataset
         Pulsars dataset used to compute probability distribution and evaluate
         log likelihood
 
@@ -100,7 +100,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
     See Also
     --------
     likelihood_pulsar_orbital : Binary pulsar orbital period likelihood
-    fitter.probabilities.pulsars : Module containing all pulsar prob. components
+    gcfit.probabilities.pulsars : Module containing all pulsar prob. components
 
     '''
 
@@ -310,10 +310,10 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
 
     parameters
     ----------
-    model : fitter.Model
+    model : gcfit.FittableModel
         Cluster model use to compute probability distribution
 
-    pulsars : fitter.core.data.Dataset
+    pulsars : gcfit.core.data.Dataset
         Pulsars dataset used to compute probability distribution and evaluate
         log likelihood
 
@@ -341,7 +341,7 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
     See Also
     --------
     likelihood_pulsar_spin : Pulsar spin period likelihood
-    fitter.probabilities.pulsars : Module containing all pulsar prob. components
+    gcfit.probabilities.pulsars : Module containing all pulsar prob. components
 
     '''
 
@@ -507,10 +507,10 @@ def likelihood_number_density(model, ndensity, *,
 
     parameters
     ----------
-    model : fitter.Model
+    model : gcfit.FittableModel
         Cluster model use to compute probability distribution
 
-    ndensity : fitter.core.data.Dataset
+    ndensity : gcfit.core.data.Dataset
         Number density profile dataset used to compute probability distribution
         and evaluate log likelihood
 
@@ -597,10 +597,10 @@ def likelihood_pm_tot(model, pm, *, mass_bin=None, hyperparams=False):
 
     parameters
     ----------
-    model : fitter.Model
+    model : gcfit.FittableModel
         Cluster model use to compute probability distribution
 
-    pm : fitter.core.data.Dataset
+    pm : gcfit.core.data.Dataset
         Proper motion dispersions profile dataset used to compute probability
         distribution and evaluate log likelihood
 
@@ -663,10 +663,10 @@ def likelihood_pm_ratio(model, pm, *, mass_bin=None, hyperparams=False):
 
     parameters
     ----------
-    model : fitter.Model
+    model : gcfit.FittableModel
         Cluster model use to compute probability distribution
 
-    pm : fitter.core.data.Dataset
+    pm : gcfit.core.data.Dataset
         Proper motion dispersions profile dataset used to compute probability
         distribution and evaluate log likelihood
 
@@ -731,10 +731,10 @@ def likelihood_pm_T(model, pm, *, mass_bin=None, hyperparams=False):
 
     parameters
     ----------
-    model : fitter.Model
+    model : gcfit.FittableModel
         Cluster model use to compute probability distribution
 
-    pm : fitter.core.data.Dataset
+    pm : gcfit.core.data.Dataset
         Proper motion dispersions profile dataset used to compute probability
         distribution and evaluate log likelihood
 
@@ -790,10 +790,10 @@ def likelihood_pm_R(model, pm, *, mass_bin=None, hyperparams=False):
 
     parameters
     ----------
-    model : fitter.Model
+    model : gcfit.FittableModel
         Cluster model use to compute probability distribution
 
-    pm : fitter.core.data.Dataset
+    pm : gcfit.core.data.Dataset
         Proper motion dispersions profile dataset used to compute probability
         distribution and evaluate log likelihood
 
@@ -849,10 +849,10 @@ def likelihood_LOS(model, vlos, *, mass_bin=None, hyperparams=False):
 
     parameters
     ----------
-    model : fitter.Model
+    model : gcfit.FittableModel
         Cluster model use to compute probability distribution
 
-    vlos : fitter.core.data.Dataset
+    vlos : gcfit.core.data.Dataset
         Velocity dispersions profile dataset used to compute probability
         distribution and evaluate log likelihood
 
@@ -914,16 +914,16 @@ def likelihood_mass_func(model, mf, field, *, hyperparams=False):
 
     parameters
     ----------
-    model : fitter.Model
+    model : gcfit.FittableModel
         Cluster model use to compute probability distribution
 
-    mf : fitter.core.data.Dataset
+    mf : gcfit.core.data.Dataset
         Mass function profile dataset used to compute probability distribution
         and evaluate log likelihood
 
     field : dict
-        Dictionary of `fitter.probability.mass.Field` field, as given by
-        `fitter.probability.mass.initialize_fields`
+        Dictionary of `gcfit.probability.mass.Field` field, as given by
+        `gcfit.probability.mass.initialize_fields`
 
     hyperparams : bool, optional
         Whether to include bayesian hyperparameters
@@ -1002,9 +1002,8 @@ def likelihood_mass_func(model, mf, field, *, hyperparams=False):
 
         binned_N_model = np.empty(model.nms) << N_data.unit
         for j in range(model.nms):
-            # TODO units surrounding this are a little uncertain?
             Nj = field_slice.MC_integrate(densityj[j], sample=sample_radii)
-            widthj = (model.mj[j] * model.mes_widths[j])
+            widthj = (model.mj[j] * model.mbin_widths[j])
             binned_N_model[j] = Nj / widthj
 
         N_spline = util.QuantitySpline(model.mj[:model.nms],
@@ -1034,7 +1033,7 @@ def log_likelihood(theta, observations, L_components, hyperparams):
     '''
 
     try:
-        model = Model(theta, observations)
+        model = FittableModel(theta, observations)
     except ValueError:
         logging.debug(f"Model did not converge with {theta=}")
         return -np.inf, -np.inf * np.ones(len(L_components))
@@ -1083,12 +1082,11 @@ def posterior(theta, observations, fixed_initials=None,
             return -np.inf
 
     # get a list of variable params, sorted for the unpacking of theta
-    variable_params = DEFAULT_INITIALS.keys() - fixed_initials.keys()
-    params = sorted(variable_params, key=list(DEFAULT_INITIALS).index)
+    variable_params = DEFAULT_THETA.keys() - fixed_initials.keys()
+    params = sorted(variable_params, key=list(DEFAULT_THETA).index)
 
-    # Update to unions when 3.9 becomes enforced
     # TODO add type check on theta, cause those exceptions aren't very pretty
-    theta = dict(zip(params, theta), **fixed_initials)
+    theta = dict(zip(params, theta)) | fixed_initials
 
     # prior likelihoods
     if prior_likelihood != 'ignore':

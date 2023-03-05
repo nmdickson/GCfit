@@ -6,7 +6,7 @@ import astropy.units as u
 from astropy.units.equivalencies import Equivalency
 
 
-__all__ = ['angular_width', 'QuantitySpline']
+__all__ = ['angular_width', 'QuantitySpline', 'q2pv']
 
 
 def angular_width(D):
@@ -168,3 +168,13 @@ class QuantitySpline(scipy.interpolate.UnivariateSpline):
         return QuantitySpline._from_tck(
             tck, x_unit=self._xunit, y_unit=der_unit, ext=ext,
         )
+
+
+def q2pv(p, v):
+    '''Form two array[3] of positions and velocities into a pv array for erfa'''
+    import erfa
+
+    pvunit = u.StructuredUnit((p.unit, v.unit))
+    pv = np.rec.fromarrays([p, v], erfa.dt_pv) << pvunit
+
+    return pv
