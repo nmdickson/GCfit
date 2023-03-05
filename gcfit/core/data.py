@@ -1199,13 +1199,14 @@ class Model(lp.limepy):
 
     @classmethod
     def isotropic(cls, W0, M, rh, **kw):
-        '''initialize with no anisotropy'''
+        '''Initialize the model with max `ra`, leading to an isotropic model'''
         ra = 1e8
         return cls(W0, M, rh, ra=ra, **kw)
 
     @classmethod
     def canonical(cls, W0, M, rh, imf='kroupa', **kw):
-        '''initialize with canonical mass function params'''
+        '''Initialize with an IMF defined by a canonical IMF formulation'''
+
         if imf.lower() == 'kroupa':
             a1, a2, a3 = 1.3, 2.3, 2.3
             m_breaks = [0.08, 0.5, 1.0, 100]  # only upper two kroupa exponents
@@ -1219,32 +1220,33 @@ class Model(lp.limepy):
             m_breaks = [0.1, 0.4, 1.0, 100]
 
         else:
-            mssg = f"Unknown IMF: {imf}"
+            avail = ('kroupa', 'salpeter', 'baumgardt')
+            mssg = f"Unknown IMF: {imf}. Must be one of {avail}"
             raise ValueError(mssg)
 
         return cls(W0, M, rh, a1=a1, a2=a2, a3=a3, m_breaks=m_breaks, **kw)
 
     @classmethod
     def woolley(cls, W0, M, rh, **kw):
-        '''g=0, isotropic'''
+        '''Initialize a Woolley (1954) Model (g=0 and isotropic)'''
         g = 0
         return cls.isotropic(W0, M, rh, g=g, **kw)
 
     @classmethod
     def king(cls, W0, M, rh, **kw):
-        '''g=1, isotropic'''
+        '''Initialize a King (1966) Model (g=1 and isotropic)'''
         g = 1
         return cls.isotropic(W0, M, rh, g=g, **kw)
 
     @classmethod
     def wilson(cls, W0, M, rh, **kw):
-        '''g=2, isotropic'''
+        '''Initialize a Wilson (1975) Model (g=2 and isotropic)'''
         g = 2
         return cls.isotropic(W0, M, rh, g=g, **kw)
 
     @classmethod
     def michieking(cls, W0, M, rh, **kw):
-        '''g=1, anisotropic'''
+        '''Initialize a Michie-King (1963) Model (g=1 and anisotropic)'''
         g = 1
         return cls(W0, M, rh, g=g, **kw)
 
@@ -1253,6 +1255,7 @@ class Model(lp.limepy):
     # ----------------------------------------------------------------------
 
     def sample(self, *args, **kwargs):
+        '''Return a `SampledModel` instance based on this model'''
         return SampledModel(self, *args, **kwargs)
 
     # ----------------------------------------------------------------------
@@ -1260,6 +1263,7 @@ class Model(lp.limepy):
     # ----------------------------------------------------------------------
 
     def get_visualizer(self):
+        '''Return a `analysis.ModelVisualizer` instance based on this model'''
         from ..analysis import ModelVisualizer
         return ModelVisualizer(self, observations=self.observations)
 
