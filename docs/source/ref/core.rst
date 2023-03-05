@@ -14,7 +14,6 @@ Main Fitting Functions
    nested_fit
 
 
-.. TODO how to stop Model from also documenting limepy methods?
 Core Data Containers
 --------------------
 .. autosummary::

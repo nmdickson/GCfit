@@ -40,6 +40,8 @@ extensions = [
 
 autosummary_generate = True
 
+autodoc_inherit_docstrings = False
+
 numpydoc_show_class_members = False
 numpydoc_show_inherited_class_members = False
 
