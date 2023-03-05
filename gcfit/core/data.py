@@ -1273,8 +1273,82 @@ class Model(lp.limepy):
 
 
 class SingleMassModel(lp.limepy):
-    '''like model, but without all the nice mass stuff. please, dont use
-    these aren't physical, think about what you're doing man.
+    '''Wrapper class around a single-mass LIMEPY model
+
+    Single-mass globular cluster model implemented as a subclass around a
+    `limepy.limepy` model.
+
+    This class differs from the base `Model` as it solves only for the
+    distribution of a single mass class. This makes the model much quicker to
+    compute, however these models should *not* be used to describe real
+    clusters, as single mass models fail to account for key cluster processes
+    such as mass segregation, and thus cannot accurately reproduce realistic
+    distributions of stars in GCs.
+
+    Parameters
+    ----------
+
+    W0 : float or astropy.Quantity
+        The (dimensionless) central potential. Used as a boundary condition for
+        solving Poisson’s equation and defines how centrally concentrated the
+        model is.
+
+    M : float or astropy.Quantity
+        The total mass of the system, in all mass components, in Msun.
+
+    rh : float or astropy.Quantity
+        The system half-mass radius, in parsecs.
+
+    g : float, optional
+        The truncation parameter, which controls the sharpness of the outer
+        density truncation of the model. No finite models exist outside
+        0 <= g < 3.5. Defaults to 1.5.
+
+    ra : float or astropy.Quantity, optional
+        The (dimensionless) anisotropy-radius, which determines the amount of
+        anisotropy in the system, with higher ra values indicating more
+        isotropy. This quantity is scaled based on the given `rh` in physical
+        units.
+
+    d : float or astropy.Quantity, optional
+        Distance to the cluster, from Earth, in kiloparsecs. Mainly used for any
+        conversions between observational (angular) and model (linear) units,
+        and thus mostly only required for comparing with observations.
+        Defaults to an arbitrary distance of 5 kpc.
+
+    ode_maxstep : float, optional
+        Maximum step size for the `limepy` ODE integrator. Defaults to 1e10.
+
+    ode_rtol : float, optional
+        Relative tolerance parameter for the `limepy` ODE integrator.
+        Defaults to 1e-7.
+
+    Attributes
+    ----------
+    r : astropy.Quantity
+        The projected radial distances, in pc, from the centre of the cluster,
+        defining the domain used in all other model profiles.
+
+    phi : astropy.Quantity
+        System potential as a function of distance from
+        the centre of the cluster.
+
+    rho : astropy.Quantity
+        System density as a function of distance from
+        the centre of the cluster.
+
+    v2 : astropy.Quantity
+        System mean-square velocity as a function of
+        distance from the centre of the cluster.
+
+    v2r, v2t : astropy.Quantity
+        Radial and Tangential components of the system
+        mean-square velocity, in the plane of the sky, as a function of
+        distance from the centre of the cluster.
+
+    r0, rh, rv, rt, ra, rhp : astropy.Quantity
+        The (King, half-mass, virial, truncation, anisotropy, projected
+        half-mass) radius of the cluster.
     '''
 
     def _assign_units(self):
