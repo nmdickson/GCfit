@@ -680,8 +680,8 @@ class Observations:
 class Model(lp.limepy):
     r'''Wrapper class around a LIMEPY model, including mass function evolution
 
-    Globular cluster model implemented as a subclass around a `limepy.limepy`
-    model, as defined by the input parameters,
+    Multimass globular cluster model implemented as a subclass around a
+    `limepy.limepy` model, as defined by the input parameters,
     while including support for initial mass function evolution (through
     `ssptools`), units (through `astropy.Quantity`), tracer masses and enhanced
     metadata and mass results.
@@ -798,7 +798,7 @@ class Model(lp.limepy):
         The IMF break-masses (including outer bounds) in Msun, defining the
         mass ranges of each IMF exponent. Defaults to [0.1, 0.5, 1.0, 100].
 
-    nbins : float, optional
+    nbins : (3,) numpy.ndarray of int, optional
         Number of mass bins in each regime of the IMF, as defined by `m_breaks`.
         This number of bins will be log-spaced between each of the break masses.
         Defaults to [5, 5, 20].
@@ -993,10 +993,10 @@ class Model(lp.limepy):
         # Add/convert units of some quantities. Supports quantities as inputs
         # ------------------------------------------------------------------
 
-        # TODO add a check for dimensionless on all the other params too
-
+        W0 <<= u.dimensionless_unscaled
         M <<= u.Msun
         rh <<= u.pc
+        ra <<= u.dimensionless_unscaled
         d <<= u.kpc
         age <<= u.Gyr
 
