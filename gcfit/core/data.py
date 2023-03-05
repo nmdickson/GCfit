@@ -1663,14 +1663,14 @@ class SampledModel:
         cartesian and spherical coordinate systems (x, y, z, r, theta, phi).
 
     vel : collections.namedtuple of (N,) astropy.Quantity
-    A named tuple containing all velocity vectors for each star, in both
-    cartesian and spherical coordinate systems and in the tangential direction
-    (x, y, z, r, t, theta, phi).
+        A named tuple containing all velocity vectors for each star, in both
+        cartesian and spherical coordinate systems and in the tangential
+        direction (x, y, z, r, t, theta, phi).
 
     galactic : collections.namedtuple of (N,) astropy.Quantity
-    A named tuple containing the projected positions and velocities (in the
-    galactic frame) of each star (lon, lat, distance, pm_l_cosb, pm_b, v_los),
-    based on the given cluster centre.
+        A named tuple containing the projected positions and velocities (in the
+        galactic frame) of each star (lon, lat, distance, pm_l_cosb, pm_b,
+        v_los), based on the given cluster centre.
     '''
 
     # TODO get initial masses as well, so can add stuff like photometry
