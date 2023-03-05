@@ -10,7 +10,6 @@ import numpy as np
 import dynesty
 import dynesty.dynamicsampler as dysamp
 
-import os
 import sys
 import time
 import shutil

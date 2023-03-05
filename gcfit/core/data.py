@@ -1007,8 +1007,8 @@ class Model(lp.limepy):
         # Pack theta
         # ------------------------------------------------------------------
 
-        self.theta = dict(W0=W0, M=M.to_value('1e6 Msun'), rh=rh.value,
-                          ra=np.log10(ra), g=g, delta=delta,
+        self.theta = dict(W0=W0.value, M=M.to_value('1e6 Msun'), rh=rh.value,
+                          ra=np.log10(ra.value), g=g, delta=delta,
                           a1=a1, a2=a2, a3=a3, BHret=BHret,
                           s2=s2, F=F, d=d.value)
 
@@ -1101,11 +1101,11 @@ class Model(lp.limepy):
         # ------------------------------------------------------------------
 
         self._limepy_kwargs = dict(
-            phi0=W0,
+            phi0=W0.value,
             g=g,
             M=M.value,
             rh=rh.value,
-            ra=ra,
+            ra=ra.value,
             delta=delta,
             mj=mj,
             Mj=Mj,
@@ -1398,17 +1398,11 @@ class SingleMassModel(lp.limepy):
         # Add/convert units of some quantities. Supports quantities as inputs
         # ------------------------------------------------------------------
 
+        W0 <<= u.dimensionless_unscaled
         M <<= u.Msun
         rh <<= u.pc
+        ra <<= u.dimensionless_unscaled
         d <<= u.kpc
-
-        # ------------------------------------------------------------------
-        # Pack theta
-        # ------------------------------------------------------------------
-
-        self.theta = dict(W0=W0, M=M / 1e6, rh=rh, ra=np.log10(ra), g=g,
-                          delta=None, a1=None, a2=None, a3=None, BHret=None,
-                          s2=None, F=None, d=d)
 
         self.d = d
 
@@ -1417,11 +1411,11 @@ class SingleMassModel(lp.limepy):
         # ------------------------------------------------------------------
 
         self._limepy_kwargs = dict(
-            phi0=W0,
+            phi0=W0.value,
             g=g,
             M=M.value,
             rh=rh.value,
-            ra=ra,
+            ra=ra.value,
             project=True,
             verbose=False,
             max_step=ode_maxstep,
@@ -2016,7 +2010,7 @@ class SampledModel:
         if distribute_masses:
             halfwidth = np.repeat(model.mbin_widths / 2., self.Nj)
             low, high = self.m - halfwidth, self.m + halfwidth
-            self.m = self.rng.uniform(low, high)
+            self.m = self.rng.uniform(low, high) << u.Msun
 
         self.mbins = np.repeat(range(model.nmbin), self.Nj)
 
