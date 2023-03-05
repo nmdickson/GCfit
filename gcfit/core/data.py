@@ -998,10 +998,8 @@ class Model(lp.limepy):
         rh <<= u.pc
         ra <<= u.dimensionless_unscaled
         d <<= u.kpc
-        age <<= u.Gyr
 
         m_breaks <<= u.Msun
-        vesc <<= (u.km / u.s)
 
         # ------------------------------------------------------------------
         # Pack theta
@@ -1044,6 +1042,9 @@ class Model(lp.limepy):
                 mssg = {"Must supply either `age` and `FeH` or "
                         "an `observations`, to read them from"}
                 raise ValueError(mssg)
+
+            age <<= u.Gyr
+            vesc <<= (u.km / u.s)
 
         self.observations = observations
 
