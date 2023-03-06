@@ -14,7 +14,8 @@ found [here](https://GCfit.readthedocs.io).
 
 ## Attribution
 
-GCfit was first introduced in _Dickson et al. (2023; submitted)_.
+GCfit was first introduced in
+[Dickson et al. (2023; submitted)](https://arxiv.org/abs/2303.01637).
 
 If you find this package useful in your research, please see the
 [documentation](https://GCfit.readthedocs.io/en/latest/citations.html) for
