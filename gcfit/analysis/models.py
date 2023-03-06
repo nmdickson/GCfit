@@ -555,7 +555,7 @@ class _ClusterVisualizer:
                     ymodel = model_data[mbin, :, :]
                 except IndexError:
                     mssg = (f"Mass bin index {mbin} is out of "
-                            f"range ({self.mj.size})")
+                            f"range (0-{self.mj.size - 1})")
                     raise ValueError(mssg)
 
                 # if no model color specified *and* multiple masses exists, use
