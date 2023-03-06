@@ -1,0 +1,82 @@
+{
+    "INITIALS": {
+        "optional": [
+            "W0",
+            "M",
+            "rh",
+            "ra",
+            "g",
+            "delta",
+            "s2",
+            "F",
+            "a1",
+            "a2",
+            "a3",
+            "BHret",
+            "d"
+        ]
+    },
+
+
+    "METADATA": {
+        "requires": ["FeH", "RA", "DEC", "l", "b", "μ"],
+        "optional": ["Ndot", "age"]
+    },
+
+
+    "pulsar*": {
+        "requires": {
+            "r": [["unit", "length"]]
+        },
+        "optional": {
+            "DM": [["unit", "pc/cm3"], "error", ["size", "r"]],
+            "Pdot": [["unit", "s/s"], "error", ["size", "r"]],
+            "Pbdot": [["unit", "s/s"], "error", ["size", "r"]]
+        },
+        "choice": {
+            "P": [["unit", "time"], "error", "Pdot", ["size", "r"]],
+            "Pb": [["unit", "time"], "error", "Pbdot", ["size", "r"]]
+        }
+    },
+
+
+    "velocity_dispersion*": {
+        "requires": {
+            "r": [["unit", "length"]],
+            "σ": [["unit", "speed"], "error", ["size", "r"]]
+        }
+    },
+
+
+    "number_density*": {
+        "requires": {
+            "r": [["unit", "length"]],
+            "Σ": [["unit", "1/arcmin2"], "error", ["size", "r"]]
+        }
+    },
+
+
+    "proper_motion*": {
+        "requires": {
+            "r": [["unit", "length"]]
+        },
+        "choice": {
+            "PM_R": [["unit", "speed"], "error", ["size", "r"]],
+            "PM_T": [["unit", "speed"], "error", ["size", "r"]],
+            "PM_tot": [["unit", "speed"], "error", ["size", "r"]],
+            "PM_ratio": ["error", ["size", "r"]]
+        }
+    },
+
+
+    "mass_function*":{
+        "requires": {
+            "N": ["error"],
+            "r1": [["unit", "length"], ["size", "N"]],
+            "r2": [["unit", "length"], ["size", "N"]],
+            "m1": [["unit", "mass"], ["size", "N"]],
+            "m2": [["unit", "mass"], ["size", "N"]],
+            "fields": [["unit", "angle"], "fields"]
+        }
+    }
+}

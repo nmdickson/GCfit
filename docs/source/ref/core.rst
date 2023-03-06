@@ -1,7 +1,7 @@
 Core
 ====
 
-.. currentmodule:: fitter.core
+.. currentmodule:: gcfit.core
 
 
 Main Fitting Functions
@@ -21,5 +21,8 @@ Core Data Containers
    :toctree: generated/
 
    Model
+   SingleMassModel
+   FittableModel
+   data.SampledModel
    Observations
    data.Dataset
