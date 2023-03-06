@@ -435,7 +435,7 @@ class _ClusterVisualizer:
                       y_unit=None, residuals=False,
                       res_kwargs=None, data_kwargs=None, model_kwargs=None,
                       color=None, data_color=None, model_color=None,
-                      **kwargs):
+                      mass_bins=None, **kwargs):
         '''figure out what needs to be plotted and call model/data plotters
         all **kwargs passed to both _plot_model and _plot_data
         model_data dimensions *must* be (mass bins, intervals, r axis)
@@ -467,6 +467,9 @@ class _ClusterVisualizer:
 
         data_color = data_color or default_color
         model_color = model_color or default_color
+
+        # if mass bins are supplied, label all models, for use in legends
+        label_models = bool(mass_bins)
 
         # ------------------------------------------------------------------
         # Determine the relevant datasets to the given pattern
@@ -538,16 +541,22 @@ class _ClusterVisualizer:
             if len(model_data.shape) != 3:
                 raise ValueError("invalid model data shape")
 
-            # No data plotted, use the star_bin
+            # Apply custom supplied mass_bins
+            if mass_bins:
+                masses = dict.fromkeys(mass_bins, None) | masses
+
+            # No data plotted and no mass bins supplied, default to star_bin
             if not masses:
-                if model_data.shape[0] > 1:
-                    masses = {self.star_bin: None}
-                else:
-                    masses = {0: None}
+                masses = {self.star_bin: None}
 
             for mbin, errbars in masses.items():
 
-                ymodel = model_data[mbin, :, :]
+                try:
+                    ymodel = model_data[mbin, :, :]
+                except IndexError:
+                    mssg = (f"Mass bin index {mbin} is out of "
+                            f"range (0-{self.mj.size - 1})")
+                    raise ValueError(mssg)
 
                 # if no model color specified *and* multiple masses exists, use
                 #   corresponding data colours, otherwise use default
@@ -557,8 +566,11 @@ class _ClusterVisualizer:
                 else:
                     clr = model_color
 
+                label = (fr'Model ($m={self.mj[mbin].value:.2f}\ M_\odot$)'
+                         if label_models else None)
+
                 self._plot_model(ax, ymodel, color=clr, y_unit=y_unit,
-                                 **model_kwargs, **kwargs)
+                                 label=label, **model_kwargs, **kwargs)
 
                 if residuals:
                     res_ax = self._add_residuals(ax, ymodel, errbars,
