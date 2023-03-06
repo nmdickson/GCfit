@@ -543,7 +543,6 @@ class _ClusterVisualizer:
 
             # Apply custom supplied mass_bins
             if mass_bins:
-                # TODO this will rearrange the order and might mess colours up
                 masses = dict.fromkeys(mass_bins, None) | masses
 
             # No data plotted and no mass bins supplied, default to star_bin
