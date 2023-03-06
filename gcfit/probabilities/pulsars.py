@@ -1,4 +1,4 @@
-from ..util import QuantitySpline, gaussian, div_error, trim_peaks
+from ..util import QuantitySpline, gaussian, div_error, trim_peaks, find_intersections
 
 import scipy.stats
 import scipy as sp
@@ -7,7 +7,6 @@ import astropy.units as u
 from astropy.constants import c
 
 import pathlib
-from importlib import resources
 import logging
 
 
@@ -114,9 +113,6 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
     # Location of the maximum acceleration along this los
     zmax = az_der.roots()
 
-    # Acceleration at zt
-    azt = az[-1]
-
     # Setup spline for the density, depending on mass bin
     if mass_bin == 0 and model.nmbin == 1:
         rho = model.rho
@@ -128,46 +124,19 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
     rhoz_spl = QuantitySpline(z, rho_spl(r), ext=1, s=0)
 
     # Now compute P(a_z|R)
+
+    nr = nz
+
     # There are 2 possibilities depending on R:
-    #  (1) the maximum acceleration occurs within the cluster boundary, or
-    #  (2) max(a_z) = a_z,t (this happens when R ~ r_t)
-
-    nr, k = nz, 3  # bit of experimenting
-
-    # Option (1): zmax < max(z)
+    # (1) the maximum acceleration occurs within the cluster boundary, or
+    # (2) max(a_z) = a_z,t (this happens when R ~ r_t)
     if len(zmax) > 0:
-        # Take first entry for the rare cases with multiple peaks
-        zmax = zmax[0]
-        # Set up 2 splines for the inverse z(a_z) for z < zmax and z > zmax
-        z1 = np.linspace(z[0], zmax, nr)
-
-        # What we want is a continuation of the acceleration space past the zmax
-        # point so that we come to the z2 point for which we can calculate a
-        # separate probability. The z2 point needs to be calculated separately
-        # because the calculation depends on the density, which is diffrent at
-        # each z point. Unclear why original implementation doesn't always work,
-        # seems perfectly fine. The reason for the reverse is that it needs to
-        # be strictly increasing for the spline
-
-        z2 = np.linspace(zmax, z[-1], nr)[::-1]
-
-        z1_spl = QuantitySpline(az_spl(z1), z1, k=k, s=0, ext=1)
-
-        # Original implementation
-        # changing the spline here doesn't fix the z2 interpolation error.
-        z2_spl = QuantitySpline(az_spl(z2), z2, k=k, s=0, ext=1)
-
-    # Option 2: zmax = max(z)
+        azmax = az_spl(zmax[0])
     else:
-        zmax = z[-1]
-        z1 = np.linspace(z[0], zmax, nr)
-        z1_spl = QuantitySpline(az_spl(z1), z1, k=k, s=0, ext=1)
-
-    # Value of the maximum acceleration, at the chosen root
-    azmax = az_spl(zmax)
+        azmax = az_spl(z[-1])
 
     # Old version here for future reference
-    # increment density by 2 order of magn. smaller than azmax
+    # increment density by 2 order of magnitude smaller than azmax
     # Δa = 10**(np.floor(np.log10(azmax.value)) - 2)
     # define the acceleration space domain, based on amax and Δa
     # az_domain = np.arange(0.0, azmax.value + Δa, Δa) << azmax.unit
@@ -184,30 +153,31 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
 
     # TODO look at the old new_Paz to get the comments for this stuff
 
-    z1 = np.maximum(z1_spl(az_domain), z[0])
-
     if DM is None:
-        Paz_dist = (rhoz_spl(z1) / abs(az_der(z1))).value
+
+        Paz_dist = np.zeros_like(az_domain.value)
+        for i, a in enumerate(az_domain):
+
+            z_values = find_intersections(az, z, a)
+
+            Paz_dist[i] = np.sum(
+                rhoz_spl(z_values).value / np.abs(az_der(z_values).value), axis=0
+            )
+
         Paz_dist <<= u.dimensionless_unscaled
+        # This new method gives a zero in at the start of the distribution
+        # which I expect might do bad things to convolution, so I'm just
+        # going to use the second value
+        Paz_dist[0] = Paz_dist[1]
 
-        outside_azt = az_domain > azt
-
-        # Only use z2 if any outside_azt values exist (ensures z2_spl exists)
-        if np.any(outside_azt):
-
-            z2 = z2_spl(az_domain)
-
-            within_bounds = outside_azt & (z2 < zt)
-
-            Paz_dist[within_bounds] += (rhoz_spl(z2[within_bounds])
-                                        / abs(az_der(z2[within_bounds]))).value
-
-        Paz_dist /= rhoz_spl.integral(0. << z.unit, zt).value
+        # Normalise the distribution
+        Paz_dist /= rhoz_spl.integral(0.0 << z.unit, zt).value
 
     else:
 
         # need to look at full cluster now that it's no longer symmetric
         az_domain = np.concatenate((np.flip(-az_domain[1:]), az_domain))
+
         # also need the signs to pick which side of the cluster the pulsar is on
         # negative az means a positive z position, opposite for positive
         az_signs = np.sign(az_domain)
@@ -217,16 +187,15 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
             mssg = "Cluster DM data is required to use DM based likelihood."
             raise ValueError(mssg)
 
-
         # get los pos, err using cluster DM data
         DM_los, DM_los_err = los_dm(DM, ΔDM, DM_mdata)
-
+        
         # Pulsars should alway be within the half-light radius, if not the
         # spline will just return probability of zero anyway so we should be
         # fine. We should log here anyway so that we can make sure this isn't
         # happening often.
         if DM_los.to("pc") > model.rh.to("pc"):
-            logging.warning("Pulsar LOS position outside of rh.")
+            logging.warning("Pulsar DM-based LOS position outside of rh.")
 
         z_domain = np.linspace(-model.rh, model.rh, len(az_domain))
 
@@ -236,29 +205,34 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
             x=z_domain, y=DM_gaussian, s=0, k=3, ext=1
         )
 
-        # I think we still only want positive values for the other splines
+        # We still only want positive values for the other splines
         az_domain = np.abs(az_domain)
 
-        z1 = np.maximum(z1_spl(az_domain), z[0])
+        Paz_dist = np.zeros_like(az_domain.value)
+        for i, a in enumerate(az_domain):
 
-        # Here we add the signs back in only for the DM splines, this allows
-        # us to select the correct side of the cluster for each az point
-        Paz_dist = (DM_los_spl(-az_signs * z1) / abs(az_der(z1))).value
+            z_values = find_intersections(az, z, a)
+
+            Paz_dist[i] = np.sum(
+                (DM_los_spl(-az_signs[i] * z_values) / abs(az_der(z_values))).value,
+                axis=0,
+            )
+
         Paz_dist <<= u.dimensionless_unscaled
 
-        outside_azt = az_domain > azt
-
-        # Only use z2 if any outside_azt values exist (ensures z2_spl exists)
-        if np.any(outside_azt):
-
-            z2 = z2_spl(az_domain)
-
-            within_bounds = outside_azt & (z2 < zt)
-
-            # Here we add the signs back in only for the DM splines
-            z2_signed = -az_signs * z2
-            Paz_dist[within_bounds] += (DM_los_spl(z2_signed[within_bounds])
-                                        / abs(az_der(z2[within_bounds]))).value
+        # This new method gives a zero in at the start of the distribution
+        # which I expect might do bad things to convolution, so I'm just
+        # going to interpolate it, this is a bit hacky but I don't see a cleaner
+        # way to do it, and this gives a nice smooth distribution
+        if np.any(Paz_dist == 0.0):
+            # get the index
+            arg_zero = np.argmin(Paz_dist)
+            # dont overflow the array
+            if 0 < arg_zero < len(Paz_dist)-1:
+                # interpolate between the two neighbouring points
+                Paz_dist[arg_zero] = (
+                    Paz_dist[arg_zero - 1] + Paz_dist[arg_zero + 1]
+                ) / 2.0
 
     # Ensure Paz is normalized (slightly different for density vs DM methods)
 
@@ -287,10 +261,12 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
 
         else:
             # This is the case where our probability distribution doesn't
-            # integrate to one, just don't cut anything off, log the
-            # normalization and manually normalize it.
-            logging.warning("Probability distribution failed to integrate "
-                            f"to 1.0, area: {norm:.6f}")
+            # integrate to one.
+
+            # If the area is way less than 1, we should just throw an exception
+            if norm < 0.9:
+                raise ValueError("Paz failed to integrate to 1.0, too small to"
+                                f"continue. Area: {norm:.6f}")
 
             # Manual normalization
             Paz_dist /= norm
@@ -331,8 +307,11 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
             # This is the case where our probability distribution doesn't
             # integrate to one, just don't cut anything off, log the
             # normalization and manually normalize it.
-            logging.warning("Probability distribution failed to integrate "
-                            f"to 1.0, area: {norm:.6f}")
+
+            # If the area is way less than 1, we should just throw an exception
+            if norm < 0.9:
+                raise ValueError("Paz failed to integrate to 1.0, too small to"
+                                f" continue. Area: {norm:.6f}")
 
             # Manual normalization
             Paz_dist /= norm
@@ -358,15 +337,16 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
 
     # Change the acceleration domain to a Pdot / P domain
     PdotP_domain = az_domain / c
+    P_PdotP_dist = Paz_dist * c.value
 
     # put the signs back in for the DM method
     if DM is not None:
         PdotP_domain *= az_signs
 
     # Trim the peaks from numerical instability around azmax
-    Paz_dist = trim_peaks(PdotP_domain * c, Paz_dist)
+    Paz_dist = trim_peaks(PdotP_domain, P_PdotP_dist)
 
-    return PdotP_domain, Paz_dist
+    return PdotP_domain, P_PdotP_dist
 
 
 def galactic_component(lat, lon, D):

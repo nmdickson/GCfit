@@ -1,4 +1,4 @@
-from ..core.data import DEFAULT_INITIALS
+from ..core.data import DEFAULT_THETA
 
 import numpy as np
 from scipy import stats
@@ -416,7 +416,7 @@ class _PriorBase:
         except ValueError:
             # val is a name of a param
 
-            if val not in DEFAULT_INITIALS:
+            if val not in DEFAULT_THETA:
                 raise ValueError(f'Invalid dependant parameter {val}')
 
             self.dependants.append(val)
@@ -668,7 +668,7 @@ DEFAULT_PRIORS = {
     'a2': ('uniform', [(-1, 2.35), ('a1', np.inf)]),
     'a3': ('uniform', [(1.6, 4), ('a2', np.inf)]),
     'BHret': ('uniform', [(0, 100)]),
-    'd': ('uniform', [(2, 8)])
+    'd': ('uniform', [(2, 18)])
 }
 
 _PRIORS_MAP = {

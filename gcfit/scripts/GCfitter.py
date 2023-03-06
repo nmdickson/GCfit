@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import fitter
+import gcfit
 
 import json
 import logging
@@ -81,7 +81,7 @@ class RepeatedCallHandler(logging.FileHandler):
         super().close()
 
 
-if __name__ == '__main__':
+def main():
 
     # ----------------------------------------------------------------------
     # Command line argument parsing
@@ -94,6 +94,8 @@ if __name__ == '__main__':
     # ----------------------------------------------------------------------
     # Common arguments to all samplers
     # ----------------------------------------------------------------------
+
+    # TODO make all defaults here match defaults in main functions
 
     shared_parser = argparse.ArgumentParser(add_help=False)
 
@@ -167,7 +169,7 @@ if __name__ == '__main__':
     parser_MCMC.add_argument('--show-progress', action='store_true',
                              dest='progress', help="Display progress bar")
 
-    parser_MCMC.set_defaults(fit_func=fitter.MCMC_fit)
+    parser_MCMC.set_defaults(fit_func=gcfit.MCMC_fit)
 
     # ----------------------------------------------------------------------
     # Nested Sampling with dynesty
@@ -205,7 +207,7 @@ if __name__ == '__main__':
                              help='Method used to sample uniformly within the '
                                   'likelihood, based on the provided bounds')
 
-    parser_nest.set_defaults(fit_func=fitter.nested_fit)
+    parser_nest.set_defaults(fit_func=gcfit.nested_fit)
 
     args = parser.parse_args()
 
@@ -298,7 +300,7 @@ if __name__ == '__main__':
     logging.basicConfig(**config)
 
     # ----------------------------------------------------------------------
-    # Call fitter
+    # Call gcfit
     # ----------------------------------------------------------------------
 
     del args.sampler

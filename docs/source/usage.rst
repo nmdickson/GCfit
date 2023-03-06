@@ -3,22 +3,163 @@ Usage
 =====
 
 .. TODO add a bunch of plots here and there maybe 
+.. TODO how to get rid of the whole `gcfit.core.data` when linking `Model` etc
 
-``GCfit`` has two functionalities. The primary, to fit GC equilibrium models
-against a number of observables, and the secondary, to analyze and visualize
-the statistical fitting process and the resultant models.
+``GCfit`` has two main functionalities. The primary, to provide easy access to
+a library of GC equilibrium models, and the secondary, to fit said models
+against a number of observables.
+
+The package then also provides the ability to analyze and visualize
+the models, the statistical fitting process and the resultant fits.
+
+Models
+======
+
+The ``GCfit`` Models can be accessed through the core module at
+
+.. code-block:: python
+    
+    import gcfit
+
+All models are based off of the single base class :class:`gcfit.core.Model`.
+
+To begin, we can start by exploring a model with some arbitrary default
+parameters. The :class:`gcfit.core.Model` class gives default values for many
+arguments, which you may want to adjust yourself. See the documentation of said
+class for more explanation of the meaning of all available parameters.
+
+.. code-block:: python
+
+    model = gcfit.Model(W0=6.3, M=5e5, rh=6.7, age=12, FeH=-0.7)
+
+The model will automatically generate a number of mass bins, containing either
+stars or remnants of a certain type, which are used to solve the multimass
+version of the LIMEPY DF.
+
+.. code-block:: python
+
+    # Mean masses per bin
+    model.mj
+
+    # Total mass per bin
+    model.Mj
+
+    # Stellar object types (MS, NS, WD, BH)
+    model.star_types
+
+    # Total mass and number of black holes, in their repective bins
+    model.BH_Mj
+    model.BH_Nj
+
+Notice that the majority of interesting quantities in :class:`gcfit.core.Model` are
+stored as :class:`astropy.Quantity` objects, with their respective units.
+
+The radial profiles of a number of system properties, such as velocity
+dispersion, density and energy, are available for each mass bin, as well as a
+number of useful radii.
+
+.. code-block:: python
+
+    # Density profile of the most massive main-sequence stars
+    model.rhoj[model.nms - 1]
+
+    # Half-mass radius of each mass bin
+    model.rhj
+
+See :class:`gcfit.core.Model` for further description of all available properties.
+
+Models matching a number of historical DF formulations can also be created
+easily using the relevant generator functions. These functions mostly
+consist of setting a specific default value for the truncation parameter ``g``.
+
+.. code-block:: python
+
+    # Generate a King (1966) model
+    model = gcfit.Model.king(6.3, 5e5, 6.7, age=12, FeH=-0.7)
+
+
+Sampled Models
+^^^^^^^^^^^^^^
+
+These (multimass) models can also be sampled, in order to return a random
+distribution of stars matching the phase-space distribution of the models.
+
+.. code-block:: python
+
+    sampled = model.sample()
+
+    # Total number of stars in the system
+    sampled.Nstars
+
+    # Cartesian coordinates of all stars, centred on the cluster centre
+    sampled.pos.x, sampled.pos.y, sampled.pos.z
+
+    # Radial and tangential velocities of each star
+    sm.vel.r, sm.vel.t
+
+If a centre coordinate on the sky is given (as an :class:`astropy.SkyCoord`
+with both position and velocity),
+the projected positions and velocities on the sky can also be computed.
+
+.. code-block:: python
+    
+    import astropy.units import u
+    from astropy.coordinates import SkyCoord
+
+    deg, masyr, kms = u.deg, u.unit('mas/yr'), u.Unit('km/s')
+    cen = SkyCoord(l=45. * deg, b=55. * deg,
+                   pm_l_cosb=5 * masyr, pm_b=3 * masyr, radial_velocity=2 * kms,
+                   frame='galactic')
+
+    p_sampled = model.sample(centre=cen)
+
+    p_sampled.galactic.lon, p_sampled.galactic.lat
+
+    p_sampled.galactic.pm_l_cosb, p_sampled.galactic.pm_b
+
+
+Observations
+^^^^^^^^^^^^
+
+Another useful class within ``GCfit`` is the :class:`gcfit.core.Observations` class,
+which acts as a container for a number of observational datasets. These
+observations are key for all fitting (see below), but are also useful when
+working with individual models, as they contain a number of useful metadata
+fields about the cluster:
+
+.. code-block:: python
+
+    obs = gcfit.Observations('NGC104')
+
+    model = gcfit.Model(W0=6.3, M=5e5, rh=6.7, observations=obs)
+
+More information on the datafiles underlying this class, and how to create your
+own datafiles can be found at (TODO).
+
 
 Fitting
 =======
 
+While these models can be useful on their own, one of the key objectives of
+``GCfit`` is to determine the posterior distributions of the most important
+parameters defining these models.
+
+This fitting is based on top of a different model subclass;
+:class:`gcfit.core.FittableModel`.
+
+This class is nearly identical to the base ``Model``, except for how it is
+initialized: based on an array of sampled values for each of the 13 main fitting
+parameters, in a specific order, and an ``Observations`` object.
+
+Note: The order and units required of the parameters for this class may not
+match those in :class:`gcfit.core.Model`. It is recommended to only access the base
+model directly, and leave this class for use by the fitting functions below.
+
 Python
 ^^^^^^
 
-The ``GCfit`` fitting process can be accessed through the python interface at
-
-.. code-block:: python
-    
-    import fitter
+The ``GCfit`` fitting process can be accessed through the python interface as
+well.
 
 There are two core fitting functions, one for each sampling method. Both come
 with many optional arguments, some shared between the two, and some specific
@@ -31,19 +172,19 @@ Both functions require, to begin, the name of the cluster.
     cluster = 'NGC104'
 
     # MCMC Sampling
-    fitter.MCMC_fit(cluster, Niters=3000)
+    gcfit.MCMC_fit(cluster, Niters=3000)
 
     # Nested Sampling
-    fitter.nested_fit(cluster)
+    gcfit.nested_fit(cluster)
 
 The cluster name can be given in a few different formats. See
-:func:`fitter.util.get_std_cluster_name` for info on valid names.
+:func:`gcfit.util.get_std_cluster_name` for info on valid names.
 
 Both methods share a large assortment of keyword arguments, which define the
 probability functions and parallelization scheme used, as well as
 method-specific arguments which define the samplers themselves. For specific
-call signatures and full details, see :func:`fitter.core.MCMC\_fit`
-and :func:`fitter.core.nested_fit`.
+call signatures and full details, see :func:`gcfit.core.MCMC\_fit`
+and :func:`gcfit.core.nested_fit`.
 
 Probabilities
 """""""""""""
@@ -55,7 +196,7 @@ the dimensions, and assigning the parameter to it's initial value.
 
 .. code-block:: python
     
-    fitter.nested_fit(cluster, fixed_params=['M', 'rh'])
+    gcfit.nested_fit(cluster, fixed_params=['M', 'rh'])
 
 The initial values that these parameters are fixed to are defined by the
 ``initials`` argument. These also act as the initial positions for the MCMC
@@ -64,7 +205,7 @@ file.
 
 .. code-block:: python
     
-    fitter.nested_fit(cluster, fixed_params=['M'], initials={'M': 0.5})
+    gcfit.nested_fit(cluster, fixed_params=['M'], initials={'M': 0.5})
 
 The posterior is typically made up of a sum of component likelihoods, which
 act on a specific dataset each. The component likelihood functions, and
@@ -74,12 +215,12 @@ types of datasets, can be excluded from the posterior using the
 .. code-block:: python
 
     excluded_L = ['proper_motion/GEDR3', 'pulsar*']  # glob patterns can be used
-    fitter.nested_fit(cluster, excluded_likelihoods=excluded_L)
+    gcfit.nested_fit(cluster, excluded_likelihoods=excluded_L)
 
 
 The posterior also includes prior probabilities on each free parameter. These
 probability funnctions may also be specified using the ``param_priors``
-argument. Priors are handled by the :class:`fitter.probabilities.priors.Priors`
+argument. Priors are handled by the :class:`gcfit.probabilities.priors.Priors`
 class. The ``param_priors`` argument accepts a dict of param-prior pairs,
 where each entry must specify the type and relevant parameters of a prior
 distribution.
@@ -92,7 +233,7 @@ distribution.
         "a2": ("Uniform", [(0, 4), ('a1', 4)]), # Other params can be used as bounds
     }
 
-    fitter.nested_fit(cluster, param_priors=priors)
+    gcfit.nested_fit(cluster, param_priors=priors)
 
 
 Parallelization
@@ -111,7 +252,7 @@ to spawn.
     import multiprocessing
     max_cpu = multiprocessing.cpu_count()
 
-    fitter.nested_fit(cluster, Ncpu=max_cpu)
+    gcfit.nested_fit(cluster, Ncpu=max_cpu)
 
 To run the fitting over multiple nodes, using MPI, the boolean ``mpi`` flag
 can be specified. If using ``mpi``, the ``Ncpu`` argument is ignored, and the
@@ -121,7 +262,7 @@ MPI-execution utility (``mpirun``, ``mpiexec``, etc.).
 .. code-block:: python
 
     # Run script with e.g. mpiexec -n 4 python script.py
-    fitter.nested_fit(cluster, mpi=True)
+    gcfit.nested_fit(cluster, mpi=True)
 
 The scaling of the fitting functions is not completely trivial. Before scaling
 to a very large number of processes naively, users should look into any notes on
@@ -146,7 +287,7 @@ argument should be set high enough to ensure convergence of the chains.
 
 .. code-block:: python
     
-    fitter.MCMC_fit(cluster, Niters=1500, Nwalkers=100)
+    gcfit.MCMC_fit(cluster, Niters=1500, Nwalkers=100)
 
 
 Nested Sampler Specific
@@ -172,7 +313,7 @@ for more information on each.
     # Sampler can be one of {'unif', 'rwalk', 'rstagger', 'slice', 'rslice'}
     sampler = 'rwalk'
 
-    fitter.nested_fit(cluster, bound_type=bound, sample_type=sampler)
+    gcfit.nested_fit(cluster, bound_type=bound, sample_type=sampler)
 
 *Dynamic* nested sampling allows for a targeted focusing of the sampler
 algorithm in order to more efficiently probe the posterior or evidence. This
@@ -191,7 +332,7 @@ determines the size of the targeted space.
 
     maxfrac = 0.8  # percentage of the maximum weight, defining the new bounds
 
-    fitter.nested_fit(cluster, pfrac=pfrac, maxfrac=maxfrac)
+    gcfit.nested_fit(cluster, pfrac=pfrac, maxfrac=maxfrac)
 
 Both of these arguments are described in more detail in the dynesty
 documentation.
@@ -214,7 +355,7 @@ This argument (``eff_samples``) must be set, in similar fashion to the MCMC
 
     ESS = 5000
 
-    fitter.nested_fit(cluster, pfrac=1, eff_samples=ESS)
+    gcfit.nested_fit(cluster, pfrac=1, eff_samples=ESS)
 
 
 Command Line
@@ -269,7 +410,7 @@ by ``--savedir``). This file provides everything necessary to reconstruct the
 sampler evolution and results, and the corresponding models.
 
 ``GCfit`` provides utilities to read in, analyze and plot the relevant
-quantities from this output, through the ``fitter.analysis`` module.
+quantities from this output, through the ``gcfit.analysis`` module.
 The analysis is split into two seperate modules, for analyzing the
 fitting runs and for visualizing the best-fitting models.
 
@@ -279,21 +420,21 @@ information, and a list of all possible plots.
 
 .. code-block:: python
 
-    from fitter import analysis
+    from gcfit import analysis
     import matplotlib.pyplot as plt
 
-    obs = fitter.Observations(cluster)
+    obs = gcfit.Observations(cluster)
 
-    fitter.nested_fit(cluster, savedir='./nested_out')
-    fitter.MCMC_fit(cluster, savedir='./MCMC_out')
+    gcfit.nested_fit(cluster, savedir='./nested_out')
+    gcfit.MCMC_fit(cluster, savedir='./MCMC_out')
 
 
 Fitting Results
 ^^^^^^^^^^^^^^^
 
 The run visualizers are split into specific classes once again for the MCMC
-(:class:`fitter.analysis.MCMCRun`) and nested sampler
-(:class:`fitter.analysis.NestedRun`) results.
+(:class:`gcfit.analysis.MCMCRun`) and nested sampler
+(:class:`gcfit.analysis.NestedRun`) results.
 
 .. code-block:: python
 
@@ -319,7 +460,7 @@ model. From there, plots of all observables, as well as a number of other
 cluster parameters and profiles, can be created.
 
 The median best-fit model can be visualized with the
-:class:`fitter.analysis.ModelVisualizer` class.
+:class:`gcfit.analysis.ModelVisualizer` class.
 
 .. code-block:: python
 
@@ -338,7 +479,7 @@ The median best-fit model can be visualized with the
 
 
 All the same plots can instead be shown with confidence intervals on the
-model outputs (:class:`fitter.analysis.CIModelVisualizer`). The computation
+model outputs (:class:`gcfit.analysis.CIModelVisualizer`). The computation
 of these intervals may be intensive, and can thus be parallelized (locally)
 using the ``Nprocesses`` keyword.
 
@@ -374,11 +515,39 @@ see the help page:
     generate_model_CI --help
 
 
+Plotting Specific Models and Observations
+"""""""""""""""""""""""""""""""""""""""""
+
+All of these model visualizations can also be used to examine specific models,
+not necessarily based on any fitting results, though they will of course not
+have any comparisons to observed datasets.
+
+.. code-block:: python
+
+    model = gcfit.Model(W0=6.3, M=5e5, rh=6.7, age=12, FeH=-0.7)
+    
+    mv = analysis.ModelVisualizer(model)
+
+    mv.plot_cumulative_mass()
+
+
+Similarly, visualizations of observational datasets, without any corresponding
+models, can also be done.
+
+.. code-block:: python
+
+    obs = gcfit.Observations('NGC104')
+    
+    ov = analysis.ObservationsVisualizer(obs)
+
+    ov.plot_number_density(show_background=True)
+
+
 Collections of Runs
 ^^^^^^^^^^^^^^^^^^^
 
 When analyzing multiple runs (for a single or many different clusters),
-the :class:`fitter.analysis.RunCollection` class allows for easy interaction
+the :class:`gcfit.analysis.RunCollection` class allows for easy interaction
 with, and comparison of, all runs at the same time.
 
 .. code-block:: python

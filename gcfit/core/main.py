@@ -10,7 +10,6 @@ import numpy as np
 import dynesty
 import dynesty.dynamicsampler as dysamp
 
-import os
 import sys
 import time
 import shutil
@@ -309,12 +308,12 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     stored the individual likelihood values of each used likelihood function.
 
     The MCMC sampler is sampled for `Niters` iterations, parallelized over
-    `Ncpu` or using `mpi`, with calls to `fitter.posterior`.
+    `Ncpu` or using `mpi`, with calls to `gcfit.posterior`.
 
     parameters
     ----------
     cluster : str
-        Cluster common name, as used to load `fitter.Observations`
+        Cluster common name, as used to load `gcfit.Observations`
 
     Niters : int
         Number of sampler iterations
@@ -430,8 +429,8 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     if initials is None:
         initials = observations.initials
     else:
-        # fill manually supplied dict with defaults (change to unions in 3.9)
-        initials = {**observations.initials, **initials}
+        # fill manually supplied dict with defaults
+        initials = observations.initials | initials
 
     logging.debug(f"Inital initals: {initials}")
 
@@ -502,9 +501,12 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
         backend.store_metadata('cluster', cluster)
 
-        backend.store_metadata('restrict_to', restrict_to)
-        backend.store_metadata('GCFIT_DIR',
-                               'CORE' if restrict_to == 'core' else GCFIT_DIR)
+        # Only store if set. Will default read to None if not stored here
+        if restrict_to is not None:
+            backend.store_metadata('restrict_to', restrict_to)
+
+        backend.store_metadata('GCFIT_DIR', 'CORE' if restrict_to == 'core'
+                                            else str(GCFIT_DIR))
 
         backend.store_metadata('mpi', mpi)
         backend.store_metadata('Ncpu', Ncpu)
@@ -639,13 +641,13 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
     importance weight peak.
 
     The sampling is parallelized over `Ncpu` or using `mpi`, with calls to
-    `fitter.posterior` defined based on a uniform sampling of the
+    `gcfit.posterior` defined based on a uniform sampling of the
     `PriorTransforms`.
 
     parameters
     ----------
     cluster : str
-        Cluster common name, as used to load `fitter.Observations`
+        Cluster common name, as used to load `gcfit.Observations`
 
     bound_type : {'none', 'single', 'multi', 'balls', 'cubes'}, optional
         Method used to approximately bound the prior using the current
@@ -773,8 +775,8 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
     if initials is None:
         initials = observations.initials
     else:
-        # fill manually supplied dict with defaults (change to unions in 3.9)
-        initials = {**observations.initials, **initials}
+        # fill manually supplied dict with defaults
+        initials = observations.initials | initials
 
     logging.debug(f"Inital initals: {initials}")
 
@@ -839,9 +841,12 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
         backend.store_metadata('cluster', cluster)
 
-        backend.store_metadata('restrict_to', restrict_to)
-        backend.store_metadata('GCFIT_DIR',
-                               'CORE' if restrict_to == 'core' else GCFIT_DIR)
+        # Only store if set. Will default read to None if not stored here
+        if restrict_to is not None:
+            backend.store_metadata('restrict_to', restrict_to)
+
+        backend.store_metadata('GCFIT_DIR', 'CORE' if restrict_to == 'core'
+                                            else str(GCFIT_DIR))
 
         backend.store_metadata('mpi', mpi)
         backend.store_metadata('Ncpu', Ncpu)
@@ -859,7 +864,6 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         backend.store_metadata('excluded_likelihoods', excluded_likelihoods)
 
         if initial_kwargs:
-            print(initial_kwargs)
             backend.store_metadata('initial_kwargs', initial_kwargs)
 
         if batch_kwargs:
