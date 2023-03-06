@@ -477,6 +477,17 @@ The median best-fit model can be visualized with the
 
     plt.show()
 
+Profiles corresponding to any mass bin, not only those comparable to the
+observations, can be shown alongside using the `mass_bins` argument to any
+plotting function:
+
+.. code-block:: python
+
+    # Plot alongside profiles of lightest stars and heaviest remnants
+    extra_masses = [0, -1]
+    mviz.plot_pm_tot(mass_bins=extra_masses)
+
+    plt.show()
 
 All the same plots can instead be shown with confidence intervals on the
 model outputs (:class:`gcfit.analysis.CIModelVisualizer`). The computation
@@ -495,8 +506,11 @@ using the ``Nprocesses`` keyword.
 
     plt.show()
 
+Note that, unless extra tracer masses are used during fitting, profiles for
+only a single mass bin will be generated to save on memory and time.
+
 Given the computing time it may require to compute the confidence intervals,
-these outputs can also be saved and loaded from the same results file
+these outputs can also be saved and loaded from the same results file:
 
 .. code-block:: python
 
