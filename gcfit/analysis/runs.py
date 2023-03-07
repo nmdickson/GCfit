@@ -1,4 +1,4 @@
-from .. import Observations
+from ..core import Observations
 from ..probabilities import priors
 from .models import CIModelVisualizer, ModelVisualizer, ModelCollection
 
