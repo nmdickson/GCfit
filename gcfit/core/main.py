@@ -163,6 +163,8 @@ class NestedSamplingOutput(Output):
             for key, data in results.items():
                 if key == 'bound':
                     self._store_bounds(data, group=self.group, file=hdf)
+                elif key == 'blob':
+                    continue
                 else:
                     self.store_dataset(key, data, group=self.group, file=hdf)
 
