@@ -1893,7 +1893,7 @@ class ModelVisualizer(_ClusterVisualizer):
         # Check for observational numdens profiles, to compute scaling factors K
         #   but do not apply them to the numdens yet.
         if ((observations is not None)
-                and (obs_nd := observations.filter_datasets('*umber_density'))):
+                and (obs_nd := observations.filter_datasets('*number*'))):
 
             if len(obs_nd) > 1:
                 mssg = ('Too many number density datasets, '
@@ -2559,7 +2559,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         equivs = util.angular_width(self.d)
 
-        if obs_nd := self.obs.filter_datasets('*number_density'):
+        if obs_nd := self.obs.filter_datasets('*number_density*'):
 
             if len(obs_nd) > 1:
                 mssg = ('Too many number density datasets, '
