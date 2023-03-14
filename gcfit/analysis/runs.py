@@ -1058,6 +1058,11 @@ class NestedRun(_RunAnalysis):
                 if btype == 'UnitCube':
                     bnds.append(bounding.UnitCube(ds.attrs['ndim']))
 
+                elif btype == 'Ellipsoid':
+                    ctr = ds['centre'][:]
+                    cov = ds['covariance'][:]
+                    bnds.append(bounding.Ellipsoid(ctr=ctr, cov=cov))
+
                 elif btype == 'MultiEllipsoid':
                     ctrs = ds['centres'][:]
                     covs = ds['covariances'][:]
