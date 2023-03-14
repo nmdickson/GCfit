@@ -1035,7 +1035,11 @@ class NestedRun(_RunAnalysis):
             # remove the amount of non-finite values we removed from niter
             r['niter'] -= (r['niter'] - r['logl'].size)
 
-        r['bound'] = self._reconstruct_bounds()
+        # TODO this is a temp fix for backwards compat. and should be removed
+        try:
+            r['bound'] = self._reconstruct_bounds()
+        except KeyError:
+            r['bound'] = None
 
         return Results(r)
 
@@ -1057,6 +1061,11 @@ class NestedRun(_RunAnalysis):
 
                 if btype == 'UnitCube':
                     bnds.append(bounding.UnitCube(ds.attrs['ndim']))
+
+                elif btype == 'Ellipsoid':
+                    ctr = ds['centre'][:]
+                    cov = ds['covariance'][:]
+                    bnds.append(bounding.Ellipsoid(ctr=ctr, cov=cov))
 
                 elif btype == 'MultiEllipsoid':
                     ctrs = ds['centres'][:]
