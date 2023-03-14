@@ -1035,7 +1035,11 @@ class NestedRun(_RunAnalysis):
             # remove the amount of non-finite values we removed from niter
             r['niter'] -= (r['niter'] - r['logl'].size)
 
-        r['bound'] = self._reconstruct_bounds()
+        # TODO this is a temp fix for backwards compat. and should be removed
+        try:
+            r['bound'] = self._reconstruct_bounds()
+        except KeyError:
+            r['bound'] = None
 
         return Results(r)
 
