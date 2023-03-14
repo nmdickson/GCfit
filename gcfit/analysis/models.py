@@ -1076,7 +1076,7 @@ class _ClusterVisualizer:
                                  **kwargs)
 
         if self.obs is not None:
-            nd = self.obs['number_density']
+            nd = list(self.obs.filter_datasets('*number*').values())[-1]
             bg = 0.9 * nd.mdata['background'] << nd['Σ'].unit
         else:
             bg = np.inf
