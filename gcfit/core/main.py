@@ -68,7 +68,13 @@ class Output:
                 if v.dtype.kind == 'U':
                     v = v.astype('S')
 
-                dset.attrs[f'{k}{type_postfix}'] = v
+                try:
+                    dset.attrs[f'{k}{type_postfix}'] = v
+
+                except TypeError as err:
+                    mssg = f'Could not store metadata {key}:{k}={v} ({err})'
+                    logging.debug(mssg)
+                    continue
 
         elif isinstance(value, abc.Collection) \
                 and not isinstance(value, _str_types):
@@ -82,11 +88,23 @@ class Output:
                 if v.dtype.kind == 'U':
                     v = v.astype('S')
 
-                dset.attrs[f'{i}{type_postfix}'] = v
+                try:
+                    dset.attrs[f'{i}{type_postfix}'] = v
+
+                except TypeError as err:
+                    mssg = f'Could not store metadata {key}[{i}]={v} ({err})'
+                    logging.debug(mssg)
+                    continue
 
         else:
 
-            meta_grp.attrs[f'{key}{type_postfix}'] = value
+            try:
+                meta_grp.attrs[f'{key}{type_postfix}'] = value
+
+            except TypeError as err:
+                mssg = f'Could not store metadata {key}={value} ({err})'
+                logging.debug(mssg)
+                pass
 
         if not file:
             hdf.close()
