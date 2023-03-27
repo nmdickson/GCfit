@@ -442,7 +442,7 @@ class _ClusterVisualizer:
                       y_unit=None, residuals=False,
                       res_kwargs=None, data_kwargs=None, model_kwargs=None,
                       color=None, data_color=None, model_color=None,
-                      mass_bins=None, **kwargs):
+                      mass_bins=None, model_label=None, **kwargs):
         '''figure out what needs to be plotted and call model/data plotters
         all **kwargs passed to both _plot_model and _plot_data
         model_data dimensions *must* be (mass bins, intervals, r axis)
@@ -476,7 +476,10 @@ class _ClusterVisualizer:
         model_color = model_color or default_color
 
         # if mass bins are supplied, label all models, for use in legends
-        label_models = bool(mass_bins)
+        label_masses = bool(mass_bins)
+
+        if label_masses and model_label is None:
+            model_label = 'Model'
 
         # ------------------------------------------------------------------
         # Determine the relevant datasets to the given pattern
@@ -573,8 +576,9 @@ class _ClusterVisualizer:
                 else:
                     clr = model_color
 
-                label = (fr'Model ($m={self.mj[mbin].value:.2f}\ M_\odot$)'
-                         if label_models else None)
+                label = model_label
+                if label_masses:
+                    label += fr' ($m={self.mj[mbin].value:.2f}\ M_\odot$)'
 
                 self._plot_model(ax, ymodel, color=clr, y_unit=y_unit,
                                  label=label, **model_kwargs, **kwargs)
