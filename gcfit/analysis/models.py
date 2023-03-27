@@ -2046,7 +2046,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
                 this_slc['dNdm'][0, j] = (Nj / widthj).value
 
-            self.mass_func['model'].append(this_slc)
+            self.mass_func['Model'].append(this_slc)
 
     @_ClusterVisualizer._support_units
     def _init_dens(self, model, observations):
