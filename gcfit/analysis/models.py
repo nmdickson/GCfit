@@ -98,24 +98,7 @@ class _ClusterVisualizer:
             subfig_kw = {}
 
         def create_axes(base, shape):
-            '''create the axes of `shape` on this base (fig)'''
-
-            # make sure shape is a tuple of atleast 1d, at most 2d
-
-            if not isinstance(shape, tuple):
-                # TODO doesnt work on an int
-                shape = tuple(shape)
-
-            if len(shape) == 1:
-                shape = (shape, 1)
-
-            elif len(shape) > 2:
-                mssg = f"Invalid `shape` for subplots {shape}, must be 2D"
-                raise ValueError(mssg)
-
-            # split into dict of nrows, ncols
-
-            shape = dict(zip(("nrows", "ncols"), shape))
+            '''create the axes of `shape` on this base (fig). shape as dict'''
 
             # if either of them is also a tuple, means we want columns or rows
             #   of varying sizes, switch to using subfigures
@@ -188,12 +171,36 @@ class _ClusterVisualizer:
 
         else:
 
+            # make sure shape is a tuple of atleast 1d, at most 2d
+
+            if not isinstance(shape, tuple):
+                # TODO doesnt work on an int
+                shape = tuple(shape)
+
+            if len(shape) == 1:
+                shape = (shape, 1)
+
+            elif len(shape) > 2:
+                mssg = f"Invalid `shape` for subplots {shape}, must be 2D"
+                raise ValueError(mssg)
+
+            # split into dict of nrows, ncols
+
+            shape = dict(zip(("nrows", "ncols"), shape))
+
             # this fig has axes, check that they match shape
             if axarr := fig.axes:
-                # TODO this won't actually work, cause fig.axes is just a list
-                if axarr.shape != shape:
-                    mssg = (f"figure {fig} already contains axes with "
-                            f"mismatched shape ({axarr.shape} != {shape})")
+
+                if isinstance(shape['nrows'], tuple):
+                    Naxes = np.sum(shape['nrows'])
+                elif isinstance(shape['ncols'], tuple):
+                    Naxes = np.sum(shape['ncols'])
+                else:
+                    Naxes = shape['nrows'] * shape['ncols']
+
+                if len(axarr) != Naxes:
+                    mssg = (f"figure {fig} already contains wrong number of "
+                            f"axes ({len(axarr)} != {Naxes})")
                     raise ValueError(mssg)
 
             else:
@@ -254,6 +261,7 @@ class _ClusterVisualizer:
 
         bottom_ax = ax if residual_ax is None else residual_ax
 
+        # TODO doesn't work when replotting on same axis, or when ax has a label
         if unit_label := bottom_ax.get_xlabel():
             label += f' [{unit_label}]'
 
