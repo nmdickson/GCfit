@@ -12,6 +12,7 @@ import astropy.visualization as astroviz
 
 import logging
 import pathlib
+from collections import abc
 
 
 __all__ = ['ModelVisualizer', 'CIModelVisualizer', 'ObservationsVisualizer',
@@ -506,7 +507,12 @@ class _ClusterVisualizer:
 
         masses = {}
 
-        for key, dset in datasets.items():
+        # Allow passing list of data colours to override the mass-colour match
+        if not (list_of_clr := (isinstance(data_color, abc.Collection)
+                                and not isinstance(data_color, str))):
+            data_color = [data_color, ] * len(datasets)
+
+        for i, (key, dset) in enumerate(datasets.items()):
 
             mrk = next(markers)
 
@@ -517,10 +523,10 @@ class _ClusterVisualizer:
             else:
                 mass_bin = self.star_bin
 
-            if mass_bin in masses:
+            if mass_bin in masses and not list_of_clr:
                 clr = masses[mass_bin][0][0].get_color()
             else:
-                clr = data_color
+                clr = data_color[i]
 
             # plot the data
             try:
