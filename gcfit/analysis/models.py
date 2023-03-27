@@ -1161,12 +1161,10 @@ class _ClusterVisualizer:
     def plot_mass_func(self, fig=None, show_obs=True, show_fields=True, *,
                        PI_legend=False, propid_legend=False,
                        logscaled=False, field_kw=None):
+        # TODO support using other x units (arcsec, pc) here and in MF plot
 
-        if not self.mass_func:
-            mssg = ("No mass functions fields found to plot. "
-                    "Note that plotting mass functions for models without "
-                    "observations is not currently supported")
-            raise RuntimeError(mssg)
+        if self.obs is None:
+            show_obs = False
 
         # ------------------------------------------------------------------
         # Setup axes, splitting into two columns if necessary and adding the
@@ -1214,22 +1212,24 @@ class _ClusterVisualizer:
 
             bins = self.mass_func[PI]
 
-            # Get data for this PI
-
-            mf = self.obs[PI]
-
-            mbin_mean = (mf['m1'] + mf['m2']) / 2.
-            mbin_width = mf['m2'] - mf['m1']
-
-            N = mf['N'] / mbin_width
-            ΔN = mf['ΔN'] / mbin_width
-
             label = ''
             if PI_legend:
                 label += pathlib.Path(PI).name
 
-            if propid_legend:
-                label += f" ({mf.mdata['proposal']})"
+            # Get data for this PI
+
+            if show_obs:
+
+                mf = self.obs[PI]
+
+                mbin_mean = (mf['m1'] + mf['m2']) / 2.
+                mbin_width = mf['m2'] - mf['m1']
+
+                N = mf['N'] / mbin_width
+                ΔN = mf['ΔN'] / mbin_width
+
+                if propid_legend:
+                    label += f" ({mf.mdata['proposal']})"
 
             # --------------------------------------------------------------
             # Iterate over radial bin dicts for this PI
@@ -1353,7 +1353,10 @@ class _ClusterVisualizer:
 
         for PI, bins in self.mass_func.items():
 
-            lbl = f"{pathlib.Path(PI).name} ({self.obs[PI].mdata['proposal']})"
+            lbl = f"{pathlib.Path(PI).name}"
+
+            if self.obs is not None:
+                lbl = f"{lbl} ({self.obs[PI].mdata['proposal']})"
 
             for rbin in bins:
 
@@ -1888,14 +1891,14 @@ class ModelVisualizer(_ClusterVisualizer):
         self.pm_tot = np.sqrt(0.5 * (self.pm_T**2 + self.pm_R**2))
         self.pm_ratio = self.pm_T / self.pm_R
 
-        self._init_numdens(model, observations)
-        self._init_massfunc(model, observations)
+        self._init_numdens(model, self.obs)
+        self._init_massfunc(model, self.obs)
 
-        self._init_surfdens(model, observations)
-        self._init_dens(model, observations)
+        self._init_surfdens(model, self.obs)
+        self._init_dens(model, self.obs)
 
-        self._init_mass_frac(model, observations)
-        self._init_cum_mass(model, observations)
+        self._init_mass_frac(model, self.obs)
+        self._init_cum_mass(model, self.obs)
 
     # TODO alot of these init functions could be more homogenous
     @_ClusterVisualizer._support_units
@@ -1953,9 +1956,9 @@ class ModelVisualizer(_ClusterVisualizer):
 
         self.mass_func = {}
 
-        # Not sure how to handle MF without observations yet, just skip and warn
+        # If no observations given, generate some demonstrative fields instead
         if observations is None:
-            return
+            return self._spoof_empty_massfunc(model)
 
         cen = (observations.mdata['RA'], observations.mdata['DEC'])
 
@@ -1999,6 +2002,51 @@ class ModelVisualizer(_ClusterVisualizer):
                     this_slc['dNdm'][0, j] = (Nj / widthj).value
 
                 self.mass_func[key].append(this_slc)
+
+    @_ClusterVisualizer._support_units
+    def _spoof_empty_massfunc(self, model):
+        '''spoof an arbitrary massfunc, for use when no observations given'''
+        import shapely
+
+        # cen = (observations.mdata['RA'], observations.mdata['DEC'])
+
+        # PI_list = observations.filter_datasets('*mass_function*')
+
+        densityj = [util.QuantitySpline(model.r, model.Sigmaj[j])
+                    for j in range(model.nms)]
+
+        self.mass_func['Model'] = []
+
+        limit = 3 * model.rh.to_value('pc')
+
+        base = mass.Field(shapely.Point((0, 0)).buffer(10 * limit))
+
+        domain = np.arange(0, limit, 2) * u.pc
+
+        for r_in, r_out in np.c_[domain[:-1], domain[1:]]:
+
+            this_slc = {'r1': r_in, 'r2': r_out}
+
+            field_slice = base.slice_radially(r_in, r_out)
+
+            this_slc['field'] = field_slice
+
+            this_slc['colour'] = None
+
+            this_slc['dNdm'] = np.empty((1, model.nms))
+
+            this_slc['mj'] = model.mj[:model.nms]
+
+            sample_radii = field_slice.MC_sample(300).to(u.pc)
+
+            for j in range(model.nms):
+
+                Nj = field_slice.MC_integrate(densityj[j], sample_radii)
+                widthj = (model.mj[j] * model.mbin_widths[j])
+
+                this_slc['dNdm'][0, j] = (Nj / widthj).value
+
+            self.mass_func['model'].append(this_slc)
 
     @_ClusterVisualizer._support_units
     def _init_dens(self, model, observations):
