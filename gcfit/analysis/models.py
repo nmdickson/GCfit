@@ -423,7 +423,9 @@ class _ClusterVisualizer:
         # ------------------------------------------------------------------
 
         kwargs.setdefault('marker', '.')
+        kwargs.setdefault('mfc', 'none')  # TODO a better default is needed
         kwargs.setdefault('linestyle', 'None')
+        kwargs.setdefault('zorder', 10)  # to force marker and bar to be higher
 
         label = dataset.cite()
         if 'm' in dataset.mdata:
@@ -433,10 +435,7 @@ class _ClusterVisualizer:
         # Plot
         # ------------------------------------------------------------------
 
-        # TODO not sure if I like the mfc=none style,
-        #   mostly due to https://github.com/matplotlib/matplotlib/issues/3400
-        #   maybe set mfc to be a slightly lighter colour than fc/errbars
-        return ax.errorbar(xdata, ydata, xerr=xerr, yerr=yerr, mfc='none',
+        return ax.errorbar(xdata, ydata, xerr=xerr, yerr=yerr,
                            label=label, **kwargs)
 
     def _plot_profile(self, ax, ds_pattern, y_key, model_data, *,
