@@ -1160,7 +1160,8 @@ class _ClusterVisualizer:
     @_support_units
     def plot_mass_func(self, fig=None, show_obs=True, show_fields=True, *,
                        PI_legend=False, propid_legend=False,
-                       logscaled=False, field_kw=None):
+                       label_unit='arcmin',
+                       logscaled=False, field_kw=None, **kwargs):
         # TODO support using other x units (arcsec, pc) here and in MF plot
 
         if self.obs is None:
@@ -1276,7 +1277,7 @@ class _ClusterVisualizer:
 
                 median = dNdm[midpoint]
 
-                med_plot, = ax.plot(mj, median, '--', c=clr)
+                med_plot, = ax.plot(mj, median, color=clr, **kwargs)
 
                 alpha = 0.8 / (midpoint + 1)
                 for sigma in range(1, midpoint + 1):
@@ -1304,10 +1305,18 @@ class _ClusterVisualizer:
                 # Really this should be a part of plt (see matplotlib#17946)
                 # ----------------------------------------------------------
 
-                r1 = rbin['r1'].to_value('arcmin')
-                r2 = rbin['r2'].to_value('arcmin')
+                r1 = rbin['r1'].to(label_unit)
+                r2 = rbin['r2'].to(label_unit)
+                lu = ''
 
-                fake = plt.Line2D([], [], label=f"r = {r1:.2f}'-{r2:.2f}'")
+                if label_unit in ('arcmin', 'arcminute'):
+                    r1, r2, lu = r1.value, r2.value, "'"
+
+                elif label_unit in ('arcsec', 'arcsecond'):
+                    r1, r2, lu = r1.value, r2.value, '"'
+
+                fake = plt.Line2D([], [],
+                                  label=f"r = {r1:.2f}{lu}-{r2:.2f}{lu}")
                 handles = [fake]
 
                 leg_kw = {'handlelength': 0, 'handletextpad': 0}
@@ -2021,7 +2030,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
         base = mass.Field(shapely.Point((0, 0)).buffer(10 * limit))
 
-        domain = np.arange(0, limit, 2) * u.pc
+        domain = np.arange(0, limit, 1) * u.pc
 
         for r_in, r_out in np.c_[domain[:-1], domain[1:]]:
 
