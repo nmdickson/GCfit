@@ -12,6 +12,7 @@ import astropy.visualization as astroviz
 
 import logging
 import pathlib
+from collections import abc
 
 
 __all__ = ['ModelVisualizer', 'CIModelVisualizer', 'ObservationsVisualizer',
@@ -98,24 +99,7 @@ class _ClusterVisualizer:
             subfig_kw = {}
 
         def create_axes(base, shape):
-            '''create the axes of `shape` on this base (fig)'''
-
-            # make sure shape is a tuple of atleast 1d, at most 2d
-
-            if not isinstance(shape, tuple):
-                # TODO doesnt work on an int
-                shape = tuple(shape)
-
-            if len(shape) == 1:
-                shape = (shape, 1)
-
-            elif len(shape) > 2:
-                mssg = f"Invalid `shape` for subplots {shape}, must be 2D"
-                raise ValueError(mssg)
-
-            # split into dict of nrows, ncols
-
-            shape = dict(zip(("nrows", "ncols"), shape))
+            '''create the axes of `shape` on this base (fig). shape as dict'''
 
             # if either of them is also a tuple, means we want columns or rows
             #   of varying sizes, switch to using subfigures
@@ -188,12 +172,36 @@ class _ClusterVisualizer:
 
         else:
 
+            # make sure shape is a tuple of atleast 1d, at most 2d
+
+            if not isinstance(shape, tuple):
+                # TODO doesnt work on an int
+                shape = tuple(shape)
+
+            if len(shape) == 1:
+                shape = (shape, 1)
+
+            elif len(shape) > 2:
+                mssg = f"Invalid `shape` for subplots {shape}, must be 2D"
+                raise ValueError(mssg)
+
+            # split into dict of nrows, ncols
+
+            shape = dict(zip(("nrows", "ncols"), shape))
+
             # this fig has axes, check that they match shape
             if axarr := fig.axes:
-                # TODO this won't actually work, cause fig.axes is just a list
-                if axarr.shape != shape:
-                    mssg = (f"figure {fig} already contains axes with "
-                            f"mismatched shape ({axarr.shape} != {shape})")
+
+                if isinstance(shape['nrows'], tuple):
+                    Naxes = np.sum(shape['nrows'])
+                elif isinstance(shape['ncols'], tuple):
+                    Naxes = np.sum(shape['ncols'])
+                else:
+                    Naxes = shape['nrows'] * shape['ncols']
+
+                if len(axarr) != Naxes:
+                    mssg = (f"figure {fig} already contains wrong number of "
+                            f"axes ({len(axarr)} != {Naxes})")
                     raise ValueError(mssg)
 
             else:
@@ -254,6 +262,7 @@ class _ClusterVisualizer:
 
         bottom_ax = ax if residual_ax is None else residual_ax
 
+        # TODO doesn't work when replotting on same axis, or when ax has a label
         if unit_label := bottom_ax.get_xlabel():
             label += f' [{unit_label}]'
 
@@ -415,7 +424,9 @@ class _ClusterVisualizer:
         # ------------------------------------------------------------------
 
         kwargs.setdefault('marker', '.')
+        kwargs.setdefault('mfc', 'none')  # TODO a better default is needed
         kwargs.setdefault('linestyle', 'None')
+        kwargs.setdefault('zorder', 10)  # to force marker and bar to be higher
 
         label = dataset.cite()
         if 'm' in dataset.mdata:
@@ -425,17 +436,14 @@ class _ClusterVisualizer:
         # Plot
         # ------------------------------------------------------------------
 
-        # TODO not sure if I like the mfc=none style,
-        #   mostly due to https://github.com/matplotlib/matplotlib/issues/3400
-        #   maybe set mfc to be a slightly lighter colour than fc/errbars
-        return ax.errorbar(xdata, ydata, xerr=xerr, yerr=yerr, mfc='none',
+        return ax.errorbar(xdata, ydata, xerr=xerr, yerr=yerr,
                            label=label, **kwargs)
 
     def _plot_profile(self, ax, ds_pattern, y_key, model_data, *,
                       y_unit=None, residuals=False,
                       res_kwargs=None, data_kwargs=None, model_kwargs=None,
                       color=None, data_color=None, model_color=None,
-                      mass_bins=None, **kwargs):
+                      mass_bins=None, model_label=None, **kwargs):
         '''figure out what needs to be plotted and call model/data plotters
         all **kwargs passed to both _plot_model and _plot_data
         model_data dimensions *must* be (mass bins, intervals, r axis)
@@ -469,7 +477,10 @@ class _ClusterVisualizer:
         model_color = model_color or default_color
 
         # if mass bins are supplied, label all models, for use in legends
-        label_models = bool(mass_bins)
+        label_masses = bool(mass_bins)
+
+        if label_masses and model_label is None:
+            model_label = 'Model'
 
         # ------------------------------------------------------------------
         # Determine the relevant datasets to the given pattern
@@ -496,7 +507,12 @@ class _ClusterVisualizer:
 
         masses = {}
 
-        for key, dset in datasets.items():
+        # Allow passing list of data colours to override the mass-colour match
+        if not (list_of_clr := (isinstance(data_color, abc.Collection)
+                                and not isinstance(data_color, str))):
+            data_color = [data_color, ] * len(datasets)
+
+        for i, (key, dset) in enumerate(datasets.items()):
 
             mrk = next(markers)
 
@@ -507,10 +523,10 @@ class _ClusterVisualizer:
             else:
                 mass_bin = self.star_bin
 
-            if mass_bin in masses:
+            if mass_bin in masses and not list_of_clr:
                 clr = masses[mass_bin][0][0].get_color()
             else:
-                clr = data_color
+                clr = data_color[i]
 
             # plot the data
             try:
@@ -566,8 +582,9 @@ class _ClusterVisualizer:
                 else:
                     clr = model_color
 
-                label = (fr'Model ($m={self.mj[mbin].value:.2f}\ M_\odot$)'
-                         if label_models else None)
+                label = model_label
+                if label_masses:
+                    label += fr' ($m={self.mj[mbin].value:.2f}\ M_\odot$)'
 
                 self._plot_model(ax, ymodel, color=clr, y_unit=y_unit,
                                  label=label, **model_kwargs, **kwargs)
@@ -1070,19 +1087,27 @@ class _ClusterVisualizer:
 
         # Number Density
 
+        show_numdens_background, bg_lim = False, None
+
+        if self.obs is not None and kwargs.get('show_obs', True):
+
+            if nd := list(self.obs.filter_datasets('*number*').values()):
+                nd = nd[0]
+
+                if 'background' in nd.mdata:
+
+                    show_numdens_background = True
+                    bg_lim = 0.9 * nd.mdata['background'] << nd['Σ'].unit
+
         self.plot_number_density(fig=fig, ax=axes[0, 0], label_position='left',
                                  blank_xaxis=True,
-                                 show_background=(self.obs is not None),
+                                 show_background=show_numdens_background,
                                  **kwargs)
 
-        if self.obs is not None:
-            nd = list(self.obs.filter_datasets('*number*').values())[-1]
-            bg = 0.9 * nd.mdata['background'] << nd['Σ'].unit
-        else:
-            bg = np.inf
+        if self.numdens and bg_lim is not None:
+            bg_lim = min([bg_lim, np.abs(self.numdens[..., :-2].min())])
 
-        bot_lim = min([bg, np.abs(self.numdens[..., :-2].min())])
-        axes[0, 0].set_ylim(bottom=bot_lim)
+        axes[0, 0].set_ylim(bottom=bg_lim)
 
         # Line-of-Sight Velocity Dispersion
 
@@ -1143,13 +1168,12 @@ class _ClusterVisualizer:
     @_support_units
     def plot_mass_func(self, fig=None, show_obs=True, show_fields=True, *,
                        PI_legend=False, propid_legend=False,
-                       logscaled=False, field_kw=None):
+                       label_unit='arcmin',
+                       logscaled=False, field_kw=None, **kwargs):
+        # TODO support using other x units (arcsec, pc) here and in MF plot
 
-        if not self.mass_func:
-            mssg = ("No mass functions fields found to plot. "
-                    "Note that plotting mass functions for models without "
-                    "observations is not currently supported")
-            raise RuntimeError(mssg)
+        if self.obs is None:
+            show_obs = False
 
         # ------------------------------------------------------------------
         # Setup axes, splitting into two columns if necessary and adding the
@@ -1197,22 +1221,24 @@ class _ClusterVisualizer:
 
             bins = self.mass_func[PI]
 
-            # Get data for this PI
-
-            mf = self.obs[PI]
-
-            mbin_mean = (mf['m1'] + mf['m2']) / 2.
-            mbin_width = mf['m2'] - mf['m1']
-
-            N = mf['N'] / mbin_width
-            ΔN = mf['ΔN'] / mbin_width
-
             label = ''
             if PI_legend:
                 label += pathlib.Path(PI).name
 
-            if propid_legend:
-                label += f" ({mf.mdata['proposal']})"
+            # Get data for this PI
+
+            if show_obs:
+
+                mf = self.obs[PI]
+
+                mbin_mean = (mf['m1'] + mf['m2']) / 2.
+                mbin_width = mf['m2'] - mf['m1']
+
+                N = mf['N'] / mbin_width
+                ΔN = mf['ΔN'] / mbin_width
+
+                if propid_legend:
+                    label += f" ({mf.mdata['proposal']})"
 
             # --------------------------------------------------------------
             # Iterate over radial bin dicts for this PI
@@ -1259,7 +1285,7 @@ class _ClusterVisualizer:
 
                 median = dNdm[midpoint]
 
-                med_plot, = ax.plot(mj, median, '--', c=clr)
+                med_plot, = ax.plot(mj, median, color=clr, **kwargs)
 
                 alpha = 0.8 / (midpoint + 1)
                 for sigma in range(1, midpoint + 1):
@@ -1287,10 +1313,18 @@ class _ClusterVisualizer:
                 # Really this should be a part of plt (see matplotlib#17946)
                 # ----------------------------------------------------------
 
-                r1 = rbin['r1'].to_value('arcmin')
-                r2 = rbin['r2'].to_value('arcmin')
+                r1 = rbin['r1'].to(label_unit)
+                r2 = rbin['r2'].to(label_unit)
+                lu = ''
 
-                fake = plt.Line2D([], [], label=f"r = {r1:.2f}'-{r2:.2f}'")
+                if label_unit in ('arcmin', 'arcminute'):
+                    r1, r2, lu = r1.value, r2.value, "'"
+
+                elif label_unit in ('arcsec', 'arcsecond'):
+                    r1, r2, lu = r1.value, r2.value, '"'
+
+                fake = plt.Line2D([], [],
+                                  label=f"r = {r1:.2f}{lu}-{r2:.2f}{lu}")
                 handles = [fake]
 
                 leg_kw = {'handlelength': 0, 'handletextpad': 0}
@@ -1336,7 +1370,10 @@ class _ClusterVisualizer:
 
         for PI, bins in self.mass_func.items():
 
-            lbl = f"{pathlib.Path(PI).name} ({self.obs[PI].mdata['proposal']})"
+            lbl = f"{pathlib.Path(PI).name}"
+
+            if self.obs is not None:
+                lbl = f"{lbl} ({self.obs[PI].mdata['proposal']})"
 
             for rbin in bins:
 
@@ -1871,14 +1908,14 @@ class ModelVisualizer(_ClusterVisualizer):
         self.pm_tot = np.sqrt(0.5 * (self.pm_T**2 + self.pm_R**2))
         self.pm_ratio = self.pm_T / self.pm_R
 
-        self._init_numdens(model, observations)
-        self._init_massfunc(model, observations)
+        self._init_numdens(model, self.obs)
+        self._init_massfunc(model, self.obs)
 
-        self._init_surfdens(model, observations)
-        self._init_dens(model, observations)
+        self._init_surfdens(model, self.obs)
+        self._init_dens(model, self.obs)
 
-        self._init_mass_frac(model, observations)
-        self._init_cum_mass(model, observations)
+        self._init_mass_frac(model, self.obs)
+        self._init_cum_mass(model, self.obs)
 
     # TODO alot of these init functions could be more homogenous
     @_ClusterVisualizer._support_units
@@ -1936,9 +1973,9 @@ class ModelVisualizer(_ClusterVisualizer):
 
         self.mass_func = {}
 
-        # Not sure how to handle MF without observations yet, just skip and warn
+        # If no observations given, generate some demonstrative fields instead
         if observations is None:
-            return
+            return self._spoof_empty_massfunc(model)
 
         cen = (observations.mdata['RA'], observations.mdata['DEC'])
 
@@ -1982,6 +2019,51 @@ class ModelVisualizer(_ClusterVisualizer):
                     this_slc['dNdm'][0, j] = (Nj / widthj).value
 
                 self.mass_func[key].append(this_slc)
+
+    @_ClusterVisualizer._support_units
+    def _spoof_empty_massfunc(self, model):
+        '''spoof an arbitrary massfunc, for use when no observations given'''
+        import shapely
+
+        # cen = (observations.mdata['RA'], observations.mdata['DEC'])
+
+        # PI_list = observations.filter_datasets('*mass_function*')
+
+        densityj = [util.QuantitySpline(model.r, model.Sigmaj[j])
+                    for j in range(model.nms)]
+
+        self.mass_func['Model'] = []
+
+        limit = 3 * model.rh.to_value('pc')
+
+        base = mass.Field(shapely.Point((0, 0)).buffer(10 * limit))
+
+        domain = np.arange(0, limit, 1) * u.pc
+
+        for r_in, r_out in np.c_[domain[:-1], domain[1:]]:
+
+            this_slc = {'r1': r_in, 'r2': r_out}
+
+            field_slice = base.slice_radially(r_in, r_out)
+
+            this_slc['field'] = field_slice
+
+            this_slc['colour'] = None
+
+            this_slc['dNdm'] = np.empty((1, model.nms))
+
+            this_slc['mj'] = model.mj[:model.nms]
+
+            sample_radii = field_slice.MC_sample(300).to(u.pc)
+
+            for j in range(model.nms):
+
+                Nj = field_slice.MC_integrate(densityj[j], sample_radii)
+                widthj = (model.mj[j] * model.mbin_widths[j])
+
+                this_slc['dNdm'][0, j] = (Nj / widthj).value
+
+            self.mass_func['Model'].append(this_slc)
 
     @_ClusterVisualizer._support_units
     def _init_dens(self, model, observations):
