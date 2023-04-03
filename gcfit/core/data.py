@@ -1569,8 +1569,14 @@ class FittableModel(Model):
         # ------------------------------------------------------------------
 
         kwargs = kwargs.copy()
-        kwargs.setdefault('vesc', None)
-        kwargs.setdefault('Ndot', None)
+
+        # Extra check if vesc/Ndot exist in obs first, otherwise use default
+        #   Necessary because checks in Model aren't sufficient
+        if ('vesc' not in kwargs) and ('vesc' in observations.mdata):
+            kwargs['vesc'] = observations.mdata['vesc'] << u.km / u.s
+
+        if ('Ndot' not in kwargs) and ('Ndot' in observations.mdata):
+            kwargs['Ndot'] = observations.mdata['Ndot']
 
         super().__init__(observations=observations, **theta, **kwargs)
 
