@@ -1087,19 +1087,27 @@ class _ClusterVisualizer:
 
         # Number Density
 
-        self.plot_number_density(fig=fig, ax=axes[0, 0], label_position='left',
-                                 blank_xaxis=True,
-                                 show_background=(self.obs is not None),
-                                 **kwargs)
+        show_numdens_background, bg_lim = False, None
 
         if self.obs is not None:
-            nd = list(self.obs.filter_datasets('*number*').values())[-1]
-            bg = 0.9 * nd.mdata['background'] << nd['Σ'].unit
-        else:
-            bg = np.inf
 
-        bot_lim = min([bg, np.abs(self.numdens[..., :-2].min())])
-        axes[0, 0].set_ylim(bottom=bot_lim)
+            if nd := list(self.obs.filter_datasets('*number*').values()):
+                nd = nd[0]
+
+                if 'background' in nd.mdata:
+
+                    show_numdens_background = True
+                    bg_lim = 0.9 * nd.mdata['background'] << nd['Σ'].unit
+
+        self.plot_number_density(fig=fig, ax=axes[0, 0], label_position='left',
+                                 blank_xaxis=True,
+                                 show_background=show_numdens_background,
+                                 **kwargs)
+
+        if self.numdens and bg_lim is not None:
+            bg_lim = min([bg_lim, np.abs(self.numdens[..., :-2].min())])
+
+        axes[0, 0].set_ylim(bottom=bg_lim)
 
         # Line-of-Sight Velocity Dispersion
 
