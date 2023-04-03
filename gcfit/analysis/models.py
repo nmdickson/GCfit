@@ -1089,7 +1089,7 @@ class _ClusterVisualizer:
 
         show_numdens_background, bg_lim = False, None
 
-        if self.obs is not None:
+        if self.obs is not None and kwargs.get('show_obs', True):
 
             if nd := list(self.obs.filter_datasets('*number*').values()):
                 nd = nd[0]
