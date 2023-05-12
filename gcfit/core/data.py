@@ -1194,6 +1194,16 @@ class Model(lp.limepy):
         self.NS_rhoj = self.rhoj[self._remnant_bins][self._NS_bins]
         self.NS_Sigmaj = self.Sigmaj[self._remnant_bins][self._NS_bins]
 
+        # ------------------------------------------------------------------
+        # Get remnant fractions
+        # ------------------------------------------------------------------
+
+        self.f_rem = (np.sum(self.Mj[self._remnant_bins]) / self.M).to(u.pct)
+
+        self.f_BH = (np.sum(self.BH_Mj) / self.M).to(u.pct)
+        self.f_WD = (np.sum(self.WD_Mj) / self.M).to(u.pct)
+        self.f_NS = (np.sum(self.NS_Mj) / self.M).to(u.pct)
+
     # ----------------------------------------------------------------------
     # Alternative generators
     # ----------------------------------------------------------------------

@@ -2475,6 +2475,8 @@ class RunCollection(_RunAnalysis):
             'RA': r'\deg',
             'DEC': r'\deg',
             'BH_mass': r'M_\odot',
+            'f_rem': r'\%',
+            'f_BH': r'\%',
             'r0': r'\mathrm{pc}',
             'rt': r'\mathrm{pc}',
             'rv': r'\mathrm{pc}',
