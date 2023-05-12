@@ -1898,8 +1898,8 @@ class ModelVisualizer(_ClusterVisualizer):
         self.star_bin = model.nms - 1
         self.mj = model.mj
 
-        self.f_rem = np.sum(model.Mj[model._remnant_bins]) / model.M
-        self.f_BH = np.sum(model.BH_Mj) / model.M
+        self.f_rem = model.f_rem
+        self.f_BH = model.f_BH
 
         self.LOS = np.sqrt(self.model.v2pj)[:, np.newaxis, :]
         self.pm_T = np.sqrt(model.v2Tj)[:, np.newaxis, :]
@@ -2418,8 +2418,8 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             frac_M_MS[slc], frac_M_rem[slc] = viz._init_mass_frac(model)
 
-            f_rem[model_ind] = np.sum(model.Mj[model._remnant_bins]) / model.M
-            f_BH[model_ind] = np.sum(model.BH_Mj) / model.M
+            f_rem[model_ind] = model.f_rem
+            f_BH[model_ind] = model.f_BH
 
             # Black holes
 
