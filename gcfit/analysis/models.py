@@ -492,6 +492,7 @@ class _ClusterVisualizer:
 
         else:
             # TODO optionally exclude any "excluded_datasets"?
+            # TODO since this is not sorted, hard to pass in list of spec colors
             datasets = self.obs.filter_datasets(ds_pattern)
 
         if strict and ds_pattern and not datasets:
@@ -1107,6 +1108,10 @@ class _ClusterVisualizer:
         if self.numdens and bg_lim is not None:
             bg_lim = min([bg_lim, np.abs(self.numdens[..., :-2].min())])
 
+        # Sometime deBoer lists BGlev=0.000, but only due to digits cut off
+        if bg_lim is not None and bg_lim <= 0.0:
+            bg_lim = 1e-3
+
         axes[0, 0].set_ylim(bottom=bg_lim)
 
         # Line-of-Sight Velocity Dispersion
@@ -1121,7 +1126,7 @@ class _ClusterVisualizer:
         self.plot_pm_ratio(fig=fig, ax=axes[2, 0], label_position='left',
                            **kwargs)
 
-        axes[2, 0].set_ylim(bottom=0.3, top=max(axes[2, 0].get_ylim()[1], 1.1))
+        axes[2, 0].set_ylim(bottom=0.4, top=max(axes[2, 0].get_ylim()[1], 1.2))
 
         # ------------------------------------------------------------------
         # Right Plots
@@ -1243,6 +1248,7 @@ class _ClusterVisualizer:
             # --------------------------------------------------------------
             # Iterate over radial bin dicts for this PI
             # --------------------------------------------------------------
+            # TODO make plotting calls a bit more uniform with profiles
 
             for rind, rbin in enumerate(bins):
 
@@ -1265,7 +1271,8 @@ class _ClusterVisualizer:
                     err = self.F * err_data
 
                     pnts = ax.errorbar(mbin_mean[r_mask], N_data, yerr=err,
-                                       fmt='o', color=clr)
+                                       marker='o', color=clr, ls='none',
+                                       **kwargs)
 
                     clr = pnts[0].get_color()
 
@@ -1285,7 +1292,7 @@ class _ClusterVisualizer:
 
                 median = dNdm[midpoint]
 
-                med_plot, = ax.plot(mj, median, color=clr, **kwargs)
+                med_plot, = ax.plot(mj, median, color=clr)
 
                 alpha = 0.8 / (midpoint + 1)
                 for sigma in range(1, midpoint + 1):
@@ -1474,35 +1481,35 @@ class _ClusterVisualizer:
         # Total density
         if 'tot' in kind:
             self._plot_profile(ax, None, None, self.rho_tot,
-                               x_unit=x_unit, label="Total",
+                               x_unit=x_unit, model_label="Total",
                                color=colors.get("tot", "tab:cyan"))
 
         # Total Remnant density
         if 'rem' in kind:
             self._plot_profile(ax, None, None, self.rho_rem,
-                               x_unit=x_unit, label="Remnants",
+                               x_unit=x_unit, model_label="Remnants",
                                color=colors.get("rem", "tab:purple"))
 
         # Main sequence density
         if 'MS' in kind:
             self._plot_profile(ax, None, None, self.rho_MS,
-                               x_unit=x_unit, label="Main-sequence stars",
+                               x_unit=x_unit, model_label="Main-sequence stars",
                                color=colors.get("MS", "tab:orange"))
 
         if 'WD' in kind:
             self._plot_profile(ax, None, None, self.rho_WD,
-                               x_unit=x_unit, label="White Dwarfs",
+                               x_unit=x_unit, model_label="White Dwarfs",
                                color=colors.get("WD", "tab:green"))
 
         if 'NS' in kind:
             self._plot_profile(ax, None, None, self.rho_NS,
-                               x_unit=x_unit, label="Neutron Stars",
+                               x_unit=x_unit, model_label="Neutron Stars",
                                color=colors.get("NS", "tab:red"))
 
         # Black hole density
         if 'BH' in kind:
             self._plot_profile(ax, None, None, self.rho_BH,
-                               x_unit=x_unit, label="Black Holes",
+                               x_unit=x_unit, model_label="Black Holes",
                                color=colors.get("BH", "tab:gray"))
 
         ax.set_yscale("log")
@@ -1533,35 +1540,35 @@ class _ClusterVisualizer:
         # Total density
         if 'tot' in kind:
             self._plot_profile(ax, None, None, self.Sigma_tot,
-                               x_unit=x_unit, label="Total",
+                               x_unit=x_unit, model_label="Total",
                                color=colors.get("tot", "tab:cyan"))
 
         # Total Remnant density
         if 'rem' in kind:
             self._plot_profile(ax, None, None, self.Sigma_rem,
-                               x_unit=x_unit, label="Remnants",
+                               x_unit=x_unit, model_label="Remnants",
                                color=colors.get("rem", "tab:purple"))
 
         # Main sequence density
         if 'MS' in kind:
             self._plot_profile(ax, None, None, self.Sigma_MS,
-                               x_unit=x_unit, label="Main-sequence stars",
+                               x_unit=x_unit, model_label="Main-sequence stars",
                                color=colors.get("MS", "tab:orange"))
 
         if 'WD' in kind:
             self._plot_profile(ax, None, None, self.Sigma_WD,
-                               x_unit=x_unit, label="White Dwarfs",
+                               x_unit=x_unit, model_label="White Dwarfs",
                                color=colors.get("WD", "tab:green"))
 
         if 'NS' in kind:
             self._plot_profile(ax, None, None, self.Sigma_NS,
-                               x_unit=x_unit, label="Neutron Stars",
+                               x_unit=x_unit, model_label="Neutron Stars",
                                color=colors.get("NS", "tab:red"))
 
         # Black hole density
         if 'BH' in kind:
             self._plot_profile(ax, None, None, self.Sigma_BH,
-                               x_unit=x_unit, label="Black Holes",
+                               x_unit=x_unit, model_label="Black Holes",
                                color=colors.get("BH", "tab:gray"))
 
         ax.set_yscale("log")
@@ -1592,29 +1599,29 @@ class _ClusterVisualizer:
         # Total density
         if 'tot' in kind:
             self._plot_profile(ax, None, None, self.cum_M_tot,
-                               x_unit=x_unit, label="Total",
+                               x_unit=x_unit, model_label="Total",
                                color=colors.get("tot", "tab:cyan"))
 
         # Main sequence density
         if 'MS' in kind:
             self._plot_profile(ax, None, None, self.cum_M_MS,
-                               x_unit=x_unit, label="Main-sequence stars",
+                               x_unit=x_unit, model_label="Main-sequence stars",
                                color=colors.get("MS", "tab:orange"))
 
         if 'WD' in kind:
             self._plot_profile(ax, None, None, self.cum_M_WD,
-                               x_unit=x_unit, label="White Dwarfs",
+                               x_unit=x_unit, model_label="White Dwarfs",
                                color=colors.get("WD", "tab:green"))
 
         if 'NS' in kind:
             self._plot_profile(ax, None, None, self.cum_M_NS,
-                               x_unit=x_unit, label="Neutron Stars",
+                               x_unit=x_unit, model_label="Neutron Stars",
                                color=colors.get("NS", "tab:red"))
 
         # Black hole density
         if 'BH' in kind:
             self._plot_profile(ax, None, None, self.cum_M_BH,
-                               x_unit=x_unit, label="Black Holes",
+                               x_unit=x_unit, model_label="Black Holes",
                                color=colors.get("BH", "tab:gray"))
 
         ax.set_yscale("log")
@@ -1641,9 +1648,9 @@ class _ClusterVisualizer:
         ax.set_xscale("log")
 
         self._plot_profile(ax, None, None, self.frac_M_MS,
-                           x_unit=x_unit, label="Main-sequence stars")
+                           x_unit=x_unit, model_label="Main-sequence stars")
         self._plot_profile(ax, None, None, self.frac_M_rem,
-                           x_unit=x_unit, label="Remnants")
+                           x_unit=x_unit, model_label="Remnants")
 
         label = r"Mass fraction $M_{MS}/M_{tot}$, $M_{remn.}/M_{tot}$"
         self._set_ylabel(ax, label, label_position)
