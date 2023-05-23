@@ -8,11 +8,11 @@ GCfit can be installed directly using pip, from it's github page:
 
 .. code-block:: console
 
-   $ pip install git+ssh://git@github.com/nmdickson/GCfit.git
+   $ pip install git+https://github.com/nmdickson/GCfit.git
 
 
 The latest, bleeding-edge, code can be installed from the ``develop`` branch:
 
 .. code-block:: console
 
-   $ pip install git+ssh://git@github.com/nmdickson/GCfit.git@develop
+   $ pip install git+https://github.com/nmdickson/GCfit.git@develop
