@@ -42,6 +42,8 @@ class _RunAnalysis:
     '''
 
     _cmap = plt.rcParams['image.cmap']
+    _mask = None
+    results = None
 
     @property
     def cmap(self):
@@ -56,6 +58,31 @@ class _RunAnalysis:
         else:
             mssg = f"{cm} is not a registered colormap, see `plt.colormaps`"
             raise ValueError(mssg)
+
+    @property
+    def mask(self):
+        return self._mask
+
+    @mask.setter
+    def mask(self, value):
+
+        if value is not None:
+
+            # _, ch = self._get_chains(include_fixed=False)
+
+            with self._openfile() as file:
+                ch = file[self._gname]['samples'][:]
+
+            if value.ndim > 1 or value.shape[0] != ch.shape[0]:
+                mssg = (f'Invalid mask shape {value.shape}; '
+                        f'must have shape {ch[:, 0].shape}')
+                raise ValueError(mssg)
+
+        self._mask = value
+
+        # If necessary, recompute results with mask applied
+        if self.results is not None:
+            self.results = self._get_results()
 
     def __str__(self):
         try:
@@ -1012,6 +1039,10 @@ class NestedRun(_RunAnalysis):
 
                 if d.shape and (d.shape[0] == Niter):
                     d = np.array(d)[inds]
+
+                    if self.mask is not None:
+                        d = d[self.mask]
+
                 else:
                     d = np.array(d)
 
@@ -1133,6 +1164,9 @@ class NestedRun(_RunAnalysis):
 
             chain = file[self._gname]['samples'][:]
 
+            if self.mask is not None:
+                chain = chain[self.mask, :]
+
             labels = list(self.obs.initials)
 
             fixed = sorted(
@@ -1158,6 +1192,10 @@ class NestedRun(_RunAnalysis):
 
             if add_errors is False:
                 chain = file[self._gname]['samples'][:]
+
+                if self.mask is not None:
+                    chain = chain[self.mask, :]
+
                 eq_chain = resample_equal(chain, self.weights)
 
             else:
