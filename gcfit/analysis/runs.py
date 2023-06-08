@@ -84,6 +84,19 @@ class _RunAnalysis:
         if self.results is not None:
             self.results = self._get_results()
 
+    def slice_on_param(self, param, lower_lim, upper_lim):
+
+        labels = self._get_labels()
+
+        if param not in labels:
+            mssg = f'Invalid param "{param}". Must be one of {labels}'
+            raise ValueError(mssg)
+
+        data = self._get_chains()[1][..., labels.index(param)]
+
+        # TODO how should updating masks work?
+        self.mask = (data < lower_lim) | (data > upper_lim)
+
     def __str__(self):
         try:
             return f'{self._filename} - Run Results'
