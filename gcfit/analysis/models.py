@@ -2311,8 +2311,8 @@ class CIModelVisualizer(_ClusterVisualizer):
         frac_M_MS = np.full((1, N, Nr), np.nan) << u.dimensionless_unscaled
         frac_M_rem = frac_M_MS.copy()
 
-        f_rem = np.full(N, np.nan) << u.dimensionless_unscaled
-        f_BH = np.full(N, np.nan) << u.dimensionless_unscaled
+        f_rem = np.full(N, np.nan) << u.pct
+        f_BH = np.full(N, np.nan) << u.pct
 
         # number density
 
