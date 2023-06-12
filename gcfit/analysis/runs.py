@@ -242,6 +242,9 @@ class _SingleRunAnalysis(_RunAnalysis):
     def mask(self):
         return self._mask
 
+    def reset_mask(self):
+        self._mask = None
+
     @mask.setter
     def mask(self, value):
 
@@ -261,6 +264,11 @@ class _SingleRunAnalysis(_RunAnalysis):
             self.results = self._get_results()
 
     def slice_on_param(self, param, lower_lim, upper_lim):
+        '''set `self.mask` based on a parameter value
+
+        already present masks will be combined, if that's not desired, you
+        should `self.reset_mask()` first.
+        '''
 
         labels = self._get_labels()
 
@@ -270,8 +278,12 @@ class _SingleRunAnalysis(_RunAnalysis):
 
         data = self._get_chains(apply_mask=False)[1][..., labels.index(param)]
 
-        # TODO how should updating masks work?
-        self.mask = (data < lower_lim) | (data > upper_lim)
+        mask = (data < lower_lim) | (data > upper_lim)
+
+        if self.mask is None:
+            self.mask = mask
+        else:
+            self.mask |= mask
 
     def __str__(self):
         try:
