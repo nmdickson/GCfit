@@ -247,11 +247,7 @@ class _SingleRunAnalysis(_RunAnalysis):
 
         if value is not None:
 
-            # _, ch = self._get_chains(include_fixed=False)
-
-            with self._openfile() as file:
-                # TODO will fail for MCMC
-                ch = file[self._gname]['samples'][:]
+            _, ch = self._get_chains(include_fixed=False, apply_mask=False)
 
             if value.ndim > 1 or value.shape[0] != ch.shape[0]:
                 mssg = (f'Invalid mask shape {value.shape}; '
@@ -272,7 +268,7 @@ class _SingleRunAnalysis(_RunAnalysis):
             mssg = f'Invalid param "{param}". Must be one of {labels}'
             raise ValueError(mssg)
 
-        data = self._get_chains()[1][..., labels.index(param)]
+        data = self._get_chains(apply_mask=False)[1][..., labels.index(param)]
 
         # TODO how should updating masks work?
         self.mask = (data < lower_lim) | (data > upper_lim)
