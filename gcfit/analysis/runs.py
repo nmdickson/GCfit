@@ -252,6 +252,10 @@ class _SingleRunAnalysis(_RunAnalysis):
 
             _, ch = self._get_chains(include_fixed=False, apply_mask=False)
 
+            # flatten chain if necessary (to work with MCMC, mask must be flat)
+            if ch.ndim > 2:
+                ch = ch.reshape((-1, ch.shape[-1]))
+
             if value.ndim > 1 or value.shape[0] != ch.shape[0]:
                 mssg = (f'Invalid mask shape {value.shape}; '
                         f'must have shape {ch[:, 0].shape}')
@@ -277,6 +281,9 @@ class _SingleRunAnalysis(_RunAnalysis):
             raise ValueError(mssg)
 
         data = self._get_chains(apply_mask=False)[1][..., labels.index(param)]
+
+        if data.ndim > 1:
+            data = data.reshape((-1, data.shape[-1]))
 
         mask = (data < lower_lim) | (data > upper_lim)
 
