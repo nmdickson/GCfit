@@ -1034,7 +1034,7 @@ class NestedRun(_SingleRunAnalysis):
     # Helpers
     # ----------------------------------------------------------------------
 
-    def _get_results(self, finite_only=False):
+    def _get_results(self, finite_only=False, *, apply_mask=True):
         '''return a dynesty-style `Results` class'''
         from dynesty.results import Results
 
@@ -1057,7 +1057,7 @@ class NestedRun(_SingleRunAnalysis):
                 if d.shape and (d.shape[0] == Niter):
                     d = np.array(d)[inds]
 
-                    if self.mask is not None:
+                    if apply_mask and self.mask is not None:
                         d = d[self.mask]
 
                 else:
@@ -1174,14 +1174,14 @@ class NestedRun(_SingleRunAnalysis):
         return labels
 
     # TODO some ways of handling and plotting initial_batch only clusters
-    def _get_chains(self, include_fixed=True):
+    def _get_chains(self, include_fixed=True, *, apply_mask=True):
         '''for nested sampling results (current Batch)'''
 
         with self._openfile() as file:
 
             chain = file[self._gname]['samples'][:]
 
-            if self.mask is not None:
+            if apply_mask and self.mask is not None:
                 chain = chain[self.mask, :]
 
             labels = list(self.obs.initials)
@@ -1202,7 +1202,8 @@ class NestedRun(_SingleRunAnalysis):
 
         return labels, chain
 
-    def _get_equal_weight_chains(self, include_fixed=True, add_errors=False):
+    def _get_equal_weight_chains(self, include_fixed=True, add_errors=False, *,
+                                 apply_mask=True):
         from dynesty.utils import resample_equal
 
         with self._openfile() as file:
@@ -1210,7 +1211,7 @@ class NestedRun(_SingleRunAnalysis):
             if add_errors is False:
                 chain = file[self._gname]['samples'][:]
 
-                if self.mask is not None:
+                if apply_mask and self.mask is not None:
                     chain = chain[self.mask, :]
 
                 eq_chain = resample_equal(chain, self.weights)
