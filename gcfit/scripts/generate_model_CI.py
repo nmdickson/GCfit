@@ -42,9 +42,19 @@ def main():
     parser.add_argument('--overwrite', action='store_true',
                         help='Overwrite saved CIs if already exist. Be careful')
 
+    parser.add_argument('--mask', nargs=3, default=False,
+                        metavar=('PARAM', 'LOWER_LIM', 'UPPER_LIM'),
+                        help='Apply a mask to each run based on a param')
+
+    parser.add_argument('-o', '--output', nargs='+', default=None,
+                        help='Alternative files only for saving CI outputs')
+
     parser.add_argument('--debug', action='store_true')
 
     args = parser.parse_args()
+
+    if args.output is None:
+        args.output = args.filenames
 
     if args.debug:
         now = datetime.datetime.now()
@@ -64,6 +74,13 @@ def main():
 
     rc = analysis.RunCollection.from_files(args.filenames)
 
+    if args.mask:
+        mask_prm = args.mask[0]
+        mask_dnlim, mask_uplim = float(args.mask[1]), float(args.mask[2])
+
+        for run in rc:
+            run.slice_on_param(mask_prm, mask_dnlim, mask_uplim)
+
     mc = rc.get_CImodels(N=args.N, Nprocesses=args.Ncpu, load=False)
 
-    mc.save(args.filenames, overwrite=args.overwrite)
+    mc.save(args.output, overwrite=args.overwrite)
