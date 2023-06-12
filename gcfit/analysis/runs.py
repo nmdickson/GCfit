@@ -2578,6 +2578,8 @@ class RunCollection(_RunAnalysis):
 
         if 'ms' in scatter_kw:
             scatter_kw['s'] = scatter_kw.pop('ms')**2
+        elif 'markersize' in scatter_kw:
+            scatter_kw['s'] = scatter_kw.pop('markersize')**2
 
         if 'mec' in scatter_kw:
             scatter_kw['ec'] = scatter_kw.pop('mec')
