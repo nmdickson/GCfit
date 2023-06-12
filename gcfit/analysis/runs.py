@@ -2586,13 +2586,13 @@ class RunCollection(_RunAnalysis):
 
         if 'mew' in scatter_kw:
             scatter_kw['lw'] = scatter_kw.pop('mew')
-        elif 'markeredgecolor' in scatter_kw:
+        elif 'markeredgewidth' in scatter_kw:
             scatter_kw['lw'] = scatter_kw.pop('markeredgewidth')
 
         # bad idea to use this anyways, use full c or something like clr_param
         if 'mfc' in scatter_kw:
             scatter_kw['fc'] = scatter_kw.pop('mfc')
-        elif 'markeredgecolor' in scatter_kw:
+        elif 'markerfacecolor' in scatter_kw:
             scatter_kw['fc'] = scatter_kw.pop('markerfacecolor')
 
         # place scatter points very slightly above errorbars
