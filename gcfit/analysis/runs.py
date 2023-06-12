@@ -2,7 +2,6 @@ from .. import Observations
 from ..probabilities import priors
 from .models import CIModelVisualizer, ModelVisualizer, ModelCollection
 
-import os
 import sys
 import pathlib
 import logging
@@ -28,7 +27,6 @@ __all__ = ['RunCollection', 'MCMCRun', 'NestedRun']
 # --------------------------------------------------------------------------
 
 
-# TODO a way to plot our priors, probably for both vizs
 class _RunAnalysis:
     '''base class for all visualizers of all run types
 
@@ -42,8 +40,6 @@ class _RunAnalysis:
     '''
 
     _cmap = plt.rcParams['image.cmap']
-    _mask = None
-    results = None
 
     @property
     def cmap(self):
@@ -58,103 +54,6 @@ class _RunAnalysis:
         else:
             mssg = f"{cm} is not a registered colormap, see `plt.colormaps`"
             raise ValueError(mssg)
-
-    @property
-    def mask(self):
-        return self._mask
-
-    @mask.setter
-    def mask(self, value):
-
-        if value is not None:
-
-            # _, ch = self._get_chains(include_fixed=False)
-
-            with self._openfile() as file:
-                ch = file[self._gname]['samples'][:]
-
-            if value.ndim > 1 or value.shape[0] != ch.shape[0]:
-                mssg = (f'Invalid mask shape {value.shape}; '
-                        f'must have shape {ch[:, 0].shape}')
-                raise ValueError(mssg)
-
-        self._mask = value
-
-        # If necessary, recompute results with mask applied
-        if self.results is not None:
-            self.results = self._get_results()
-
-    def slice_on_param(self, param, lower_lim, upper_lim):
-
-        labels = self._get_labels()
-
-        if param not in labels:
-            mssg = f'Invalid param "{param}". Must be one of {labels}'
-            raise ValueError(mssg)
-
-        data = self._get_chains()[1][..., labels.index(param)]
-
-        # TODO how should updating masks work?
-        self.mask = (data < lower_lim) | (data > upper_lim)
-
-    def __str__(self):
-        try:
-            return f'{self._filename} - Run Results'
-        except AttributeError:
-            return "Run Results"
-
-    def __init__(self, filename, observations, group, name=None):
-
-        self._filename = filename
-        self._gname = group
-
-        with h5py.File(filename, 'r') as file:
-
-            # Check that all necessary groups exist in the given file
-            reqd_groups = {group, 'metadata'}
-
-            if missing_groups := (reqd_groups - file.keys()):
-                mssg = (f"Output file {filename} is invalid: "
-                        f"missing {missing_groups} groups. "
-                        "Are you sure this was created by GCfit?")
-
-                raise RuntimeError(mssg)
-
-            # Check if this run seems to have used a local cluster data file
-            restrict_to = file['metadata'].attrs.get('restrict_to', None)
-
-        # Determine and init cluster observations if necessary
-        if name is not None:
-            self.name = name
-
-        if observations is not None:
-            self.obs = observations
-
-        else:
-            try:
-                with h5py.File(filename, 'r') as file:
-                    cluster = file['metadata'].attrs['cluster']
-
-                self.obs = Observations(cluster, restrict_to=restrict_to)
-
-            except KeyError as err:
-                mssg = "No cluster name in metadata, must supply observations"
-                raise ValueError(mssg) from err
-
-    @contextlib.contextmanager
-    def _openfile(self, group=None, mode='r'):
-        file = h5py.File(self._filename, mode)
-
-        try:
-
-            if group is not None:
-                yield file[group]
-
-            else:
-                yield file
-
-        finally:
-            file.close()
 
     def _setup_artist(self, fig, ax, *, use_name=True):
         '''setup a plot (figure and ax) with one single ax'''
@@ -333,7 +232,112 @@ class _RunAnalysis:
         return res_ax
 
 
-class MCMCRun(_RunAnalysis):
+# TODO a way to plot our priors, probably for both vizs
+class _SingleRunAnalysis(_RunAnalysis):
+
+    _mask = None
+    results = None
+
+    @property
+    def mask(self):
+        return self._mask
+
+    @mask.setter
+    def mask(self, value):
+
+        if value is not None:
+
+            # _, ch = self._get_chains(include_fixed=False)
+
+            with self._openfile() as file:
+                # TODO will fail for MCMC
+                ch = file[self._gname]['samples'][:]
+
+            if value.ndim > 1 or value.shape[0] != ch.shape[0]:
+                mssg = (f'Invalid mask shape {value.shape}; '
+                        f'must have shape {ch[:, 0].shape}')
+                raise ValueError(mssg)
+
+        self._mask = value
+
+        # If necessary, recompute results with mask applied
+        if self.results is not None:
+            self.results = self._get_results()
+
+    def slice_on_param(self, param, lower_lim, upper_lim):
+
+        labels = self._get_labels()
+
+        if param not in labels:
+            mssg = f'Invalid param "{param}". Must be one of {labels}'
+            raise ValueError(mssg)
+
+        data = self._get_chains()[1][..., labels.index(param)]
+
+        # TODO how should updating masks work?
+        self.mask = (data < lower_lim) | (data > upper_lim)
+
+    def __str__(self):
+        try:
+            return f'{self._filename} - Run Results'
+        except AttributeError:
+            return "Run Results"
+
+    def __init__(self, filename, observations, group, name=None):
+
+        self._filename = filename
+        self._gname = group
+
+        with h5py.File(filename, 'r') as file:
+
+            # Check that all necessary groups exist in the given file
+            reqd_groups = {group, 'metadata'}
+
+            if missing_groups := (reqd_groups - file.keys()):
+                mssg = (f"Output file {filename} is invalid: "
+                        f"missing {missing_groups} groups. "
+                        "Are you sure this was created by GCfit?")
+
+                raise RuntimeError(mssg)
+
+            # Check if this run seems to have used a local cluster data file
+            restrict_to = file['metadata'].attrs.get('restrict_to', None)
+
+        # Determine and init cluster observations if necessary
+        if name is not None:
+            self.name = name
+
+        if observations is not None:
+            self.obs = observations
+
+        else:
+            try:
+                with h5py.File(filename, 'r') as file:
+                    cluster = file['metadata'].attrs['cluster']
+
+                self.obs = Observations(cluster, restrict_to=restrict_to)
+
+            except KeyError as err:
+                mssg = "No cluster name in metadata, must supply observations"
+                raise ValueError(mssg) from err
+
+    @contextlib.contextmanager
+    def _openfile(self, group=None, mode='r'):
+        file = h5py.File(self._filename, mode)
+
+        try:
+
+            if group is not None:
+                yield file[group]
+
+            else:
+                yield file
+
+        finally:
+            file.close()
+
+
+class MCMCRun(_SingleRunAnalysis):
     '''All the plots based on a model run, like the chains and likelihoods
     and marginals corner plots and etc
 
@@ -946,7 +950,7 @@ class MCMCRun(_RunAnalysis):
         out.write(mssg)
 
 
-class NestedRun(_RunAnalysis):
+class NestedRun(_SingleRunAnalysis):
 
     @property
     def weights(self):
@@ -2310,6 +2314,15 @@ class RunCollection(_RunAnalysis):
     # ----------------------------------------------------------------------
     # Helpers
     # ----------------------------------------------------------------------
+
+    def _update(self):
+        '''quickly update all run params, in case something has changed'''
+        labels = self.runs[0]._get_labels(label_fixed=False)
+        self._params = [dict(zip(labels, r._get_equal_weight_chains()[1].T))
+                        for r in self.runs]
+
+        self._mdata = [{k: [v, ] for k, v in r.obs.mdata.items()}
+                       for r in self.runs]
 
     def _get_from_run(self, param):
 
