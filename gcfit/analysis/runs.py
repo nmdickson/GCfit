@@ -2565,6 +2565,46 @@ class RunCollection(_RunAnalysis):
         else:
             return None
 
+    def _dissect_scatter_kwargs(self, plot_kw):
+        '''attempt to coerce some `plot` kwargs to work with `scatter`
+        Unfortunately necessary because there are a number of arguments to
+        these functions which accomplish the same thing, but are named
+        slightly differently, because the functions use different artist types
+        '''
+
+        scatter_kw = plot_kw.copy()
+
+        # marker style kwargs
+
+        if 'ms' in scatter_kw:
+            scatter_kw['s'] = scatter_kw.pop('ms')**2
+        elif 'markersize' in scatter_kw:
+            scatter_kw['s'] = scatter_kw.pop('markersize')**2
+
+        if 'mec' in scatter_kw:
+            scatter_kw['ec'] = scatter_kw.pop('mec')
+        elif 'markeredgecolor' in scatter_kw:
+            scatter_kw['ec'] = scatter_kw.pop('markeredgecolor')
+
+        if 'mew' in scatter_kw:
+            scatter_kw['lw'] = scatter_kw.pop('mew')
+        elif 'markeredgewidth' in scatter_kw:
+            scatter_kw['lw'] = scatter_kw.pop('markeredgewidth')
+
+        # bad idea to use this anyways, use full c or something like clr_param
+        if 'mfc' in scatter_kw:
+            scatter_kw['fc'] = scatter_kw.pop('mfc')
+        elif 'markerfacecolor' in scatter_kw:
+            scatter_kw['fc'] = scatter_kw.pop('markerfacecolor')
+
+        # place scatter points very slightly above errorbars
+        if 'zorder' in scatter_kw:
+            scatter_kw['zorder'] += 0.0001
+        else:
+            scatter_kw['zorder'] = 2.0001
+
+        return scatter_kw
+
     # ----------------------------------------------------------------------
     # Model Collection Visualizers
     # ----------------------------------------------------------------------
@@ -2688,14 +2728,14 @@ class RunCollection(_RunAnalysis):
         '''
 
         fig, ax = self._setup_artist(fig, ax)
+        sc_kwargs = self._dissect_scatter_kwargs(kwargs)
 
         x, *dx = self._get_param(param1, force_model=force_model)
         y, *dy = self._get_param(param2, force_model=force_model)
 
-        # TODO errorbar and scatter often dont accept same kwargs
         errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', label=label,
                              **kwargs)
-        points = ax.scatter(x, y, picker=True, **kwargs)
+        points = ax.scatter(x, y, picker=True, **sc_kwargs)
 
         ax.set_xlabel(self._get_latex_labels(param1, force_model=force_model))
         ax.set_ylabel(self._get_latex_labels(param2, force_model=force_model))
@@ -2738,12 +2778,13 @@ class RunCollection(_RunAnalysis):
         '''
 
         fig, ax = self._setup_artist(fig, ax)
+        sc_kwargs = self._dissect_scatter_kwargs(kwargs)
 
         x, *dx = self._get_param(param, force_model=force_model)
         y, dy = truths, e_truths
 
         errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', **kwargs)
-        points = ax.scatter(x, y, picker=True, **kwargs)
+        points = ax.scatter(x, y, picker=True, **sc_kwargs)
 
         if diagonal:
             grid_kw = {
@@ -2799,6 +2840,7 @@ class RunCollection(_RunAnalysis):
         '''
 
         fig, ax = self._setup_artist(fig, ax)
+        sc_kwargs = self._dissect_scatter_kwargs(kwargs)
 
         x, *dx = self._get_param(param, force_model=force_model)
         y, dy = lit, e_lit
@@ -2814,7 +2856,7 @@ class RunCollection(_RunAnalysis):
             xlabel, ylabel = ylabel, xlabel
 
         errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', **kwargs)
-        points = ax.scatter(x, y, picker=True, **kwargs)
+        points = ax.scatter(x, y, picker=True, **sc_kwargs)
 
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
@@ -2941,6 +2983,7 @@ class RunCollection(_RunAnalysis):
                          force_model=False, **kwargs):
         '''plot mean and std errorbars for each run of the given param'''
         fig, ax = self._setup_artist(fig, ax)
+        sc_kwargs = self._dissect_scatter_kwargs(kwargs)
 
         mean, *err = self._get_param(param, force_model=force_model)
 
@@ -2949,7 +2992,7 @@ class RunCollection(_RunAnalysis):
         labels = self.names
 
         errbar = ax.errorbar(x=xticks, y=mean, yerr=err, fmt='none', **kwargs)
-        points = ax.scatter(x=xticks, y=mean, picker=True, **kwargs)
+        points = ax.scatter(x=xticks, y=mean, picker=True, **sc_kwargs)
 
         if clr_param is not None:
 
