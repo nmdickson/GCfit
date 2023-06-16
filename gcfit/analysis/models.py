@@ -247,12 +247,16 @@ class _ClusterVisualizer:
                 try:
                     if not isinstance(unit, u.Unit):
                         unit = u.Unit(unit)
+
+                    if unit is not u.dimensionless_unscaled:
+
+                        fmt = "latex_inline" if inline_latex else "latex"
+                        fmtunit = unit.to_string(fmt)
+
+                        label += fr' $\left[{fmtunit.strip("$")}\right]$'
+
                 except ValueError:
                     pass
-
-                fmt = "latex_inline" if inline_latex else "latex"
-
-                label += fr' $\left[{unit.to_string(fmt).strip("$")}\right]$'
 
             ax.set_ylabel(label)
 
@@ -278,12 +282,16 @@ class _ClusterVisualizer:
             try:
                 if not isinstance(unit, u.Unit):
                     unit = u.Unit(unit)
+
+                if unit is not u.dimensionless_unscaled:
+
+                    fmt = "latex_inline" if inline_latex else "latex"
+                    fmtunit = unit.to_string(fmt)
+
+                    label += fr' $\left[{fmtunit.strip("$")}\right]$'
+
             except ValueError:
                 pass
-
-            fmt = "latex_inline" if inline_latex else "latex"
-
-            label += fr' $\left[{unit.to_string(fmt).strip("$")}\right]$'
 
         bottom_ax.set_xlabel(label)
 
