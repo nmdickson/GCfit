@@ -1679,7 +1679,7 @@ class _ClusterVisualizer:
         self._plot_profile(ax, None, None, self.frac_M_rem,
                            x_unit=x_unit, model_label="Remnants")
 
-        label = r"Mass fraction $M_{MS}/M_{tot}$, $M_{remn.}/M_{tot}$"
+        label = r"Mass fraction $M_{MS}/M_{tot}$, $M_{remn}/M_{tot}$"
         self._set_ylabel(ax, label, None, label_position)
         self._set_xlabel(ax, unit=x_unit)
 
@@ -1688,11 +1688,16 @@ class _ClusterVisualizer:
         if show_total:
             from matplotlib.offsetbox import AnchoredText
 
-            tot = AnchoredText(fr'$f_{{\mathrm{{remn}}}}={self.f_rem:.2f}$',
+            tot = np.nanpercentile(self.f_rem, q=[50., 15.87, 84.13]).value
+            tot[1:] = np.abs(tot[1:] - tot[0])
+
+            lbl = f'{tot[0]:.2f}^{{+{tot[1]:.2f}}}_{{-{tot[2]:.2f}}}\\,\\%'
+
+            txt = AnchoredText(fr'$f_{{\mathrm{{remn}}}}={lbl}$',
                                frameon=True, loc='upper center')
 
-            tot.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
-            ax.add_artist(tot)
+            txt.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
+            ax.add_artist(txt)
 
         ax.legend()
 
