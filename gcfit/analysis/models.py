@@ -220,8 +220,8 @@ class _ClusterVisualizer:
 
         return fig, np.atleast_1d(axarr)
 
-    def _set_ylabel(self, ax, label, label_position='left', *,
-                    residual_ax=None):
+    def _set_ylabel(self, ax, label, unit=None, label_position='left', *,
+                    residual_ax=None, inline_latex=True):
 
         tick_prms = dict(which='both',
                          labelright=(label_position == 'right'),
@@ -241,8 +241,22 @@ class _ClusterVisualizer:
 
         else:
 
-            if (unit_label := ax.get_ylabel()) and unit_label != r'$\mathrm{}$':
-                label += f' [{unit_label}]'
+            if unit is not None:
+
+                # try to get an automatically formatted unit string if possible
+                try:
+                    if not isinstance(unit, u.Unit):
+                        unit = u.Unit(unit)
+
+                    if unit is not u.dimensionless_unscaled:
+
+                        fmt = "latex_inline" if inline_latex else "latex"
+                        fmtunit = unit.to_string(fmt)
+
+                        label += fr' $\left[{fmtunit.strip("$")}\right]$'
+
+                except ValueError:
+                    pass
 
             ax.set_ylabel(label)
 
@@ -257,14 +271,27 @@ class _ClusterVisualizer:
 
         ax.yaxis.set_ticks_position('both')
 
-    def _set_xlabel(self, ax, label='Distance from centre', *,
-                    residual_ax=None, remove_all=False):
+    def _set_xlabel(self, ax, label='Distance from centre', unit=None, *,
+                    residual_ax=None, remove_all=False, inline_latex=True):
 
         bottom_ax = ax if residual_ax is None else residual_ax
 
-        # TODO doesn't work when replotting on same axis, or when ax has a label
-        if unit_label := bottom_ax.get_xlabel():
-            label += f' [{unit_label}]'
+        if unit is not None:
+
+            # try to get an automatically formatted unit string if possible
+            try:
+                if not isinstance(unit, u.Unit):
+                    unit = u.Unit(unit)
+
+                if unit is not u.dimensionless_unscaled:
+
+                    fmt = "latex_inline" if inline_latex else "latex"
+                    fmtunit = unit.to_string(fmt)
+
+                    label += fr' $\left[{fmtunit.strip("$")}\right]$'
+
+            except ValueError:
+                pass
 
         bottom_ax.set_xlabel(label)
 
@@ -811,8 +838,9 @@ class _ClusterVisualizer:
         else:
             label = r'$\sigma_{\mathrm{LOS}}$'
 
-        self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
-        self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
+        self._set_ylabel(ax, label, y_unit, label_position, residual_ax=res_ax)
+        self._set_xlabel(ax, unit=x_unit, residual_ax=res_ax,
+                         remove_all=blank_xaxis)
 
         leg = ax.legend()
         # Remove empty legend boxes. TODO must be a better way to check this
@@ -850,8 +878,9 @@ class _ClusterVisualizer:
         else:
             label = r'$\sigma_{\mathrm{PM},\mathrm{tot}}$'
 
-        self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
-        self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
+        self._set_ylabel(ax, label, y_unit, label_position, residual_ax=res_ax)
+        self._set_xlabel(ax, unit=x_unit, residual_ax=res_ax,
+                         remove_all=blank_xaxis)
 
         leg = ax.legend()
         if not leg.legendHandles:
@@ -889,8 +918,9 @@ class _ClusterVisualizer:
             label = (r'$\sigma_{\mathrm{PM},\mathrm{T}} / '
                      r'\sigma_{\mathrm{PM},\mathrm{R}}$')
 
-        self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
-        self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
+        self._set_ylabel(ax, label, None, label_position, residual_ax=res_ax)
+        self._set_xlabel(ax, unit=x_unit, residual_ax=res_ax,
+                         remove_all=blank_xaxis)
 
         leg = ax.legend()
         if not leg.legendHandles:
@@ -927,8 +957,9 @@ class _ClusterVisualizer:
         else:
             label = r'$\sigma_{\mathrm{PM},\mathrm{T}}$'
 
-        self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
-        self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
+        self._set_ylabel(ax, label, y_unit, label_position, residual_ax=res_ax)
+        self._set_xlabel(ax, unit=x_unit, residual_ax=res_ax,
+                         remove_all=blank_xaxis)
 
         leg = ax.legend()
         if not leg.legendHandles:
@@ -965,8 +996,9 @@ class _ClusterVisualizer:
         else:
             label = r'$\sigma_{\mathrm{PM},\mathrm{R}}$'
 
-        self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
-        self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
+        self._set_ylabel(ax, label, y_unit, label_position, residual_ax=res_ax)
+        self._set_xlabel(ax, unit=x_unit, residual_ax=res_ax,
+                         remove_all=blank_xaxis)
 
         leg = ax.legend()
         if not leg.legendHandles:
@@ -1057,8 +1089,9 @@ class _ClusterVisualizer:
         else:
             label = r'$\Sigma$'
 
-        self._set_ylabel(ax, label, label_position, residual_ax=res_ax)
-        self._set_xlabel(ax, residual_ax=res_ax, remove_all=blank_xaxis)
+        self._set_ylabel(ax, label, y_unit, label_position, residual_ax=res_ax)
+        self._set_xlabel(ax, unit=x_unit, residual_ax=res_ax,
+                         remove_all=blank_xaxis)
 
         return fig
 
@@ -1515,8 +1548,8 @@ class _ClusterVisualizer:
         ax.set_yscale("log")
         ax.set_xscale("log")
 
-        self._set_ylabel(ax, 'Mass Density', label_position)
-        self._set_xlabel(ax)
+        self._set_ylabel(ax, 'Mass Density', self.rho_tot.unit, label_position)
+        self._set_xlabel(ax, unit=x_unit)
 
         fig.legend(loc='upper center', ncol=6,
                    bbox_to_anchor=(0.5, 1.), fancybox=True)
@@ -1574,8 +1607,9 @@ class _ClusterVisualizer:
         ax.set_yscale("log")
         ax.set_xscale("log")
 
-        self._set_ylabel(ax, 'Surface Mass Density', label_position)
-        self._set_xlabel(ax)
+        self._set_ylabel(ax, 'Surface Mass Density', self.Sigma_tot.unit,
+                         label_position)
+        self._set_xlabel(ax, unit=x_unit)
 
         fig.legend(loc='upper center', ncol=6,
                    bbox_to_anchor=(0.5, 1.), fancybox=True)
@@ -1627,8 +1661,9 @@ class _ClusterVisualizer:
         ax.set_yscale("log")
         ax.set_xscale("log")
 
-        self._set_ylabel(ax, rf'$M_{{enc}}$', label_position)
-        self._set_xlabel(ax)
+        self._set_ylabel(ax, rf'$M_{{enc}}$', self.cum_M_tot.unit,
+                         label_position)
+        self._set_xlabel(ax, unit=x_unit)
 
         # TODO stop ever doing fig.legend, put legend on inside of ax
         #   also maybe make it optional
@@ -1652,20 +1687,25 @@ class _ClusterVisualizer:
         self._plot_profile(ax, None, None, self.frac_M_rem,
                            x_unit=x_unit, model_label="Remnants")
 
-        label = r"Mass fraction $M_{MS}/M_{tot}$, $M_{remn.}/M_{tot}$"
-        self._set_ylabel(ax, label, label_position)
-        self._set_xlabel(ax)
+        label = r"Mass fraction $M_{MS}/M_{tot}$, $M_{remn}/M_{tot}$"
+        self._set_ylabel(ax, label, None, label_position)
+        self._set_xlabel(ax, unit=x_unit)
 
         ax.set_ylim(0.0, 1.0)
 
         if show_total:
             from matplotlib.offsetbox import AnchoredText
 
-            tot = AnchoredText(fr'$f_{{\mathrm{{remn}}}}={self.f_rem:.2f}$',
+            tot = np.nanpercentile(self.f_rem, q=[50., 15.87, 84.13]).value
+            tot[1:] = np.abs(tot[1:] - tot[0])
+
+            lbl = f'{tot[0]:.2f}^{{+{tot[1]:.2f}}}_{{-{tot[2]:.2f}}}\\,\\%'
+
+            txt = AnchoredText(fr'$f_{{\mathrm{{remn}}}}={lbl}$',
                                frameon=True, loc='upper center')
 
-            tot.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
-            ax.add_artist(tot)
+            txt.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
+            ax.add_artist(txt)
 
         ax.legend()
 
@@ -2154,7 +2194,8 @@ class CIModelVisualizer(_ClusterVisualizer):
     '''
 
     @_ClusterVisualizer._support_units
-    def plot_f_rem(self, fig=None, ax=None, bins='auto', color='tab:blue'):
+    def plot_f_rem(self, fig=None, ax=None, bins='auto', color='tab:blue',
+                   verbose_label=True):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -2164,10 +2205,18 @@ class CIModelVisualizer(_ClusterVisualizer):
         ax.hist(self.f_rem, histtype='stepfilled',
                 bins=bins, ec=color, fc=facecolor, lw=2)
 
+        if verbose_label:
+            label = "Remnant Fraction"
+        else:
+            label = r'$f_{\mathrm{remn}}$'
+
+        self._set_xlabel(ax, label, unit=self.f_rem.unit)
+
         return fig
 
     @_ClusterVisualizer._support_units
-    def plot_f_BH(self, fig=None, ax=None, bins='auto', color='tab:blue'):
+    def plot_f_BH(self, fig=None, ax=None, bins='auto', color='tab:blue',
+                  verbose_label=True):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -2177,10 +2226,18 @@ class CIModelVisualizer(_ClusterVisualizer):
         ax.hist(self.f_BH, histtype='stepfilled',
                 bins=bins, ec=color, fc=facecolor, lw=2)
 
+        if verbose_label:
+            label = "BH Mass Fraction"
+        else:
+            label = r'$f_{\mathrm{BH}}$'
+
+        self._set_xlabel(ax, label, unit=self.f_BH.unit)
+
         return fig
 
     @_ClusterVisualizer._support_units
-    def plot_BH_mass(self, fig=None, ax=None, bins='auto', color='tab:blue'):
+    def plot_BH_mass(self, fig=None, ax=None, bins='auto', color='tab:blue',
+                     verbose_label=True):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -2190,10 +2247,18 @@ class CIModelVisualizer(_ClusterVisualizer):
         ax.hist(self.BH_mass, histtype='stepfilled',
                 bins=bins, ec=color, fc=facecolor, lw=2)
 
+        if verbose_label:
+            label = "BH Mass"
+        else:
+            label = r'$\mathrm{M}_{BH}$'
+
+        self._set_xlabel(ax, label, unit=self.BH_mass.unit)
+
         return fig
 
     @_ClusterVisualizer._support_units
-    def plot_BH_num(self, fig=None, ax=None, bins='auto', color='tab:blue'):
+    def plot_BH_num(self, fig=None, ax=None, bins='auto', color='tab:blue',
+                    verbose_label=True):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -2202,6 +2267,13 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         ax.hist(self.BH_num, histtype='stepfilled',
                 bins=bins, ec=color, fc=facecolor, lw=2)
+
+        if verbose_label:
+            label = "BH Amount"
+        else:
+            label = r'$\mathrm{N}_{BH}$'
+
+        self._set_xlabel(ax, label, unit=self.BH_num.unit)
 
         return fig
 
