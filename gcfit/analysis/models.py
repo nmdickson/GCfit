@@ -2194,7 +2194,8 @@ class CIModelVisualizer(_ClusterVisualizer):
     '''
 
     @_ClusterVisualizer._support_units
-    def plot_f_rem(self, fig=None, ax=None, bins='auto', color='tab:blue'):
+    def plot_f_rem(self, fig=None, ax=None, bins='auto', color='tab:blue',
+                   verbose_label=True):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -2204,10 +2205,18 @@ class CIModelVisualizer(_ClusterVisualizer):
         ax.hist(self.f_rem, histtype='stepfilled',
                 bins=bins, ec=color, fc=facecolor, lw=2)
 
+        if verbose_label:
+            label = "Remnant Fraction"
+        else:
+            label = r'$f_{\mathrm{remn}}$'
+
+        self._set_xlabel(ax, label, unit=self.f_rem.unit)
+
         return fig
 
     @_ClusterVisualizer._support_units
-    def plot_f_BH(self, fig=None, ax=None, bins='auto', color='tab:blue'):
+    def plot_f_BH(self, fig=None, ax=None, bins='auto', color='tab:blue',
+                  verbose_label=True):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -2217,10 +2226,18 @@ class CIModelVisualizer(_ClusterVisualizer):
         ax.hist(self.f_BH, histtype='stepfilled',
                 bins=bins, ec=color, fc=facecolor, lw=2)
 
+        if verbose_label:
+            label = "BH Mass Fraction"
+        else:
+            label = r'$f_{\mathrm{BH}}$'
+
+        self._set_xlabel(ax, label, unit=self.f_BH.unit)
+
         return fig
 
     @_ClusterVisualizer._support_units
-    def plot_BH_mass(self, fig=None, ax=None, bins='auto', color='tab:blue'):
+    def plot_BH_mass(self, fig=None, ax=None, bins='auto', color='tab:blue',
+                     verbose_label=True):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -2230,10 +2247,18 @@ class CIModelVisualizer(_ClusterVisualizer):
         ax.hist(self.BH_mass, histtype='stepfilled',
                 bins=bins, ec=color, fc=facecolor, lw=2)
 
+        if verbose_label:
+            label = "BH Mass"
+        else:
+            label = r'$\mathrm{M}_{BH}$'
+
+        self._set_xlabel(ax, label, unit=self.BH_mass.unit)
+
         return fig
 
     @_ClusterVisualizer._support_units
-    def plot_BH_num(self, fig=None, ax=None, bins='auto', color='tab:blue'):
+    def plot_BH_num(self, fig=None, ax=None, bins='auto', color='tab:blue',
+                    verbose_label=True):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -2242,6 +2267,13 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         ax.hist(self.BH_num, histtype='stepfilled',
                 bins=bins, ec=color, fc=facecolor, lw=2)
+
+        if verbose_label:
+            label = "BH Amount"
+        else:
+            label = r'$\mathrm{N}_{BH}$'
+
+        self._set_xlabel(ax, label, unit=self.BH_num.unit)
 
         return fig
 
