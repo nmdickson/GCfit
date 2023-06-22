@@ -1206,7 +1206,7 @@ class _ClusterVisualizer:
     @_support_units
     def plot_mass_func(self, fig=None, show_obs=True, show_fields=True, *,
                        PI_legend=False, propid_legend=False,
-                       label_unit='arcmin',
+                       label_unit='arcmin', model_color=None,
                        logscaled=False, field_kw=None, **kwargs):
         # TODO support using other x units (arcsec, pc) here and in MF plot
 
@@ -1315,6 +1315,10 @@ class _ClusterVisualizer:
                 # logic
                 # ----------------------------------------------------------
 
+                # If really desired, don't match model colour to bins
+                if model_color is not None:
+                    clr = model_color
+
                 # The mass domain is provided explicitly, to support visualizers
                 # which don't store the entire mass range (e.g. CImodels)
                 mj = rbin['mj']
@@ -1325,6 +1329,7 @@ class _ClusterVisualizer:
 
                 median = dNdm[midpoint]
 
+                # TODO zorder needs work here, noticeable when colors dont match
                 med_plot, = ax.plot(mj, median, color=clr)
 
                 alpha = 0.8 / (midpoint + 1)
