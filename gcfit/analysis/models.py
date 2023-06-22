@@ -1399,7 +1399,7 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_MF_fields(self, fig=None, ax=None, *, radii=("rh",),
-                       grid=True, label_grid=True):
+                       grid=True, label_grid=True, add_legend=True):
         '''plot all mass function fields in this observation
         '''
         import shapely.geometry as geom
@@ -1493,8 +1493,9 @@ class _ClusterVisualizer:
         ax.set_xlabel(r'$\Delta\,\mathrm{RA}\ [\mathrm{arcmin}]$')
         ax.set_ylabel(r'$\Delta\,\mathrm{DEC}\ [\mathrm{arcmin}]$')
 
-        # TODO figure out a better way of handling this always using best? (75)
-        ax.legend(loc='upper left' if grid else 'best')
+        if add_legend:
+            # TODO figure out a better way of handling this always using best?
+            ax.legend(loc='upper left' if grid else 'best')
 
         return fig
 
