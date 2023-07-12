@@ -325,7 +325,8 @@ class Field:
         path = Path(coords, codes)
         return PathPatch(path, *args, **kwargs)
 
-    def plot(self, ax, prev_sample=False, adjust_view=True, **kwargs):
+    def plot(self, ax, prev_sample=False, adjust_view=True, *,
+             sample_kw=None, **kwargs):
         '''Plot this field onto a given ax as a polygonal patch
 
         Given an already-initialized matplotlib axes, add a patch representing
@@ -350,6 +351,10 @@ class Field:
             Simply adding a patch to a plot will not move the view to match,
             and patches could end up outside of the window limits. This
             parameter corrects that.
+
+        sample_kw : dict, optional
+            kwargs to be passed to the `scatter` plot of the sample plot, if
+            `prev_sample=True`
         '''
 
         pt = ax.add_patch(self._patch(**kwargs))
@@ -358,9 +363,12 @@ class Field:
             try:
                 smpl = self._prev_sample
 
+                if sample_kw is None:
+                    sample_kw = {}
+
                 if hasattr(smpl, 'geom_type'):
                     smpl_xy = zip(*[p.xy for p in smpl.geoms])
-                    sc = ax.scatter(*smpl_xy, marker='.')
+                    sc = ax.scatter(*smpl_xy, **sample_kw)
                     sc.set_zorder(pt.zorder + 1)
 
                 else:
