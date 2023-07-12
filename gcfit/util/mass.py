@@ -359,7 +359,7 @@ class Field:
                 smpl = self._prev_sample
 
                 if hasattr(smpl, 'geom_type'):
-                    smpl_xy = zip(*[p.xy for p in smpl])
+                    smpl_xy = zip(*[p.xy for p in smpl.geoms])
                     sc = ax.scatter(*smpl_xy, marker='.')
                     sc.set_zorder(pt.zorder + 1)
 
@@ -369,7 +369,8 @@ class Field:
                     raise RuntimeError(mssg)
 
             except AttributeError:
-                mssg = "No previous sample, call `Field.MC_sample` first"
+                mssg = ("No previous sample, call `Field.MC_sample` with "
+                        "`return_points=True` first")
                 raise RuntimeError(mssg)
 
         if adjust_view:
