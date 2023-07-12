@@ -658,7 +658,7 @@ class Observations:
                 # Field
                 cen = (self.mdata['RA'], self.mdata['DEC'])
 
-                field = probabilities.mass.Field.from_dataset(self[key], cen)
+                field = util.mass.Field.from_dataset(self[key], cen)
 
                 comps.append((key, func, field))
 

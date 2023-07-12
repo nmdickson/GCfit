@@ -31,15 +31,6 @@ Prior Likelihood Functions
     priors.Priors
     priors.UniformPrior
     priors.GaussianPrior
-    
-
-Mass Function Utilities
------------------------
-.. autosummary::
-    :nosignatures:
-    :toctree: generated/
-
-    mass.Field
 
 
 Pulsar Likelihood Utilities

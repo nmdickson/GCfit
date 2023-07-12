@@ -922,8 +922,8 @@ def likelihood_mass_func(model, mf, field, *, hyperparams=False):
         and evaluate log likelihood
 
     field : dict
-        Dictionary of `gcfit.probability.mass.Field` field, as given by
-        `gcfit.probability.mass.initialize_fields`
+        Dictionary of `gcfit.util.mass.Field` field, as given by
+        `gcfit.util.mass.initialize_fields`
 
     hyperparams : bool, optional
         Whether to include bayesian hyperparameters
@@ -943,7 +943,7 @@ def likelihood_mass_func(model, mf, field, *, hyperparams=False):
 
     See Also
     --------
-    probability.mass.Field.MC_integrate :
+    util.mass.Field.MC_integrate :
         Monte Carlo integration method used to integrate the surface density
         profile
     '''
