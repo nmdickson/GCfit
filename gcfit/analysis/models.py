@@ -1471,8 +1471,9 @@ class _ClusterVisualizer:
         # Try to plot the various radii quantities from this model, if desired
         # ------------------------------------------------------------------
 
-        # TODO for CI this could be a CI of rh, ra, rt actually (60)
         valid_rs = {'rh', 'ra', 'rt', 'r0', 'rhp', 'rv'}
+
+        q = [84.13, 50., 15.87]
 
         for r_type in radii:
 
@@ -1481,10 +1482,28 @@ class _ClusterVisualizer:
                 mssg = f'radii must be one of {valid_rs}, not `{r_type}`'
                 raise TypeError(mssg)
 
-            radius = getattr(self, r_type).to_value('arcmin')
-            circle = np.array(geom.Point(0, 0).buffer(radius).exterior.coords).T
-            ax.plot(*circle, ls='--')
-            ax.text(0, circle[1].max(), r_type)
+            r_lbl = f'$r_{{{r_type[1:]}}}$'
+
+            radius = getattr(self, r_type).to('arcmin')
+
+            σr_u, r, σr_l = np.nanpercentile(radius, q=q)
+
+            # Plot median as line
+            mid = np.array(geom.Point(0, 0).buffer(r.value).exterior.coords).T
+            r_line = ax.plot(*mid, ls='--')[0]
+            ax.text(0, mid[1].max() * 1.05, r_lbl,
+                    c=r_line.get_color(), ha='center')
+
+            # Plot a polygon slice for the uncertainties
+            try:
+                outer = mass.Field(geom.Point(0, 0).buffer(σr_u.value))
+                uncert = outer.slice_radially(σr_l, σr_u)
+
+                uncert.plot(ax, alpha=0.1, fc=r_line.get_color())
+
+            # Couldn't plot, probably because this is a non-CI model
+            except ValueError:
+                pass
 
         # ------------------------------------------------------------------
         # Add plot labels and legends
