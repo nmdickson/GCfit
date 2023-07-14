@@ -33,10 +33,13 @@ class Field:
         coordinates will be centred around (0, 0). Defaults to assuming this
         centring has already happened
 
-    unit : str, optional
-        Unit associated with all coordinates. Must be provided if `cen` has
-        no units. Note that all coordinates will be converted to arcmin during
-        processing, this parameter only defines the input values.
+    unit : str or astropy.units.Unit, optional
+        Unit associated with all coordinates. Only angular units (deg, rad,
+        arcmin, etc.) are currently supported. Must be provided if `coords` has
+        no units. All input coordinates will be assumed to be in these units if
+        they do not have their own, and otherwise they will be converted to
+        this unit. This unit cannot be changed afterwards and all other
+        class functionality (e.g. sampling) will be based on it.
 
     preprep : bool, optional
         Whether to run `Field.prep` upon initialization. Defaults to False
@@ -73,17 +76,15 @@ class Field:
         RA, DEC = crd[:, 0], crd[:, 1]
 
         # Add and convert units to arcmin
-        if not hasattr(crd, 'unit'):
-            RA, DEC = RA << u.Unit(unit), DEC << u.Unit(unit)
-
+        RA, DEC = RA << u.Unit(unit), DEC << u.Unit(unit)
         cen <<= RA.unit
 
         # Centre and correct RA
         RA, DEC = (RA - cen[0]) * np.cos(DEC), DEC - cen[1]
 
-        RA, DEC = RA.to_value(u.arcmin), DEC.to_value(u.arcmin)
+        # RA, DEC = RA.to_value(u.arcmin), DEC.to_value(u.arcmin)
 
-        return np.c_[RA, DEC]
+        return np.c_[RA.value, DEC.value]
 
     def prep(self):
         '''Prepare the polygons for quicker containment searches'''
@@ -95,6 +96,7 @@ class Field:
         return self._prepped
 
     def __init__(self, coords, cen=(0, 0), unit=None, preprep=False):
+        # TODO does it make sense to try to support linear units at all?
 
         # ------------------------------------------------------------------
         # Parse the coords argument
@@ -107,15 +109,31 @@ class Field:
             self._multi = True
             coords = coords.geoms
 
-        # is a single polygon of coordinates
-        elif isinstance(coords, np.ndarray) and coords.ndim == 2:
-            self._multi = False
-            coords = self._correct(coords, cen, unit)
-
-        # assume it's iterable of coords or polygons
         else:
-            self._multi = True
-            coords = [self._correct(c, cen, unit) for c in coords]
+
+            # try to get the unit from coords if not given (error below if cant)
+            if (unit := (unit or getattr(coords, 'unit', None))) is not None:
+
+                # is a single polygon of coordinates
+                if isinstance(coords, np.ndarray) and coords.ndim == 2:
+                    self._multi = False
+                    coords = self._correct(coords, cen, unit)
+
+                # assume it's iterable of coords or polygons
+                else:
+                    self._multi = True
+                    coords = [self._correct(c, cen, unit) for c in coords]
+
+        # ------------------------------------------------------------------
+        # Check the units
+        # ------------------------------------------------------------------
+
+        if unit is None:
+            mssg = "'unit' must be provided if 'coords' has no units"
+            raise ValueError(mssg)
+
+        else:
+            self.unit = u.Unit(unit)
 
         # ------------------------------------------------------------------
         # Set up the polygons
@@ -141,7 +159,7 @@ class Field:
             self.prep()
 
         # Compute polygon area, in correct units
-        self.area = self.polygon.area << u.arcmin**2
+        self.area = self.polygon.area << self.unit**2
 
     @classmethod
     def from_dataset(cls, dataset, cen):
@@ -165,14 +183,19 @@ class Field:
     def slice_radially(self, r1, r2):
         '''Return a new field representing a radial "slice" of this field'''
 
-        # make sure that r1,r2 are in arcmin
-        r1, r2 = r1.to_value('arcmin'), r2.to_value('arcmin')
+        # make sure that r1,r2 are in correct units (fine with requiring them)
+        r1, r2 = r1.to_value(self.unit), r2.to_value(self.unit)
 
         origin = geom.Point((0, 0))
 
         shell = origin.buffer(r2) - origin.buffer(r1)
 
-        return Field(self.polygon & shell)
+        return Field(self.polygon & shell, unit=self.unit)
+
+    # def convert(self, unit):
+    #     '''return a copy of this field with different units for some reason'''
+    #   raise NotImplementedError("This is too hard to convert polygons for
+    #                              re-init. Just convert your own units before")
 
     def MC_sample(self, M, return_points=False):
         '''Randomly sample `M` points from this field
@@ -244,8 +267,8 @@ class Field:
         if return_points:
             self._prev_sample = geom.MultiPoint(points)
         else:
-            origin = geom.Point((0, 0))
-            self._prev_sample = [p.distance(origin) for p in points] << u.arcmin
+            orig = geom.Point((0, 0))
+            self._prev_sample = [p.distance(orig) for p in points] << self.unit
 
         return self._prev_sample
 
@@ -303,7 +326,7 @@ class Field:
     # Plotting functionality
     # ----------------------------------------------------------------------
 
-    def _patch(self, *args, **kwargs):
+    def _patch(self, unit='arcmin', *args, **kwargs):
         '''Create a `PathPatch` based on the polygon boundaries'''
         from matplotlib.path import Path
         from matplotlib.patches import PathPatch
@@ -322,10 +345,10 @@ class Field:
                 codes += ([Path.LINETO] * (len(line.coords) - 2))
                 codes += [Path.CLOSEPOLY]
 
-        path = Path(coords, codes)
+        path = Path((coords << self.unit).to(unit), codes)
         return PathPatch(path, *args, **kwargs)
 
-    def plot(self, ax, prev_sample=False, adjust_view=True, *,
+    def plot(self, ax, prev_sample=False, adjust_view=True, *, unit='arcmin',
              sample_kw=None, **kwargs):
         '''Plot this field onto a given ax as a polygonal patch
 
@@ -352,12 +375,18 @@ class Field:
             and patches could end up outside of the window limits. This
             parameter corrects that.
 
+        unit : str or astropy.units.Unit, optional
+            Unit to convert all coordinates to before plotting. The default
+            is "arcmin", not the current unit, to ensure easier consistent
+            plotting between multiple fields, as `astropy.visualization` is
+            not enough to convert `Patch` coordinates correctly.
+
         sample_kw : dict, optional
             kwargs to be passed to the `scatter` plot of the sample plot, if
             `prev_sample=True`
         '''
 
-        pt = ax.add_patch(self._patch(**kwargs))
+        pt = ax.add_patch(self._patch(unit=unit, **kwargs))
 
         if prev_sample:
             try:
@@ -367,8 +396,8 @@ class Field:
                     sample_kw = {}
 
                 if hasattr(smpl, 'geom_type'):
-                    smpl_xy = zip(*[p.xy for p in smpl.geoms])
-                    sc = ax.scatter(*smpl_xy, **sample_kw)
+                    smpl_xy = ([p.xy for p in smpl.geoms] << self.unit).to(unit)
+                    sc = ax.scatter(*smpl_xy.reshape(-1, 2).T, **sample_kw)
                     sc.set_zorder(pt.zorder + 1)
 
                 else:
