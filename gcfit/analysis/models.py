@@ -1218,6 +1218,8 @@ class _ClusterVisualizer:
         # extra ax for the field plot if desired
         # ------------------------------------------------------------------
 
+        ax_ind = 0
+
         N_rbins = sum([len(d) for d in self.mass_func.values()])
         shape = ((int(np.ceil(N_rbins / 2)), int(np.floor(N_rbins / 2))), 2)
 
@@ -1225,11 +1227,14 @@ class _ClusterVisualizer:
         if show_fields:
             shape = ((1, *shape[0]), shape[1] + 1)
 
+        # if it looks like this comes from a past call, try to preserve MF ax
+        elif fig is not None and len(fig.axes) == (N_rbins + 1):
+            shape = ((1, *shape[0]), shape[1] + 1)
+            ax_ind = 1
+
         fig, axes = self._setup_multi_artist(fig, shape, sharex=True)
 
         axes = axes.T.flatten()
-
-        ax_ind = 0
 
         # ------------------------------------------------------------------
         # If desired, use the `plot_MF_fields` method to show the fields
@@ -1400,7 +1405,7 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_MF_fields(self, fig=None, ax=None, *, unit='arcmin', radii=("rh",),
-                       grid=False, label_grid=True, add_legend=True):
+                       grid=True, label_grid=False, add_legend=True):
         '''plot all mass function fields in this observation
         '''
         import shapely.geometry as geom
