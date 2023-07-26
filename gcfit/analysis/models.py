@@ -1,5 +1,5 @@
 from .. import util
-from ..probabilities import mass
+from ..util import mass
 from ..core.data import Observations, FittableModel
 
 import h5py
@@ -1206,7 +1206,7 @@ class _ClusterVisualizer:
     @_support_units
     def plot_mass_func(self, fig=None, show_obs=True, show_fields=True, *,
                        PI_legend=False, propid_legend=False,
-                       label_unit='arcmin',
+                       label_unit='arcmin', model_color=None, model_label=None,
                        logscaled=False, field_kw=None, **kwargs):
         # TODO support using other x units (arcsec, pc) here and in MF plot
 
@@ -1218,6 +1218,8 @@ class _ClusterVisualizer:
         # extra ax for the field plot if desired
         # ------------------------------------------------------------------
 
+        ax_ind = 0
+
         N_rbins = sum([len(d) for d in self.mass_func.values()])
         shape = ((int(np.ceil(N_rbins / 2)), int(np.floor(N_rbins / 2))), 2)
 
@@ -1225,11 +1227,14 @@ class _ClusterVisualizer:
         if show_fields:
             shape = ((1, *shape[0]), shape[1] + 1)
 
+        # if it looks like this comes from a past call, try to preserve MF ax
+        elif fig is not None and len(fig.axes) == (N_rbins + 1):
+            shape = ((1, *shape[0]), shape[1] + 1)
+            ax_ind = 1
+
         fig, axes = self._setup_multi_artist(fig, shape, sharex=True)
 
         axes = axes.T.flatten()
-
-        ax_ind = 0
 
         # ------------------------------------------------------------------
         # If desired, use the `plot_MF_fields` method to show the fields
@@ -1243,6 +1248,7 @@ class _ClusterVisualizer:
                 field_kw = {}
 
             field_kw.setdefault('radii', [])
+            field_kw.setdefault('unit', label_unit)
 
             self.plot_MF_fields(fig, ax, **field_kw)
 
@@ -1278,6 +1284,10 @@ class _ClusterVisualizer:
                 if propid_legend:
                     label += f" ({mf.mdata['proposal']})"
 
+            # Make sure we're not already labeling in a field plot
+            if show_fields and field_kw.get('add_legend', True):
+                label = ''
+
             # --------------------------------------------------------------
             # Iterate over radial bin dicts for this PI
             # --------------------------------------------------------------
@@ -1287,7 +1297,7 @@ class _ClusterVisualizer:
 
                 ax = axes[ax_ind]
 
-                clr = rbin.get('colour', None)
+                data_clr = rbin.get('colour', None)
 
                 # ----------------------------------------------------------
                 # Plot observations
@@ -1304,16 +1314,19 @@ class _ClusterVisualizer:
                     err = self.F * err_data
 
                     pnts = ax.errorbar(mbin_mean[r_mask], N_data, yerr=err,
-                                       marker='o', color=clr, ls='none',
+                                       marker='o', color=data_clr, ls='none',
                                        **kwargs)
 
-                    clr = pnts[0].get_color()
+                    data_clr = pnts[0].get_color()
 
                 # ----------------------------------------------------------
                 # Plot model. Doesn't utilize the `_plot_profile` method, as
                 # this is *not* a profile, but does use similar, but simpler,
                 # logic
                 # ----------------------------------------------------------
+
+                # If really desired, don't match model colour to bins
+                model_clr = model_color if model_color is not None else data_clr
 
                 # The mass domain is provided explicitly, to support visualizers
                 # which don't store the entire mass range (e.g. CImodels)
@@ -1325,7 +1338,8 @@ class _ClusterVisualizer:
 
                 median = dNdm[midpoint]
 
-                med_plot, = ax.plot(mj, median, color=clr)
+                # TODO zorder needs work here, noticeable when colors dont match
+                med_plot, = ax.plot(mj, median, color=model_clr)
 
                 alpha = 0.8 / (midpoint + 1)
                 for sigma in range(1, midpoint + 1):
@@ -1334,7 +1348,7 @@ class _ClusterVisualizer:
                         mj,
                         dNdm[midpoint + sigma],
                         dNdm[midpoint - sigma],
-                        alpha=1 - alpha, color=clr
+                        alpha=1 - alpha, color=model_clr
                     )
 
                     alpha += alpha
@@ -1370,10 +1384,10 @@ class _ClusterVisualizer:
                 leg_kw = {'handlelength': 0, 'handletextpad': 0}
 
                 # If this is the first bin, also add a PI tag
-                if label and not rind and not show_fields:
+                if label and not rind:
                     lbl_fake = plt.Line2D([], [], label=label)
                     handles.append(lbl_fake)
-                    leg_kw['labelcolor'] = ['k', clr]
+                    leg_kw['labelcolor'] = ['k', data_clr]
 
                 ax.legend(handles=handles, **leg_kw)
 
@@ -1388,13 +1402,45 @@ class _ClusterVisualizer:
             # sf.supxlabel(r'Mass [$M_\odot$]')
             sf.axes[-1].set_xlabel(r'Mass [$M_\odot$]')
 
-        fig.subfigs[show_fields].supylabel('dN/dm')
+        fig.subfigs[show_fields].supylabel(r'$\mathrm{d}N / \mathrm{d}m$')
+
+        # TODO this is a pretty messy way to do this, but legends are messy
+        #   location placement is a bit broken, but plots are so busy already
+        if model_label:
+
+            # TODO can't get "outside" loc keyword to work in subfigs
+            loc = dict(loc='upper center', ncols=3)
+
+            if len(shape[0]) == 3:  # has field plot
+                sf = fig.subfigs[0]
+                loc['bbox_to_anchor'] = (0.5, 1.0)
+
+            else:
+                sf = fig.subfigs[-1]
+                loc['bbox_to_anchor'] = (0.5, 1.05)
+
+            if model_color is None:
+                mssg = ("cannot label a model which was not explicitly given a "
+                        "single separate colour (`model_color`)")
+                raise ValueError(mssg)
+
+            lbl_fake = plt.Line2D([], [], label=model_label, color=model_color)
+
+            if sf.legends:
+                old_leg = sf.legends[0]
+                handles = old_leg.legendHandles + [lbl_fake]
+
+                sf.legend(handles=handles, **loc)
+                old_leg.remove()
+
+            else:
+                sf.legend(handles=[lbl_fake], **loc)
 
         return fig
 
     @_support_units
-    def plot_MF_fields(self, fig=None, ax=None, *, radii=("rh",),
-                       grid=True, label_grid=True):
+    def plot_MF_fields(self, fig=None, ax=None, *, unit='arcmin', radii=("rh",),
+                       grid=True, label_grid=False, add_legend=True):
         '''plot all mass function fields in this observation
         '''
         import shapely.geometry as geom
@@ -1403,6 +1449,19 @@ class _ClusterVisualizer:
 
         # Centre dot
         ax.plot(0, 0, 'kx')
+
+        # ------------------------------------------------------------------
+        # Parse units
+        # ------------------------------------------------------------------
+        # TODO do we support non-angular units correctly?
+
+        unit = u.Unit(unit)
+
+        if unit in (u.arcmin, u.arcsec):
+            unit_lbl = fr"\mathrm{{{unit}}}"
+            short_unit_lbl = f"{unit:latex}".strip('$')
+        else:
+            unit_lbl = short_unit_lbl = f"{unit:latex}".strip('$')
 
         # ------------------------------------------------------------------
         # Iterate over each PI and it's radial bins
@@ -1423,7 +1482,8 @@ class _ClusterVisualizer:
 
                 clr = rbin.get("colour", None)
 
-                rbin['field'].plot(ax, fc=clr, alpha=0.7, ec='k', label=lbl)
+                rbin['field'].plot(ax, fc=clr, alpha=0.7, ec='k',
+                                   label=lbl, unit=unit)
 
                 # make this label private so it's only added once to legend
                 lbl = f'_{lbl}'
@@ -1440,10 +1500,12 @@ class _ClusterVisualizer:
             # TODO this should probably use distance to furthest field
 
             try:
-                rt = np.nanmedian(self.rt).to_value('arcmin') + 2
-                ticks = np.arange(2, rt, 2)
+                rt = np.nanmedian(self.rt).to_value(unit) + 2
             except AttributeError:
-                ticks = np.arange(2, 20, 2)
+                rt = (20 << u.arcmin).to_value(unit)
+
+            stepsize = (2 << u.arcmin).to_value(unit)
+            ticks = np.arange(2, rt, stepsize)
 
             # make sure this grid matches normal grids
             grid_kw = {
@@ -1459,15 +1521,17 @@ class _ClusterVisualizer:
                 gr_line, = ax.plot(*circle, **grid_kw)
 
                 if label_grid:
-                    ax.annotate(f'{gr:.0f}"', xy=(circle[0].max(), 0),
+                    ax.annotate(f'${gr:.0f}{short_unit_lbl}$',
+                                xy=(circle[0].max(), 0),
                                 color=grid_kw['color'])
 
         # ------------------------------------------------------------------
         # Try to plot the various radii quantities from this model, if desired
         # ------------------------------------------------------------------
 
-        # TODO for CI this could be a CI of rh, ra, rt actually (60)
         valid_rs = {'rh', 'ra', 'rt', 'r0', 'rhp', 'rv'}
+
+        q = [84.13, 50., 15.87]
 
         for r_type in radii:
 
@@ -1476,20 +1540,39 @@ class _ClusterVisualizer:
                 mssg = f'radii must be one of {valid_rs}, not `{r_type}`'
                 raise TypeError(mssg)
 
-            radius = getattr(self, r_type).to_value('arcmin')
-            circle = np.array(geom.Point(0, 0).buffer(radius).exterior.coords).T
-            ax.plot(*circle, ls='--')
-            ax.text(0, circle[1].max(), r_type)
+            r_lbl = f'$r_{{{r_type[1:]}}}$'
+
+            radius = getattr(self, r_type).to(unit)
+
+            σr_u, r, σr_l = np.nanpercentile(radius, q=q)
+
+            # Plot median as line
+            mid = np.array(geom.Point(0, 0).buffer(r.value).exterior.coords).T
+            r_line = ax.plot(*mid, ls='--')[0]
+            ax.text(0, mid[1].max() * 1.05, r_lbl,
+                    c=r_line.get_color(), ha='center')
+
+            # Plot a polygon slice for the uncertainties
+            try:
+                outer = mass.Field(geom.Point(0, 0).buffer(σr_u.value))
+                uncert = outer.slice_radially(σr_l, σr_u)
+
+                uncert.plot(ax, alpha=0.1, fc=r_line.get_color())
+
+            # Couldn't plot, probably because this is a non-CI model
+            except ValueError:
+                pass
 
         # ------------------------------------------------------------------
         # Add plot labels and legends
         # ------------------------------------------------------------------
 
-        ax.set_xlabel(r'$\Delta\,\mathrm{RA}\ [\mathrm{arcmin}]$')
-        ax.set_ylabel(r'$\Delta\,\mathrm{DEC}\ [\mathrm{arcmin}]$')
+        ax.set_xlabel(rf'$\Delta\,\mathrm{{RA}}\ \left[{unit_lbl}\right]$')
+        ax.set_ylabel(rf'$\Delta\,\mathrm{{DEC}}\ \left[{unit_lbl}\right]$')
 
-        # TODO figure out a better way of handling this always using best? (75)
-        ax.legend(loc='upper left' if grid else 'best')
+        if add_legend:
+            # TODO figure out a better way of handling this always using best?
+            ax.legend(loc='upper left' if grid else 'best')
 
         return fig
 

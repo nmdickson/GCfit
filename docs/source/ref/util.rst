@@ -42,3 +42,12 @@ Probability Utility Functions
     hyperparam_effective
     div_error
     trim_peaks
+
+
+Mass Function Utilities
+-----------------------
+.. autosummary::
+    :nosignatures:
+    :toctree: generated/
+
+    mass.Field
