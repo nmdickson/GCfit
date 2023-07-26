@@ -1206,7 +1206,7 @@ class _ClusterVisualizer:
     @_support_units
     def plot_mass_func(self, fig=None, show_obs=True, show_fields=True, *,
                        PI_legend=False, propid_legend=False,
-                       label_unit='arcmin', model_color=None,
+                       label_unit='arcmin', model_color=None, model_label=None,
                        logscaled=False, field_kw=None, **kwargs):
         # TODO support using other x units (arcsec, pc) here and in MF plot
 
@@ -1403,6 +1403,38 @@ class _ClusterVisualizer:
             sf.axes[-1].set_xlabel(r'Mass [$M_\odot$]')
 
         fig.subfigs[show_fields].supylabel('dN/dm')
+
+        # TODO this is a pretty messy way to do this, but legends are messy
+        #   location placement is a bit broken, but plots are so busy already
+        if model_label:
+
+            # TODO can't get "outside" loc keyword to work in subfigs
+            loc = dict(loc='upper center', ncols=3)
+
+            if len(shape[0]) == 3:  # has field plot
+                sf = fig.subfigs[0]
+                loc['bbox_to_anchor'] = (0.5, 1.0)
+
+            else:
+                sf = fig.subfigs[-1]
+                loc['bbox_to_anchor'] = (0.5, 1.05)
+
+            if model_color is None:
+                mssg = ("cannot label a model which was not explicitly given a "
+                        "single separate colour (`model_color`)")
+                raise ValueError(mssg)
+
+            lbl_fake = plt.Line2D([], [], label=model_label, color=model_color)
+
+            if sf.legends:
+                old_leg = sf.legends[0]
+                handles = old_leg.legendHandles + [lbl_fake]
+
+                sf.legend(handles=handles, **loc)
+                old_leg.remove()
+
+            else:
+                sf.legend(handles=[lbl_fake], **loc)
 
         return fig
 
