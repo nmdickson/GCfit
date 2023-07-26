@@ -342,7 +342,8 @@ class _ClusterVisualizer:
                 return None
 
     def _plot_model(self, ax, data, intervals=None, *,
-                    x_data=None, x_unit='pc', y_unit=None, scale=1.0,
+                    x_data=None, x_unit='pc', y_unit=None,
+                    scale=1.0, background=0.0,
                     CI_kwargs=None, **kwargs):
 
         CI_kwargs = dict() if CI_kwargs is None else CI_kwargs
@@ -386,6 +387,12 @@ class _ClusterVisualizer:
             data = data.to(y_unit)
 
         # ------------------------------------------------------------------
+        # Subtract background value
+        # ------------------------------------------------------------------
+
+        data -= (background << data.unit)
+
+        # ------------------------------------------------------------------
         # Plot the median (assumed to be the middle axis of the intervals)
         # ------------------------------------------------------------------
 
@@ -417,7 +424,7 @@ class _ClusterVisualizer:
 
     def _plot_data(self, ax, dataset, y_key, *,
                    x_key='r', x_unit='pc', y_unit=None,
-                   err_transform=None, scale=1.0, **kwargs):
+                   err_transform=None, scale=1.0, background=0.0, **kwargs):
 
         # ------------------------------------------------------------------
         # Get data and relevant errors for plotting
@@ -438,6 +445,12 @@ class _ClusterVisualizer:
 
         if y_unit is not None:
             ydata = ydata.to(y_unit)
+
+        # ------------------------------------------------------------------
+        # Subtract background value
+        # ------------------------------------------------------------------
+
+        ydata -= (background << ydata.unit)
 
         # ------------------------------------------------------------------
         # If given, transform errors based on `err_transform` function
@@ -1007,7 +1020,8 @@ class _ClusterVisualizer:
         return fig
 
     @_support_units
-    def plot_number_density(self, fig=None, ax=None, show_background=False,
+    def plot_number_density(self, fig=None, ax=None,
+                            show_background=False, subtract_background=False,
                             show_obs=True, residuals=False, *,
                             x_unit='pc', y_unit='1/pc2', scale_to='model',
                             label_position='top', verbose_label=True,
@@ -1019,9 +1033,18 @@ class _ClusterVisualizer:
         def quad_nuisance(err):
             return np.sqrt(err**2 + (self.s2 << u.arcmin**-4))
 
+        # ------------------------------------------------------------------
+        # Setup the figures
+        # ------------------------------------------------------------------
+
         fig, ax = self._setup_artist(fig, ax)
 
-        ax.loglog()
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+
+        # ------------------------------------------------------------------
+        # Determine the datasets to plot
+        # ------------------------------------------------------------------
 
         if show_obs:
             pattern, var = '*number_density*', 'Σ'
@@ -1035,6 +1058,10 @@ class _ClusterVisualizer:
         else:
             pattern = var = None
             strict = False
+
+        # ------------------------------------------------------------------
+        # Compute the scaling relations if necessary
+        # ------------------------------------------------------------------
 
         try:
             if scale_to == 'model':
@@ -1050,14 +1077,20 @@ class _ClusterVisualizer:
         except TypeError:
             pass
 
-        ax, res_ax = self._plot_profile(ax, pattern, var, self.numdens,
-                                        strict=strict, residuals=residuals,
-                                        x_unit=x_unit, y_unit=y_unit,
-                                        model_kwargs=model_kwargs,
-                                        data_kwargs=data_kwargs,
-                                        res_kwargs=res_kwargs, **kwargs)
+        # ------------------------------------------------------------------
+        # Compute and optionally plot the background
+        # ------------------------------------------------------------------
 
-        if show_background:
+        if show_background and subtract_background:
+            mssg = ("Cannot both 'show_background' and 'subtract_background' "
+                    "at same time")
+            raise ValueError(mssg)
+
+        elif show_background or subtract_background:
+
+            # --------------------------------------------------------------
+            # Compute the background
+            # --------------------------------------------------------------
 
             if self.obs is None:
                 mssg = "No observations for this model; cannot plot background"
@@ -1070,8 +1103,6 @@ class _ClusterVisualizer:
                 if scale_to == 'model' and self.K_scale is not None:
                     background /= self.K_scale[self.star_bin]
 
-                ax.axhline(y=background, ls='--', c='black', alpha=0.66)
-
             except IndexError as err:
                 mssg = ('No number density profile data found, '
                         'cannot compute background')
@@ -1079,6 +1110,31 @@ class _ClusterVisualizer:
             except KeyError as err:
                 mssg = 'No background level found in number density metadata'
                 raise RuntimeError(mssg) from err
+
+            # --------------------------------------------------------------
+            # Plot the background
+            # --------------------------------------------------------------
+
+            if show_background:
+                ax.axhline(y=background, ls='--', c='black', alpha=0.66)
+
+            elif subtract_background:
+                data_kwargs['background'] = background
+
+        # ------------------------------------------------------------------
+        # Plot number denstiy profiles
+        # ------------------------------------------------------------------
+
+        ax, res_ax = self._plot_profile(ax, pattern, var, self.numdens,
+                                        strict=strict, residuals=residuals,
+                                        x_unit=x_unit, y_unit=y_unit,
+                                        model_kwargs=model_kwargs,
+                                        data_kwargs=data_kwargs,
+                                        res_kwargs=res_kwargs, **kwargs)
+
+        # ------------------------------------------------------------------
+        # Add legends and labels
+        # ------------------------------------------------------------------
 
         leg = ax.legend()
         if not leg.legendHandles:
