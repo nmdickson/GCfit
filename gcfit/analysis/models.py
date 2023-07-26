@@ -2579,7 +2579,10 @@ class CIModelVisualizer(_ClusterVisualizer):
         mmean = np.full(N, np.nan) << huge_model.mmean.unit
         volume = np.full(N, np.nan) << huge_model.volume.unit
 
+        # BH derived quantities
+
         BH_rh = np.full(N, np.nan) << huge_model.BH.rh.unit
+        spitz_chi = np.full(N, np.nan) << u.dimensionless_unscaled
 
         # ------------------------------------------------------------------
         # Setup iteration and pooling
@@ -2679,6 +2682,7 @@ class CIModelVisualizer(_ClusterVisualizer):
             volume[model_ind] = model.volume
 
             BH_rh[model_ind] = model.BH.rh
+            spitz_chi[model_ind] = model._spitzer_chi
 
         # ------------------------------------------------------------------
         # compute and store the percentiles and medians
@@ -2744,6 +2748,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         viz.volume = volume
 
         viz.BH_rh = BH_rh
+        viz.spitzer_chi = spitz_chi
 
         return viz
 
@@ -3035,8 +3040,8 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             quant_keys = (
                 'f_rem', 'f_BH', 'BH_mass', 'BH_num',
-                'r0', 'rt', 'rh', 'rhp', 'ra', 'rv', 'mmean', 'volume', 'BH_rh',
-                'K_scale'
+                'r0', 'rt', 'rh', 'rhp', 'ra', 'rv', 'mmean', 'volume',
+                'BH_rh', 'spitzer_chi', 'K_scale'
             )
 
             for key in quant_keys:
