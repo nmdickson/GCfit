@@ -1286,7 +1286,7 @@ class _ClusterVisualizer:
 
             # Make sure we're not already labeling in a field plot
             if show_fields and field_kw.get('add_legend', True):
-                label = None
+                label = ''
 
             # --------------------------------------------------------------
             # Iterate over radial bin dicts for this PI
@@ -1297,7 +1297,7 @@ class _ClusterVisualizer:
 
                 ax = axes[ax_ind]
 
-                clr = rbin.get('colour', None)
+                data_clr = rbin.get('colour', None)
 
                 # ----------------------------------------------------------
                 # Plot observations
@@ -1314,10 +1314,10 @@ class _ClusterVisualizer:
                     err = self.F * err_data
 
                     pnts = ax.errorbar(mbin_mean[r_mask], N_data, yerr=err,
-                                       marker='o', color=clr, ls='none',
+                                       marker='o', color=data_clr, ls='none',
                                        **kwargs)
 
-                    clr = pnts[0].get_color()
+                    data_clr = pnts[0].get_color()
 
                 # ----------------------------------------------------------
                 # Plot model. Doesn't utilize the `_plot_profile` method, as
@@ -1326,8 +1326,7 @@ class _ClusterVisualizer:
                 # ----------------------------------------------------------
 
                 # If really desired, don't match model colour to bins
-                if model_color is not None:
-                    clr = model_color
+                model_clr = model_color if model_color is not None else data_clr
 
                 # The mass domain is provided explicitly, to support visualizers
                 # which don't store the entire mass range (e.g. CImodels)
@@ -1340,7 +1339,7 @@ class _ClusterVisualizer:
                 median = dNdm[midpoint]
 
                 # TODO zorder needs work here, noticeable when colors dont match
-                med_plot, = ax.plot(mj, median, color=clr)
+                med_plot, = ax.plot(mj, median, color=model_clr)
 
                 alpha = 0.8 / (midpoint + 1)
                 for sigma in range(1, midpoint + 1):
@@ -1349,7 +1348,7 @@ class _ClusterVisualizer:
                         mj,
                         dNdm[midpoint + sigma],
                         dNdm[midpoint - sigma],
-                        alpha=1 - alpha, color=clr
+                        alpha=1 - alpha, color=model_clr
                     )
 
                     alpha += alpha
@@ -1388,7 +1387,7 @@ class _ClusterVisualizer:
                 if label and not rind:
                     lbl_fake = plt.Line2D([], [], label=label)
                     handles.append(lbl_fake)
-                    leg_kw['labelcolor'] = ['k', clr]
+                    leg_kw['labelcolor'] = ['k', data_clr]
 
                 ax.legend(handles=handles, **leg_kw)
 
