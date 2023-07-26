@@ -674,7 +674,7 @@ class Observations:
 
 # Attributes namespace for storing various attrs for individual stellar types
 _attributes = namedtuple(
-    'attributes',
+    '_attributes',
     ['mj', 'Mj', 'Nj', 'mavg', 'rhoj', 'Sigmaj', 'f', 'rh'],
     defaults=[None, ] * 8
 )
