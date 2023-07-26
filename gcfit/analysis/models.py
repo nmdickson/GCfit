@@ -1,5 +1,5 @@
 from .. import util
-from ..probabilities import mass
+from ..util import mass
 from ..core.data import Observations, FittableModel
 
 import h5py
@@ -1243,6 +1243,7 @@ class _ClusterVisualizer:
                 field_kw = {}
 
             field_kw.setdefault('radii', [])
+            field_kw.setdefault('unit', label_unit)
 
             self.plot_MF_fields(fig, ax, **field_kw)
 
@@ -1398,8 +1399,8 @@ class _ClusterVisualizer:
         return fig
 
     @_support_units
-    def plot_MF_fields(self, fig=None, ax=None, *, radii=("rh",),
-                       grid=True, label_grid=True, add_legend=True):
+    def plot_MF_fields(self, fig=None, ax=None, *, unit='arcmin', radii=("rh",),
+                       grid=False, label_grid=True, add_legend=True):
         '''plot all mass function fields in this observation
         '''
         import shapely.geometry as geom
@@ -1408,6 +1409,19 @@ class _ClusterVisualizer:
 
         # Centre dot
         ax.plot(0, 0, 'kx')
+
+        # ------------------------------------------------------------------
+        # Parse units
+        # ------------------------------------------------------------------
+        # TODO do we support non-angular units correctly?
+
+        unit = u.Unit(unit)
+
+        if unit in (u.arcmin, u.arcsec):
+            unit_lbl = fr"\mathrm{{{unit}}}"
+            short_unit_lbl = f"{unit:latex}".strip('$')
+        else:
+            unit_lbl = short_unit_lbl = f"{unit:latex}".strip('$')
 
         # ------------------------------------------------------------------
         # Iterate over each PI and it's radial bins
@@ -1428,7 +1442,8 @@ class _ClusterVisualizer:
 
                 clr = rbin.get("colour", None)
 
-                rbin['field'].plot(ax, fc=clr, alpha=0.7, ec='k', label=lbl)
+                rbin['field'].plot(ax, fc=clr, alpha=0.7, ec='k',
+                                   label=lbl, unit=unit)
 
                 # make this label private so it's only added once to legend
                 lbl = f'_{lbl}'
@@ -1445,10 +1460,12 @@ class _ClusterVisualizer:
             # TODO this should probably use distance to furthest field
 
             try:
-                rt = np.nanmedian(self.rt).to_value('arcmin') + 2
-                ticks = np.arange(2, rt, 2)
+                rt = np.nanmedian(self.rt).to_value(unit) + 2
             except AttributeError:
-                ticks = np.arange(2, 20, 2)
+                rt = (20 << u.arcmin).to_value(unit)
+
+            stepsize = (2 << u.arcmin).to_value(unit)
+            ticks = np.arange(2, rt, stepsize)
 
             # make sure this grid matches normal grids
             grid_kw = {
@@ -1464,7 +1481,8 @@ class _ClusterVisualizer:
                 gr_line, = ax.plot(*circle, **grid_kw)
 
                 if label_grid:
-                    ax.annotate(f'{gr:.0f}"', xy=(circle[0].max(), 0),
+                    ax.annotate(f'${gr:.0f}{short_unit_lbl}$',
+                                xy=(circle[0].max(), 0),
                                 color=grid_kw['color'])
 
         # ------------------------------------------------------------------
@@ -1484,7 +1502,7 @@ class _ClusterVisualizer:
 
             r_lbl = f'$r_{{{r_type[1:]}}}$'
 
-            radius = getattr(self, r_type).to('arcmin')
+            radius = getattr(self, r_type).to(unit)
 
             σr_u, r, σr_l = np.nanpercentile(radius, q=q)
 
@@ -1509,8 +1527,8 @@ class _ClusterVisualizer:
         # Add plot labels and legends
         # ------------------------------------------------------------------
 
-        ax.set_xlabel(r'$\Delta\,\mathrm{RA}\ [\mathrm{arcmin}]$')
-        ax.set_ylabel(r'$\Delta\,\mathrm{DEC}\ [\mathrm{arcmin}]$')
+        ax.set_xlabel(rf'$\Delta\,\mathrm{{RA}}\ \left[{unit_lbl}\right]$')
+        ax.set_ylabel(rf'$\Delta\,\mathrm{{DEC}}\ \left[{unit_lbl}\right]$')
 
         if add_legend:
             # TODO figure out a better way of handling this always using best?
