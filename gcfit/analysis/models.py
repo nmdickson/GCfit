@@ -2579,6 +2579,8 @@ class CIModelVisualizer(_ClusterVisualizer):
         mmean = np.full(N, np.nan) << huge_model.mmean.unit
         volume = np.full(N, np.nan) << huge_model.volume.unit
 
+        BH_rh = np.full(N, np.nan) << huge_model.BH.rh.unit
+
         # ------------------------------------------------------------------
         # Setup iteration and pooling
         # ------------------------------------------------------------------
@@ -2676,6 +2678,8 @@ class CIModelVisualizer(_ClusterVisualizer):
             mmean[model_ind] = model.mmean
             volume[model_ind] = model.volume
 
+            BH_rh[model_ind] = model.BH.rh
+
         # ------------------------------------------------------------------
         # compute and store the percentiles and medians
         # ------------------------------------------------------------------
@@ -2738,6 +2742,8 @@ class CIModelVisualizer(_ClusterVisualizer):
         viz.rv = rv
         viz.mmean = mmean
         viz.volume = volume
+
+        viz.BH_rh = BH_rh
 
         return viz
 
@@ -3029,7 +3035,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             quant_keys = (
                 'f_rem', 'f_BH', 'BH_mass', 'BH_num',
-                'r0', 'rt', 'rh', 'rhp', 'ra', 'rv', 'mmean', 'volume',
+                'r0', 'rt', 'rh', 'rhp', 'ra', 'rv', 'mmean', 'volume', 'BH_rh',
                 'K_scale'
             )
 
