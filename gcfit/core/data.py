@@ -1205,6 +1205,18 @@ class Model(lp.limepy):
         self.f_BH = self.BH.f  # For backwards compatibility
         self.f_rem = self.rem.f
 
+        # ------------------------------------------------------------------
+        # Get some derived quantities
+        # ------------------------------------------------------------------
+
+        # Spitzer instability
+
+        # TODO if Nbh is ~0 this could be nan, but shouldn't allow that
+        self._spitzer_chi = ((self.BH.Mj.sum() / self.nonBH.Mj.sum())
+                             * (self.BH.mavg / self.nonBH.mavg)**(1.5))
+
+        self.spitzer_stable = (self._spitzer_chi < 0.16)
+
     # ----------------------------------------------------------------------
     # Alternative generators
     # ----------------------------------------------------------------------
