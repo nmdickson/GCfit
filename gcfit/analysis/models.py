@@ -1284,6 +1284,10 @@ class _ClusterVisualizer:
                 if propid_legend:
                     label += f" ({mf.mdata['proposal']})"
 
+            # Make sure we're not already labeling in a field plot
+            if show_fields and field_kw.get('add_legend', True):
+                label = None
+
             # --------------------------------------------------------------
             # Iterate over radial bin dicts for this PI
             # --------------------------------------------------------------
@@ -1381,7 +1385,7 @@ class _ClusterVisualizer:
                 leg_kw = {'handlelength': 0, 'handletextpad': 0}
 
                 # If this is the first bin, also add a PI tag
-                if label and not rind and not show_fields:
+                if label and not rind:
                     lbl_fake = plt.Line2D([], [], label=label)
                     handles.append(lbl_fake)
                     leg_kw['labelcolor'] = ['k', clr]
