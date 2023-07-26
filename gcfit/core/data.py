@@ -672,6 +672,13 @@ class Observations:
 # TODO The units are *quite* incomplete in Model (10)
 # TODO what attributes should be documented?
 
+# Attributes namespace for storing various attrs for individual stellar types
+_attributes = namedtuple(
+    'attributes',
+    ['mj', 'Mj', 'Nj', 'mavg', 'rhoj', 'Sigmaj', 'f', 'rh'],
+    defaults=[None, ] * 8
+)
+
 # --------------------------------------------------------------------------
 # Base model
 # --------------------------------------------------------------------------
@@ -981,6 +988,25 @@ class Model(lp.limepy):
         self.Sigma <<= (M_units / R_units**2)
         self.Sigmaj <<= (M_units / R_units**2)
 
+    def _extract_indiv_attrs(self, mask):
+        '''Extract a number of quantities from the model with a given mask'''
+        mj = self.mj[mask]
+        Mj = self.Mj[mask]
+        Nj = self.Nj[mask]
+
+        rhoj = self.rhoj[mask]
+        Sigmaj = self.Sigmaj[mask]
+
+        f = (Mj.sum() / self.M).to(u.pct)
+
+        mavg = Mj.sum() / Nj.sum()
+
+        mc = self.mcj[mask].sum(axis=0)
+        rh = np.interp(0.5 * Mj.sum(), mc, self.r)
+
+        return _attributes(mj=mj, Mj=Mj, Nj=Nj, mavg=mavg,
+                           rhoj=rhoj, Sigmaj=Sigmaj, f=f, rh=rh)
+
     def __init__(self, W0, M, rh, g=1.5, delta=0.45, ra=1e8,
                  a1=1.3, a2=2.3, a3=2.3, BHret=1.0, d=5,
                  s2=0., F=1., *, observations=None, age=None, FeH=None,
@@ -1095,7 +1121,7 @@ class Model(lp.limepy):
             self._tracer_bins = slice(self.nms + self.nmr, None)
 
         else:
-            logging.warning("No `Observations` given, no tracer masses added")
+            logging.info("No `Observations` given, no tracer masses added")
 
         # ------------------------------------------------------------------
         # Create the limepy model base
@@ -1152,57 +1178,32 @@ class Model(lp.limepy):
         # Recompute to account for physical scaling applied by limepy
         self.Nj = self.Mj / self.mj
 
-        # TODO these kind of slices would prob be more useful than nms elsewhere
+        # TODO these kind of masks would prob be more useful than nms elsewhere
+        # TODO slices vs masks?
         self._star_bins = slice(0, self.nms)
         self._remnant_bins = slice(self.nms, self.nms + self.nmr)
 
-        # Masked only within `remnant bins` regime to avoid issues with tracers
-        self._BH_bins = self._mf.types[self.nms:] == 'BH'
-        self._NS_bins = self._mf.types[self.nms:] == 'NS'
-        self._WD_bins = self._mf.types[self.nms:] == 'WD'
+        self._BH_bins = self.star_types == 'BH'
+        self._NS_bins = self.star_types == 'NS'
+        self._WD_bins = self.star_types == 'WD'
+
+        self._nonBH_bins = ~self._BH_bins
 
         # ------------------------------------------------------------------
-        # Get Black Holes
+        # Get various attributes for some individual stellar classes
         # ------------------------------------------------------------------
 
-        self.BH_mj = self.mj[self._remnant_bins][self._BH_bins]
-        self.BH_Mj = self.Mj[self._remnant_bins][self._BH_bins]
-        self.BH_Nj = self.Nj[self._remnant_bins][self._BH_bins]
+        self.MS = self._extract_indiv_attrs(self._star_bins)
+        self.rem = self._extract_indiv_attrs(self._remnant_bins)
 
-        self.BH_rhoj = self.rhoj[self._remnant_bins][self._BH_bins]
-        self.BH_Sigmaj = self.Sigmaj[self._remnant_bins][self._BH_bins]
+        self.BH = self._extract_indiv_attrs(self._BH_bins)
+        self.WD = self._extract_indiv_attrs(self._WD_bins)
+        self.NS = self._extract_indiv_attrs(self._NS_bins)
 
-        # ------------------------------------------------------------------
-        # Get White Dwarfs
-        # ------------------------------------------------------------------
+        self.nonBH = self._extract_indiv_attrs(self._nonBH_bins)
 
-        self.WD_mj = self.mj[self._remnant_bins][self._WD_bins]
-        self.WD_Mj = self.Mj[self._remnant_bins][self._WD_bins]
-        self.WD_Nj = self.Nj[self._remnant_bins][self._WD_bins]
-
-        self.WD_rhoj = self.rhoj[self._remnant_bins][self._WD_bins]
-        self.WD_Sigmaj = self.Sigmaj[self._remnant_bins][self._WD_bins]
-
-        # ------------------------------------------------------------------
-        # Get Neutron Stars
-        # ------------------------------------------------------------------
-
-        self.NS_mj = self.mj[self._remnant_bins][self._NS_bins]
-        self.NS_Mj = self.Mj[self._remnant_bins][self._NS_bins]
-        self.NS_Nj = self.Nj[self._remnant_bins][self._NS_bins]
-
-        self.NS_rhoj = self.rhoj[self._remnant_bins][self._NS_bins]
-        self.NS_Sigmaj = self.Sigmaj[self._remnant_bins][self._NS_bins]
-
-        # ------------------------------------------------------------------
-        # Get remnant fractions
-        # ------------------------------------------------------------------
-
-        self.f_rem = (np.sum(self.Mj[self._remnant_bins]) / self.M).to(u.pct)
-
-        self.f_BH = (np.sum(self.BH_Mj) / self.M).to(u.pct)
-        self.f_WD = (np.sum(self.WD_Mj) / self.M).to(u.pct)
-        self.f_NS = (np.sum(self.NS_Mj) / self.M).to(u.pct)
+        self.f_BH = self.BH.f  # For backwards compatibility
+        self.f_rem = self.rem.f
 
     # ----------------------------------------------------------------------
     # Alternative generators
