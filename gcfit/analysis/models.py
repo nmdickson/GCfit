@@ -1402,7 +1402,7 @@ class _ClusterVisualizer:
             # sf.supxlabel(r'Mass [$M_\odot$]')
             sf.axes[-1].set_xlabel(r'Mass [$M_\odot$]')
 
-        fig.subfigs[show_fields].supylabel('dN/dm')
+        fig.subfigs[show_fields].supylabel(r'$\mathrm{d}N / \mathrm{d}m$')
 
         # TODO this is a pretty messy way to do this, but legends are messy
         #   location placement is a bit broken, but plots are so busy already
