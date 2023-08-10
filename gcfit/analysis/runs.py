@@ -2397,7 +2397,7 @@ class RunCollection(_RunAnalysis):
         # return the full dataset for each run
         return data
 
-    def _get_param(self, param, **kwargs):
+    def _get_param(self, param, *, sigma=1, **kwargs):
         '''return the median, -1σ, +1σ for a θ, metadata or model quntity
         "param" for all runs
         '''
@@ -2409,8 +2409,14 @@ class RunCollection(_RunAnalysis):
         base = u.Quantity if isinstance(chains[0], u.Quantity) else np.array
 
         # Compute the statistics based on the chains
-        # TODO somehow allow optionally 2,3sig?
-        q = [50., 15.87, 84.13]
+        if sigma == 0:
+            q = [50.]
+        elif sigma == 1:
+            q = [50., 15.87, 84.13]
+        elif sigma == 2:
+            q = [50., 2.80, 15.87, 84.13, 97.72]
+        else:
+            raise ValueError(f'Invalid sigma {sigma} (0, 1, 2)')
 
         out = base([np.nanpercentile(ds, q=q) for ds in chains]).T
         out[1:] = np.abs(out[1:] - out[0])
