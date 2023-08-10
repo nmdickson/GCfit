@@ -2693,13 +2693,14 @@ class RunCollection(_RunAnalysis):
     # Model Collection Visualizers
     # ----------------------------------------------------------------------
 
-    def get_models(self):
+    def get_models(self, **kwargs):
 
-        chains = [run.parameter_means(1)[0] for run in self.runs]
+        # chains = [run.parameter_means(1)[0] for run in self.runs]
+        chains = [run._get_equal_weight_chains()[1] for run in self.runs]
 
         obs_list = [run.obs for run in self.runs]
 
-        mc = ModelCollection.from_chains(chains, obs_list, ci=False)
+        mc = ModelCollection.from_chains(chains, obs_list, ci=False, **kwargs)
 
         # save a copy of models here
         self.models = mc

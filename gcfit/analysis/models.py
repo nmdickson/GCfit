@@ -2057,7 +2057,8 @@ class ModelVisualizer(_ClusterVisualizer):
         create a Visualizer instance based on a chain, y taking the median
         of the chain parameters
         '''
-        reduc_methods = {'median': np.median, 'mean': np.mean}
+        reduc_methods = {'median': np.median, 'mean': np.mean,
+                         'final': lambda ch, axis: ch[-1]}
 
         # if 3d (Niters, Nwalkers, Nparams)
         # if 2d (Nwalkers, Nparams)
