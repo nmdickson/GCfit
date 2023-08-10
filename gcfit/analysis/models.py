@@ -2106,8 +2106,12 @@ class ModelVisualizer(_ClusterVisualizer):
         self.star_bin = model.nms - 1
         self.mj = model.mj
 
+        # TODO if we have these here, should we have all quantites, to match CI?
         self.f_rem = model.rem.f
         self.f_BH = model.BH.f
+
+        self.BH_rh = model.BH.rh
+        self.spitzer_chi = model._spitzer_chi
 
         self.LOS = np.sqrt(self.model.v2pj)[:, np.newaxis, :]
         self.pm_T = np.sqrt(model.v2Tj)[:, np.newaxis, :]
