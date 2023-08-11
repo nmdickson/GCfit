@@ -2397,7 +2397,7 @@ class RunCollection(_RunAnalysis):
         # return the full dataset for each run
         return data
 
-    def _get_param(self, param, **kwargs):
+    def _get_param(self, param, *, sigma=1, **kwargs):
         '''return the median, -1σ, +1σ for a θ, metadata or model quntity
         "param" for all runs
         '''
@@ -2409,8 +2409,14 @@ class RunCollection(_RunAnalysis):
         base = u.Quantity if isinstance(chains[0], u.Quantity) else np.array
 
         # Compute the statistics based on the chains
-        # TODO somehow allow optionally 2,3sig?
-        q = [50., 15.87, 84.13]
+        if sigma == 0:
+            q = [50.]
+        elif sigma == 1:
+            q = [50., 15.87, 84.13]
+        elif sigma == 2:
+            q = [50., 2.80, 15.87, 84.13, 97.72]
+        else:
+            raise ValueError(f'Invalid sigma {sigma} (0, 1, 2)')
 
         out = base([np.nanpercentile(ds, q=q) for ds in chains]).T
         out[1:] = np.abs(out[1:] - out[0])
@@ -2530,7 +2536,7 @@ class RunCollection(_RunAnalysis):
             'a1': r'\alpha_{1}',
             'a2': r'\alpha_{2}',
             'a3': r'\alpha_{3}',
-            'BHret': r'\mathrm{BH}_{ret}',
+            'BHret': r'\mathrm{BH}_{\mathrm{ret}}',
             'd': r'd',
             'FeH': r'[\mathrm{Fe}/\mathrm{H}]',
             'Ndot': r'\dot{N}',
@@ -2541,6 +2547,7 @@ class RunCollection(_RunAnalysis):
             'BH_num': r'\mathrm{N}_{BH}',
             'f_rem': r'f_{\mathrm{remn}}',
             'f_BH': r'f_{\mathrm{BH}}',
+            'spitzer_chi': r'\chi_{\mathrm{Spitzer}}',
             'r0': r'r_{0}',
             'rt': r'r_{t}',
             'rv': r'r_{v}',
@@ -2693,13 +2700,14 @@ class RunCollection(_RunAnalysis):
     # Model Collection Visualizers
     # ----------------------------------------------------------------------
 
-    def get_models(self):
+    def get_models(self, **kwargs):
 
-        chains = [run.parameter_means(1)[0] for run in self.runs]
+        # chains = [run.parameter_means(1)[0] for run in self.runs]
+        chains = [run._get_equal_weight_chains()[1] for run in self.runs]
 
         obs_list = [run.obs for run in self.runs]
 
-        mc = ModelCollection.from_chains(chains, obs_list, ci=False)
+        mc = ModelCollection.from_chains(chains, obs_list, ci=False, **kwargs)
 
         # save a copy of models here
         self.models = mc
