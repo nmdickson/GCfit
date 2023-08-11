@@ -2610,7 +2610,7 @@ class RunCollection(_RunAnalysis):
 
         # Get colour values
         try:
-            cvalues, *_ = self._get_param(cparam)
+            cvalues, *_ = self._get_param(cparam, with_units=False)
             clabel = cparam if clabel is None else clabel
 
         # catch ValueError (invalid string) or TypeError (array of numeric vals)
@@ -3240,7 +3240,7 @@ class RunCollection(_RunAnalysis):
 
                 # Unpack colour values, to handle arrays and params here
                 try:
-                    clr_param, *_ = self._get_param(clr_param)
+                    clr_param, *_ = self._get_param(clr_param, with_units=False)
                 except (ValueError, TypeError):
                     pass
 
