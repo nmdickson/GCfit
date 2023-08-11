@@ -2595,25 +2595,57 @@ class RunCollection(_RunAnalysis):
         '''add colours to all artists and add the relevant colorbar to ax'''
         import matplotlib.colorbar as mpl_cbar
 
+        def set_colour(art, clr):
+            try:
+                art.set_color(clr)
+            except ValueError as err:
+                mssg = (f"Could not set colour '{clr}'. Colours must be a "
+                        "valid model parameter, matplotlib colour or float")
+
+                # try to fix what we broke a bit. Will reset all colours, but
+                #   otherwise a very ugly error may explode upon canvas drawing
+                art.set_color(None)
+
+                raise ValueError(mssg) from err
+
         # Get colour values
         try:
-            cvalues, *_ = self._get_param(cparam)
+            cvalues, *_ = self._get_param(cparam, with_units=False)
             clabel = cparam if clabel is None else clabel
 
-        except TypeError:
+        # catch ValueError (invalid string) or TypeError (array of numeric vals)
+        except (ValueError, TypeError):
             cvalues = cparam
 
-        if cbounds is None:
-            cbounds = cvalues.min(), cvalues.max()
+        # coerce everythign to numpy array to handle various possible inputs
+        cvalues = np.atleast_1d(cvalues)
 
-        cnorm = mpl_clr.Normalize(*cbounds)
-        colors = self.cmap(cnorm(cvalues))
+        # If cvalues looks like they might be valid plt colours, move on
+        if cvalues.dtype.kind in 'US':
+            colors = cvalues
 
-        colors[:, -1] = alpha
+            add_colorbar = False
+            # TODO not sure about this error, it could be cparam was supposed
+            #   to be a model param, but was a typo or something, not this err
+            # if add_colorbar:
+            #     mssg = "Cannot add a colourbar given explicit named colours"
+            #     raise ValueError(mssg)
+
+        # otherwise, map the values to the class' colormap
+        else:
+
+            if cbounds is None:
+                cbounds = cvalues.min(), cvalues.max()
+
+            cnorm = mpl_clr.Normalize(*cbounds)
+            colors = self.cmap(cnorm(cvalues))
+
+            colors[:, -1] = alpha
 
         # apply colour to all artists
         if mappable is not None:
-            mappable.set_color(colors)
+            # mappable.set_color(colors)
+            set_colour(mappable, colors)
             mappable.cmap = self.cmap
 
         if extra_artists is not None:
@@ -2621,14 +2653,19 @@ class RunCollection(_RunAnalysis):
 
                 # Set colors normally
                 try:
-                    artist.set_color(colors)
+                    # artist.set_color(colors)
+                    set_colour(artist, colors)
 
                 # If fails, attempt to set one colour at a time
                 except (ValueError, AttributeError) as err:
 
+                    if colors.shape[0] == 1:
+                        colors = np.repeat(colors, len(self), axis=0)
+
                     try:
                         for i, subart in enumerate(artist):
-                            subart.set_color(colors[i])
+                            # subart.set_color(colors[i])
+                            set_colour(subart, colors[i])
 
                     except (ValueError, TypeError):
                         mssg = f'Cannot `set_color` of extra artist "{artist}"'
@@ -3140,7 +3177,8 @@ class RunCollection(_RunAnalysis):
         return fig
 
     def plot_param_violins(self, param, fig=None, ax=None,
-                           clr_param=None, clr_kwargs=None, alpha=0.3,
+                           clr_param=None, clr_kwargs=None,
+                           color=None, alpha=0.3, edgecolor='k', edgewidth=1.0,
                            quantiles=[0.9772, 0.8413, 0.5, 0.1587, 0.0228],
                            force_model=False, **kwargs):
         '''plot violins for each run of the given param'''
@@ -3180,7 +3218,10 @@ class RunCollection(_RunAnalysis):
 
             parts['cbars'] = ax.vlines(xticks, mins, maxes)
 
-        # handle and add colours
+        # handle and add colours (clr_param has precedence over color)
+        if clr_param is None:
+            clr_param = color  # let _add_colour handle this
+
         if clr_param is not None:
 
             if clr_kwargs is None:
@@ -3193,14 +3234,14 @@ class RunCollection(_RunAnalysis):
             self._add_colours(ax, None, clr_param,
                               extra_artists=parts.values(), **clr_kwargs)
 
-            # if Nquants>1, have to manually add repeated colours separately
-            #   due to how plt.LineCollection handles colours
+            # if Nquants > 1 have to manually repeat then add colours
+            #   separately, due to how plt.LineCollection handles colours
             if quant_arts is not None:
 
                 # Unpack colour values, to handle arrays and params here
                 try:
-                    clr_param, *_ = self._get_param(clr_param)
-                except TypeError:
+                    clr_param, *_ = self._get_param(clr_param, with_units=False)
+                except (ValueError, TypeError):
                     pass
 
                 clr = np.repeat(clr_param, Nquant)
@@ -3209,6 +3250,8 @@ class RunCollection(_RunAnalysis):
 
         for part in parts['bodies']:
             part.set_alpha(alpha)
+            part.set_edgecolor(edgecolor)
+            part.set_linewidth(edgewidth)
 
         ax.set_xticks(xticks, labels=labels, rotation=45,
                       ha='right', rotation_mode="anchor")
