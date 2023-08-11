@@ -3178,7 +3178,7 @@ class RunCollection(_RunAnalysis):
 
     def plot_param_violins(self, param, fig=None, ax=None,
                            clr_param=None, clr_kwargs=None,
-                           color=None, alpha=0.3,
+                           color=None, alpha=0.3, edgecolor='k', edgewidth=1.0,
                            quantiles=[0.9772, 0.8413, 0.5, 0.1587, 0.0228],
                            force_model=False, **kwargs):
         '''plot violins for each run of the given param'''
@@ -3250,6 +3250,8 @@ class RunCollection(_RunAnalysis):
 
         for part in parts['bodies']:
             part.set_alpha(alpha)
+            part.set_edgecolor(edgecolor)
+            part.set_linewidth(edgewidth)
 
         ax.set_xticks(xticks, labels=labels, rotation=45,
                       ha='right', rotation_mode="anchor")
