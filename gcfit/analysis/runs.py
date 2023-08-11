@@ -3234,14 +3234,14 @@ class RunCollection(_RunAnalysis):
             self._add_colours(ax, None, clr_param,
                               extra_artists=parts.values(), **clr_kwargs)
 
-            # if Nquants>1, have to manually add repeated colours separately
-            #   due to how plt.LineCollection handles colours
+            # if Nquants > 1 have to manually repeat then add colours
+            #   separately, due to how plt.LineCollection handles colours
             if quant_arts is not None:
 
                 # Unpack colour values, to handle arrays and params here
                 try:
                     clr_param, *_ = self._get_param(clr_param)
-                except TypeError:
+                except (ValueError, TypeError):
                     pass
 
                 clr = np.repeat(clr_param, Nquant)
