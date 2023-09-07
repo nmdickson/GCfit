@@ -2880,6 +2880,10 @@ class RunCollection(_RunAnalysis):
             self._add_colours(ax, points, clr_param,
                               extra_artists=err_artists, **clr_kwargs)
 
+        elif not (sc_kwargs.keys() & {'c', 'color'}):
+            # Ensure that the points and lines are the same colour
+            points.set_color(errbar.get_children()[0].get_color())
+
         if annotate:
 
             if annotate_kwargs is None:
@@ -2945,6 +2949,10 @@ class RunCollection(_RunAnalysis):
             self._add_colours(ax, points, clr_param,
                               extra_artists=err_artists, **clr_kwargs)
 
+        elif not (sc_kwargs.keys() & {'c', 'color'}):
+            # Ensure that the points and lines are the same colour
+            points.set_color(errbar.get_children()[0].get_color())
+
         if residuals:
             clrs = points.get_facecolors()
             res_ax = self.add_residuals(ax, x, y, dx, dy, clrs, pad=0)
@@ -3002,6 +3010,10 @@ class RunCollection(_RunAnalysis):
 
             self._add_colours(ax, points, clr_param,
                               extra_artists=err_artists, **clr_kwargs)
+
+        elif not (sc_kwargs.keys() & {'c', 'color'}):
+            # Ensure that the points and lines are the same colour
+            points.set_color(errbar.get_children()[0].get_color())
 
         if residuals:
             clrs = points.get_facecolors()
@@ -3135,6 +3147,10 @@ class RunCollection(_RunAnalysis):
 
             self._add_colours(ax, points, clr_param,
                               extra_artists=err_artists, **clr_kwargs)
+
+        elif not (sc_kwargs.keys() & {'c', 'color'}):
+            # Ensure that the points and lines are the same colour
+            points.set_color(errbar.get_children()[0].get_color())
 
         ax.set_xticks(xticks, labels=labels, rotation=45,
                       ha='right', rotation_mode="anchor")
