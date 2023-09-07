@@ -463,8 +463,9 @@ class _ClusterVisualizer:
         # Setup default plotting details, style, labels
         # ------------------------------------------------------------------
 
-        kwargs.setdefault('marker', '.')
-        kwargs.setdefault('mfc', 'none')  # TODO a better default is needed
+        kwargs.setdefault('mfc', None)
+        kwargs.setdefault('mec', 'k')
+        kwargs.setdefault('mew', 0.3)
         kwargs.setdefault('linestyle', 'None')
         kwargs.setdefault('zorder', 10)  # to force marker and bar to be higher
 
@@ -721,7 +722,11 @@ class _ClusterVisualizer:
             # Grab relevant formatting (colours and markers)
             # --------------------------------------------------------------
 
-            clr = errbar[0].get_color()
+            # unfortunately `artist.update_from` refuses to work here
+            mfc = errbar[0].get_mfc()
+            mec = errbar[0].get_mec()
+            mew = errbar[0].get_mew()
+            ms = errbar[0].get_ms()
             mrk = errbar[0].get_marker()
 
             # --------------------------------------------------------------
@@ -769,7 +774,8 @@ class _ClusterVisualizer:
                 res = ydata - yspline(xdata)
 
             res_ax.errorbar(xdata, res, xerr=xerr, yerr=yerr,
-                            color=clr, marker=mrk, linestyle='none')
+                            color=mfc, mec=mec, mew=mew, marker=mrk, ms=ms,
+                            linestyle='none')
 
             # --------------------------------------------------------------
             # Optionally compute chi-squared statistic
@@ -1318,6 +1324,12 @@ class _ClusterVisualizer:
         # Iterate over each PI, gathering data to plot
         # ------------------------------------------------------------------
 
+        kwargs.setdefault('mfc', None)
+        kwargs.setdefault('mec', 'k')
+        kwargs.setdefault('mew', 0.3)
+        kwargs.setdefault('linestyle', 'None')
+        kwargs.setdefault('marker', 'o')
+
         for PI in sorted(self.mass_func,
                          key=lambda k: self.mass_func[k][0]['r1']):
 
@@ -1372,8 +1384,7 @@ class _ClusterVisualizer:
                     err = self.F * err_data
 
                     pnts = ax.errorbar(mbin_mean[r_mask], N_data, yerr=err,
-                                       marker='o', color=data_clr, ls='none',
-                                       **kwargs)
+                                       color=data_clr, **kwargs)
 
                     data_clr = pnts[0].get_color()
 
