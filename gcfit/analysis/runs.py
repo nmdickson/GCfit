@@ -43,7 +43,7 @@ class _RunAnalysis:
 
     @property
     def cmap(self):
-        return plt.cm.get_cmap(self._cmap)
+        return plt.colormaps.get_cmap(self._cmap)
 
     @cmap.setter
     def cmap(self, cm):
@@ -2880,9 +2880,10 @@ class RunCollection(_RunAnalysis):
             self._add_colours(ax, points, clr_param,
                               extra_artists=err_artists, **clr_kwargs)
 
-        elif not (sc_kwargs.keys() & {'c', 'color'}):
+        elif not (kwargs.keys() & {'c', 'color'}):
             # Ensure that the points and lines are the same colour
-            points.set_color(errbar.get_children()[0].get_color())
+            for ch in errbar.get_children():
+                ch.set_color(points.get_facecolor())
 
         if annotate:
 
@@ -2949,9 +2950,10 @@ class RunCollection(_RunAnalysis):
             self._add_colours(ax, points, clr_param,
                               extra_artists=err_artists, **clr_kwargs)
 
-        elif not (sc_kwargs.keys() & {'c', 'color'}):
+        elif not (kwargs.keys() & {'c', 'color'}):
             # Ensure that the points and lines are the same colour
-            points.set_color(errbar.get_children()[0].get_color())
+            for ch in errbar.get_children():
+                ch.set_color(points.get_facecolor())
 
         if residuals:
             clrs = points.get_facecolors()
@@ -3011,9 +3013,10 @@ class RunCollection(_RunAnalysis):
             self._add_colours(ax, points, clr_param,
                               extra_artists=err_artists, **clr_kwargs)
 
-        elif not (sc_kwargs.keys() & {'c', 'color'}):
+        elif not (kwargs.keys() & {'c', 'color'}):
             # Ensure that the points and lines are the same colour
-            points.set_color(errbar.get_children()[0].get_color())
+            for ch in errbar.get_children():
+                ch.set_color(points.get_facecolor())
 
         if residuals:
             clrs = points.get_facecolors()
@@ -3148,9 +3151,10 @@ class RunCollection(_RunAnalysis):
             self._add_colours(ax, points, clr_param,
                               extra_artists=err_artists, **clr_kwargs)
 
-        elif not (sc_kwargs.keys() & {'c', 'color'}):
+        elif not (kwargs.keys() & {'c', 'color'}):
             # Ensure that the points and lines are the same colour
-            points.set_color(errbar.get_children()[0].get_color())
+            for ch in errbar.get_children():
+                ch.set_color(points.get_facecolor())
 
         ax.set_xticks(xticks, labels=labels, rotation=45,
                       ha='right', rotation_mode="anchor")
