@@ -43,7 +43,7 @@ class _RunAnalysis:
 
     @property
     def cmap(self):
-        return plt.cm.get_cmap(self._cmap)
+        return plt.colormaps.get_cmap(self._cmap)
 
     @cmap.setter
     def cmap(self, cm):
@@ -2850,7 +2850,8 @@ class RunCollection(_RunAnalysis):
     def plot_relation(self, param1, param2, fig=None, ax=None, *,
                       errors='bars', show_pearsonr=False, force_model=False,
                       annotate=False, annotate_kwargs=None,
-                      clr_param=None, clr_kwargs=None, label=None, **kwargs):
+                      clr_param=None, clr_kwargs=None, label=None, marker='o',
+                      **kwargs):
         '''plot correlation between two param means with all runs
 
         errorbars, or 2d-ellipses
@@ -2862,10 +2863,9 @@ class RunCollection(_RunAnalysis):
         x, *dx = self._get_param(param1, force_model=force_model)
         y, *dy = self._get_param(param2, force_model=force_model)
 
-        # TODO this label only shows a line in legends, needs point too
-        errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', label=label,
-                             **kwargs)
-        points = ax.scatter(x, y, picker=True, **sc_kwargs)
+        errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', **kwargs)
+        points = ax.scatter(x, y, picker=True, marker=marker,
+                            label=label, **sc_kwargs)
 
         ax.set_xlabel(self._get_latex_labels(param1, force_model=force_model))
         ax.set_ylabel(self._get_latex_labels(param2, force_model=force_model))
@@ -2880,9 +2880,10 @@ class RunCollection(_RunAnalysis):
             self._add_colours(ax, points, clr_param,
                               extra_artists=err_artists, **clr_kwargs)
 
-        elif not (sc_kwargs.keys() & {'c', 'color'}):
+        elif not (kwargs.keys() & {'c', 'color'}):
             # Ensure that the points and lines are the same colour
-            points.set_color(errbar.get_children()[0].get_color())
+            for ch in errbar.get_children():
+                ch.set_color(points.get_facecolor())
 
         if annotate:
 
@@ -2905,7 +2906,7 @@ class RunCollection(_RunAnalysis):
                       clr_param=None, clr_kwargs=None,
                       annotate=False, annotate_kwargs=None,
                       residuals=False, inset=False, diagonal=True,
-                      force_model=False, label=None, **kwargs):
+                      force_model=False, label=None, marker='o', **kwargs):
         '''plot a x-y comparison against provided literature values
 
         Meant to compare 1-1 the same parameter (i.e. mass vs mass, etc)
@@ -2917,9 +2918,9 @@ class RunCollection(_RunAnalysis):
         x, *dx = self._get_param(param, force_model=force_model)
         y, dy = truths, e_truths
 
-        errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', label=label,
-                             **kwargs)
-        points = ax.scatter(x, y, picker=True, **sc_kwargs)
+        errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', **kwargs)
+        points = ax.scatter(x, y, picker=True, marker=marker,
+                            label=label, **sc_kwargs)
 
         if diagonal:
             grid_kw = {
@@ -2949,9 +2950,10 @@ class RunCollection(_RunAnalysis):
             self._add_colours(ax, points, clr_param,
                               extra_artists=err_artists, **clr_kwargs)
 
-        elif not (sc_kwargs.keys() & {'c', 'color'}):
+        elif not (kwargs.keys() & {'c', 'color'}):
             # Ensure that the points and lines are the same colour
-            points.set_color(errbar.get_children()[0].get_color())
+            for ch in errbar.get_children():
+                ch.set_color(points.get_facecolor())
 
         if residuals:
             clrs = points.get_facecolors()
@@ -2972,7 +2974,7 @@ class RunCollection(_RunAnalysis):
                           fig=None, ax=None, *, lit_on_x=False,
                           clr_param=None, clr_kwargs=None, residuals=False,
                           annotate=False, annotate_kwargs=None,
-                          force_model=False, label=None, **kwargs):
+                          force_model=False, label=None, marker='o', **kwargs):
         '''plot a relation plot against provided literature values
 
         Meant to compare two different parameters, with one from outside source
@@ -2994,9 +2996,9 @@ class RunCollection(_RunAnalysis):
             dx, dy = dy, dx
             xlabel, ylabel = ylabel, xlabel
 
-        errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', label=label,
-                             **kwargs)
-        points = ax.scatter(x, y, picker=True, **sc_kwargs)
+        errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', **kwargs)
+        points = ax.scatter(x, y, picker=True, marker=marker,
+                            label=label, **sc_kwargs)
 
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
@@ -3011,9 +3013,10 @@ class RunCollection(_RunAnalysis):
             self._add_colours(ax, points, clr_param,
                               extra_artists=err_artists, **clr_kwargs)
 
-        elif not (sc_kwargs.keys() & {'c', 'color'}):
+        elif not (kwargs.keys() & {'c', 'color'}):
             # Ensure that the points and lines are the same colour
-            points.set_color(errbar.get_children()[0].get_color())
+            for ch in errbar.get_children():
+                ch.set_color(points.get_facecolor())
 
         if residuals:
             clrs = points.get_facecolors()
@@ -3148,9 +3151,10 @@ class RunCollection(_RunAnalysis):
             self._add_colours(ax, points, clr_param,
                               extra_artists=err_artists, **clr_kwargs)
 
-        elif not (sc_kwargs.keys() & {'c', 'color'}):
+        elif not (kwargs.keys() & {'c', 'color'}):
             # Ensure that the points and lines are the same colour
-            points.set_color(errbar.get_children()[0].get_color())
+            for ch in errbar.get_children():
+                ch.set_color(points.get_facecolor())
 
         ax.set_xticks(xticks, labels=labels, rotation=45,
                       ha='right', rotation_mode="anchor")
