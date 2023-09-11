@@ -49,6 +49,9 @@ def main():
     parser.add_argument('-o', '--output', nargs='+', default=None,
                         help='Alternative files only for saving CI outputs')
 
+    parser.add_argument('--sampler', default='nested', choices=['nested', 'mcmc'],
+                        help='Which sampler was used for the run(s)')
+
     parser.add_argument('--debug', action='store_true')
 
     args = parser.parse_args()
@@ -72,7 +75,7 @@ def main():
     # Generate Models
     # ----------------------------------------------------------------------
 
-    rc = analysis.RunCollection.from_files(args.filenames)
+    rc = analysis.RunCollection.from_files(args.filenames, sampler=args.sampler)
 
     if args.mask:
         mask_prm = args.mask[0]
