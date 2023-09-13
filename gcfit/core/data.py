@@ -92,7 +92,8 @@ class Variable(u.Quantity):
         if not is_str:
             quant = super().__new__(cls, value, unit, *args, **kwargs)
         else:
-            quant = np.asarray(value, *args, **kwargs).view(cls)
+            # Coerce string to dtype "U" here, hdf5 cannot store that natively
+            quant = np.asarray(value, dtype='U', *args, **kwargs).view(cls)
 
         # Store the metadata
         if isinstance(mdata, dict):
