@@ -1475,6 +1475,10 @@ class Dataset:
             for colname in keys:
                 data = df[colname].to_numpy()
 
+                if data.dtype.kind == 'O' and isinstance(data[0], (str, bytes)):
+                    # Need to use bytes array for strings, hdf5 can't handle "U"
+                    data = data.astype('S')
+
                 varname = names.get(colname, colname)
 
                 # TODO still don't know how best to get units from the data file
