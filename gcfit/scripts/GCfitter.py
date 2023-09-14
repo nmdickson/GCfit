@@ -178,9 +178,8 @@ def main():
 
     parser_nest.add_argument('--pfrac', default=1.0, type=float,
                              help='Posterior weighting fraction f_p')
-    parser_nest.add_argument('--dlogz', default=0.01, type=float,
-                             help='Δln(Z) tolerance initial stopping condition.'
-                                  ' See dynesty for info on defaults')
+    parser_nest.add_argument('--dlogz', default=0.25, type=float,
+                             help='Δln(Z) tolerance initial stopping condition')
     parser_nest.add_argument('--maxfrac', default=0.8, type=float,
                              help='The fractional threshold, relative to the '
                                   'peak weight, used to determine likelihood '
@@ -195,7 +194,7 @@ def main():
     parser_nest.add_argument('--init-maxiter', default=None, type=pos_int,
                              help='Maximum number of iterations allowed in the '
                                   'baseline run. Default is no limit')
-    parser_nest.add_argument('--N-per-batch', default=None, type=pos_int,
+    parser_nest.add_argument('--N-per-batch', default=100, type=pos_int,
                              dest='Nlive_per_batch',
                              help='Number of live points to add each batch. '
                                   'See dynesty for info on defaults')
