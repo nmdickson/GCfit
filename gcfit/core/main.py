@@ -683,11 +683,13 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
     initial_kwargs : dict, optional
         kwargs to be passed to the `dynesty.DynamicNestedSampler.sample_initial`
-        initial baseline sampling function. See `dynesty` for more.
+        initial baseline sampling function. Defaults include `dlogz` of 0.25
+        and `nlive` of 100. See `dynesty` for more info and all other defaults.
 
     batch_kwargs : dict, optional
         kwargs to be passed to the `dynesty.DynamicNestedSampler.sample_batch`
-        batch sampling function. See `dynesty` for more.
+        batch sampling function. Defaults include `nlive_new` of 100.
+        See `dynesty` for more info and all other defaults.
 
     pfrac : float, optional
         Fractional weight of the posterior (versus evidence) for stop function.
@@ -767,6 +769,10 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
     if batch_kwargs is None:
         batch_kwargs = {}
+
+    # Apply some better default sampler arguments
+    initial_kwargs = {'nlive': 100, 'dlogz': 0.25} | initial_kwargs
+    batch_kwargs = {'nlive_new': 100} | batch_kwargs
 
     savedir = pathlib.Path(savedir)
     if not savedir.is_dir():
