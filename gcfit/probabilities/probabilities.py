@@ -899,7 +899,7 @@ def likelihood_LOS(model, vlos, *, mass_bin=None, hyperparams=False):
 
 
 @_angular_units
-def likelihood_mass_func(model, mf, field, *, hyperparams=False):
+def likelihood_mass_func(model, mf, fields, *, hyperparams=False):
     r'''Compute the log likelihood of the cluster's PDMF
 
     Computes the log likelihood component of a cluster's present day mass
@@ -947,9 +947,6 @@ def likelihood_mass_func(model, mf, field, *, hyperparams=False):
         Monte Carlo integration method used to integrate the surface density
         profile
     '''
-    # TODO same as numdens, the units are ignored cause 1/pc^2 != 1/arcmin^2
-
-    M = 1000
 
     if hyperparams:
         likelihood = util.hyperparam_likelihood
@@ -989,16 +986,14 @@ def likelihood_mass_func(model, mf, field, *, hyperparams=False):
     N_model = np.empty_like(N)
     err = np.empty_like(N)
 
-    for r_in, r_out in np.unique(rbins, axis=0):
+    for field_slice, (r_in, r_out) in zip(fields, np.unique(rbins, axis=0)):
         r_mask = (mf['r1'] == r_in) & (mf['r2'] == r_out)
-
-        field_slice = field.slice_radially(r_in, r_out)
 
         # --------------------------------------------------------------
         # Sample this slice of the field M times, and integrate to get N
         # --------------------------------------------------------------
 
-        sample_radii = field_slice.MC_sample(M).to(u.pc)
+        sample_radii = field_slice._prev_sample.to(u.pc)
 
         binned_N_model = np.empty(model.nms) << N_data.unit
         for j in range(model.nms):
