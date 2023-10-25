@@ -178,8 +178,9 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
             # The cluster component shouldn't be crashing nearly as often now,
             # should only happen when Paz fails to integrate to 1.0
             mssg = f"""
-            Pulsar `cluster_component` failed with params: "
-            {model.theta=}, {R=}, {mass_bin=}, {DM=}, with error:
+            Pulsar `cluster_component` failed with params:
+            {model.theta=}, {R=}, {mass_bin=}, DM={DM if use_DM else None},
+            with error:
             """
             logging.warning(mssg, exc_info=err)
 
@@ -411,7 +412,8 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
             # should only happen when Paz fails to integrate to 1.0
             mssg = f"""
             Pulsar `cluster_component` failed with params: "
-            {model.theta=}, {R=}, {mass_bin=}, {DM=}, with error:
+            {model.theta=}, {R=}, {mass_bin=}, DM={DM if use_DM else None},
+            with error:
             """
             logging.warning(mssg, exc_info=err)
 
