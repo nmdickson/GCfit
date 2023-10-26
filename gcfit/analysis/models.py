@@ -2200,29 +2200,25 @@ class ModelVisualizer(_ClusterVisualizer):
         if observations is None:
             return self._spoof_empty_massfunc(model)
 
-        cen = (observations.mdata['RA'], observations.mdata['DEC'])
-
-        PI_list = observations.filter_datasets('*mass_function*')
+        PI_list = observations.filter_likelihoods(['*mass_function*'])
 
         densityj = [util.QuantitySpline(model.r, model.Sigmaj[j])
                     for j in range(model.nms)]
 
-        for i, (key, mf) in enumerate(PI_list.items()):
+        for i, (key, _, fields) in enumerate(PI_list):
+
+            mf = observations[key]
 
             self.mass_func[key] = []
 
             clr = self.cmap(i / len(PI_list))
 
-            field = mass.Field.from_dataset(mf, cen=cen)
-
             rbins = np.unique(np.c_[mf['r1'], mf['r2']], axis=0)
             rbins.sort(axis=0)
 
-            for r_in, r_out in rbins:
+            for field_slice, (r_in, r_out) in zip(fields, rbins):
 
                 this_slc = {'r1': r_in, 'r2': r_out}
-
-                field_slice = field.slice_radially(r_in, r_out)
 
                 this_slc['field'] = field_slice
 
@@ -2232,7 +2228,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
                 this_slc['mj'] = model.mj[:model.nms]
 
-                sample_radii = field_slice.MC_sample(300).to(u.pc)
+                sample_radii = field_slice._prev_sample.to(u.pc)
 
                 for j in range(model.nms):
 
@@ -2247,10 +2243,6 @@ class ModelVisualizer(_ClusterVisualizer):
     def _spoof_empty_massfunc(self, model):
         '''spoof an arbitrary massfunc, for use when no observations given'''
         import shapely
-
-        # cen = (observations.mdata['RA'], observations.mdata['DEC'])
-
-        # PI_list = observations.filter_datasets('*mass_function*')
 
         densityj = [util.QuantitySpline(model.r, model.Sigmaj[j])
                     for j in range(model.nms)]
@@ -2277,7 +2269,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
             this_slc['mj'] = model.mj[:model.nms]
 
-            sample_radii = field_slice.MC_sample(300).to(u.pc)
+            sample_radii = field_slice.MC_sample(5000).to(u.pc)
 
             for j in range(model.nms):
 
@@ -2938,26 +2930,22 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         massfunc = {}
 
-        cen = (observations.mdata['RA'], observations.mdata['DEC'])
+        PI_list = observations.filter_likelihoods(['*mass_function*'])
 
-        PI_list = observations.filter_datasets('*mass_function*')
+        for i, (key, _, fields) in enumerate(PI_list):
 
-        for i, (key, mf) in enumerate(PI_list.items()):
+            mf = observations[key]
 
             massfunc[key] = []
 
             clr = self.cmap(i / len(PI_list))
 
-            field = mass.Field.from_dataset(mf, cen=cen)
-
             rbins = np.unique(np.c_[mf['r1'], mf['r2']], axis=0)
             rbins.sort(axis=0)
 
-            for r_in, r_out in rbins:
+            for field_slice, (r_in, r_out) in zip(fields, rbins):
 
                 this_slc = {'r1': r_in, 'r2': r_out}
-
-                field_slice = field.slice_radially(r_in, r_out)
 
                 this_slc['field'] = field_slice
 
@@ -2974,7 +2962,7 @@ class CIModelVisualizer(_ClusterVisualizer):
                     for j in range(model.nms)]
 
         with u.set_enabled_equivalencies(equivs):
-            sample_radii = rslice['field'].MC_sample(300).to(u.pc)
+            sample_radii = rslice['field']._prev_sample.to(u.pc)
 
             dNdm = np.empty(model.nms)
 
