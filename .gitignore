@@ -9,6 +9,7 @@ devnotes*
 /dist
 /results
 *ipynb_checkpoints*
+/profiling
 
 # Core latex/pdflatex auxiliary files:
 *.aux

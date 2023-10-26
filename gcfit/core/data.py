@@ -668,6 +668,7 @@ class Observations:
                 for rind, (r_in, r_out) in enumerate(np.unique(rbins, axis=0)):
                     field_slice = field.slice_radially(r_in, r_out)
                     field_slice.MC_sample(M=self._MF_M_samples)
+                    fld_slices.append(field_slice)
 
                 comps.append((key, func, fld_slices))
 
