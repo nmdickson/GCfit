@@ -64,6 +64,24 @@ class Field:
     shapely : Source for all geometry operations
     '''
 
+    def __getstate__(self):
+
+        if hasattr(self, '_prepped'):
+            self._was_prepped = True
+            del self._prepped
+        else:
+            self._was_prepped = False
+
+        return self.__dict__
+
+    def __setstate__(self, d):
+        self.__dict__ = d
+
+        if d['_was_prepped']:
+            self.prep()
+
+        del self._was_prepped
+
     def __contains__(self, other):
         # TODO might not be fair to *require* _prepped. Also will error badly
         if self._multi:
