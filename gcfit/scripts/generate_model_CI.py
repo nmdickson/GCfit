@@ -52,6 +52,10 @@ def main():
     parser.add_argument('--sampler', default='nested', choices=['nested', 'mcmc'],
                         help='Which sampler was used for the run(s)')
 
+    parser.add_argument('--MF-samples', default=50_000, type=pos_int,
+                        help='Number of samples to use when integrating mass '
+                             'functions')
+
     parser.add_argument('--debug', action='store_true')
 
     args = parser.parse_args()
@@ -76,6 +80,9 @@ def main():
     # ----------------------------------------------------------------------
 
     rc = analysis.RunCollection.from_files(args.filenames, sampler=args.sampler)
+
+    for run in rc:
+        run.obs._MF_M_samples = args.MF_samples
 
     if args.mask:
         mask_prm = args.mask[0]
