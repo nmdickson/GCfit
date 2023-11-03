@@ -353,6 +353,7 @@ class Observations:
     '''
 
     _valid_likelihoods = None
+    _MF_M_samples = 50_000
 
     def __repr__(self):
         return f'Observations(cluster="{self.cluster}")'
@@ -656,12 +657,20 @@ class Observations:
 
                 func = probabilities.likelihood_mass_func
 
-                # Field
+                # Field slices
                 cen = (self.mdata['RA'], self.mdata['DEC'])
 
                 field = util.mass.Field.from_dataset(self[key], cen)
 
-                comps.append((key, func, field))
+                rbins = np.c_[self[key]['r1'], self[key]['r2']]
+
+                fld_slices = []
+                for rind, (r_in, r_out) in enumerate(np.unique(rbins, axis=0)):
+                    field_slice = field.slice_radially(r_in, r_out)
+                    field_slice.MC_sample(M=self._MF_M_samples)
+                    fld_slices.append(field_slice)
+
+                comps.append((key, func, fld_slices))
 
         return comps
 
@@ -1079,7 +1088,7 @@ class Model(lp.limepy):
         # Get mass function
         # ------------------------------------------------------------------
 
-        self._mf = EvolvedMF(
+        self._mf_kwargs = dict(
             m_breaks=m_breaks.value,
             a_slopes=[-a1, -a2, -a3],
             nbins=nbins,
@@ -1094,6 +1103,8 @@ class Model(lp.limepy):
             natal_kicks=natal_kicks,
             vesc=vesc.value
         )
+
+        self._mf = EvolvedMF(**self._mf_kwargs)
 
         mj, Mj = self._mf.m, self._mf.M
 
