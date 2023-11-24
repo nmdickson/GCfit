@@ -219,7 +219,7 @@ class _RunAnalysis:
             divider = make_axes_locatable(ax)
             res_ax = divider.append_axes(loc, size=size, pad=pad, sharex=ax)
 
-        res_ax.grid()
+        res_ax.grid(visible=True)
         res_ax.set_xscale(ax.get_xscale())
         res_ax.set_ylabel(r"% difference")
 
@@ -2548,6 +2548,8 @@ class RunCollection(_RunAnalysis):
             'f_rem': r'f_{\mathrm{remn}}',
             'f_BH': r'f_{\mathrm{BH}}',
             'spitzer_chi': r'\chi_{\mathrm{Spitzer}}',
+            'trh': r't_{\mathrm{r_h}}',
+            'N_relax': r'N_{\mathrm{relax}}',
             'r0': r'r_{0}',
             'rt': r'r_{t}',
             'rv': r'r_{v}',
@@ -2568,6 +2570,7 @@ class RunCollection(_RunAnalysis):
             'BH_mass': r'M_\odot',
             'f_rem': r'\%',
             'f_BH': r'\%',
+            'trh': r'\mathrm{Gyr}',
             'r0': r'\mathrm{pc}',
             'rt': r'\mathrm{pc}',
             'rv': r'\mathrm{pc}',
@@ -3159,7 +3162,7 @@ class RunCollection(_RunAnalysis):
         ax.set_xticks(xticks, labels=labels, rotation=45,
                       ha='right', rotation_mode="anchor")
 
-        ax.grid(axis='x')
+        ax.grid(visible=True, axis='x')
 
         ax.set_ylabel(self._get_latex_labels(param, force_model=force_model))
 
@@ -3276,7 +3279,7 @@ class RunCollection(_RunAnalysis):
         ax.set_xticks(xticks, labels=labels, rotation=45,
                       ha='right', rotation_mode="anchor")
 
-        ax.grid(axis='x')
+        ax.grid(visible=True, axis='x')
 
         ax.set_ylabel(self._get_latex_labels(param, force_model=force_model))
 
