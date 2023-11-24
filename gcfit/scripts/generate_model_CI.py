@@ -49,19 +49,17 @@ def main():
     parser.add_argument('-o', '--output', nargs='+', default=None,
                         help='Alternative files only for saving CI outputs')
 
-    parser.add_argument('--sampler', default='nested', choices=['nested', 'mcmc'],
+    parser.add_argument('--sampler', default='nested',
+                        choices=['nested', 'mcmc'],
                         help='Which sampler was used for the run(s)')
 
-    parser.add_argument('--MF-samples', default=50_000, type=pos_int,
+    parser.add_argument('--MF-samples', default=5000, type=pos_int,
                         help='Number of samples to use when integrating mass '
                              'functions')
 
     parser.add_argument('--debug', action='store_true')
 
     args = parser.parse_args()
-
-    if args.output is None:
-        args.output = args.filenames
 
     if args.debug:
         now = datetime.datetime.now()
@@ -92,5 +90,8 @@ def main():
             run.slice_on_param(mask_prm, mask_dnlim, mask_uplim)
 
     mc = rc.get_CImodels(N=args.N, Nprocesses=args.Ncpu, load=False)
+
+    if args.output is None:
+        args.output = [rv._filename for rv in rc]
 
     mc.save(args.output, overwrite=args.overwrite)
