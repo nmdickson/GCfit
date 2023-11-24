@@ -4,6 +4,7 @@ import h5py
 import numpy as np
 import limepy as lp
 from astropy import units as u
+from astropy import constants as const
 from ssptools import EvolvedMF
 
 import fnmatch
@@ -1009,7 +1010,7 @@ class Model(lp.limepy):
 
         f = (Mj.sum() / self.M).to(u.pct)
 
-        mavg = Mj.sum() / Nj.sum()
+        mavg = Mj.sum() / Nj.sum()  # average of mj weighted by Nj
 
         mc = self.mcj[mask].sum(axis=0)
         rh = np.interp(0.5 * Mj.sum(), mc, self.r)
@@ -1220,6 +1221,22 @@ class Model(lp.limepy):
         # ------------------------------------------------------------------
         # Get some derived quantities
         # ------------------------------------------------------------------
+
+        # Relaxation Time
+
+        # Binney and Tremaine, eq 7.108
+        N = self.Nj.sum()
+        G = const.G.to("pc3 Msun-1 Gyr-2")
+        self.trh = ((0.17 * N) / (np.log(0.1 * N)) * np.sqrt(rh**3 / (G * M)))
+
+        # Spitzer, 1987
+        A = (1.7e5 << u.Unit("yr pc(-3/2) Msun(1/2)"))
+        mm = self.mmean
+        self.trh_spitzer = (A * rh**1.5 * (N**0.5 * mm**(-0.5))).to('Gyr')
+
+        # Elapsed relaxations
+
+        self.N_relax = age.to('Gyr') / self.trh
 
         # Spitzer instability
 
