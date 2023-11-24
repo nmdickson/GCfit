@@ -2124,6 +2124,9 @@ class ModelVisualizer(_ClusterVisualizer):
         self.BH_rh = model.BH.rh
         self.spitzer_chi = model._spitzer_chi
 
+        self.trh = model.trh
+        self.N_relax = model.N_relax
+
         self.LOS = np.sqrt(self.model.v2pj)[:, np.newaxis, :]
         self.pm_T = np.sqrt(model.v2Tj)[:, np.newaxis, :]
         self.pm_R = np.sqrt(model.v2Rj)[:, np.newaxis, :]
@@ -2592,6 +2595,11 @@ class CIModelVisualizer(_ClusterVisualizer):
         BH_rh = np.full(N, np.nan) << huge_model.BH.rh.unit
         spitz_chi = np.full(N, np.nan) << u.dimensionless_unscaled
 
+        # Relaxation times
+
+        trh = np.full(N, np.nan) << u.Gyr
+        N_relax = np.full(N, np.nan) << u.dimensionless_unscaled
+
         # ------------------------------------------------------------------
         # Setup iteration and pooling
         # ------------------------------------------------------------------
@@ -2692,6 +2700,9 @@ class CIModelVisualizer(_ClusterVisualizer):
             BH_rh[model_ind] = model.BH.rh
             spitz_chi[model_ind] = model._spitzer_chi
 
+            trh[model_ind] = model.trh
+            N_relax[model_ind] = model.N_relax
+
         # ------------------------------------------------------------------
         # compute and store the percentiles and medians
         # ------------------------------------------------------------------
@@ -2757,6 +2768,9 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         viz.BH_rh = BH_rh
         viz.spitzer_chi = spitz_chi
+
+        viz.trh = trh
+        viz.N_relax = N_relax
 
         return viz
 
@@ -3045,7 +3059,7 @@ class CIModelVisualizer(_ClusterVisualizer):
             quant_keys = (
                 'f_rem', 'f_BH', 'BH_mass', 'BH_num',
                 'r0', 'rt', 'rh', 'rhp', 'ra', 'rv', 'mmean', 'volume',
-                'BH_rh', 'spitzer_chi', 'K_scale'
+                'BH_rh', 'spitzer_chi', 'trh', 'N_relax', 'K_scale'
             )
 
             for key in quant_keys:
