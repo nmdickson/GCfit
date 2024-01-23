@@ -434,7 +434,7 @@ class Observations:
 
         return groups
 
-    def filter_datasets(self, pattern, valid_only=True):
+    def filter_datasets(self, pattern, valid_only=False):
         '''Return a subset of `Observations.datasets` based on given `pattern`
 
         Parameters
