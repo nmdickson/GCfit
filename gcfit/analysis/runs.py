@@ -625,7 +625,7 @@ class MCMCRun(_SingleRunAnalysis):
         # chains to only the desired params, if provided
         # ------------------------------------------------------------------
 
-        labels, chain = self._get_chains(flatten=True)
+        labels, chain = self._get_chains()
 
         # params is None or a list of string labels
         if params is not None:
@@ -661,8 +661,8 @@ class MCMCRun(_SingleRunAnalysis):
         gs_kw = {}
 
         # TODO broken when # params < 5
-        if shape := len(labels) > 5:
-            shape = int(np.ceil(shape / 2), 2)
+        if (shape := (len(labels), 1))[0] > 5:
+            shape = (int(np.ceil(shape[0] / 2)), 2)
 
         fig, axes = self._setup_multi_artist(fig, shape, sharex=True,
                                              gridspec_kw=gs_kw)
@@ -676,7 +676,9 @@ class MCMCRun(_SingleRunAnalysis):
         # Plot each parameter
         # ------------------------------------------------------------------
 
-        for ind, ax in enumerate(axes[1:].flatten()):
+        domain = np.tile(self._iteration_domain, (1024, 1)).T
+
+        for ind, ax in enumerate(axes.flatten()):
 
             # --------------------------------------------------------------
             # Get the relevant samples.
@@ -684,7 +686,7 @@ class MCMCRun(_SingleRunAnalysis):
             # --------------------------------------------------------------
 
             try:
-                lbl, prm = labels[ind], chain[:, ind]
+                lbl, prm = labels[ind], chain[..., ind]
             except IndexError:
                 # If theres an odd number of (>5) params need to delete last one
                 # TODO preferably this would also resize this column of plots
@@ -705,7 +707,7 @@ class MCMCRun(_SingleRunAnalysis):
             # --------------------------------------------------------------
 
             # TODO the y tick values have disappeared should be on the last axis
-            ax.scatter(self._iteration_domain, prm, cmap=self.cmap, **kw)
+            ax.scatter(domain, prm, cmap=self.cmap, **kw)
 
             ax.set_ylabel(lbl)
             ax.set_xlim(left=0)
@@ -715,7 +717,7 @@ class MCMCRun(_SingleRunAnalysis):
             # --------------------------------------------------------------
 
             post_kw = {
-                'chain': prm,
+                'chain': prm.flatten(),
                 'flipped': True,
                 'truth': truths if truths is None else truths[ind],
                 'truth_ci': truth_ci if truth_ci is None else truth_ci[ind],
@@ -1687,8 +1689,8 @@ class NestedRun(_SingleRunAnalysis):
 
         gs_kw = {}
 
-        if (shape := len(labels) + show_weight) > 5 + show_weight:
-            shape = (int(np.ceil(shape / 2)) + show_weight, 2)
+        if (shape := (len(labels) + show_weight, 1))[0] > 5 + show_weight:
+            shape = (int(np.ceil(shape[0] / 2)) + show_weight, 2)
 
             if show_weight:
                 gs_kw = {"height_ratios": [0.5] + [1] * (shape[0] - 1)}
