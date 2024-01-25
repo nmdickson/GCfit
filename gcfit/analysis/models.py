@@ -1277,6 +1277,12 @@ class _ClusterVisualizer:
         if self.obs is None:
             show_obs = False
 
+        if self.mass_func is None:
+            # Should only occur for ObservationsVisualizer with no MF data
+            #   at which point I'm not sure what you're even trying to plot
+            #   (this avoids a very ugly error)
+            raise ValueError("No mass function data exists to plot")
+
         # ------------------------------------------------------------------
         # Setup axes, splitting into two columns if necessary and adding the
         # extra ax for the field plot if desired
@@ -1285,7 +1291,11 @@ class _ClusterVisualizer:
         ax_ind = 0
 
         N_rbins = sum([len(d) for d in self.mass_func.values()])
-        shape = ((int(np.ceil(N_rbins / 2)), int(np.floor(N_rbins / 2))), 2)
+
+        if N_rbins > 5:
+            shape = ((int(np.ceil(N_rbins / 2)), int(np.floor(N_rbins / 2))), 2)
+        else:
+            shape = ((N_rbins, ), 1)  # this format ensures subfigs are created
 
         # If adding the fields, include an extra column on the left for it
         if show_fields:
@@ -3196,6 +3206,10 @@ class ObservationsVisualizer(_ClusterVisualizer):
         cen = (observations.mdata['RA'], observations.mdata['DEC'])
 
         PI_list = observations.filter_datasets('*mass_function*')
+
+        if not PI_list:
+            self.mass_func = None
+            return
 
         for i, (key, mf) in enumerate(PI_list.items()):
 
