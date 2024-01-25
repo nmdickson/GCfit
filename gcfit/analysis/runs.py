@@ -587,11 +587,38 @@ class MCMCRun(_SingleRunAnalysis):
     # Plots
     # ----------------------------------------------------------------------
 
-    def plot_chains(self, fig=None):
+    def plot_chains(self, fig=None, params=None):
+
+        # ------------------------------------------------------------------
+        # Get the sample chains (weighted and unweighted), paring down the
+        # chains to only the desired params, if provided
+        # ------------------------------------------------------------------
 
         labels, chain = self._get_chains()
 
-        fig, axes = self._setup_multi_artist(fig, (len(labels), ), sharex=True)
+        # params is None or a list of string labels
+        if params is not None:
+            prm_inds = [labels.index(p) for p in params]
+
+            labels = params
+            chain = chain[..., prm_inds]
+
+        # ------------------------------------------------------------------
+        # Setup axes
+        # ------------------------------------------------------------------
+
+        if (shape := (len(labels), 1))[0] > 5:
+            shape = (
+                (int(np.ceil(shape[0] / 2)), int(np.floor(shape[0] / 2))),
+                2
+            )
+
+        # TODO this sharex still doesn't work between subfigures
+        fig, axes = self._setup_multi_artist(fig, shape, sharex=True)
+
+        # ------------------------------------------------------------------
+        # Plot each parameter
+        # ------------------------------------------------------------------
 
         for ind, ax in enumerate(axes.flatten()):
 
@@ -599,11 +626,12 @@ class MCMCRun(_SingleRunAnalysis):
                 ax.plot(self._iteration_domain, chain[..., ind])
             except IndexError as err:
                 mssg = 'reduced parameters, but no explanatory metadata stored'
-                raise err(mssg)
+                raise RuntimeError(mssg) from err
 
             ax.set_ylabel(labels[ind])
 
-        axes[-1].set_xlabel('Iterations')
+        for sf in (fig.subfigs or [fig]):
+            sf.axes[-1].set_xlabel('Iterations')
 
         return fig
 
@@ -658,14 +686,10 @@ class MCMCRun(_SingleRunAnalysis):
             mssg = "`ylims` must match number of params"
             raise ValueError(mssg)
 
-        gs_kw = {}
-
-        # TODO broken when # params < 5
         if (shape := (len(labels), 1))[0] > 5:
             shape = (int(np.ceil(shape[0] / 2)), 2)
 
-        fig, axes = self._setup_multi_artist(fig, shape, sharex=True,
-                                             gridspec_kw=gs_kw)
+        fig, axes = self._setup_multi_artist(fig, shape, sharex=True)
 
         axes = axes.reshape(shape)
 
