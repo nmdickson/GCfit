@@ -90,7 +90,73 @@ class _RunAnalysis:
     def _setup_multi_artist(self, fig, shape, *, allow_blank=True,
                             use_name=True, constrained_layout=True,
                             subfig_kw=None, **sub_kw):
-        '''setup a subplot with multiple axes'''
+        '''setup a figure with multiple axes, using subplots or subfigures
+
+        Given a desired shape tuple, returns a figure with the correct
+        arrangement of axes. Allows for easily specifying slightly more complex
+        arrangements of axes while filling out the figure space, without the
+        use of functions like `subplot_mosaic`.
+
+        The requested shape will determine the exact configuration of the
+        returned figure, with subfigures being used in cases where the number
+        of axes in a given row or column is mismatched, and otherwise only
+        subplots being used. All created axes are returned in a flat array,
+        as given by `fig.axes`.
+
+        If `shape` is a length 1 tuple, will create N rows. If a length 2
+        tuple, will create (Nrows, Ncols) subplots. If either Nrows or Ncols
+        is itself a 2-tuple, will create the number of subfigures (either rows
+        or columns) specified by the other value and fill each with the number
+        of axes specified in the corresponding tuple. The axes will fill the
+        entire space provided by each row/column, and not necessarily be
+        aligned along subfigures.
+        Nrows and Ncols cannot both be tuples at once.
+
+        For example:
+        (3,) -> Single column with 3 rows
+        (3,2) -> 3 row, 2 column subplot
+        (2,(1,3)) -> 2 rows of subfigures, with 1 and 3 columns each
+        ((1,3,4), 3) -> 3 columns of subfigures, with 1, 3 and 4 rows each
+        ((1,3,4), 4) -> if `allow_blank`, same as above with an empty 4th column
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure
+            Given starting figure. If None will create a new figure from
+            scratch. If given an existing `Figure` with existing axes, will
+            simply check that axes shape matches and return the figure
+            untouched If `Figure` is empty (no axes), will create new axes
+            within the given figure.
+
+        shape : tuple
+            Tuple representing the shape of the subplot grid.
+
+        allow_blank : bool, optional
+            If shape requires subfigures and the number of subfigures is larger
+            than the corresponding tuple, allow the creation of blank (empty)
+            subfigures on the end. Defaults to True.
+
+        use_name : bool, optional
+            If True (default) add `self.name` to the figure suptitle.
+
+        constrained_layout : bool, optional
+            Passed to `Figure` if a new figure must be created. Defaults to
+            True.
+
+        subfig_kw : dict, optional
+            Passed to `fig.subfigures`, if required.
+
+        **subkw : dict, optional
+            Extra arguments passed to all calls to `fig.subplots`.
+
+        Returns
+        -------
+        fig : matplotlib.figure.Figure
+            The created figure.
+
+        axes : array of matplotlib.axes.AxesSubplot
+            Flattened numpy array of all axes in `fig`, as given by `fig.axes`
+        '''
 
         if subfig_kw is None:
             subfig_kw = {}
@@ -117,6 +183,7 @@ class _RunAnalysis:
                         if allow_blank:
                             continue
 
+                        # TODO this still creates the figure...
                         mssg = (f"Number of row entries {shape['nrows']} must "
                                 f"match number of columns ({shape['ncols']})")
                         raise ValueError(mssg)
@@ -172,7 +239,6 @@ class _RunAnalysis:
             # make sure shape is a tuple of atleast 1d, at most 2d
 
             if not isinstance(shape, tuple):
-                # TODO doesnt work on an int
                 shape = tuple(shape)
 
             if len(shape) == 1:
