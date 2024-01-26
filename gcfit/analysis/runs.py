@@ -90,30 +90,79 @@ class _RunAnalysis:
     def _setup_multi_artist(self, fig, shape, *, allow_blank=True,
                             use_name=True, constrained_layout=True,
                             subfig_kw=None, **sub_kw):
-        '''setup a subplot with multiple axes'''
+        '''setup a figure with multiple axes, using subplots or subfigures
+
+        Given a desired shape tuple, returns a figure with the correct
+        arrangement of axes. Allows for easily specifying slightly more complex
+        arrangements of axes while filling out the figure space, without the
+        use of functions like `subplot_mosaic`.
+
+        The requested shape will determine the exact configuration of the
+        returned figure, with subfigures being used in cases where the number
+        of axes in a given row or column is mismatched, and otherwise only
+        subplots being used. All created axes are returned in a flat array,
+        as given by `fig.axes`.
+
+        If `shape` is a length 1 tuple, will create N rows. If a length 2
+        tuple, will create (Nrows, Ncols) subplots. If either Nrows or Ncols
+        is itself a 2-tuple, will create the number of subfigures (either rows
+        or columns) specified by the other value and fill each with the number
+        of axes specified in the corresponding tuple. The axes will fill the
+        entire space provided by each row/column, and not necessarily be
+        aligned along subfigures.
+        Nrows and Ncols cannot both be tuples at once.
+
+        For example:
+        (3,) -> Single column with 3 rows
+        (3,2) -> 3 row, 2 column subplot
+        (2,(1,3)) -> 2 rows of subfigures, with 1 and 3 columns each
+        ((1,3,4), 3) -> 3 columns of subfigures, with 1, 3 and 4 rows each
+        ((1,3,4), 4) -> if `allow_blank`, same as above with an empty 4th column
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure
+            Given starting figure. If None will create a new figure from
+            scratch. If given an existing `Figure` with existing axes, will
+            simply check that axes shape matches and return the figure
+            untouched If `Figure` is empty (no axes), will create new axes
+            within the given figure.
+
+        shape : tuple
+            Tuple representing the shape of the subplot grid.
+
+        allow_blank : bool, optional
+            If shape requires subfigures and the number of subfigures is larger
+            than the corresponding tuple, allow the creation of blank (empty)
+            subfigures on the end. Defaults to True.
+
+        use_name : bool, optional
+            If True (default) add `self.name` to the figure suptitle.
+
+        constrained_layout : bool, optional
+            Passed to `Figure` if a new figure must be created. Defaults to
+            True.
+
+        subfig_kw : dict, optional
+            Passed to `fig.subfigures`, if required.
+
+        **subkw : dict, optional
+            Extra arguments passed to all calls to `fig.subplots`.
+
+        Returns
+        -------
+        fig : matplotlib.figure.Figure
+            The created figure.
+
+        axes : array of matplotlib.axes.AxesSubplot
+            Flattened numpy array of all axes in `fig`, as given by `fig.axes`
+        '''
 
         if subfig_kw is None:
             subfig_kw = {}
 
         def create_axes(base, shape):
-            '''create the axes of `shape` on this base (fig)'''
-
-            # make sure shape is a tuple of atleast 1d, at most 2d
-
-            if not isinstance(shape, tuple):
-                # TODO doesnt work on an int
-                shape = tuple(shape)
-
-            if len(shape) == 1:
-                shape = (shape, 1)
-
-            elif len(shape) > 2:
-                mssg = f"Invalid `shape` for subplots {shape}, must be 2D"
-                raise ValueError(mssg)
-
-            # split into dict of nrows, ncols
-
-            shape = dict(zip(("nrows", "ncols"), shape))
+            '''create the axes of `shape` on this base (fig). shape as dict'''
 
             # if either of them is also a tuple, means we want columns or rows
             #   of varying sizes, switch to using subfigures
@@ -134,6 +183,7 @@ class _RunAnalysis:
                         if allow_blank:
                             continue
 
+                        # TODO this still creates the figure...
                         mssg = (f"Number of row entries {shape['nrows']} must "
                                 f"match number of columns ({shape['ncols']})")
                         raise ValueError(mssg)
@@ -186,12 +236,35 @@ class _RunAnalysis:
 
         else:
 
+            # make sure shape is a tuple of atleast 1d, at most 2d
+
+            if not isinstance(shape, tuple):
+                shape = tuple(shape)
+
+            if len(shape) == 1:
+                shape = (shape, 1)
+
+            elif len(shape) > 2:
+                mssg = f"Invalid `shape` for subplots {shape}, must be 2D"
+                raise ValueError(mssg)
+
+            # split into dict of nrows, ncols
+
+            shape = dict(zip(("nrows", "ncols"), shape))
+
             # this fig has axes, check that they match shape
             if axarr := fig.axes:
-                # TODO this won't actually work, cause fig.axes is just a list
-                if axarr.shape != shape:
-                    mssg = (f"figure {fig} already contains axes with "
-                            f"mismatched shape ({axarr.shape} != {shape})")
+
+                if isinstance(shape['nrows'], tuple):
+                    Naxes = np.sum(shape['nrows'])
+                elif isinstance(shape['ncols'], tuple):
+                    Naxes = np.sum(shape['ncols'])
+                else:
+                    Naxes = shape['nrows'] * shape['ncols']
+
+                if len(axarr) != Naxes:
+                    mssg = (f"figure {fig} already contains wrong number of "
+                            f"axes ({len(axarr)} != {Naxes})")
                     raise ValueError(mssg)
 
             else:
@@ -587,11 +660,38 @@ class MCMCRun(_SingleRunAnalysis):
     # Plots
     # ----------------------------------------------------------------------
 
-    def plot_chains(self, fig=None):
+    def plot_chains(self, fig=None, params=None):
+
+        # ------------------------------------------------------------------
+        # Get the sample chains (weighted and unweighted), paring down the
+        # chains to only the desired params, if provided
+        # ------------------------------------------------------------------
 
         labels, chain = self._get_chains()
 
-        fig, axes = self._setup_multi_artist(fig, (len(labels), ), sharex=True)
+        # params is None or a list of string labels
+        if params is not None:
+            prm_inds = [labels.index(p) for p in params]
+
+            labels = params
+            chain = chain[..., prm_inds]
+
+        # ------------------------------------------------------------------
+        # Setup axes
+        # ------------------------------------------------------------------
+
+        if (shape := (len(labels), 1))[0] > 5:
+            shape = (
+                (int(np.ceil(shape[0] / 2)), int(np.floor(shape[0] / 2))),
+                2
+            )
+
+        # TODO this sharex still doesn't work between subfigures
+        fig, axes = self._setup_multi_artist(fig, shape, sharex=True)
+
+        # ------------------------------------------------------------------
+        # Plot each parameter
+        # ------------------------------------------------------------------
 
         for ind, ax in enumerate(axes.flatten()):
 
@@ -599,11 +699,12 @@ class MCMCRun(_SingleRunAnalysis):
                 ax.plot(self._iteration_domain, chain[..., ind])
             except IndexError as err:
                 mssg = 'reduced parameters, but no explanatory metadata stored'
-                raise err(mssg)
+                raise RuntimeError(mssg) from err
 
             ax.set_ylabel(labels[ind])
 
-        axes[-1].set_xlabel('Iterations')
+        for sf in (fig.subfigs or [fig]):
+            sf.axes[-1].set_xlabel('Iterations')
 
         return fig
 
@@ -625,7 +726,7 @@ class MCMCRun(_SingleRunAnalysis):
         # chains to only the desired params, if provided
         # ------------------------------------------------------------------
 
-        labels, chain = self._get_chains(flatten=True)
+        labels, chain = self._get_chains()
 
         # params is None or a list of string labels
         if params is not None:
@@ -658,14 +759,10 @@ class MCMCRun(_SingleRunAnalysis):
             mssg = "`ylims` must match number of params"
             raise ValueError(mssg)
 
-        gs_kw = {}
+        if (shape := (len(labels), 1))[0] > 5:
+            shape = (int(np.ceil(shape[0] / 2)), 2)
 
-        # TODO broken when # params < 5
-        if shape := len(labels) > 5:
-            shape = int(np.ceil(shape / 2), 2)
-
-        fig, axes = self._setup_multi_artist(fig, shape, sharex=True,
-                                             gridspec_kw=gs_kw)
+        fig, axes = self._setup_multi_artist(fig, shape, sharex=True)
 
         axes = axes.reshape(shape)
 
@@ -676,7 +773,9 @@ class MCMCRun(_SingleRunAnalysis):
         # Plot each parameter
         # ------------------------------------------------------------------
 
-        for ind, ax in enumerate(axes[1:].flatten()):
+        domain = np.tile(self._iteration_domain, (1024, 1)).T
+
+        for ind, ax in enumerate(axes.flatten()):
 
             # --------------------------------------------------------------
             # Get the relevant samples.
@@ -684,7 +783,7 @@ class MCMCRun(_SingleRunAnalysis):
             # --------------------------------------------------------------
 
             try:
-                lbl, prm = labels[ind], chain[:, ind]
+                lbl, prm = labels[ind], chain[..., ind]
             except IndexError:
                 # If theres an odd number of (>5) params need to delete last one
                 # TODO preferably this would also resize this column of plots
@@ -705,7 +804,7 @@ class MCMCRun(_SingleRunAnalysis):
             # --------------------------------------------------------------
 
             # TODO the y tick values have disappeared should be on the last axis
-            ax.scatter(self._iteration_domain, prm, cmap=self.cmap, **kw)
+            ax.scatter(domain, prm, cmap=self.cmap, **kw)
 
             ax.set_ylabel(lbl)
             ax.set_xlim(left=0)
@@ -715,7 +814,7 @@ class MCMCRun(_SingleRunAnalysis):
             # --------------------------------------------------------------
 
             post_kw = {
-                'chain': prm,
+                'chain': prm.flatten(),
                 'flipped': True,
                 'truth': truths if truths is None else truths[ind],
                 'truth_ci': truth_ci if truth_ci is None else truth_ci[ind],
@@ -1687,8 +1786,8 @@ class NestedRun(_SingleRunAnalysis):
 
         gs_kw = {}
 
-        if (shape := len(labels) + show_weight) > 5 + show_weight:
-            shape = (int(np.ceil(shape / 2)) + show_weight, 2)
+        if (shape := (len(labels) + show_weight, 1))[0] > 5 + show_weight:
+            shape = (int(np.ceil(shape[0] / 2)) + show_weight, 2)
 
             if show_weight:
                 gs_kw = {"height_ratios": [0.5] + [1] * (shape[0] - 1)}
