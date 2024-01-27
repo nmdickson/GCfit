@@ -1080,8 +1080,9 @@ class Model(lp.limepy):
                         "an `observations`, to read them from"}
                 raise ValueError(mssg)
 
-        age <<= u.Gyr
-        vesc <<= (u.km / u.s)
+        self.age <<= u.Gyr
+        self.FeH = FeH
+        self.vesc <<= (u.km / u.s)
 
         self.observations = observations
 
@@ -1093,8 +1094,8 @@ class Model(lp.limepy):
             m_breaks=m_breaks.value,
             a_slopes=[-a1, -a2, -a3],
             nbins=nbins,
-            FeH=FeH,
-            tout=np.array([age.to_value('Myr')]),
+            FeH=self.FeH,
+            tout=np.array([self.age.to_value('Myr')]),
             Ndot=Ndot,
             N0=5e5,
             tcc=tcc,
@@ -1102,7 +1103,7 @@ class Model(lp.limepy):
             BH_ret_int=BH_ret_int,
             BH_ret_dyn=BHret / 100.,
             natal_kicks=natal_kicks,
-            vesc=vesc.value
+            vesc=self.vesc.value
         )
 
         self._mf = EvolvedMF(**self._mf_kwargs)
@@ -1236,7 +1237,7 @@ class Model(lp.limepy):
 
         # Elapsed relaxations
 
-        self.N_relax = age.to('Gyr') / self.trh
+        self.N_relax = self.age.to('Gyr') / self.trh
 
         # Spitzer instability
 
@@ -2135,11 +2136,8 @@ class SampledModel:
         self.s2j = np.repeat(model.s2j, self.Nj)
         self.σ2_factor = model.s2 / self.s2j
 
-        try:
-            self.age = model.observations.mdata['age'] << u.Gyr
-            self.feh = model.observations.mdata['FeH']
-        except (AttributeError, KeyError):
-            pass
+        self.age = model.age
+        self.FeH = model.FeH
 
         # ------------------------------------------------------------------
         # "Sample" the masses, assuming all stars are exactly mean bin mass
