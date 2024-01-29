@@ -2215,3 +2215,120 @@ class SampledModel:
             self.centre = centre
 
             self.galactic = self._project(centre)
+
+    # ----------------------------------------------------------------------
+    # artpop tests
+    # ----------------------------------------------------------------------
+
+    def to_artpop(self, phot_system, pixel_scale, *,
+                  a_lam=0., projected=True, cutoff_radius=None,
+                  return_rem=False, iso_class=None, **kwargs):
+        import artpop
+        from astropy.table import Table
+
+        if iso_class is None:
+            iso_class = artpop.MISTIsochrone
+
+        def abs2app(band, absmag, dist):
+            return absmag + (5 * np.log10(100 * dist / u.kpc)) + a_lam[band]
+
+        # ------------------------------------------------------------------
+        # Setup isocrhone and mask any invalid mass ranges
+        # ------------------------------------------------------------------
+
+        log_age = np.log10(self.age.to_value('yr'))
+        iso = iso_class(log_age, self.FeH, phot_system=phot_system)
+
+        # Mask all remnants and any stars outside isochrone mass bounds
+        #   (should only be a few with mass~0.099)
+        isolim_mask = self.star_mask.copy()
+        isolim_mask &= ((self.m.value > iso.m_min) & (self.m.value < iso.m_max))
+
+        masses = self.m[isolim_mask]
+
+        # ------------------------------------------------------------------
+        # Setup extinction
+        # ------------------------------------------------------------------
+
+        if isinstance(a_lam, dict):
+            a_lam = {band: a_lam.get(band, 0.) for band in iso.filters}
+
+        else:
+            a_lam = {band: a_lam for band in iso.filters}
+
+        # ------------------------------------------------------------------
+        # Get positions
+        # ------------------------------------------------------------------
+
+        if projected:
+            try:
+                dist = self.galactic.distance[isolim_mask].to('kpc')
+
+                x = self.galactic.lon[isolim_mask].to('arcsec')
+                y = self.galactic.lat[isolim_mask].to('arcsec')
+
+                rem_x = self.galactic.lon[~self.star_mask].to('arcsec')
+                rem_y = self.galactic.lat[~self.star_mask].to('arcsec')
+                rem_t = self.star_types[~self.star_mask]
+
+            except AttributeError:
+                mssg = ("Model has not been projected. Supply a "
+                        "'centre' at init or set 'projected=False' here")
+                raise ValueError(mssg)
+
+        else:
+            dist = (self.d + self.pos.z[isolim_mask]).to('kpc')
+            x = self.pos.x[isolim_mask].to('arcsec')
+            y = self.pos.y[isolim_mask].to('arcsec')
+
+            rem_x = self.pos.x[~self.star_mask].to('arcsec')
+            rem_y = self.pos.y[~self.star_mask].to('arcsec')
+            rem_t = self.star_types[~self.star_mask]
+
+        if cutoff_radius is not None:
+            cutmask = (x**2 + y**2)**0.5 < cutoff_radius
+
+            x = x[cutmask]
+            y = y[cutmask]
+            dist = dist[cutmask]
+            masses = masses[cutmask]
+
+            remcutmask = (rem_x**2 + rem_y**2)**0.5 < cutoff_radius
+            rem_x = rem_x[remcutmask]
+            rem_y = rem_y[remcutmask]
+            rem_t = rem_t[remcutmask]
+
+        dpi = u.pixel_scale(pixel_scale)
+
+        # Put on the required positive grid for artpop
+        xm, ym = x.min(), y.min()
+
+        x = (x - xm).to(u.pix, dpi)
+        y = (y - ym).to(u.pix, dpi)
+
+        rem_x = (rem_x - xm).to(u.pix, dpi)
+        rem_y = (rem_y - ym).to(u.pix, dpi)
+
+        xy_dim = max(np.ceil(x.max()).astype(int).value,
+                     np.ceil(y.max()).astype(int).value)
+
+        if not (xy_dim % 2):
+            xy_dim += 1
+
+        # ------------------------------------------------------------------
+        # Compute (apparent) magnitude table
+        # ------------------------------------------------------------------
+
+        appmags = {band: abs2app(band, iso.interpolate(band, masses), dist)
+                   for band in iso.filters}
+
+        mag_table = Table(appmags)
+
+        # ------------------------------------------------------------------
+        # Get artpop sources
+        # ------------------------------------------------------------------
+
+        src = artpop.Source(np.c_[x, y], mag_table, xy_dim=xy_dim,
+                            pixel_scale=pixel_scale, **kwargs)
+
+        return (src, (rem_x, rem_y, rem_t)) if return_rem else src
