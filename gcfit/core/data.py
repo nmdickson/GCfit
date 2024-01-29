@@ -1080,9 +1080,9 @@ class Model(lp.limepy):
                         "an `observations`, to read them from"}
                 raise ValueError(mssg)
 
-        self.age <<= u.Gyr
+        self.age = age << u.Gyr
         self.FeH = FeH
-        self.vesc <<= (u.km / u.s)
+        self.vesc = vesc << (u.km / u.s)
 
         self.observations = observations
 
