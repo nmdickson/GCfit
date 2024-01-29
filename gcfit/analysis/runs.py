@@ -2625,9 +2625,9 @@ class RunCollection(_RunAnalysis):
         math_mapping = {
             'W0': r'\hat{\phi}_0',
             'M': r'M',
-            'rh': r'r_{h}',
-            'ra': (r'r_{a}' if force_model
-                   else r'\log_{10}\left(\hat{r}_{a}\right)'),
+            'rh': r'r_{\mathrm{h}}',
+            'ra': (r'r_{\mathrm{a}}' if force_model
+                   else r'\log_{10}\left(\hat{r}_{\mathrm{a}}\right)'),
             'g': r'g',
             'delta': r'\delta',
             's2': r's^{2}',
@@ -2642,17 +2642,17 @@ class RunCollection(_RunAnalysis):
             'RA': r'\mathrm{RA}',
             'DEC': r'\mathrm{DEC}',
             'chi2': r'\chi^{2}',
-            'BH_mass': r'\mathrm{M}_{BH}',
-            'BH_num': r'\mathrm{N}_{BH}',
+            'BH_mass': r'\mathrm{M}_{\mathrm{BH}}',
+            'BH_num': r'\mathrm{N}_{\mathrm{BH}}',
             'f_rem': r'f_{\mathrm{remn}}',
             'f_BH': r'f_{\mathrm{BH}}',
             'spitzer_chi': r'\chi_{\mathrm{Spitzer}}',
             'trh': r't_{\mathrm{r_h}}',
             'N_relax': r'N_{\mathrm{relax}}',
             'r0': r'r_{0}',
-            'rt': r'r_{t}',
-            'rv': r'r_{v}',
-            'rhp': r'r_{hp}',
+            'rt': r'r_{\mathrm{t}}',
+            'rv': r'r_{\mathrm{v}}',
+            'rhp': r'r_{\mathrm{hp}}',
             'mmean': r'\bar{m}',
         }
 
@@ -3513,14 +3513,19 @@ class RunCollection(_RunAnalysis):
 
         return fig
 
-    def summary_dataframe(self, *, include_FeH=True, include_BH=False,
+    def summary_dataframe(self, *, params='all',
+                          include_FeH=True, include_BH=False,
                           math_labels=False):
         import pandas as pd
         # TODO pandas isn't in the setup requirements
 
         # Get name of all desired parameters
 
-        labels = self.runs[0]._get_labels(label_fixed=False)
+        if params == 'all':
+            labels = self.runs[0]._get_labels(label_fixed=False)
+
+        else:
+            labels = params
 
         if include_FeH:
             labels = ['FeH'] + labels
@@ -3548,7 +3553,7 @@ class RunCollection(_RunAnalysis):
 
         return pd.DataFrame.from_dict(data)
 
-    def output_summary(self, outfile=sys.stdout, style='latex', *,
+    def output_summary(self, outfile=sys.stdout, params='all', style='latex', *,
                        include_FeH=False, include_BH=False, math_labels=False,
                        substack_errors=False, **kwargs):
         '''output a table of all parameter means for each cluster'''
@@ -3576,7 +3581,8 @@ class RunCollection(_RunAnalysis):
 
         # get dataframe
 
-        df = self.summary_dataframe(include_FeH=include_FeH,
+        df = self.summary_dataframe(params=params,
+                                    include_FeH=include_FeH,
                                     include_BH=include_BH,
                                     math_labels=math_labels)
 
