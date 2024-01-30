@@ -55,13 +55,13 @@ class _RunAnalysis:
             mssg = f"{cm} is not a registered colormap, see `plt.colormaps`"
             raise ValueError(mssg)
 
-    def _setup_artist(self, fig, ax, *, use_name=True):
+   def _setup_artist(self, fig, ax, *, use_name=True, **sub_kw):
         '''setup a plot (figure and ax) with one single ax'''
 
         if ax is None:
             if fig is None:
                 # no figure or ax provided, make one here
-                fig, ax = plt.subplots()
+                fig, ax = plt.subplots(**sub_kw)
 
             else:
                 # Figure provided, no ax provided. Try to grab it from the fig
@@ -75,7 +75,7 @@ class _RunAnalysis:
                     ax = cur_axes[0]
 
                 else:
-                    ax = fig.add_subplot()
+                    ax = fig.add_subplot(**sub_kw)
 
         else:
             if fig is None:
