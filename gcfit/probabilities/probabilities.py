@@ -204,7 +204,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
         #   Must be symmetric, to avoid bound effects
 
         # mirrored/starting at zero so very small gaussians become the δ-func
-        lin_domain = np.linspace(0., 1e-18, 5_000 // 2)
+        lin_domain = np.linspace(0., 3e-18, 5_000 // 2)
         lin_domain = np.concatenate((np.flip(-lin_domain[1:]), lin_domain))
 
         # ------------------------------------------------------------------
