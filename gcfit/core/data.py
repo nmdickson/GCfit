@@ -2226,8 +2226,8 @@ class SampledModel:
             the units will be assumed to be `arcsec / pixels`.
 
         a_lam : float or dict, optional
-            Magnitude of extinction. If float, the same extinction will be applied
-            to all bands. If dict, keys must match filters for this
+            Magnitude of extinction. If float, the same extinction will be
+            applied to all bands. If dict, keys must match filters for this
             `phot_system` and will be applied individually, defaulting to 0 for
             missing filters.
 
@@ -2301,30 +2301,32 @@ class SampledModel:
         # Get positions
         # ------------------------------------------------------------------
 
-        if projected:
-            try:
-                dist = self.galactic.distance[isolim_mask].to('kpc')
+        with u.set_enabled_equivalencies(util.angular_width(self.d)):
 
-                x = self.galactic.lon[isolim_mask].to('arcsec')
-                y = self.galactic.lat[isolim_mask].to('arcsec')
+            if projected:
+                try:
+                    dist = self.galactic.distance[isolim_mask].to('kpc')
 
-                rem_x = self.galactic.lon[~self.star_mask].to('arcsec')
-                rem_y = self.galactic.lat[~self.star_mask].to('arcsec')
+                    x = self.galactic.lon[isolim_mask].to('arcsec')
+                    y = self.galactic.lat[isolim_mask].to('arcsec')
+
+                    rem_x = self.galactic.lon[~self.star_mask].to('arcsec')
+                    rem_y = self.galactic.lat[~self.star_mask].to('arcsec')
+                    rem_t = self.star_types[~self.star_mask]
+
+                except AttributeError:
+                    mssg = ("Model has not been projected. Supply a "
+                            "'centre' at init or set 'projected=False' here")
+                    raise ValueError(mssg)
+
+            else:
+                dist = (self.d + self.pos.z[isolim_mask]).to('kpc')
+                x = self.pos.x[isolim_mask].to('arcsec')
+                y = self.pos.y[isolim_mask].to('arcsec')
+
+                rem_x = self.pos.x[~self.star_mask].to('arcsec')
+                rem_y = self.pos.y[~self.star_mask].to('arcsec')
                 rem_t = self.star_types[~self.star_mask]
-
-            except AttributeError:
-                mssg = ("Model has not been projected. Supply a "
-                        "'centre' at init or set 'projected=False' here")
-                raise ValueError(mssg)
-
-        else:
-            dist = (self.d + self.pos.z[isolim_mask]).to('kpc')
-            x = self.pos.x[isolim_mask].to('arcsec')
-            y = self.pos.y[isolim_mask].to('arcsec')
-
-            rem_x = self.pos.x[~self.star_mask].to('arcsec')
-            rem_y = self.pos.y[~self.star_mask].to('arcsec')
-            rem_t = self.star_types[~self.star_mask]
 
         if cutoff_radius is not None:
             cutmask = (x**2 + y**2)**0.5 < cutoff_radius
