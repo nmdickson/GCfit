@@ -16,7 +16,7 @@ from collections import abc
 
 
 __all__ = ['ModelVisualizer', 'CIModelVisualizer', 'ObservationsVisualizer',
-           'ModelCollection']
+           'SampledVisualizer', 'ModelCollection']
 
 
 def _get_model(theta, observations):
@@ -58,13 +58,13 @@ class _ClusterVisualizer:
     # Artist setups
     # -----------------------------------------------------------------------
 
-    def _setup_artist(self, fig, ax, *, use_name=True):
+    def _setup_artist(self, fig, ax, *, use_name=True, **sub_kw):
         '''setup a plot (figure and ax) with one single ax'''
 
         if ax is None:
             if fig is None:
                 # no figure or ax provided, make one here
-                fig, ax = plt.subplots()
+                fig, ax = plt.subplots(**sub_kw)
 
             else:
                 # Figure provided, no ax provided. Try to grab it from the fig
@@ -78,7 +78,7 @@ class _ClusterVisualizer:
                     ax = cur_axes[0]
 
                 else:
-                    ax = fig.add_subplot()
+                    ax = fig.add_subplot(**sub_kw)
 
         else:
             if fig is None:
@@ -2926,6 +2926,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
     def _init_cum_mass(self, model):
         # TODO it seems like the integrated mass is a bit less than total Mj?
+        # TODO why doing all this instead of using model.mc?
 
         _2πr = 2 * np.pi * model.r
 
@@ -3329,6 +3330,191 @@ class ObservationsVisualizer(_ClusterVisualizer):
         self.K_scale = None
 
         self._init_massfunc(observations)
+
+
+# --------------------------------------------------------------------------
+# Sampled Model visualizers
+# --------------------------------------------------------------------------
+
+class SampledVisualizer:
+    '''
+    basic class for making some plots related to a sampled single model
+    '''
+
+    _setup_artist = _ClusterVisualizer._setup_artist
+
+    def _get_stars(self, type_='all'):
+
+        mask = np.full(self.model.N, False)
+
+        if type_ == 'all':
+            mask[:] = True
+        else:
+            mask[mask == type_] = True
+
+        mask[::self.thin] = False
+
+        return mask
+
+    def __init__(self, sampledmodel, thin=1):
+
+        self.model = sampledmodel
+        self.d = sampledmodel.d
+        self.thin = thin
+
+    def plot_positions(self, fig=None, ax=None, type_='all',
+                       galactic=False, projection=None, **kwargs):
+
+        subplot_kw = dict(projection=projection)
+
+        fig, ax = self._setup_artist(fig=fig, ax=ax, subplot_kw=subplot_kw)
+
+        mask = self._get_stars(type_)
+
+        if galactic:
+
+            x = self.model.galactic.lon[mask]
+            y = self.model.galactic.lat[mask]
+            z = self.model.galactic.distance[mask]
+
+        elif projection == 'polar':
+
+            x = self.model.pos.r[mask]
+            y = self.model.pos.theta[mask]
+            z = None  # can't be polar and 3d
+
+        else:
+
+            x = self.model.pos.x[mask]
+            y = self.model.pos.y[mask]
+            z = self.model.pos.y[mask]
+
+        if projection == '3d':
+            ax.scatter(x, y, z, **kwargs)
+        else:
+            ax.scatter(x, y, **kwargs)
+
+        return fig
+
+    def plot_velocities(self, fig=None, ax=None, type_='all',
+                        galactic=False, projection=None, **kwargs):
+
+        subplot_kw = dict(projection=projection)
+
+        fig, ax = self._setup_artist(fig=fig, ax=ax, subplot_kw=subplot_kw)
+
+        mask = self._get_stars(type_)
+
+        if galactic:
+
+            vx = self.model.galactic.pm_l_cosb[mask]
+            vy = self.model.galactic.pm_b[mask]
+            vz = self.model.galactic.v_los[mask]
+
+        elif projection == 'polar':
+
+            vx = self.model.vel.r[mask]
+            vy = self.model.vel.theta[mask]
+            vz = None  # can't be polar and 3d
+
+        else:
+
+            vx = self.model.vel.x[mask]
+            vy = self.model.vel.y[mask]
+            vz = self.model.vel.y[mask]
+
+        if projection == '3d':
+            ax.scatter(vx, vy, vz, **kwargs)
+        else:
+            ax.scatter(vx, vy, **kwargs)
+
+        return fig
+
+    @_ClusterVisualizer._support_units
+    def plot_simulation(self, phot_system, r_band, g_band, b_band,
+                        pixel_scale, FWHM,
+                        fig=None, ax=None, *, source_kw=None,
+                        ideal_imager=False, exptime=3600,
+                        imager_kw=None, psf_kw=None,
+                        observe_kw=None, rgb_kw=None, show_kw=None):
+        '''plot a simulated observation using `artpop`
+
+        This method basically provides a skeleton of what is necessary to
+        produce an artpop artificial RGB image of a sampled cluster, based on
+        the `SampledModel.to_artpop` method.
+        All options for each step can be provided to the relevant `*_kw`
+        argument. If more manual control is required, simply use the
+        `artpop.Source` provided by `to_artpop` directly.
+        '''
+        import artpop
+        from astropy.visualization import make_lupton_rgb
+
+        fig, ax = self._setup_artist(fig=fig, ax=ax)
+
+        # ------------------------------------------------------------------
+        # Get artpop Source object from sampled model directly
+        # ------------------------------------------------------------------
+
+        if source_kw is None:
+            source_kw = {}
+
+        src = self.model.to_artpop(phot_system, pixel_scale, **source_kw)
+
+        # ------------------------------------------------------------------
+        # Construct PSF
+        # ------------------------------------------------------------------
+
+        if psf_kw is None:
+            psf_kw = {}
+
+        psf = artpop.moffat_psf(fwhm=FWHM, **psf_kw)
+
+        # ------------------------------------------------------------------
+        # Construct imager
+        # ------------------------------------------------------------------
+
+        if imager_kw is None:
+            imager_kw = {}
+
+        if ideal_imager:
+            imager = artpop.IdealImager(**imager_kw)
+
+        else:
+            imager = artpop.ArtImager(phot_system=phot_system, **imager_kw)
+
+        # ------------------------------------------------------------------
+        # Observe each colour
+        # ------------------------------------------------------------------
+
+        if observe_kw is None:
+            observe_kw = {}
+
+        if not ideal_imager:
+            observe_kw.setdefault('exptime', exptime)
+
+        obs_r = imager.observe(src, r_band, psf=psf, **observe_kw)
+        obs_g = imager.observe(src, g_band, psf=psf, **observe_kw)
+        obs_b = imager.observe(src, b_band, psf=psf, **observe_kw)
+
+        # ------------------------------------------------------------------
+        # Construct RGB image
+        # ------------------------------------------------------------------
+
+        if rgb_kw is None:
+            rgb_kw = {}
+
+        rgb = make_lupton_rgb(obs_r.image, obs_g.image, obs_b.image, **rgb_kw)
+
+        # ------------------------------------------------------------------
+        # Plot image
+        # ------------------------------------------------------------------
+
+        if show_kw is None:
+            show_kw = {}
+
+        artpop.show_image(rgb, subplots=(fig, ax), **show_kw)
+
+        return fig
 
 
 # --------------------------------------------------------------------------

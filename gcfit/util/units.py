@@ -1,6 +1,6 @@
 import warnings
 
-import scipy.stats
+import scipy
 import numpy as np
 import astropy.units as u
 from astropy.units.equivalencies import Equivalency

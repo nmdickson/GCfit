@@ -1080,8 +1080,9 @@ class Model(lp.limepy):
                         "an `observations`, to read them from"}
                 raise ValueError(mssg)
 
-        age <<= u.Gyr
-        vesc <<= (u.km / u.s)
+        self.age = age << u.Gyr
+        self.FeH = FeH
+        self.vesc = vesc << (u.km / u.s)
 
         self.observations = observations
 
@@ -1093,8 +1094,8 @@ class Model(lp.limepy):
             m_breaks=m_breaks.value,
             a_slopes=[-a1, -a2, -a3],
             nbins=nbins,
-            FeH=FeH,
-            tout=np.array([age.to_value('Myr')]),
+            FeH=self.FeH,
+            tout=np.array([self.age.to_value('Myr')]),
             Ndot=Ndot,
             N0=5e5,
             tcc=tcc,
@@ -1102,7 +1103,7 @@ class Model(lp.limepy):
             BH_ret_int=BH_ret_int,
             BH_ret_dyn=BHret / 100.,
             natal_kicks=natal_kicks,
-            vesc=vesc.value
+            vesc=self.vesc.value
         )
 
         self._mf = EvolvedMF(**self._mf_kwargs)
@@ -1236,7 +1237,7 @@ class Model(lp.limepy):
 
         # Elapsed relaxations
 
-        self.N_relax = age.to('Gyr') / self.trh
+        self.N_relax = self.age.to('Gyr') / self.trh
 
         # Spitzer instability
 
@@ -1732,8 +1733,6 @@ class SampledModel:
         v_los), based on the given cluster centre.
     '''
 
-    # TODO get initial masses as well, so can add stuff like photometry
-
     centre = None
     galactic = None
 
@@ -2078,20 +2077,6 @@ class SampledModel:
 
     def __init__(self, model, centre=None, *, distribute_masses=True,
                  use_model_distance=True, seed=None, pool=None, verbose=False):
-        '''Sample N stars with positions and velocities from this model
-
-        if centre is given, will determine projected/observed
-            coordinates/velocities for each star based on this centre.
-            Centre should be a SkyCoord, and also contain velocities
-            The model "distance" `d` will set the distance of the exact centre
-            of the cluster, overriding the distance in the given centre
-            skycoord, unless `use_model_distance` is False.
-        if use_model_distance is False and the distance is not very close to
-            the model distance, this will obvisouly give very weird results
-
-        if distribute_masses, masses will be uniformally sampled between all
-            the mass bins, otherwise will all have the mean value (mj)
-        '''
 
         # store ref to base model, just in case
         self._basemodel = model
@@ -2135,11 +2120,8 @@ class SampledModel:
         self.s2j = np.repeat(model.s2j, self.Nj)
         self.σ2_factor = model.s2 / self.s2j
 
-        try:
-            self.age = model.observations.mdata['age'] << u.Gyr
-            self.feh = model.observations.mdata['FeH']
-        except (AttributeError, KeyError):
-            pass
+        self.age = model.age
+        self.FeH = model.FeH
 
         # ------------------------------------------------------------------
         # "Sample" the masses, assuming all stars are exactly mean bin mass
@@ -2217,3 +2199,189 @@ class SampledModel:
             self.centre = centre
 
             self.galactic = self._project(centre)
+
+    # ----------------------------------------------------------------------
+    # artpop tests
+    # ----------------------------------------------------------------------
+
+    def to_artpop(self, phot_system, pixel_scale, *,
+                  a_lam=0., projected=False, cutoff_radius=None,
+                  return_rem=False, iso_class=None, thin=False, **kwargs):
+        '''Construct an `artpop.Source` for use in simulated photometry
+
+        Computes, based on the masses and MIST Isochrones for the given
+        `phot_system`, positions and magnitudes for all stars which are used to
+        create an artificial `Source` object from `artpop`, to be used within
+        `artpop` to simulate artificial imagery of this (sampled) cluster.
+
+        Parameters
+        ----------
+        phot_system : str
+            Name of the photometric system to simulate stellar magnitudes
+            within. Must be supported by the given `iso_class` (therefore,
+            likely part of the MIST isochrone catalogue)
+
+        pixel_scale : float or astropy.Quantity
+            The pixel scale of the mock image. If a float is given,
+            the units will be assumed to be `arcsec / pixels`.
+
+        a_lam : float or dict, optional
+            Magnitude of extinction. If float, the same extinction will be
+            applied to all bands. If dict, keys must match filters for this
+            `phot_system` and will be applied individually, defaulting to 0 for
+            missing filters.
+
+        projected : bool, optional
+            If False (default) will use unprojected x-y star positions,
+            otherwise will use the galactic longitude/latitude. A centre must
+            have been provided at initilization.
+
+        cutoff_radius : astropy.Quantity, optional
+            A maximum radius to apply to the sampled stars. Only stars sampled
+            within this radius will be used.
+
+        return_rem : bool, optional
+            If True, will also return the x and y positions (and types) of all
+            remnants alongside the `Source`, which can be used to show the
+            presence of dark remnants alongside simulated imagery.
+            By default, only the `Source` is returned
+
+        iso_class : artpop.Isochrone, optional
+            Optionally use a custom subclass of the typical `artpop` isochrone
+            objects. This may be required for use with custom isochrones from
+            sources other than the MIST catalogue. By default, the
+            `artpop.MISTIsochrone` class is used.
+
+        thin : int, optional
+            If given, will "thin" out the stars used in the final tables by
+            this factor. Not typically recommended unless absolutely necessary.
+
+        Returns
+        -------
+        src : artpop.Source
+            `artpop` artificial source object corresponding to this sampled
+            cluster
+
+        '''
+
+        import artpop
+        from astropy.table import Table
+
+        if iso_class is None:
+            iso_class = artpop.MISTIsochrone
+
+        def abs2app(band, absmag, dist):
+            return absmag + (5 * np.log10(100 * dist / u.kpc)) + a_lam[band]
+
+        # ------------------------------------------------------------------
+        # Setup isocrhone and mask any invalid mass ranges
+        # ------------------------------------------------------------------
+
+        log_age = np.log10(self.age.to_value('yr'))
+        iso = iso_class(log_age, self.FeH, phot_system=phot_system)
+
+        # Mask all remnants and any stars outside isochrone mass bounds
+        #   (should only be a few with mass~0.099)
+        isolim_mask = self.star_mask.copy()
+        isolim_mask &= ((self.m.value > iso.m_min) & (self.m.value < iso.m_max))
+
+        masses = self.m[isolim_mask]
+
+        # ------------------------------------------------------------------
+        # Setup extinction
+        # ------------------------------------------------------------------
+
+        if isinstance(a_lam, dict):
+            a_lam = {band: a_lam.get(band, 0.) for band in iso.filters}
+
+        else:
+            a_lam = {band: a_lam for band in iso.filters}
+
+        # ------------------------------------------------------------------
+        # Get positions
+        # ------------------------------------------------------------------
+
+        with u.set_enabled_equivalencies(util.angular_width(self.d)):
+
+            if projected:
+                try:
+                    dist = self.galactic.distance[isolim_mask].to('kpc')
+
+                    x = self.galactic.lon[isolim_mask].to('arcsec')
+                    y = self.galactic.lat[isolim_mask].to('arcsec')
+
+                    rem_x = self.galactic.lon[~self.star_mask].to('arcsec')
+                    rem_y = self.galactic.lat[~self.star_mask].to('arcsec')
+                    rem_t = self.star_types[~self.star_mask]
+
+                except AttributeError:
+                    mssg = ("Model has not been projected. Supply a "
+                            "'centre' at init or set 'projected=False' here")
+                    raise ValueError(mssg)
+
+            else:
+                dist = (self.d + self.pos.z[isolim_mask]).to('kpc')
+                x = self.pos.x[isolim_mask].to('arcsec')
+                y = self.pos.y[isolim_mask].to('arcsec')
+
+                rem_x = self.pos.x[~self.star_mask].to('arcsec')
+                rem_y = self.pos.y[~self.star_mask].to('arcsec')
+                rem_t = self.star_types[~self.star_mask]
+
+        if cutoff_radius is not None:
+            cutmask = (x**2 + y**2)**0.5 < cutoff_radius
+
+            x = x[cutmask]
+            y = y[cutmask]
+            dist = dist[cutmask]
+            masses = masses[cutmask]
+
+            remcutmask = (rem_x**2 + rem_y**2)**0.5 < cutoff_radius
+            rem_x = rem_x[remcutmask]
+            rem_y = rem_y[remcutmask]
+            rem_t = rem_t[remcutmask]
+
+        if thin:
+            x = x[::thin]
+            y = y[::thin]
+            dist = dist[::thin]
+            masses = masses[::thin]
+
+        # Put on the required positive grid for artpop
+        xm, ym = x.min(), y.min()
+
+        pixel_scale <<= u.arcsec / u.pixel
+
+        dpi = u.pixel_scale(pixel_scale)
+
+        x = (x - xm).to(u.pix, dpi)
+        y = (y - ym).to(u.pix, dpi)
+
+        rem_x = (rem_x - xm).to(u.pix, dpi)
+        rem_y = (rem_y - ym).to(u.pix, dpi)
+
+        xy_dim = max(np.ceil(x.max()).astype(int).value,
+                     np.ceil(y.max()).astype(int).value)
+
+        if not (xy_dim % 2):
+            xy_dim += 1
+
+        # ------------------------------------------------------------------
+        # Compute (apparent) magnitude table
+        # ------------------------------------------------------------------
+
+        # TODO this should in theory use `x_name='mact'` but that produces
+        #   nonsensical images, despite this mag table being almost identical
+        appmags = {band: abs2app(band, iso.interpolate(band, masses), dist)
+                   for band in iso.filters}
+
+        mag_table = Table(appmags)
+
+        # ------------------------------------------------------------------
+        # Get artpop sources
+        # ------------------------------------------------------------------
+
+        src = artpop.Source(np.c_[x, y], mag_table, xy_dim=xy_dim,
+                            pixel_scale=pixel_scale, **kwargs)
+
+        return (src, (rem_x, rem_y, rem_t)) if return_rem else src
