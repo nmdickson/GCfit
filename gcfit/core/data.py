@@ -2348,6 +2348,8 @@ class SampledModel:
         # Put on the required positive grid for artpop
         xm, ym = x.min(), y.min()
 
+        pixel_scale <<= u.arcsec / u.pixel
+
         dpi = u.pixel_scale(pixel_scale)
 
         x = (x - xm).to(u.pix, dpi)
