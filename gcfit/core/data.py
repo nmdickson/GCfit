@@ -1733,8 +1733,6 @@ class SampledModel:
         v_los), based on the given cluster centre.
     '''
 
-    # TODO get initial masses as well, so can add stuff like photometry
-
     centre = None
     galactic = None
 
@@ -2079,20 +2077,6 @@ class SampledModel:
 
     def __init__(self, model, centre=None, *, distribute_masses=True,
                  use_model_distance=True, seed=None, pool=None, verbose=False):
-        '''Sample N stars with positions and velocities from this model
-
-        if centre is given, will determine projected/observed
-            coordinates/velocities for each star based on this centre.
-            Centre should be a SkyCoord, and also contain velocities
-            The model "distance" `d` will set the distance of the exact centre
-            of the cluster, overriding the distance in the given centre
-            skycoord, unless `use_model_distance` is False.
-        if use_model_distance is False and the distance is not very close to
-            the model distance, this will obvisouly give very weird results
-
-        if distribute_masses, masses will be uniformally sampled between all
-            the mass bins, otherwise will all have the mean value (mj)
-        '''
 
         # store ref to base model, just in case
         self._basemodel = model
@@ -2220,9 +2204,66 @@ class SampledModel:
     # artpop tests
     # ----------------------------------------------------------------------
 
-    def to_artpop(self, phot_system, pixel_scale, *, thin=False,
-                  a_lam=0., projected=True, cutoff_radius=None,
-                  return_rem=False, iso_class=None, **kwargs):
+    def to_artpop(self, phot_system, pixel_scale, *,
+                  a_lam=0., projected=False, cutoff_radius=None,
+                  return_rem=False, iso_class=None, thin=False, **kwargs):
+        '''Construct an `artpop.Source` for use in simulated photometry
+
+        Computes, based on the masses and MIST Isochrones for the given
+        `phot_system`, positions and magnitudes for all stars which are used to
+        create an artificial `Source` object from `artpop`, to be used within
+        `artpop` to simulate artificial imagery of this (sampled) cluster.
+
+        Parameters
+        ----------
+        phot_system : str
+            Name of the photometric system to simulate stellar magnitudes
+            within. Must be supported by the given `iso_class` (therefore,
+            likely part of the MIST isochrone catalogue)
+
+        pixel_scale : float or astropy.Quantity
+            The pixel scale of the mock image. If a float is given,
+            the units will be assumed to be `arcsec / pixels`.
+
+        a_lam : float or dict, optional
+            Magnitude of extinction. If float, the same extinction will be applied
+            to all bands. If dict, keys must match filters for this
+            `phot_system` and will be applied individually, defaulting to 0 for
+            missing filters.
+
+        projected : bool, optional
+            If False (default) will use unprojected x-y star positions,
+            otherwise will use the galactic longitude/latitude. A centre must
+            have been provided at initilization.
+
+        cutoff_radius : astropy.Quantity, optional
+            A maximum radius to apply to the sampled stars. Only stars sampled
+            within this radius will be used.
+
+        return_rem : bool, optional
+            If True, will also return the x and y positions (and types) of all
+            remnants alongside the `Source`, which can be used to show the
+            presence of dark remnants alongside simulated imagery.
+            By default, only the `Source` is returned
+
+        iso_class : artpop.Isochrone, optional
+            Optionally use a custom subclass of the typical `artpop` isochrone
+            objects. This may be required for use with custom isochrones from
+            sources other than the MIST catalogue. By default, the
+            `artpop.MISTIsochrone` class is used.
+
+        thin : int, optional
+            If given, will "thin" out the stars used in the final tables by
+            this factor. Not typically recommended unless absolutely necessary.
+
+        Returns
+        -------
+        src : artpop.Source
+            `artpop` artificial source object corresponding to this sampled
+            cluster
+
+        '''
+
         import artpop
         from astropy.table import Table
 
@@ -2298,8 +2339,6 @@ class SampledModel:
             rem_y = rem_y[remcutmask]
             rem_t = rem_t[remcutmask]
 
-        dpi = u.pixel_scale(pixel_scale)
-
         if thin:
             x = x[::thin]
             y = y[::thin]
@@ -2308,6 +2347,8 @@ class SampledModel:
 
         # Put on the required positive grid for artpop
         xm, ym = x.min(), y.min()
+
+        dpi = u.pixel_scale(pixel_scale)
 
         x = (x - xm).to(u.pix, dpi)
         y = (y - ym).to(u.pix, dpi)
@@ -2325,6 +2366,8 @@ class SampledModel:
         # Compute (apparent) magnitude table
         # ------------------------------------------------------------------
 
+        # TODO this should in theory use `x_name='mact'` but that produces
+        #   nonsensical images, despite this mag table being almost identical
         appmags = {band: abs2app(band, iso.interpolate(band, masses), dist)
                    for band in iso.filters}
 

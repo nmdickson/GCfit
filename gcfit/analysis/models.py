@@ -3337,6 +3337,9 @@ class ObservationsVisualizer(_ClusterVisualizer):
 # --------------------------------------------------------------------------
 
 class SampledVisualizer:
+    '''
+    basic class for making some plots related to a sampled single model
+    '''
 
     _setup_artist = _ClusterVisualizer._setup_artist
 
@@ -3434,7 +3437,15 @@ class SampledVisualizer:
                         ideal_imager=False, exptime=3600,
                         imager_kw=None, psf_kw=None,
                         observe_kw=None, rgb_kw=None, show_kw=None):
-        '''plot a simulated observation using `artpop`'''
+        '''plot a simulated observation using `artpop`
+
+        This method basically provides a skeleton of what is necessary to
+        produce an artpop artificial RGB image of a sampled cluster, based on
+        the `SampledModel.to_artpop` method.
+        All options for each step can be provided to the relevant `*_kw`
+        argument. If more manual control is required, simply use the
+        `artpop.Source` provided by `to_artpop` directly.
+        '''
         import artpop
         from astropy.visualization import make_lupton_rgb
 
