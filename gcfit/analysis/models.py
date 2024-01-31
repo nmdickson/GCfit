@@ -2926,6 +2926,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
     def _init_cum_mass(self, model):
         # TODO it seems like the integrated mass is a bit less than total Mj?
+        # TODO why doing all this instead of using model.mc?
 
         _2πr = 2 * np.pi * model.r
 
@@ -3422,6 +3423,83 @@ class SampledVisualizer:
             ax.scatter(vx, vy, vz, **kwargs)
         else:
             ax.scatter(vx, vy, **kwargs)
+
+        return fig
+
+    def plot_simulation(self, phot_system, r_band, g_band, b_band,
+                        pixel_scale, FWHM,
+                        fig=None, ax=None, *, source_kw=None,
+                        ideal_imager=False, exptime=3600,
+                        imager_kw=None, psf_kw=None,
+                        observe_kw=None, rgb_kw=None, show_kw=None):
+        '''plot a simulated observation using `artpop`'''
+        import artpop
+        from astropy.visualization import make_lupton_rgb
+
+        fig, ax = self._setup_artist(fig=fig, ax=ax)
+
+        # ------------------------------------------------------------------
+        # Get artpop Source object from sampled model directly
+        # ------------------------------------------------------------------
+
+        if source_kw is None:
+            source_kw = {}
+
+        src = self.model.to_artpop(phot_system, pixel_scale, **source_kw)
+
+        # ------------------------------------------------------------------
+        # Construct PSF
+        # ------------------------------------------------------------------
+
+        if psf_kw is None:
+            psf_kw = {}
+
+        psf = artpop.moffat_psf(fwhm=FWHM, **psf_kw)
+
+        # ------------------------------------------------------------------
+        # Construct imager
+        # ------------------------------------------------------------------
+
+        if imager_kw is None:
+            imager_kw = {}
+
+        if ideal_imager:
+            imager = artpop.IdealImager(**imager_kw)
+
+        else:
+            imager = artpop.ArtImager(phot_system=phot_system, **imager_kw)
+
+        # ------------------------------------------------------------------
+        # Observe each colour
+        # ------------------------------------------------------------------
+
+        if observe_kw is None:
+            observe_kw = {}
+
+        if not ideal_imager:
+            observe_kw.setdefault('exptime', exptime)
+
+        obs_r = imager.observe(src, r_band, psf=psf, **observe_kw)
+        obs_g = imager.observe(src, g_band, psf=psf, **observe_kw)
+        obs_b = imager.observe(src, b_band, psf=psf, **observe_kw)
+
+        # ------------------------------------------------------------------
+        # Construct RGB image
+        # ------------------------------------------------------------------
+
+        if rgb_kw is None:
+            rgb_kw = {}
+
+        rgb = make_lupton_rgb(obs_r.image, obs_g.image, obs_b.image, **rgb_kw)
+
+        # ------------------------------------------------------------------
+        # Plot image
+        # ------------------------------------------------------------------
+
+        if show_kw is None:
+            show_kw = {}
+
+        artpop.show_image(rgb, subplots=(fig, ax), **show_kw)
 
         return fig
 

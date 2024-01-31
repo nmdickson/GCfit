@@ -55,7 +55,7 @@ class _RunAnalysis:
             mssg = f"{cm} is not a registered colormap, see `plt.colormaps`"
             raise ValueError(mssg)
 
-   def _setup_artist(self, fig, ax, *, use_name=True, **sub_kw):
+    def _setup_artist(self, fig, ax, *, use_name=True, **sub_kw):
         '''setup a plot (figure and ax) with one single ax'''
 
         if ax is None:
