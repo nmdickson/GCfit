@@ -2220,7 +2220,7 @@ class SampledModel:
     # artpop tests
     # ----------------------------------------------------------------------
 
-    def to_artpop(self, phot_system, pixel_scale, *,
+    def to_artpop(self, phot_system, pixel_scale, *, thin=False,
                   a_lam=0., projected=True, cutoff_radius=None,
                   return_rem=False, iso_class=None, **kwargs):
         import artpop
@@ -2299,6 +2299,12 @@ class SampledModel:
             rem_t = rem_t[remcutmask]
 
         dpi = u.pixel_scale(pixel_scale)
+
+        if thin:
+            x = x[::thin]
+            y = y[::thin]
+            dist = dist[::thin]
+            masses = masses[::thin]
 
         # Put on the required positive grid for artpop
         xm, ym = x.min(), y.min()
