@@ -3356,6 +3356,7 @@ class SampledVisualizer:
     def __init__(self, sampledmodel, thin=1):
 
         self.model = sampledmodel
+        self.d = sampledmodel.d
         self.thin = thin
 
     def plot_positions(self, fig=None, ax=None, type_='all',
@@ -3426,6 +3427,7 @@ class SampledVisualizer:
 
         return fig
 
+    @_ClusterVisualizer._support_units
     def plot_simulation(self, phot_system, r_band, g_band, b_band,
                         pixel_scale, FWHM,
                         fig=None, ax=None, *, source_kw=None,
