@@ -9,11 +9,12 @@ Welcome to GCfit's documentation!
 :Release: |release|
 :Date: |today|
 
-GCfit is a Python package enabling the creation of distribution-function based
-lowered isothermal (`LIMEPY <https://github.com/mgieles/limepy>`_) models,
-representing globular cluster (GC) systems, and the generalized fitting of
-these models to various observational GC data products, via a parallelized
-sampling suite.
+GCfit is a Python package enabling the creation and extension of
+distribution-function based lowered isothermal
+(`LIMEPY <https://github.com/mgieles/limepy>`_) models,
+representing globular cluster (GC) systems, as well as the generalized
+fitting of these models to various observational GC data products, via a
+parallelized bayesian sampling suite.
 
 .. toctree::
    :maxdepth: 2
