@@ -14,7 +14,7 @@ from collections import namedtuple
 
 
 __all__ = ['DEFAULT_THETA', 'Model', 'FittableModel', 'SingleMassModel',
-           'Observations']
+           'SampledModel', 'Observations']
 
 
 # The order of this is important!
@@ -885,8 +885,6 @@ class Model(lp.limepy):
     star_types : numpy.ndarray
         Array of 2-character strings representing the type of object in each
         mass bin (MS, WD, NS, BH).
-        Note that this is not 100% accurate, as some remnants of different
-        types may have final masses which fall into the same mass bin.
 
     {BH,NS,WD}_mj : astropy.Quantity
         Black hole, neutron star or white dwarf component mass bin size
