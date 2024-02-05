@@ -85,6 +85,6 @@ see the proceeding pages:
    Installation <installation>
    Models <models>
    Fitting <fitting>
-   Usage and Examples <usage>
+   Usage and Examples <usage/usage>
    API <ref/api>
    References <citations>
