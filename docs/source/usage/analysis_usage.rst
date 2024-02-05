@@ -142,10 +142,10 @@ see the help page:
     generate_model_CI --help
 
 
-Plotting Specific Models and Observations
-"""""""""""""""""""""""""""""""""""""""""
+Specific Models and Observations
+""""""""""""""""""""""""""""""""
 
-All of these model visualizations can also be used to examine specific models,
+All of these model visualizations can also be used to examine arbitrary models,
 not necessarily based on any fitting results, though they will of course not
 have any comparisons to observed datasets.
 
@@ -173,6 +173,54 @@ models, can also be done.
     >>> ov.plot_number_density(show_background=True)
     <Figure size 640x480 with 1 Axes>
 
+    >>> plt.show()
+
+
+Sampled Models and Simulated Photometry
+"""""""""""""""""""""""""""""""""""""""
+
+Some basic visualizations are also provided for sampled multimass models.
+
+.. code-block:: python
+
+    >>> sampled = model.sample()
+    >>> sviz = analysis.models.SampledVisualizer(sampled)
+
+    >>> sviz.plot_positions()
+    <Figure size 640x480 with 1 Axes>
+
+If the models are large, the large number of samples may be difficult to plot
+at once. The ``thin`` argument can thus be used to reduce the number of
+sampled shown in these figures.
+
+.. code-block:: python
+
+    >>> sviz = analysis.models.SampledVisualizer(sampled, thin=50)
+
+Simulated, realistic images of the models can be created using the
+`artpop package <https://github.com/ArtificialStellarPopulations/ArtPop>`_.
+The :class:`SampledModel<gcfit.core.data.SampledModel>` class provides some
+artpop integration through the ``to_artpop`` method, which returns an
+``artpop.Source`` object, with positions and magnitudes for each sampled star,
+which can be used by artpop to create synthetic imagery.
+
+.. code-block:: python
+
+    >>> src = sampled.to_artpop('LSST', pixel_scale=0.5)
+    >>> src
+    <artpop.source.Source object at 0x7f238558d630>
+
+See the `artpop documentation <https://artpop.readthedocs.io/en/latest/tutorials/artimages.html>`_
+for a tutorial on how to use the generated source object.
+
+A very basic function for creating an RGB image based on the sampled model,
+without interacting with artpop manually, is also provided.
+
+.. code-block:: python
+
+    >>> sviz.plot_simulation('LSST', 'LSST_i', 'LSST_r', 'LSST_g',
+                             pixel_scale=0.5, FWHM=0.7)
+    <Figure size 640x480 with 1 Axes>
     >>> plt.show()
 
 
