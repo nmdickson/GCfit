@@ -1587,7 +1587,7 @@ class FittableModel(Model):
         evolution algorithm and fitting parameters.
         See `Model` for further explanation of all possible input parameters.
 
-    observations : Observations, optional
+    observations : Observations
         The `Observations` instance corresponding to this cluster. Required at
         initilization so that the models can be compared to these observations
         in the most consistent way possible.
