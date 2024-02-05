@@ -43,7 +43,7 @@ DEFAULT_THETA = {
 
 
 class Variable(u.Quantity):
-    '''Read-only `astropy.Quantity` subclass with metadata support'''
+    '''Read-only `astropy.Quantity` subclass with metadata support.'''
 
     def __repr__(self):
         prefix = f'<{self.__class__.__name__} '
@@ -142,7 +142,7 @@ class Variable(u.Quantity):
 
 
 class Dataset:
-    '''Read-only container for all variables associated with a single dataset
+    '''Read-only container for all variables associated with a single dataset.
 
     Contains all data representing a single observational dataset,
     i.e. all `Variable`s associated to a single physical process, from a single
@@ -151,13 +151,17 @@ class Dataset:
     Should not be initialized directly, but from an `Observations` instance,
     using the base data file's relevant group.
 
+    Parameters
+    ----------
+    group : h5py.Group
+        HDF5 group object corresponding to this dataset.
+
     Attributes
     ----------
     variables
 
     mdata : dict
-        Dictionary of all "cluster-level" metadata
-
+        Dictionary of all "cluster-level" metadata.
     '''
 
     def __repr__(self):
@@ -218,7 +222,7 @@ class Dataset:
 
     @property
     def size(self):
-        '''Number of datapoints in this dataset'''
+        '''Number of datapoints in this dataset.'''
         try:
             return list(self._dict_variables.values())[0].size
         except IndexError:
@@ -228,15 +232,15 @@ class Dataset:
 
     @property
     def variables(self):
-        '''Dictionary of all `Variables`s contained in this class'''
+        '''Dictionary of all `Variables`s contained in this class.'''
         return self._dict_variables
 
     def cite(self):
-        '''Return the literature source (citation) of this `Dataset`'''
+        '''Return the literature source (citation) of this `Dataset`.'''
         return self.__citation__()
 
     def build_err(self, varname, model_r, model_val):
-        '''Return the most relevant uncertainties associated with a variable
+        '''Return the most relevant uncertainties associated with a variable.
 
         Determines and returns the uncertainty (error) variables corresponding
         to the `varname` variable, which must also exist within this dataset.
@@ -248,10 +252,10 @@ class Dataset:
         this dataset's radial `r` profile, and for each point the closest
         error bar to each `model_val` is chosen.
 
-        parameters
+        Parameters
         ----------
         varname : str
-            Name of the variable to retrieve the errors for
+            Name of the variable to retrieve the errors for.
 
         model_r : astropy.Quantity
             Quantity representing the desired radial profile to interpolate on.
@@ -262,6 +266,11 @@ class Dataset:
             Quantity representing the desired values to interpolate on.
             Only used for assymetric errors. Must have equivalent units to
             the given `varname`.
+
+        Returns
+        -------
+        astropy.Quantity
+            The error variable corresponding to this `varname`.
         '''
 
         quantity = self[varname]
@@ -309,7 +318,7 @@ class Dataset:
 
 
 class Observations:
-    '''Read-only interface for all observational cluster data
+    '''Read-only interface for all observational cluster data.
 
     The main interface for reading and interacting with (reading) all
     observational data for the specified globular cluster.
@@ -345,12 +354,12 @@ class Observations:
     datasets
 
     mdata : dict
-        Dictionary of all "cluster-level" metadata
+        Dictionary of all "cluster-level" metadata.
 
     See Also
     --------
-    gcfit.util.get_cluster_path : Locating of data file based on `cluster` name
-    gcfit.util.data.ClusterFile : Handling of data file creation and editing
+    gcfit.util.get_cluster_path : Locating of data file based on `cluster` name.
+    gcfit.util.data.ClusterFile : Handling of data file creation and editing.
     '''
 
     _valid_likelihoods = None
@@ -435,16 +444,22 @@ class Observations:
         return groups
 
     def filter_datasets(self, pattern, valid_only=False):
-        '''Return a subset of `Observations.datasets` based on given `pattern`
+        '''Return a subset of `Observations.datasets` based on given `pattern`.
 
         Parameters
         ----------
         pattern : str
-            A pattern string to filter all dataset names on, using `fnmatch`
+            A pattern string to filter all dataset names on, using `fnmatch`.
 
         valid_only : bool, optional
             Whether to filter on all datasets or only those considered "valid"
-            by `Observations.valid_likelihoods`
+            by `Observations.valid_likelihoods`.
+
+        Returns
+        -------
+        dict
+            Dictionary of name:dataset pairs for all datasets which match the
+            given `pattern`.
         '''
 
         if valid_only:
@@ -455,7 +470,7 @@ class Observations:
         return {key: self[key] for key in fnmatch.filter(datasets, pattern)}
 
     def filter_likelihoods(self, patterns, exclude=False, keys_only=False):
-        '''Return subset of `Observations.valid_likelihoods` based on `patterns`
+        '''Return subset of `valid_likelihoods` based on `patterns`.
 
         Filters the results of `Observations.valid_likelihoods` based on a
         *list* of `patterns`. The pattern matching (for each pattern in the
@@ -465,11 +480,12 @@ class Observations:
         Parameters
         ----------
         patterns : list of str
-            List of pattern strings to filter all likelihoods on using `fnmatch`
+            List of pattern strings to filter all likelihoods on using
+            `fnmatch`.
 
         exclude : bool, optional
             Whether to return all likelihoods which match the filters (False,
-            default) or to exclude them, and return all others (True)
+            default) or to exclude them, and return all others (True).
 
         keys_only : bool, optional
             Whether to return only the filtered dataset names (True) or the
@@ -477,6 +493,12 @@ class Observations:
             `Observations.valid_likelihoods` (False, default). Filtering will
             still be done on both dataset and likelihood names, no matter this
             parameter.
+
+        Returns
+        -------
+        list
+            A list of lists, in the same format as `valid_likelihoods`, which
+            has been filtered.
         '''
 
         matches, no_matches = [], []
@@ -821,6 +843,9 @@ class Model(lp.limepy):
         This number of bins will be log-spaced between each of the break masses.
         Defaults to [5, 5, 20].
 
+    tcc : float, optional
+        Core collapse time, in years. Defaults to 0, effectively being ignored.
+
     NS_ret : float, optional
         Neutron star retention fraction (0 to 1). Defaults to 0.1 (10%).
 
@@ -924,6 +949,10 @@ class Model(lp.limepy):
         The per mass bin (King, half-mass, anisotropy, projected half-mass)
         radius of the cluster.
 
+    See Also
+    --------
+    limepy : Distribution-function model base of this class.
+
     Notes
     -----
     The IMF of the model is defined using a three-component broken power law,
@@ -937,10 +966,6 @@ class Model(lp.limepy):
         \end{cases}
 
     where the `a` exponents are given as input parameters.
-
-    See Also
-    --------
-    limepy : Distribution-function model base of this class
     '''
 
     def _assign_units(self):
@@ -1251,13 +1276,13 @@ class Model(lp.limepy):
 
     @classmethod
     def isotropic(cls, W0, M, rh, **kw):
-        '''Initialize the model with max `ra`, leading to an isotropic model'''
+        '''Initialize the model with max `ra`, leading to an isotropic model.'''
         ra = 1e8
         return cls(W0, M, rh, ra=ra, **kw)
 
     @classmethod
     def canonical(cls, W0, M, rh, imf='kroupa', **kw):
-        '''Initialize with an IMF defined by a canonical IMF formulation'''
+        '''Initialize with an IMF defined by a canonical IMF formulation.'''
 
         if imf.lower() == 'kroupa':
             a1, a2, a3 = 1.3, 2.3, 2.3
@@ -1280,25 +1305,25 @@ class Model(lp.limepy):
 
     @classmethod
     def woolley(cls, W0, M, rh, **kw):
-        '''Initialize a Woolley (1954) Model (g=0 and isotropic)'''
+        '''Initialize a Woolley (1954) Model (g=0 and isotropic).'''
         g = 0
         return cls.isotropic(W0, M, rh, g=g, **kw)
 
     @classmethod
     def king(cls, W0, M, rh, **kw):
-        '''Initialize a King (1966) Model (g=1 and isotropic)'''
+        '''Initialize a King (1966) Model (g=1 and isotropic).'''
         g = 1
         return cls.isotropic(W0, M, rh, g=g, **kw)
 
     @classmethod
     def wilson(cls, W0, M, rh, **kw):
-        '''Initialize a Wilson (1975) Model (g=2 and isotropic)'''
+        '''Initialize a Wilson (1975) Model (g=2 and isotropic).'''
         g = 2
         return cls.isotropic(W0, M, rh, g=g, **kw)
 
     @classmethod
     def michieking(cls, W0, M, rh, **kw):
-        '''Initialize a Michie-King (1963) Model (g=1 and anisotropic)'''
+        '''Initialize a Michie-King (1963) Model (g=1 and anisotropic).'''
         g = 1
         return cls(W0, M, rh, g=g, **kw)
 
@@ -1307,7 +1332,7 @@ class Model(lp.limepy):
     # ----------------------------------------------------------------------
 
     def sample(self, *args, **kwargs):
-        '''Return a `SampledModel` instance based on this model'''
+        '''Return a `SampledModel` instance based on this model.'''
         return SampledModel(self, *args, **kwargs)
 
     # ----------------------------------------------------------------------
@@ -1315,7 +1340,7 @@ class Model(lp.limepy):
     # ----------------------------------------------------------------------
 
     def get_visualizer(self):
-        '''Return a `analysis.ModelVisualizer` instance based on this model'''
+        '''Return a `analysis.ModelVisualizer` instance based on this model.'''
         from ..analysis import ModelVisualizer
         return ModelVisualizer(self, observations=self.observations)
 
@@ -1325,7 +1350,7 @@ class Model(lp.limepy):
 
 
 class SingleMassModel(lp.limepy):
-    '''Wrapper class around a single-mass LIMEPY model
+    '''Wrapper class around a single-mass LIMEPY model.
 
     Single-mass globular cluster model implemented as a subclass around a
     `limepy.limepy` model.
@@ -1443,7 +1468,7 @@ class SingleMassModel(lp.limepy):
         self.rho <<= (M_units / R_units**3)
         self.Sigma <<= (M_units / R_units**2)
 
-    def __init__(self, W0, M, rh, ra=1e8, g=1.5, d=5, *,
+    def __init__(self, W0, M, rh, g=1.5, ra=1e8, d=5, *,
                  ode_maxstep=1e10, ode_rtol=1e-7):
 
         # ------------------------------------------------------------------
@@ -1507,31 +1532,31 @@ class SingleMassModel(lp.limepy):
 
     @classmethod
     def isotropic(cls, W0, M, rh, **kw):
-        '''initialize with no anisotropy'''
+        '''initialize with no anisotropy.'''
         ra = 1e8
         return cls(W0, M, rh, ra=ra, **kw)
 
     @classmethod
     def woolley(cls, W0, M, rh, **kw):
-        '''g=0, isotropic'''
+        '''Initialize a Woolley (1954) Model (g=0 and isotropic).'''
         g = 0
         return cls.isotropic(W0, M, rh, g=g, **kw)
 
     @classmethod
     def king(cls, W0, M, rh, **kw):
-        '''g=1, isotropic'''
+        '''Initialize a King (1966) Model (g=1 and isotropic).'''
         g = 1
         return cls.isotropic(W0, M, rh, g=g, **kw)
 
     @classmethod
     def wilson(cls, W0, M, rh, **kw):
-        '''g=2, isotropic'''
+        '''Initialize a Wilson (1975) Model (g=2 and isotropic).'''
         g = 2
         return cls.isotropic(W0, M, rh, g=g, **kw)
 
     @classmethod
     def michieking(cls, W0, M, rh, **kw):
-        '''g=1, anisotropic'''
+        '''Initialize a Michie-King (1963) Model (g=1 and anisotropic).'''
         g = 1
         return cls(W0, M, rh, g=g, **kw)
 
@@ -1542,7 +1567,7 @@ class SingleMassModel(lp.limepy):
 
 
 class FittableModel(Model):
-    '''Model subclass for use in all fitting functions
+    '''Model subclass for use in all fitting functions.
 
     A subclass of the base `Model`, with a simplified and specific
     initilization signature based on a single `theta` input containing the main
@@ -1584,7 +1609,6 @@ class FittableModel(Model):
 
     All cluster metadata parameters (such as age, vesc, etc.) will be read from
     the observations, and should not be provided as arguments here.
-
     '''
 
     def __init__(self, theta, observations, **kwargs):
@@ -1648,7 +1672,7 @@ _projection = namedtuple('projection', ['lat', 'lon', 'distance',
 
 
 class SampledModel:
-    '''Representation of a cluster based on sampling a Model
+    '''Representation of a cluster based on sampling a Model.
 
     Based on a solved `Model`, this class gives access to the phase-space
     coordinates of N stars and remnants, as sampled from the smooth model
@@ -1687,9 +1711,17 @@ class SampledModel:
         will simply assign each star the mean mass (`Model.mj`) for each bin.
         Defaults to True.
 
+    use_model_distance : bool, optional
+        If a centre SkyCoord is given, whether or not to force the distance
+        coordinate to the match the model distance. Defaults to True.
+
     seed : int, optional
         A random seed to define the random generator used in all sampling.
         Passed to `numpy.random.default_rng`. Defaults to None.
+
+    pool : multiprocessing.Pool, optional
+        A pooling object with a `map` method, used to generate some samples
+        in parallel.
 
     Attributes
     ----------
@@ -2074,7 +2106,7 @@ class SampledModel:
                            pm_b=db.to('mas/yr'), v_los=dd)
 
     def __init__(self, model, centre=None, *, distribute_masses=True,
-                 use_model_distance=True, seed=None, pool=None, verbose=False):
+                 use_model_distance=True, seed=None, pool=None):
 
         # store ref to base model, just in case
         self._basemodel = model
@@ -2205,7 +2237,7 @@ class SampledModel:
     def to_artpop(self, phot_system, pixel_scale, *,
                   a_lam=0., projected=False, cutoff_radius=None,
                   return_rem=False, iso_class=None, thin=False, **kwargs):
-        '''Construct an `artpop.Source` for use in simulated photometry
+        '''Construct an `artpop.Source` for use in simulated photometry.
 
         Computes, based on the masses and MIST Isochrones for the given
         `phot_system`, positions and magnitudes for all stars which are used to
@@ -2217,7 +2249,7 @@ class SampledModel:
         phot_system : str
             Name of the photometric system to simulate stellar magnitudes
             within. Must be supported by the given `iso_class` (therefore,
-            likely part of the MIST isochrone catalogue)
+            likely part of the MIST isochrone catalogue).
 
         pixel_scale : float or astropy.Quantity
             The pixel scale of the mock image. If a float is given,
@@ -2242,7 +2274,7 @@ class SampledModel:
             If True, will also return the x and y positions (and types) of all
             remnants alongside the `Source`, which can be used to show the
             presence of dark remnants alongside simulated imagery.
-            By default, only the `Source` is returned
+            By default, only the `Source` is returned.
 
         iso_class : artpop.Isochrone, optional
             Optionally use a custom subclass of the typical `artpop` isochrone
@@ -2256,10 +2288,9 @@ class SampledModel:
 
         Returns
         -------
-        src : artpop.Source
+        artpop.Source
             `artpop` artificial source object corresponding to this sampled
-            cluster
-
+            cluster.
         '''
 
         import artpop
