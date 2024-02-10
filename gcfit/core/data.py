@@ -945,6 +945,28 @@ class Model(lp.limepy):
     limepy : Distribution-function model base of this class
     '''
 
+    def _evolve_mf(self, m_breaks, a1, a2, a3, nbins, FeH, age, Ndot, tcc,
+                   NS_ret, BH_ret_int, BHret, natal_kicks, vesc):
+        '''Compute an evolved mass function using `ssptools.EvolvedMF`'''
+
+        self._mf_kwargs = dict(
+            m_breaks=m_breaks.value,
+            a_slopes=[-a1, -a2, -a3],
+            nbins=nbins,
+            FeH=FeH,
+            tout=np.array([age.to_value('Myr')]),
+            Ndot=Ndot,
+            N0=5e5,
+            tcc=tcc,
+            NS_ret=NS_ret,
+            BH_ret_int=BH_ret_int,
+            BH_ret_dyn=BHret / 100.,
+            natal_kicks=natal_kicks,
+            vesc=vesc.value
+        )
+
+        return EvolvedMF(**self._mf_kwargs)
+
     def _assign_units(self):
         '''Convert most values to `astropy.Quantity` with correct units'''
 
@@ -1089,23 +1111,9 @@ class Model(lp.limepy):
         # Get mass function
         # ------------------------------------------------------------------
 
-        self._mf_kwargs = dict(
-            m_breaks=m_breaks.value,
-            a_slopes=[-a1, -a2, -a3],
-            nbins=nbins,
-            FeH=FeH,
-            tout=np.array([age.to_value('Myr')]),
-            Ndot=Ndot,
-            N0=5e5,
-            tcc=tcc,
-            NS_ret=NS_ret,
-            BH_ret_int=BH_ret_int,
-            BH_ret_dyn=BHret / 100.,
-            natal_kicks=natal_kicks,
-            vesc=vesc.value
-        )
-
-        self._mf = EvolvedMF(**self._mf_kwargs)
+        self._mf = self._evolve_mf(m_breaks, a1, a2, a3, nbins,
+                                   FeH, age, Ndot, tcc,
+                                   NS_ret, BH_ret_int, BHret, natal_kicks, vesc)
 
         mj, Mj = self._mf.m, self._mf.M
 
@@ -1631,6 +1639,73 @@ class FittableModel(Model):
             kwargs['Ndot'] = observations.mdata['Ndot']
 
         super().__init__(observations=observations, **theta, **kwargs)
+
+
+# --------------------------------------------------------------------------
+# Model evolved from initial conditions using evolutionary model `clusterBH`
+# --------------------------------------------------------------------------
+
+
+class EvolvedModel(Model):
+    '''
+    modified model that takes in different initial parameters and uses
+    `clusterBH` to evolve them to the present day conditions of a normal model.
+    most importantly, changes M, rh to M0, rh0 (their initial conditions)
+    and removes the need for a BH_ret (gets target M_BH from clusterBH)
+    '''
+
+    def _evolve_mf(self, m_breaks, a1, a2, a3, nbins, FeH, age, Ndot, tcc,
+                   NS_ret, BH_ret_int, BHret, natal_kicks, vesc):
+        from ssptools import EvolvedMFWithBH
+
+        self._mf_kwargs = dict(
+            m_breaks=m_breaks.value,
+            a_slopes=[-a1, -a2, -a3],
+            nbins=nbins,
+            FeH=FeH,
+            tout=np.array([age.to_value('Myr')]),
+            Ndot=Ndot,
+            f_BH=self._clusterbh.fbh[-1],
+            N0=self._clusterbh.N,
+            tcc=tcc,
+            NS_ret=NS_ret,
+            BH_ret_int=BH_ret_int,
+            natal_kicks=natal_kicks,
+            vesc=vesc.value
+        )
+
+        return EvolvedMFWithBH(**self._mf_kwargs)
+
+    def __init__(self, W0, M0, rh0, g=1.5, delta=0.45, ra=1e8,
+                 a1=1.3, a2=2.3, a3=2.3, d=5,
+                 s2=0., F=1., cbh_kwargs=None, **kwargs):
+
+        import clusterbh
+
+        self.M0 = M0
+        self.rh0 = rh0
+
+        if cbh_kwargs is None:
+            cbh_kwargs = {}
+
+        # first convert the more useful M0, rh0 to the N0, rhoh0 required
+        m0 = 0.638  # For Kroupa (2001) IMF 0.1-100 Msun
+        N = M0 / m0
+        rhoh0 = (3 * M0) / (8 * np.pi * rh0**3)
+
+        # TODO need to get all the other args to clusterBH
+        self._clusterbh = clusterbh.clusterBH(N, rhoh0, tend=12e3, **cbh_kwargs)
+
+        self.cbh_kwargs = cbh_kwargs
+
+        M = self._clusterbh.M[-1] << u.Msun
+        rh = self._clusterbh.rh[-1] << u.pc
+
+        BHret = -1
+
+        super().__init__(W0, M, rh, g=1.5, delta=0.45, ra=1e8,
+                         a1=1.3, a2=2.3, a3=2.3, BHret=BHret, d=5,
+                         s2=0., F=1., **kwargs)
 
 
 # --------------------------------------------------------------------------
