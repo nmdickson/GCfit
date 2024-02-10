@@ -63,8 +63,7 @@ Easy visualizations of the models are done through the :ref:`analysis` module:
 
 .. code-block:: python
 
-   >>> import gcfit.analysis
-   >>> mviz = gcfit.analysis.ModelVisualizer(model)
+   >>> mviz = model.get_visualizer()
    >>> mviz.plot_number_density(label_position='left')
 
 .. image:: _static/example1.png

@@ -28,16 +28,7 @@ __all__ = ['RunCollection', 'MCMCRun', 'NestedRun']
 
 
 class _RunAnalysis:
-    '''base class for all visualizers of all run types
-
-    filename : path to run output file
-    group : base group for sampler outputs, probably either 'nested' or 'mcmc'
-
-    if observations is None, it will be created and an educated guess will be
-    made on the source (i.e. the `restrict_to` kw) based on the file metadata.
-    If you want to restrict to a specific different place, pass in your own
-    Observations.
-    '''
+    '''Base class for all visualizers of all run types.'''
 
     _cmap = plt.rcParams['image.cmap']
 
@@ -90,7 +81,7 @@ class _RunAnalysis:
     def _setup_multi_artist(self, fig, shape, *, allow_blank=True,
                             use_name=True, constrained_layout=True,
                             subfig_kw=None, **sub_kw):
-        '''setup a figure with multiple axes, using subplots or subfigures
+        '''Setup a figure with multiple axes, using subplots or subfigures.
 
         Given a desired shape tuple, returns a figure with the correct
         arrangement of axes. Allows for easily specifying slightly more complex
@@ -146,7 +137,7 @@ class _RunAnalysis:
         subfig_kw : dict, optional
             Passed to `fig.subfigures`, if required.
 
-        **subkw : dict, optional
+        **sub_kw : dict, optional
             Extra arguments passed to all calls to `fig.subplots`.
 
         Returns
@@ -307,15 +298,37 @@ class _RunAnalysis:
 
 # TODO a way to plot our priors, probably for both vizs
 class _SingleRunAnalysis(_RunAnalysis):
+    '''Base class for all visualizers of single runs, of all types.
+
+    Parameters
+    ----------
+    filename : pathlib.Path or str
+        Path to the run output HDF5 file.
+
+    observations : gcfit.Observations or None
+        The `Observations` instance corresponding to this cluster.
+        If None, an educated guess will be made on the source location
+        (i.e. the `restrict_to` argument) and the observations will be created
+        based on the cluster name stored in the output.
+
+    group : str
+        Name of the root group in the HDF5 file. Most likely either "nested"
+        or "mcmc", depending on the run type.
+
+    name : str, optional
+        Custom name for this run.
+    '''
 
     _mask = None
     results = None
 
     @property
     def mask(self):
+        '''Mask out certain samples, removing them from all analysis.'''
         return self._mask
 
     def reset_mask(self):
+        '''Reset the mask.'''
         self._mask = None
 
     @mask.setter
@@ -341,10 +354,9 @@ class _SingleRunAnalysis(_RunAnalysis):
             self.results = self._get_results()
 
     def slice_on_param(self, param, lower_lim, upper_lim):
-        '''set `self.mask` based on a parameter value
-
-        already present masks will be combined, if that's not desired, you
-        should `self.reset_mask()` first.
+        '''Set `mask` based on the value of a certain parameter.
+        Already present masks will be combined. If that's not desired, masks
+        should be reset (`self.reset_mask()`) first.
         '''
 
         labels = self._get_labels()
