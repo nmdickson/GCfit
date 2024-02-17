@@ -2979,21 +2979,59 @@ class NestedRun(_SingleRunAnalysis):
 
 
 class _Annotator:
-    '''Annotate points on click with run/cluster names
-    picker=True must be set on the actual plot
+    '''Figure hook which annotates clicked points with the cluster names.
+
+    When hooked into a figure, allows the user of an interactive plot to
+    click on a certain data point and have that datapoint be highlighted and
+    the name of the corresponding cluster be shown in an annotation.
+
+    Works only for scatter plots, and `picker=True` must be given during the
+    scatter plot function call.
+
+    This hook is tied to a given figure through
+    `fig.canvas.mpl_connect('pick_event', self)`. Plotting multiple times on
+    the same axes, or using multiple axes on a single figure, may produce
+    nonsensical or incorrect results (but will also work fine sometimes).
+
+    Parameters
+    ----------
+    fig : matplotlib.figure.Figure
+        The figure to annotate.
+
+    ax : matplotlib.axes.Axes
+        The axes instance to place the annotation on.
+        Technically does not have to be the same ax the data was plotted on.
+
+    runs : list of _SingleRunAnalysis
+        Collection of run objects which correspond to (and are in the same
+        order as) the data plotted. These are used to retrieve the string
+        `name`.
+
+    xdata, ydata : np.ndarray
+        The x and y data plotted. Used to highlight upon clicking. If incorrect
+        data is given, will highlight the incorrect locations on the figure.
+
+    loc : str, optional
+        The location of the annotation box. Options are the same as those
+        describing `matplotlib.legend.Legend` locations (except 'best').
+
+    **annot_kw : dict
+        All other arguments are passed to the `AnchoredText` object.
     '''
 
     highlight_style = {'marker': 'D', 'linestyle': 'None',
                        'mfc': 'none', 'mec': 'red', 'mew': 2.0}
 
     def set_text(self, text):
-        ''''get the corresponding `TextArea` and set its text'''
+        ''''Get the corresponding `TextArea` and set its text.'''
         return self.annotation.get_child().set_text(text)
 
     def set_highlight(self, x, y):
+        '''Plot a highlighting marker at the selected location.'''
         self.highlight, = self.ax.plot(x, y, **self.highlight_style)
 
     def remove_highlight(self):
+        '''Remove any already placed highlighting marker.'''
         if self.highlight:
             self.highlight.remove()
             self.highlight = None
@@ -3015,6 +3053,7 @@ class _Annotator:
         self.highlight = None
 
     def __call__(self, event):
+        '''Call signature connected to a figure and run at a `pick_event`'''
         ind = event.ind[0]
 
         cluster = self.runs[ind].name
@@ -3044,7 +3083,30 @@ class _Annotator:
 
 
 class RunCollection(_RunAnalysis):
-    '''For analyzing a collection of runs all at once
+    '''Analysis and visualization of an collection of multiple runs.
+
+    Provides a number of flexible plotting, output and summary methods useful
+    for the analysis of distributions, relationships and correlations between
+    the results of multiple runs at once. This class is meant to enable the
+    analysis of a larger population of fits of different clusters at once, and
+    explore the relationships in cluster parameters and make comparisons with
+    results from the literature.
+    Multiple different runs of fitting on the same cluster may also be given,
+    though care should be taken that each has it's own `.name` to avoid
+    confusion.
+
+    Parameters
+    ----------
+    runs, *, sort=True
+
+    runs : list of _SingleRunAnalysis
+        List of run objects which will make up this collection. In theory,
+        MCMC and Nested sampling runs can both be used interchangeably.
+
+    sort : bool, optional
+        If True (default), the given list of runs will be sorted by their
+        `.name` attributes. Sorting decides the positioning of the runs in
+        some plot functions.
     '''
 
     _src = None
@@ -3067,14 +3129,16 @@ class RunCollection(_RunAnalysis):
 
     @property
     def names(self):
+        '''List of `.name`s of each run in this collection.'''
         return [r.name for r in self.runs]
 
     def __iter__(self):
-        '''return an iterator over the individual Runs'''
+        '''Return an iterator over the individual runs in this collection.'''
         # Important that the order of self.runs (and thus this iter) is constant
         return iter(self.runs)
 
     def __add__(self, other):
+        '''Add the runs of two RunCollections together and return new object.'''
 
         # TODO make this and __or__ preserve stuff like cmap
 
@@ -3087,9 +3151,9 @@ class RunCollection(_RunAnalysis):
         return RunCollection(new_runs, sort=False)
 
     def __or__(self, other):
-        '''return a new RunCollection with merged runs from self and other
+        '''Return a new RunCollection with merged runs from self and other
         with runs from other taking priority when in both (runs identified by
-        their name)
+        their name).
         '''
 
         self_runs = dict(zip(self.names, self.runs))
@@ -3102,26 +3166,48 @@ class RunCollection(_RunAnalysis):
         return RunCollection(new_runs, sort=False)
 
     def get_run(self, name):
-        '''Return the run with a name `name`'''
+        '''Return the a single run from this collection with a given `name`'''
         for run in self.runs:
             if run.name == name:
                 return run
-
         else:
             mssg = f"No Run found with name {name}"
             raise ValueError(mssg)
 
     def filter_runs(self, pattern, sort_by=None, sort=True, **kwargs):
-        '''filter runs based on name and return a new runcollection with them
+        '''filter all runs based on names and return a new object with them
 
-        sort : bool
-            Whether or not to sort this run
+        Based on a given string pattern, filters out all runs within this
+        collection matching this pattern (as based on `fnmatch.filter`) and
+        returns a new `RunCollection` instance with only those filtered runs.
 
-        sort_by: ('old', 'new', None)
-            sort runs in new collection by either the order in this collection,
-            the list of patterns (if it's a list, otherwise does None)
-            if None, jsut passes `sort` to init and lets it go.
-            only used if `sort` is True
+        Parameters
+        ----------
+        pattern : str or list of str
+            A pattern used to filter all run names, using the glob rules
+            provided by `fnmatch`.
+            Also allowed is a list of cluster names, which will filter on
+            the matching runs. A list of names will not use pattern matching,
+            and the given names must match exactly.
+
+        sort_by: {'old', 'new', None}, optional
+            Sort runs in new collection by either the order in this collection
+            or the list of names (if it is a list, otherwise does None).
+            If None (default), simply passes `sort` to the new collection init
+            and sorting is handled there, by name. This argument is only used
+            if `sort` is True.
+
+        sort : bool, optional
+            Whether or not to sort this run. If `sort_by` is None, this
+            argument is passed to the new run collection init.
+
+        **kwargs : dict
+            All other arguments are passed to the new RunCollection object.
+
+        Returns
+        -------
+        RunCollection
+            A new run collection instance based on the filtered out runs.
         '''
         import fnmatch
 
@@ -3176,6 +3262,7 @@ class RunCollection(_RunAnalysis):
 
         labels = runs[0]._get_labels(label_fixed=False)
 
+        # TODO this `equal_weights...` breaks when using MCMCRun's
         self._params = [dict(zip(labels, r._get_equal_weight_chains()[1].T))
                         for r in runs]
 
@@ -3185,7 +3272,40 @@ class RunCollection(_RunAnalysis):
     @classmethod
     def from_dir(cls, directory, pattern='**/*hdf', strict=False,
                  *args, sampler='nested', run_kwargs=None, **kwargs):
-        '''init by finding all run files in a directory'''
+        '''Initialize a run collection based on run files found in a directory.
+
+        Search for run output files (as created by the relevant fitting
+        functions) in a given directory and create a new RunCollection instance
+        based on the run objects created from them.
+
+        `NestedRun` or `MCMCRun` instances will be created for found file.
+        Which class is used must be consistent over all runs, and specified
+        a priori.
+
+        Parameters
+        ----------
+        directory : str or pathlib.Path
+            Path to the directory to search for files within.
+
+        pattern : str, optional
+            The glob pattern used to find all files within the given directory.
+            Should be tuned in order to only return valid run files.
+            Default is to search (recursively) for all HDF files within
+            the directory.
+
+        strict : bool, optional
+            If True, will raise an RuntimeError if any discovered file fails
+            when creating a run class.
+
+        sampler : {'nested', 'mcmc'}, optional
+            Whether to initialize each run as either a `NestedRun` or `MCMCRun`.
+
+        run_kwargs : dict, optional
+            Optional arguments passed to all individual run initialization.
+
+        **kwargs : dict
+            All other arguments are passed to the new RunCollection object.
+        '''
 
         cls._src = f'{directory}/{pattern}'
 
@@ -3231,7 +3351,34 @@ class RunCollection(_RunAnalysis):
     @classmethod
     def from_files(cls, file_list, strict=False,
                    *args, sampler='nested', run_kwargs=None, **kwargs):
-        '''init by finding all run files in a directory'''
+        '''Initialize a run collection based on a list of run files.
+
+        Given a list of paths to a number of run output files (as created by
+        the relevant fitting functions), creates a new RunCollection instance
+        based on the run objects created from them.
+
+        `NestedRun` or `MCMCRun` instances will be created for found file.
+        Which class is used must be consistent over all runs, and specified
+        a priori.
+
+        Parameters
+        ----------
+        file_list : list of str
+            A list of paths to valid run output files.
+
+        strict : bool, optional
+            If True, will raise an RuntimeError if any discovered file fails
+            when creating a run class.
+
+        sampler : {'nested', 'mcmc'}, optional
+            Whether to initialize each run as either a `NestedRun` or `MCMCRun`.
+
+        run_kwargs : dict, optional
+            Optional arguments passed to all individual run initialization.
+
+        **kwargs : dict
+            All other arguments are passed to the new RunCollection object.
+        '''
 
         if not file_list:
             mssg = f"`file_list` must not be empty"
@@ -3281,7 +3428,7 @@ class RunCollection(_RunAnalysis):
     # ----------------------------------------------------------------------
 
     def _update(self):
-        '''quickly update all run params, in case something has changed'''
+        '''Quickly update all run params, in case something has changed.'''
         labels = self.runs[0]._get_labels(label_fixed=False)
         self._params = [dict(zip(labels, r._get_equal_weight_chains()[1].T))
                         for r in self.runs]
@@ -3290,6 +3437,7 @@ class RunCollection(_RunAnalysis):
                        for r in self.runs]
 
     def _get_from_run(self, param):
+        '''Get chains from either stored params or the runs directly.'''
 
         # try to get it from the best-fit params or metadata
         try:
@@ -3312,11 +3460,11 @@ class RunCollection(_RunAnalysis):
         return chains
 
     def _get_from_model(self, param, *, with_units=True, **kwargs):
-        '''get chains one of the attributes from models (like BH mass)
+        '''Get chains one of the attributes from models (like BH mass)
 
-        if havent generated models already (using the get_*models function),
+        If havent generated models already (using the get_*models function),
         then they will be computed here, with all **kwargs pass to it.
-        if N is passed, will gen CI models, otherwise normal mean models
+        if N is passed, will gen CI models, otherwise normal mean models.
         '''
 
         # Compute models now
@@ -3343,9 +3491,7 @@ class RunCollection(_RunAnalysis):
         return data
 
     def _get_param(self, param, *, sigma=1, **kwargs):
-        '''return the median, -1σ, +1σ for a θ, metadata or model quntity
-        "param" for all runs
-        '''
+        '''Return median, -+1σ for a θ, metadata or model quant for all runs'''
 
         # get parameter chains
         chains = self._get_param_chains(param, **kwargs)
@@ -3369,6 +3515,7 @@ class RunCollection(_RunAnalysis):
         return out
 
     def _check_for_operator(func):
+        '''Decorator which parses param str for math operations to apply.'''
         import functools
         import operator
 
@@ -3404,13 +3551,12 @@ class RunCollection(_RunAnalysis):
     @_check_for_operator
     def _get_param_chains(self, param, *,
                           allow_model=True, force_model=False, **kwargs):
-        '''return the full chain for a θ, metadata or model quntity "param"
-        for all runs
+        '''Return the full chain for a θ, metadata or model quant for all runs.
 
-        allow_model=False if you want to really avoid model params (i.e. dont
+        `allow_model=False` if you want to really avoid model params (i.e. dont
         want to compute the models) all kwargs are passed to get_model otherwise
 
-        force_model=True if you want to skip the run params entirely and force
+        `force_model=True` if you want to skip the run params entirely and force
         `_get_from_model` (useful for getting some things like scaled `ra`)
 
         One operation (+-*/) can be included to return two different parameters
@@ -3458,7 +3604,7 @@ class RunCollection(_RunAnalysis):
         return chains
 
     def _get_latex_labels(self, param, *, with_units=True, force_model=False):
-        '''return the param names in math mode, for plotting'''
+        '''Return the given param name in math mode, for plotting.'''
 
         try:
             if logged := param.startswith('log_'):
@@ -3540,7 +3686,9 @@ class RunCollection(_RunAnalysis):
     def _add_colours(self, ax, mappable, cparam, clabel=None, *, alpha=1.,
                      add_colorbar=True, extra_artists=None, math_label=True,
                      fix_cbar_ticks=True, cbounds=None):
-        '''add colours to all artists and add the relevant colorbar to ax'''
+        '''Add colours to all artists and add the relevant colorbar to ax.
+        Unnecessarily complicated to account for diverse artists (violinplot).
+        '''
         import matplotlib.colorbar as mpl_cbar
 
         def set_colour(art, clr):
@@ -3642,10 +3790,10 @@ class RunCollection(_RunAnalysis):
             return None
 
     def _dissect_scatter_kwargs(self, plot_kw):
-        '''attempt to coerce some `plot` kwargs to work with `scatter`
+        '''Attempt to coerce some `plot` kwargs to work with `scatter`.
         Unfortunately necessary because there are a number of arguments to
         these functions which accomplish the same thing, but are named
-        slightly differently, because the functions use different artist types
+        slightly differently, because the functions use different artist types.
         '''
 
         scatter_kw = plot_kw.copy()
@@ -3686,6 +3834,23 @@ class RunCollection(_RunAnalysis):
     # ----------------------------------------------------------------------
 
     def get_models(self, **kwargs):
+        '''Return a `ModelCollection` instance corresponding to these runs.
+
+        The visualizer collection is initialized through the
+        `ModelCollection.from_chains` classmethod, with the chains from each
+        run in this collection, and based on the single average model.
+
+        Parameters
+        ----------
+        **kwargs : dict
+            All arguments are passed to the `from_chains` classmethod, with
+            `ci=False`.
+
+        Returns
+        -------
+        ModelCollection
+            The created model collection visualization object.
+        '''
 
         # chains = [run.parameter_means(1)[0] for run in self.runs]
         chains = [run._get_equal_weight_chains()[1] for run in self.runs]
@@ -3701,6 +3866,44 @@ class RunCollection(_RunAnalysis):
 
     def get_CImodels(self, N=100, Nprocesses=1, add_errors=False, shuffle=True,
                      load=True):
+        '''Return a CI `ModelCollection` instance corresponding to these runs.
+
+        The visualizer collection is initialized through the
+        `ModelCollection.from_chains` classmethod, with the chains from each
+        run in this collection and using `N` samples, if `load` is False,
+        otherwise will attempt to use the
+        `ModelCollection.load` classmethod, assuming a CI model has already
+        been created and saved to this same file, under the `model` group,
+        in each run.
+
+        Parameters
+        ----------
+        N : int, optional
+            The number of samples to use in computing the confidence intervals.
+
+        Nprocesses : int, optional
+            The number of processes to use in a `multiprocessing.Pool` passed
+            to the CI model initializer. Defaults to only 1 cpu.
+
+        add_errors : bool, optional
+            Optionally add the statistical and sampling errors, not normally
+            accounted for, to the chain of samples used. Only relevant to
+            nested sampling runs.
+
+        shuffle : bool, optional
+            Optionally shuffle the chains before passing on. Useful when `N`
+            is smaller than the full sample size, to avoid biasing the
+            resulting CIs.
+
+        load : bool, optional
+            If True, will attempt to load CI models, rather than creating a
+            new one.
+
+        Returns
+        -------
+        CIModelVisualizer
+            The created model visualization (with confidence intervals) object.
+        '''
         import multiprocessing
 
         # TODO also pass all the obs from the runs here too
@@ -3736,9 +3939,7 @@ class RunCollection(_RunAnalysis):
     # ----------------------------------------------------------------------
 
     def iter_plots(self, plot_func, yield_run=False, *args, **kwargs):
-        '''calls each run's `plot_func`, yields a figure
-        all args, kwargs passed to plot func
-        '''
+        '''Iterator yielding a call to `plot_func` for each run.'''
         for run in self.runs:
             fig = getattr(run, plot_func)(*args, **kwargs)
 
@@ -3746,11 +3947,34 @@ class RunCollection(_RunAnalysis):
 
     def save_plots(self, plot_func, fn_pattern=None, save_kw=None, size=None,
                    remove_name=True, *args, **kwargs):
-        '''
-        fn_pattern is format string which will be passed the kw "cluster" name
-            (i.e. `fn_pattern.format(cluster=run.name)`)
-            if None, will be ./{cluster}_{plot_func[5:]}
-            (Include the desired dir here too)
+        '''Iterate over calls to `plot_func` on each run and save the figures.
+
+        Iterates over the `iter_plots` function and saves all individual
+        figures to separate files, under a custom iterative file naming schema.
+
+        Parameters
+        ----------
+        plot_func : str
+            The name of the plotting function called on each run.
+
+        fn_pattern : str, optional
+            A format string, which is passed the argument "cluster"
+            representing each run's name, and is used to create the filename
+            each figure is saved under.
+            Defaults to `f'./{cluster}_{plot_func[5:]}'`.
+
+        save_kw : dict, optional
+            Optional arguments are passed to the `fig.savefig` function.
+
+        size : 2-tuple of float, optional
+            Optional resizing of the figure, using `fig.set_size_inches`.
+
+        remove_name : bool, optional
+            Remove the sometimes present cluster name placed into the
+            figure's `suptitle`.
+
+        **kwargs : dict
+            All other arguments are passed to `iter_plots`.
         '''
 
         if fn_pattern is None:
@@ -3779,7 +4003,7 @@ class RunCollection(_RunAnalysis):
 
     def plot_a3_FeH(self, fig=None, ax=None, show_kroupa=False,
                     *args, **kwargs):
-        '''Some special cases of plot_relation can have their own named func'''
+        '''Special case of `plot_relation` with "a3" and "FeH".'''
 
         fig = self.plot_relation('FeH', 'a3', fig, ax, *args, **kwargs)
 
@@ -3800,9 +4024,67 @@ class RunCollection(_RunAnalysis):
                       annotate=False, annotate_kwargs=None,
                       clr_param=None, clr_kwargs=None, label=None, marker='o',
                       **kwargs):
-        '''plot correlation between two param means with all runs
+        '''Plot relationship between two parameters across all runs.
 
-        errorbars, or 2d-ellipses
+        Plots a scatter plot (with errorbars) of `param1` by `param2` using the
+        median and 1σ error values from each run in this collection.
+
+        Parameters
+        ----------
+        param1 : str
+            Name of the parameter to plot on the x-axis.
+
+        param2 : str
+            Name of the parameter to plot on the y-axis.
+
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_RunAnalysis._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this relation. Should be a
+            part of the given `fig`.
+
+        show_pearsonr : bool, optional
+            Optionally compute the "Pearson-r" statistic for this data and
+            place it in a text box in the bottom right of the ax.
+
+        force_model : bool, optional
+            Force these parameter values to be taken from model quantities.
+            Can be useful when some parameter names overlap (e.g. "ra").
+
+        annotate : bool, optional
+            Optionally create a hook to this figure allowing the interactive
+            annotating of selected cluster names. See `_Annotator` for more
+            details.
+
+        annotate_kwargs : dict, optional
+            Optional arguments passed to the `_Annotator` instance.
+
+        clr_param : str, optional
+            Defines the colour of the plotted points. If the name of a
+            parameter, will colour each point by the respective value of that
+            parameter in each run, otherwise will accept a single colour, or
+            array of colours for each run.
+
+        clr_kwargs : dict, optional
+            Optional arguments passed to the `_add_colours` function.
+
+        label : str, optional
+            Set a label that will be displayed in the legend.
+
+        marker : str, optional
+            The marker style. See `matplotlib.markers` for more information.
+
+        **kwargs : dict
+            All other arguments are passed to `ax.errorbar` and `ax.scatter`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
         '''
 
         fig, ax = self._setup_artist(fig, ax)
@@ -3851,13 +4133,84 @@ class RunCollection(_RunAnalysis):
 
     def plot_lit_comp(self, param, truths, e_truths=None, src_truths='',
                       fig=None, ax=None, *,
-                      clr_param=None, clr_kwargs=None,
                       annotate=False, annotate_kwargs=None,
-                      residuals=False, inset=False, diagonal=True,
+                      clr_param=None, clr_kwargs=None,
+                      residuals=False, diagonal=True,
                       force_model=False, label=None, marker='o', **kwargs):
-        '''plot a x-y comparison against provided literature values
+        '''Plot comparison between parameter values and "truths".
 
-        Meant to compare 1-1 the same parameter (i.e. mass vs mass, etc)
+        Plots a scatter plot (with errorbars) of `param` by the values
+        provided in the `truths` array, using the
+        median and 1σ error values from each run in this collection.
+
+        This is meant to compare one-to-one the results of fits against
+        "true" values, representing the same parameter, from the literature.
+
+        Parameters
+        ----------
+        param : str
+            Name of the parameter to plot.
+
+        truths : np.ndarray[Nruns]
+            Array of "truth" values, to plot on the y-axis.
+
+        e_truths : np.ndarray[Nruns], optional
+            Array of uncertainties on the "truth" values.
+
+        src_truths : str, optional
+            The source of the "truths", included in the y-axis label.
+
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_RunAnalysis._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this relation. Should be a
+            part of the given `fig`.
+
+        annotate : bool, optional
+            Optionally create a hook to this figure allowing the interactive
+            annotating of selected cluster names. See `_Annotator` for more
+            details.
+
+        annotate_kwargs : dict, optional
+            Optional arguments passed to the `_Annotator` instance.
+
+        clr_param : str, optional
+            Defines the colour of the plotted points. If the name of a
+            parameter, will colour each point by the respective value of that
+            parameter in each run, otherwise will accept a single colour, or
+            array of colours for each run.
+
+        clr_kwargs : dict, optional
+            Optional arguments passed to the `_add_colours` function.
+
+        residuals : bool, optional
+            Add an ax to the bottom of the figure showing the residuals between
+            the run results and the "truths".
+
+        diagonal : bool, optional
+            Include a background one-to-one line along the diagonal.
+
+        force_model : bool, optional
+            Force these parameter values to be taken from model quantities.
+            Can be useful when some parameter names overlap (e.g. "ra").
+
+        label : str, optional
+            Set a label that will be displayed in the legend.
+
+        marker : str, optional
+            The marker style. See `matplotlib.markers` for more information.
+
+        **kwargs : dict
+            All other arguments are passed to `ax.errorbar` and `ax.scatter`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
         '''
 
         fig, ax = self._setup_artist(fig, ax)
@@ -3923,9 +4276,85 @@ class RunCollection(_RunAnalysis):
                           clr_param=None, clr_kwargs=None, residuals=False,
                           annotate=False, annotate_kwargs=None,
                           force_model=False, label=None, marker='o', **kwargs):
-        '''plot a relation plot against provided literature values
+        '''Plot comparison between parameter values and arbitrary data.
 
-        Meant to compare two different parameters, with one from outside source
+        Plots a scatter plot (with errorbars) of `param` by the values
+        provided in the `lit` array, using the
+        median and 1σ error values from each run in this collection.
+
+        This is meant to showcase relationships between the parameter results
+        and other external parameter values, ostensibly from the literature.
+
+        Parameters
+        ----------
+        param : str
+            Name of the parameter to plot.
+
+        lit : np.ndarray[Nruns]
+            Array of external data values, to plot on the y-axis.
+
+        e_lit : np.ndarray[Nruns], optional
+            Array of uncertainties on the `lit` values.
+
+        param_lit : str, optional
+            The name of the parameter represented in the `lit` values,
+            included in the y-axis label.
+
+        src_lit : str, optional
+            The source of the `lit`, included in the y-axis label.
+
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_RunAnalysis._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this relation. Should be a
+            part of the given `fig`.
+
+        lit_on_x : bool, optional
+            Optionally flip the axes, plotting the `lit` values on the
+            x-axis and the runs on the y-axis.
+
+        clr_param : str, optional
+            Defines the colour of the plotted points. If the name of a
+            parameter, will colour each point by the respective value of that
+            parameter in each run, otherwise will accept a single colour, or
+            array of colours for each run.
+
+        clr_kwargs : dict, optional
+            Optional arguments passed to the `_add_colours` function.
+
+        residuals : bool, optional
+            Add an ax to the bottom of the figure showing the residuals between
+            the run results and the "truths".
+
+        annotate : bool, optional
+            Optionally create a hook to this figure allowing the interactive
+            annotating of selected cluster names. See `_Annotator` for more
+            details.
+
+        annotate_kwargs : dict, optional
+            Optional arguments passed to the `_Annotator` instance.
+
+        force_model : bool, optional
+            Force these parameter values to be taken from model quantities.
+            Can be useful when some parameter names overlap (e.g. "ra").
+
+        label : str, optional
+            Set a label that will be displayed in the legend.
+
+        marker : str, optional
+            The marker style. See `matplotlib.markers` for more information.
+
+        **kwargs : dict
+            All other arguments are passed to `ax.errorbar` and `ax.scatter`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
         '''
 
         fig, ax = self._setup_artist(fig, ax)
@@ -3984,22 +4413,94 @@ class RunCollection(_RunAnalysis):
                       fig=None, ax=None, *,
                       kde=True, show_normal=True, kde_color='tab:blue',
                       show_FWHM=True,
-                      clr_param=None, clr_kwargs=None,
                       annotate=False, annotate_kwargs=None,
-                      residuals=False, inset=False, diagonal=True,
-                      **kwargs):
-        '''plot a histogram of the fractional difference distribution of
-        this param vs literature sources
+                      residuals=False, force_model=False, **kwargs):
+        '''Plot hist of the fractional difference between param and "truths".
 
-        i.e. (param - truths) / sqrt(e_param^2 + e_truths^2)
+        Plots a scatter plot (with errorbars) of `param` by the values
+        provided in the `truths` array, using the
+        median and 1σ error values from each run in this collection.
 
+        This is meant to compare one-to-one the results of fits against
+        "true" values, representing the same parameter, from the literature.
+
+        Plots a histogram (or smoothed KDE) of the fractional difference
+        distribution between the run parameters values "true" values of the
+        same parameter, from the literature.
+
+        The fractional difference is given by
+        `(param - truths) / sqrt(e_param^2 + e_truths^2)`
         which, if in perfect agreement, should resemble a Gaussian centred on
         0 with a width of 1.
+
+        Parameters
+        ----------
+        param : str
+            Name of the parameter to plot.
+
+        truths : np.ndarray[Nruns]
+            Array of "truth" values.
+
+        e_truths : np.ndarray[Nruns], optional
+            Array of uncertainties on the "truth" values. If None,
+            will be taken as all 0.
+
+        src_truths : str, optional
+            The source of the "truths", included in the y-axis label.
+
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_RunAnalysis._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this relation. Should be a
+            part of the given `fig`.
+
+        kde : bool, optional
+            Whether to plot a smooth Gaussian KDE, or a simple histogram.
+
+        show_normal : bool, optional
+            Optionally overplot a Gaussian centred at 0 with a width of 1,
+            representing perfect agreement.
+
+        kde_color : str, optional
+            The colour of the filled KDE.
+
+        show_FWHM : bool, optional
+            If `show_normal` is True, also place in a text box the difference
+            in the FWHM between the KDE and the normal plot.
+
+        annotate : bool, optional
+            Optionally create a hook to this figure allowing the interactive
+            annotating of selected cluster names. See `_Annotator` for more
+            details.
+
+        annotate_kwargs : dict, optional
+            Optional arguments passed to the `_Annotator` instance.
+
+        residuals : bool, optional
+            Add an ax to the bottom of the figure showing the residuals between
+            the run results and the "truths".
+
+        force_model : bool, optional
+            Force these parameter values to be taken from model quantities.
+            Can be useful when some parameter names overlap (e.g. "ra").
+
+        **kwargs : dict
+            All other arguments are passed to `ax.fill_between`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
         '''
 
         fig, ax = self._setup_artist(fig, ax)
 
-        x, *dx = self._get_param(param, with_units=False)
+        x, *dx = self._get_param(param, with_units=False,
+                                 force_model=force_model)
         dx = np.mean(dx, axis=0)
         y, dy = truths, e_truths
 
@@ -4076,7 +4577,47 @@ class RunCollection(_RunAnalysis):
     def plot_param_means(self, param, fig=None, ax=None,
                          clr_param=None, clr_kwargs=None,
                          force_model=False, **kwargs):
-        '''plot mean and std errorbars for each run of the given param'''
+        '''Plot the mean and 1σ values of `param` along all runs.
+
+        Plots, with error bars, the mean values of the given parameter for
+        each run, spaced equally along the x-axis, sorted by run name.
+
+        Parameters
+        ----------
+        param : str
+            Name of the parameter to plot.
+
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_RunAnalysis._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this parameter. Should be a
+            part of the given `fig`.
+
+        clr_param : str, optional
+            Defines the colour of the plotted points. If the name of a
+            parameter, will colour each point by the respective value of that
+            parameter in each run, otherwise will accept a single colour, or
+            array of colours for each run.
+
+        clr_kwargs : dict, optional
+            Optional arguments passed to the `_add_colours` function.
+
+        force_model : bool, optional
+            Force these parameter values to be taken from model quantities.
+            Can be useful when some parameter names overlap (e.g. "ra").
+
+        **kwargs : dict
+            All other arguments are passed to `ax.errorbar` and `ax.scatter`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
         fig, ax = self._setup_artist(fig, ax)
         sc_kwargs = self._dissect_scatter_kwargs(kwargs)
 
@@ -4116,7 +4657,48 @@ class RunCollection(_RunAnalysis):
     def plot_param_bar(self, param, fig=None, ax=None,
                        clr_param=None, clr_kwargs=None,
                        force_model=False, **kwargs):
-        '''plot mean and std bar chart for each run of the given param'''
+        '''Plot the mean and 1σ values of `param` along all runs as a bar chart.
+
+        Plots, with error bars, the mean values of the given parameter for
+        each run as a bar chart beginning at 0.0, spaced equally along the
+        x-axis, sorted by run name.
+
+        Parameters
+        ----------
+        param : str
+            Name of the parameter to plot.
+
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_RunAnalysis._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this parameter. Should be a
+            part of the given `fig`.
+
+        clr_param : str, optional
+            Defines the colour of the plotted points. If the name of a
+            parameter, will colour each point by the respective value of that
+            parameter in each run, otherwise will accept a single colour, or
+            array of colours for each run.
+
+        clr_kwargs : dict, optional
+            Optional arguments passed to the `_add_colours` function.
+
+        force_model : bool, optional
+            Force these parameter values to be taken from model quantities.
+            Can be useful when some parameter names overlap (e.g. "ra").
+
+        **kwargs : dict
+            All other arguments are passed to `ax.bar`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
         fig, ax = self._setup_artist(fig, ax)
 
         mean, *err = self._get_param(param, force_model=force_model)
@@ -4149,7 +4731,65 @@ class RunCollection(_RunAnalysis):
                            color=None, alpha=0.3, edgecolor='k', edgewidth=1.0,
                            quantiles=[0.9772, 0.8413, 0.5, 0.1587, 0.0228],
                            force_model=False, **kwargs):
-        '''plot violins for each run of the given param'''
+        '''Plot a violin plot showing the parameter distributions for all runs.
+
+        Plots a violin plot with the full posterior distributions of a
+        parameter for each run, spaced equally along the x-axis, sorted by run
+        name.
+
+        Parameters
+        ----------
+        param : str
+            Name of the parameter to plot.
+
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_RunAnalysis._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this parameter. Should be a
+            part of the given `fig`.
+
+        clr_param : str, optional
+            Defines the colour of the plotted points. If the name of a
+            parameter, will colour each point by the respective value of that
+            parameter in each run, otherwise will accept a single colour, or
+            array of colours for each run.
+
+        clr_kwargs : dict, optional
+            Optional arguments passed to the `_add_colours` function.
+
+        color : str, optional
+            Fallback default (single) colour for all distributions.
+            `clr_param` has precedence over this.
+
+        alpha : float, optional
+            Transparency value applied to all distributions.
+
+        edgecolor : str, optional
+            The color of the border placed around each distribution
+
+        edgewidth : float, optional
+            The width of the border placed around each distribution
+
+        quantiles : list of float, optional
+            The quantiles shown as ticks on the central errorbars inside the
+            distributions.
+
+        force_model : bool, optional
+            Force these parameter values to be taken from model quantities.
+            Can be useful when some parameter names overlap (e.g. "ra").
+
+        **kwargs : dict
+            All other arguments are passed to `ax.violinplot`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
         fig, ax = self._setup_artist(fig, ax)
 
         chains = self._get_param_chains(param, with_units=False,
@@ -4232,9 +4872,40 @@ class RunCollection(_RunAnalysis):
 
     def plot_param_hist(self, param, fig=None, ax=None, kde=False,
                         force_model=False, **kwargs):
-        '''
-        plot a kde representing the sum (convolution) of all run's
-        distributions (kde) of this parameter
+        '''Plot a histogram representing the sum of all distributions of param.
+
+        Plots a histogram (or smoothed Gaussian KDE) representing the sum
+        (or convolution) of the distributions of this parameter over all runs.
+
+        Parameters
+        ----------
+        param : str
+            Name of the parameter to plot.
+
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_RunAnalysis._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this parameter. Should be a
+            part of the given `fig`.
+
+        kde : bool, optional
+            Whether to plot a smooth Gaussian KDE, or a simple histogram.
+
+        force_model : bool, optional
+            Force these parameter values to be taken from model quantities.
+            Can be useful when some parameter names overlap (e.g. "ra").
+
+        **kwargs : dict
+            All other arguments are passed to `ax.fill_between` or `ax.hist`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
         '''
         # TODO is a liiittle bit invalid if chains don't all have same N
 
@@ -4274,12 +4945,43 @@ class RunCollection(_RunAnalysis):
     def plot_param_corner(self, params=None, fig=None, *,
                           include_FeH=True, include_BH=False, include_rt=False,
                           log_radii=False, force_model=False, **kwargs):
-        '''
-        plot corner plot of all params for all runs
-        if params is none, default params used are:
+        '''Plot a "corner plot" showing relationship between parameters.
 
-        if include_{FeH,BH}, those are included in the defaults. does not
-        override params
+        Plots a Nparam-Nparam lower-triangular "corner" plot showing the mean
+        and 1σ values for all parameters for all runs.
+
+        Parameters
+        ----------
+        params : list of str, optional
+            The list of parameters to plot. If not given, defaults to the
+            typical 13 free model parameters, and any included by the
+            `include_*` arguments.
+
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place all axes on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_RunAnalysis._setup_multi_artist` for more details.
+
+        include_FeH : bool, optional
+            If True, the metallicity `FeH` is included in the default params.
+
+        include_BH : bool, optional
+            If True, the black hole mass `BH_mass` is included in the
+            default params.
+
+        include_rt : bool, optional
+            If True, the tidal radius `rt` is included in the default params.
+
+        log_radii : bool, optional
+            If True, the radii included in the default params are logged.
+
+        force_model : bool, optional
+            Force these parameter values to be taken from model quantities.
+            Can be useful when some parameter names overlap (e.g. "ra").
+
+        **kwargs : dict
+            All other arguments are passed to `plot_relation`.
         '''
 
         if params is None:
@@ -4362,6 +5064,35 @@ class RunCollection(_RunAnalysis):
     def summary_dataframe(self, *, params='all',
                           include_FeH=True, include_BH=False,
                           math_labels=False):
+        '''Return a Dataframe with the median and 1σ param values for all runs.
+
+        Constructs and returns a table (in the form of a `pandas.Dataframe`)
+        of the median and 1σ values of all included parameters, with each row
+        representing a run.
+
+        Parameters
+        ----------
+        params : list of str, optional
+            The list of parameters to include in the returned table.
+            If not given, defaults to the typical 13 free model parameters,
+            and any included by the `include_*` arguments.
+
+        include_FeH : bool, optional
+            If True, the metallicity `FeH` is included in the default params.
+
+        include_BH : bool, optional
+            If True, the black hole related parameters (`BH_mass`, `BH_num`,
+            `f_BH`, `f_rem`) are included in the default params.
+
+        math_labels : bool, optional
+            If True, the column names will be labelled with latex math.
+            See `_get_latex_labels` for more information.
+
+        Returns
+        -------
+        pandas.Dataframe
+            The full table of parameter values.
+        '''
         import pandas as pd
         # TODO pandas isn't in the setup requirements
 
@@ -4402,7 +5133,51 @@ class RunCollection(_RunAnalysis):
     def output_summary(self, outfile=sys.stdout, params='all', style='latex', *,
                        include_FeH=False, include_BH=False, math_labels=False,
                        substack_errors=False, **kwargs):
-        '''output a table of all parameter means for each cluster'''
+        '''Output a table of the median and 1σ param values for all runs.
+
+        Constructs and writes out a table of the median and 1σ values of all
+        included parameters, with each row representing a run.
+
+        Parameters
+        ----------
+        outfile : file, optional
+            Output file handler to write the summary to. Defaults to printing
+            to "stdout".
+
+        params : list of str, optional
+            The list of parameters to include in the outputted table.
+            If not given, defaults to the typical 13 free model parameters,
+            and any included by the `include_*` arguments.
+
+        style : {'table', 'latex', 'hdf', 'csv', 'html'}, optional
+            Type of output file to create. Defaults to 'latex'. Most formats
+            use the corresponding `to_*` method on a `pandas.Dataframe`.
+
+        include_FeH : bool, optional
+            If True, the metallicity `FeH` is included in the default params.
+
+        include_BH : bool, optional
+            If True, the black hole related parameters (`BH_mass`, `BH_num`,
+            `f_BH`, `f_rem`) are included in the default params.
+
+        math_labels : bool, optional
+            If True, the column names will be labelled with latex math.
+            See `_get_latex_labels` for more information.
+
+        substack_errors : bool, optional
+            If True, and the given style is `latex`, the errors will be
+            written, not as a separate column, but within a "substack" on
+            each value.
+
+        **kwargs : dict
+            All other arguments are passed to the corresponding
+            `to_*` method on a `pandas.Dataframe`.
+
+        Returns
+        -------
+        pandas.Dataframe
+            The dataframe used to write the output file.
+        '''
 
         def _round_sf(*values, max_prec=7):
             import decimal
