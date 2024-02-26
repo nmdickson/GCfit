@@ -18,11 +18,11 @@ sys.path.insert(0, os.path.abspath('../..'))
 # -- Project information -----------------------------------------------------
 
 project = 'GCfit'
-copyright = '2023, Nolan Dickson'
+copyright = '2024, Nolan Dickson'
 author = 'Nolan Dickson'
 
 # The full version, including alpha/beta/rc tags
-release = '1.0'
+release = '1.1'
 
 
 # -- General configuration ---------------------------------------------------
