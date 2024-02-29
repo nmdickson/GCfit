@@ -311,7 +311,7 @@ class NestedSamplingOutput(Output):
                 grp[key][-n_grow:] = val
 
 
-def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
+def MCMC_fit(cluster, Niters, Nwalkers, evolved=False, Ncpu=2, *,
              mpi=False, initials=None, param_priors=None, moves=None,
              fixed_params=None, excluded_likelihoods=None, hyperparams=False,
              cont_run=False, savedir=_here, backup=False, restrict_to=None,
@@ -447,13 +447,15 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     # *_params -> list of keys, *_initials -> dictionary
 
     spec_initials = initials
+    obs_initials = (observations.initials if not evolved
+                    else observations.ev_initials)
 
     # get supplied initials, or read them from the data files if not given
     if initials is None:
-        initials = observations.initials
+        initials = obs_initials
     else:
         # fill manually supplied dict with defaults
-        initials = observations.initials | initials
+        initials = obs_initials | initials
 
     logging.debug(f"Inital initals: {initials}")
 
@@ -482,7 +484,8 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     spec_prior_type = {k: v[0] for k, v in param_priors.items()}
     spec_prior_args = {k: v[1:] for k, v in param_priors.items()}
 
-    prior_likelihood = priors.Priors(param_priors)
+    prior_kwargs = {'fixed_initials': fixed_initials, 'evolved': evolved}
+    prior_likelihood = priors.Priors(param_priors, **prior_kwargs)
 
     # check if initials are outside priors, if so then error right here
     if not np.isfinite(prior_likelihood(initials)):
@@ -523,6 +526,7 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         # ------------------------------------------------------------------
 
         backend.store_metadata('cluster', cluster)
+        backend.store_metadata('evolved', evolved)
 
         # Only store if set. Will default read to None if not stored here
         if restrict_to is not None:
@@ -540,7 +544,8 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         backend.store_metadata('excluded_likelihoods', excluded_likelihoods)
 
         # MCMC moves
-        backend.store_metadata('moves', [mv.__class__.__name__ for mv in moves])
+        backend.store_metadata('moves', [(mv.__class__.__name__ for mv in moves)
+                                         if moves is not None else 'None'])
 
         if spec_initials is not None:
             backend.store_metadata('specified_initials', spec_initials)
@@ -555,7 +560,8 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
         logging.info("Initializing sampler")
 
-        sampler_kwargs = {'hyperparams': hyperparams, 'return_indiv': True}
+        sampler_kwargs = {'hyperparams': hyperparams, 'evolved': evolved,
+                          'return_indiv': True}
 
         sampler = emcee.EnsembleSampler(
             nwalkers=Nwalkers,
@@ -637,7 +643,8 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     logging.info("FINISHED")
 
 
-def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
+def nested_fit(cluster, evolved=False, *,
+               bound_type='multi', sample_type='auto',
                initial_kwargs=None, batch_kwargs=None,
                pfrac=1.0, maxfrac=0.8, eff_samples=5000,
                Ncpu=2, mpi=False, initials=None, param_priors=None,
@@ -799,13 +806,15 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
     # *_params -> list of keys, *_initials -> dictionary
 
     spec_initials = initials
+    obs_initials = (observations.initials if not evolved
+                    else observations.ev_initials)
 
     # get supplied initials, or read them from the data files if not given
     if initials is None:
-        initials = observations.initials
+        initials = obs_initials
     else:
         # fill manually supplied dict with defaults
-        initials = observations.initials | initials
+        initials = obs_initials | initials
 
     logging.debug(f"Inital initals: {initials}")
 
@@ -832,7 +841,8 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
     spec_prior_type = {k: v[0] for k, v in param_priors.items()}
     spec_prior_args = {k: v[1:] for k, v in param_priors.items()}
 
-    prior_kwargs = {'fixed_initials': fixed_initials, 'err_on_fail': False}
+    prior_kwargs = {'fixed_initials': fixed_initials, 'err_on_fail': False,
+                    'evolved': evolved}
     prior_transform = priors.PriorTransforms(param_priors, **prior_kwargs)
 
     # ----------------------------------------------------------------------
@@ -869,6 +879,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         # ----------------------------------------------------------------------
 
         backend.store_metadata('cluster', cluster)
+        backend.store_metadata('evolved', evolved)
 
         # Only store if set. Will default read to None if not stored here
         if restrict_to is not None:
@@ -913,7 +924,8 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
         backend.ndim = ndim
 
-        logl_kwargs = {'hyperparams': hyperparams, 'return_indiv': False}
+        logl_kwargs = {'hyperparams': hyperparams, 'evolved': evolved,
+                       'return_indiv': False}
 
         sampler = dynesty.DynamicNestedSampler(
             ndim=ndim,

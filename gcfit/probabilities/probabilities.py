@@ -1,7 +1,8 @@
 from .pulsars import *
 from .priors import Priors
 from .. import util
-from ..core.data import DEFAULT_THETA, FittableModel
+from ..core.data import (DEFAULT_THETA, DEFAULT_EV_THETA,
+                         FittableModel, FittableEvolvedModel)
 
 import numpy as np
 import astropy.units as u
@@ -1023,14 +1024,19 @@ def likelihood_mass_func(model, mf, fields, *, hyperparams=False):
 # --------------------------------------------------------------------------
 
 
-def log_likelihood(theta, observations, L_components, hyperparams):
+def log_likelihood(theta, observations, L_components, hyperparams, evolved):
     '''
     Main likelihood function, generates the model(theta) passes it to the
     individual likelihood functions and collects their results.
     '''
 
+    if evolved:
+        model_cls = FittableEvolvedModel
+    else:
+        model_cls = FittableModel
+
     try:
-        model = FittableModel(theta, observations)
+        model = model_cls(theta, observations)
     except ValueError:
         logging.debug(f"Model did not converge with {theta=}")
         return -np.inf, -np.inf * np.ones(len(L_components))
@@ -1048,7 +1054,7 @@ def log_likelihood(theta, observations, L_components, hyperparams):
 
 def posterior(theta, observations, fixed_initials=None,
               L_components=None, prior_likelihood=None, *,
-              hyperparams=False, return_indiv=True):
+              hyperparams=False, return_indiv=True, evolved=False):
     '''
     Combines the likelihood with the prior
 
@@ -1067,7 +1073,12 @@ def posterior(theta, observations, fixed_initials=None,
         L_components = observations.valid_likelihoods
 
     if prior_likelihood is None:
-        prior_likelihood = Priors(dict())
+        prior_likelihood = Priors(dict(), evolved=evolved)
+
+    if evolved:
+        default_θ = DEFAULT_EV_THETA
+    else:
+        default_θ = DEFAULT_THETA
 
     # Check if any values of theta are not finite, probably caused by invalid
     # prior transforms, and indicating we should return -inf
@@ -1079,8 +1090,8 @@ def posterior(theta, observations, fixed_initials=None,
             return -np.inf
 
     # get a list of variable params, sorted for the unpacking of theta
-    variable_params = DEFAULT_THETA.keys() - fixed_initials.keys()
-    params = sorted(variable_params, key=list(DEFAULT_THETA).index)
+    variable_params = default_θ.keys() - fixed_initials.keys()
+    params = sorted(variable_params, key=list(default_θ).index)
 
     # TODO add type check on theta, cause those exceptions aren't very pretty
     theta = dict(zip(params, theta)) | fixed_initials
@@ -1098,8 +1109,9 @@ def posterior(theta, observations, fixed_initials=None,
     else:
         log_Pθ = 0
 
-    log_L, individuals = log_likelihood(theta, observations,
-                                        L_components, hyperparams)
+    log_L, individuals = log_likelihood(theta, observations, L_components,
+                                        hyperparams=hyperparams,
+                                        evolved=evolved)
 
     probability = log_L + log_Pθ
 

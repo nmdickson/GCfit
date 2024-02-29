@@ -13,11 +13,13 @@ import itertools
 from collections import namedtuple
 
 
-__all__ = ['DEFAULT_THETA', 'Model', 'FittableModel', 'SingleMassModel',
+__all__ = ['DEFAULT_THETA', 'DEFAULT_EV_THETA',
+           'Model', 'FittableModel', 'SingleMassModel',
+           'EvolvedModel', 'FittableEvolvedModel',
            'Observations']
 
 
-# The order of this is important!
+# The order of these is important!
 DEFAULT_THETA = {
     'W0': 6.0,
     'M': 0.69,
@@ -31,6 +33,22 @@ DEFAULT_THETA = {
     'a2': 1.3,
     'a3': 2.5,
     'BHret': 0.5,
+    'd': 6.405,
+}
+
+
+DEFAULT_EV_THETA = {
+    'W0': 6.0,
+    'M0': 5.0,
+    'rh0': 10.0,
+    'ra': 1.23,
+    'g': 0.75,
+    'delta': 0.45,
+    's2': 0.1,
+    'F': 1.1,
+    'a1': 0.5,
+    'a2': 1.3,
+    'a3': 2.5,
     'd': 6.405,
 }
 
@@ -525,7 +543,9 @@ class Observations:
 
         self.mdata = {}
         self._dict_datasets = {}
+
         self.initials = DEFAULT_THETA.copy()
+        self.ev_initials = DEFAULT_EV_THETA.copy()
 
         filename = util.get_cluster_path(cluster, standardize_name, restrict_to)
 
@@ -542,13 +562,26 @@ class Observations:
                 # This updates defaults with data while keeping default sort
                 self.initials = {**self.initials, **file['initials'].attrs}
 
-                if extras := (self.initials.keys() - DEFAULT_THETA.keys()):
+                if extra := (self.initials.keys() - DEFAULT_THETA.keys()):
                     mssg = (f"Stored initials do not match expected."
-                            f"Extra values found: {extras}")
+                            f"Extra values found: {extra}")
                     raise ValueError(mssg)
 
             except KeyError:
                 logging.info("No initial state stored, using defaults")
+                pass
+
+            try:
+                self.ev_initials = {**self.ev_initials,
+                                    **file['ev_initials'].attrs}
+
+                if extra := (self.ev_initials.keys() - DEFAULT_EV_THETA.keys()):
+                    mssg = (f"Stored (evolved) initials do not match expected."
+                            f"Extra values found: {extra}")
+                    raise ValueError(mssg)
+
+            except KeyError:
+                logging.info("No (evolved) initial state stored, using default")
                 pass
 
             # TODO need a way to read units for some mdata from file
@@ -1706,6 +1739,54 @@ class EvolvedModel(Model):
         super().__init__(W0, M, rh, g=1.5, delta=0.45, ra=1e8,
                          a1=1.3, a2=2.3, a3=2.3, BHret=BHret, d=5,
                          s2=0., F=1., **kwargs)
+
+
+class FittableEvolvedModel(EvolvedModel):
+    '''Evolved Model subclass for use in all fitting functions.'''
+
+    def __init__(self, theta, observations, **kwargs):
+
+        self.observations = observations
+
+        # ------------------------------------------------------------------
+        # Unpack theta
+        # ------------------------------------------------------------------
+
+        if not isinstance(theta, dict):
+            theta = dict(zip(DEFAULT_EV_THETA, theta))
+
+        else:
+            theta = theta.copy()
+
+        if missing_params := (DEFAULT_EV_THETA.keys() - theta.keys()):
+            mssg = f"Missing required params: {missing_params}"
+            raise KeyError(mssg)
+
+        self.theta = theta
+
+        # ------------------------------------------------------------------
+        # Convert a few quantities
+        # ------------------------------------------------------------------
+
+        theta['M0'] = theta['M0'] * 1e6
+
+        theta['ra'] = 10**theta['ra']
+
+        # ------------------------------------------------------------------
+        # Create the base model
+        # ------------------------------------------------------------------
+
+        kwargs = kwargs.copy()
+
+        # Extra check if vesc/Ndot exist in obs first, otherwise use default
+        #   Necessary because checks in Model aren't sufficient
+        if ('vesc' not in kwargs) and ('vesc' in observations.mdata):
+            kwargs['vesc'] = observations.mdata['vesc'] << u.km / u.s
+
+        if ('Ndot' not in kwargs) and ('Ndot' in observations.mdata):
+            kwargs['Ndot'] = observations.mdata['Ndot']
+
+        super().__init__(observations=observations, **theta, **kwargs)
 
 
 # --------------------------------------------------------------------------

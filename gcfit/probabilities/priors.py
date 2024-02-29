@@ -7,7 +7,8 @@ import logging
 import operator
 
 
-__all__ = ["Priors", "DEFAULT_PRIORS", "UniformPrior", "GaussianPrior",
+__all__ = ["DEFAULT_PRIORS", "DEFAULT_EV_PRIORS",
+           "Priors", "UniformPrior", "GaussianPrior",
            "BoundedGaussianPrior", "CromwellUniformPrior", "ArbitraryPrior"]
 
 
@@ -127,12 +128,14 @@ class Priors:
         return L
 
     def __init__(self, priors, fixed_initials=None, *,
-                 logged=True, err_on_fail=False):
+                 logged=True, err_on_fail=False, evolved=False):
 
         self._log = logged
         self._strict = err_on_fail
 
-        if extraneous_params := (priors.keys() - DEFAULT_PRIORS.keys()):
+        defaults = DEFAULT_PRIORS if not evolved else DEFAULT_EV_PRIORS
+
+        if extraneous_params := (priors.keys() - defaults.keys()):
             raise ValueError(f"Invalid parameters: {extraneous_params}")
 
         # ------------------------------------------------------------------
@@ -147,15 +150,15 @@ class Priors:
         self.fixed_initials = fixed_initials
 
         # get list of variable params, sorted for the later unpacking of theta
-        var_params = DEFAULT_PRIORS.keys() - fixed_initials.keys()
-        self.var_params = sorted(var_params, key=list(DEFAULT_PRIORS).index)
+        var_params = defaults.keys() - fixed_initials.keys()
+        self.var_params = sorted(var_params, key=list(defaults).index)
 
         # ------------------------------------------------------------------
         # Initialize all Prior objects
         # ------------------------------------------------------------------
 
         # Fill in unspecified parameters with default priors
-        self.priors = {**DEFAULT_PRIORS, **priors}
+        self.priors = {**defaults, **priors}
 
         # Fill the dict with actual priors objects
         for param in self.priors:
@@ -312,11 +315,14 @@ class PriorTransforms(Priors):
 
         return theta
 
-    def __init__(self, priors, fixed_initials=None, *, err_on_fail=False):
+    def __init__(self, priors, fixed_initials=None, *, err_on_fail=False,
+                 evolved=False):
 
         self._strict = err_on_fail
 
-        if extraneous_params := (priors.keys() - DEFAULT_PRIORS.keys()):
+        defaults = DEFAULT_PRIORS if not evolved else DEFAULT_EV_PRIORS
+
+        if extraneous_params := (priors.keys() - defaults.keys()):
             raise ValueError(f"Invalid parameters: {extraneous_params}")
 
         # ------------------------------------------------------------------
@@ -331,15 +337,15 @@ class PriorTransforms(Priors):
         self.fixed_initials = fixed_initials
 
         # get list of variable params, sorted for the later unpacking of U
-        var_params = DEFAULT_PRIORS.keys() - fixed_initials.keys()
-        self.var_params = sorted(var_params, key=list(DEFAULT_PRIORS).index)
+        var_params = defaults.keys() - fixed_initials.keys()
+        self.var_params = sorted(var_params, key=list(defaults).index)
 
         # ------------------------------------------------------------------
         # Initialize all Prior objects
         # ------------------------------------------------------------------
 
         # Fill in unspecified parameters with default priors
-        self.priors = {**DEFAULT_PRIORS, **priors}
+        self.priors = {**defaults, **priors}
 
         for key in self.fixed_initials:
             del self.priors[key]
@@ -668,6 +674,21 @@ DEFAULT_PRIORS = {
     'a2': ('uniform', [(-1, 2.35), ('a1', np.inf)]),
     'a3': ('uniform', [(1.6, 4), ('a2', np.inf)]),
     'BHret': ('uniform', [(0, 100)]),
+    'd': ('uniform', [(2, 18)])
+}
+
+DEFAULT_EV_PRIORS = {
+    'W0': ('uniform', [(3, 20)]),
+    'M0': ('uniform', [(0.001, 10)]),
+    'rh0': ('uniform', [(0.1, 50)]),
+    'ra': ('uniform', [(0, 5)]),
+    'g': ('uniform', [(0, 3.5)]),
+    'delta': ('uniform', [(0.3, 0.5)]),
+    's2': ('uniform', [(0, 15)]),
+    'F': ('uniform', [(1, 3)]),
+    'a1': ('uniform', [(-1, 2.35)]),
+    'a2': ('uniform', [(-1, 2.35), ('a1', np.inf)]),
+    'a3': ('uniform', [(1.6, 4), ('a2', np.inf)]),
     'd': ('uniform', [(2, 18)])
 }
 
