@@ -129,6 +129,10 @@ def main():
                                action='store_true',
                                help="Use Bayesian hyperparams")
 
+    shared_parser.add_argument('--evolved', dest='evolved',
+                               action='store_true',
+                               help="Use evolved models")
+
     shared_parser.add_argument('--verbose', action='store_true')
     shared_parser.add_argument('--debug', action='store_true')
 
