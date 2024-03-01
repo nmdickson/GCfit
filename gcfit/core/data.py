@@ -1711,8 +1711,7 @@ class EvolvedModel(Model):
 
     def __init__(self, W0, M0, rh0, g=1.5, delta=0.45, ra=1e8,
                  a1=1.3, a2=2.3, a3=2.3, d=5,
-                 s2=0., F=1., cbh_kwargs=None, **kwargs):
-
+                 s2=0., F=1., *, observations=None, cbh_kwargs=None, **kwargs):
         import clusterbh
 
         self.M0 = M0
@@ -1726,19 +1725,36 @@ class EvolvedModel(Model):
         N = M0 / m0
         rhoh0 = (3 * M0) / (8 * np.pi * rh0**3)
 
-        # TODO need to get all the other args to clusterBH
-        self._clusterbh = clusterbh.clusterBH(N, rhoh0, tend=12e3, **cbh_kwargs)
+        if observations is not None:
+
+            # Get cluster galactocentric radius
+            Rgal = util.Rhel2Rgal(observations.mdata['l'] << u.deg,
+                                  observations.mdata['b'] << u.deg, d << u.kpc)
+
+            cbh_kwargs.setdefault('rg', Rgal.to_value('kpc'))
+
+            # Get age to evolve to
+            age = (observations.mdata['age'] << u.Gyr).to_value('Myr')
+            cbh_kwargs.setdefault('tend', age)
+
+        cbh_kwargs.setdefault('kick', True)
+
+        self._clusterbh = clusterbh.clusterBH(N, rhoh0, **cbh_kwargs)
 
         self.cbh_kwargs = cbh_kwargs
 
         M = self._clusterbh.M[-1] << u.Msun
         rh = self._clusterbh.rh[-1] << u.pc
 
+        # if np.abs(self._clusterbh.fbh[-1]) - np.finfo(float).eps < 0.:
+        if self._clusterbh.fbh[-1] < 0.:
+            self._clusterbh.fbh[-1] = 0.0
+
         BHret = -1
 
-        super().__init__(W0, M, rh, g=1.5, delta=0.45, ra=1e8,
-                         a1=1.3, a2=2.3, a3=2.3, BHret=BHret, d=5,
-                         s2=0., F=1., **kwargs)
+        super().__init__(W0, M, rh, g=g, delta=delta, ra=ra,
+                         a1=a1, a2=a2, a3=a3, BHret=BHret, d=d,
+                         s2=s2, F=F, observations=observations, **kwargs)
 
 
 class FittableEvolvedModel(EvolvedModel):
@@ -1787,7 +1803,6 @@ class FittableEvolvedModel(EvolvedModel):
             kwargs['Ndot'] = observations.mdata['Ndot']
 
         super().__init__(observations=observations, **theta, **kwargs)
-
 
 # --------------------------------------------------------------------------
 # Sampled model

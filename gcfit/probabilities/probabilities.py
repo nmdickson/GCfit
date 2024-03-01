@@ -1037,8 +1037,8 @@ def log_likelihood(theta, observations, L_components, hyperparams, evolved):
 
     try:
         model = model_cls(theta, observations)
-    except ValueError:
-        logging.debug(f"Model did not converge with {theta=}")
+    except ValueError as err:
+        logging.debug(f"Model did not converge with {theta=} ({err})")
         return -np.inf, -np.inf * np.ones(len(L_components))
 
     # Calculate each log likelihood
