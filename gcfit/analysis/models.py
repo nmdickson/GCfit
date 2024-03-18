@@ -20,6 +20,7 @@ __all__ = ['ModelVisualizer', 'CIModelVisualizer', 'ObservationsVisualizer',
 
 
 def _get_model(theta, observations):
+    '''Compute a model based on `theta` and fail quietly'''
     try:
         return FittableModel(theta, observations=observations)
     except ValueError:
@@ -32,6 +33,7 @@ def _get_model(theta, observations):
 
 
 class _ClusterVisualizer:
+    '''Base class for all visualizers of all Model types.'''
 
     _MARKERS = ('o', '^', 'D', '+', 'x', '*', 's', 'p', 'h', 'v', '1', '2')
 
@@ -289,6 +291,7 @@ class _ClusterVisualizer:
 
     def _set_ylabel(self, ax, label, unit=None, label_position='left', *,
                     residual_ax=None, inline_latex=True):
+        '''Set the label for the quantity on the y axis of this plot.'''
 
         tick_prms = dict(which='both',
                          labelright=(label_position == 'right'),
@@ -340,6 +343,7 @@ class _ClusterVisualizer:
 
     def _set_xlabel(self, ax, label='Distance from centre', unit=None, *,
                     residual_ax=None, remove_all=False, inline_latex=True):
+        '''Set the label for the quantity on the x axis of this plot.'''
 
         bottom_ax = ax if residual_ax is None else residual_ax
 
@@ -377,6 +381,7 @@ class _ClusterVisualizer:
     # -----------------------------------------------------------------------
 
     def _support_units(method):
+        '''Decorator adding units support to any wrapped plotting function.'''
         import functools
 
         @functools.wraps(method)
@@ -395,11 +400,11 @@ class _ClusterVisualizer:
     # -----------------------------------------------------------------------
 
     def _get_median(self, percs):
-        '''from an array of data percentiles, return the median array'''
+        '''From an array of data percentiles, return the median array.'''
         return percs[percs.shape[0] // 2] if percs.ndim > 1 else percs
 
     def _get_err(self, dataset, key):
-        '''gather the error variables corresponding to `key` from `dataset`'''
+        '''Gather the error variables corresponding to `key` from `dataset`.'''
         try:
             return dataset[f'Δ{key}']
         except KeyError:
@@ -412,6 +417,53 @@ class _ClusterVisualizer:
                     x_data=None, x_unit='pc', y_unit=None,
                     scale=1.0, background=0.0,
                     CI_kwargs=None, **kwargs):
+        '''Base plotting function for all model profiles.
+
+        Plots a given array of y-values representing a radial profile
+        from a given model, on `ax`, as a solid connected line.
+        If `data` is a higher dimensional array, will overplot a desired number
+        of confidence intervals.
+
+        This base function is to be used by `plot_profile` to handle the
+        plotting of all model quantities.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            An axes instance on which to plot this model profile.
+
+        data : u.Quantity[Ninterval, Nr]
+            Array of model profile data to plot. Final dimension should be
+            the same size as `self.r`. If two dimensional, the first dimension
+            must be an odd size, with the median profile in the middle row
+            and each other an extra σ away.
+
+        intervals : int, optional
+            The number of σ confidence intervals to plot (e.g. intervals=2 will
+            plot the median, 1σ and 2σ). The first dimension of `data` must
+            be of size 1 + 2(intervals).
+
+        x_data : u.Quantity[Nr], optional
+            Alternative x-axis data to use instead of `self.r`.
+
+        x_unit, y_unit : u.Unit, optional
+            Units to convert the x and y data to. By default, x-units are in
+            parsecs and y-units are whatever units `data` is passed in with.
+
+        scale : float, optional
+            An optional y-scaling factor applied to the `data`.
+
+        background : float, optional
+            An optional background level to be subtracted from the `data`.
+
+        CI_kwargs : dict, optional
+            Optional arguments passed to `ax.fill_between` when overplotting
+            confidence intervals.
+
+        **kwargs : dict
+            All other arguments are passed to `ax.plot` when plotting median
+            profile.
+        '''
 
         CI_kwargs = dict() if CI_kwargs is None else CI_kwargs
 
@@ -492,6 +544,55 @@ class _ClusterVisualizer:
     def _plot_data(self, ax, dataset, y_key, *,
                    x_key='r', x_unit='pc', y_unit=None,
                    err_transform=None, scale=1.0, background=0.0, **kwargs):
+        '''Base plotting function for all observed data profiles.
+
+        Plots the observational data corrseponding to the variable `y_key`
+        from a given dataset, with correspoonding errorbars (if they exist).
+
+        This base function is to be used by `plot_profile` to handle the
+        plotting of all observational data.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            An axes instance on which to plot this observational data.
+
+        dataset : gcfit.data.Dataset
+            The observational dataset to load the variable and errors from.
+
+        y_key : str
+            The variable name of the observational data to plot.
+            Must exist within `dataset`.
+
+        x_key : str, optional
+            Alternative x-axis variable name to use instead of `dataset['r']`.
+            Must exist within `dataset`.
+
+        x_unit, y_unit : u.Unit, optional
+            Units to convert the x and y data to. By default, x-units are in
+            parsecs and y-units are in the stored data units.
+
+        err_transform : callable, optional
+            An optional transformation function which, if given, will be
+            called on the y-errors before plotting. Must accept an array of
+            error values and return an array of the same size.
+
+        scale : float, optional
+            An optional y-scaling factor applied to the variable data.
+
+        background : float, optional
+            An optional background level to be subtracted from the variable
+            data.
+
+        **kwargs : dict
+            All other arguments are passed to `ax.errorbar`.
+
+        Returns
+        -------
+        matplotlib.ErrorbarContainer
+            The outputs from the call to `plt.errorbars` using the given
+            dataset.
+        '''
 
         # ------------------------------------------------------------------
         # Get data and relevant errors for plotting
@@ -549,18 +650,108 @@ class _ClusterVisualizer:
 
     def _plot_profile(self, ax, ds_pattern, y_key, model_data, *,
                       y_unit=None, residuals=False,
-                      res_kwargs=None, data_kwargs=None, model_kwargs=None,
                       color=None, data_color=None, model_color=None,
-                      mass_bins=None, label_masses=True, model_label=None,
+                      mass_bins=None, model_label=None, label_masses=True,
+                      res_kwargs=None, data_kwargs=None, model_kwargs=None,
                       **kwargs):
-        '''figure out what needs to be plotted and call model/data plotters
-        all **kwargs passed to both _plot_model and _plot_data
-        model_data dimensions *must* be (mass bins, intervals, r axis)
+        '''Base plotting function for all profiles.
 
-        Each mass bin will be plotted with it's own colour, as
-        decided by the usual matplotlib colour cycle (color=None),
-        Unless data_color, model_color or color are supplied, in which case
-        they will take precedence (in that order)
+        Base function handling the plotting of all profile-based (i.e. `self.r`
+        on the x-axis) model plots. This includes both the full model profiles
+        and observational datasets.
+        This function determines what needs to be plotted, and calls the
+        `_plot_model` and `_plot_data` functions as necessary.
+
+        Model data for all datasets matching `ds_pattern` will be plotted
+        separately with different markers.
+
+        Each mass (both model and data) will be plotted  with it's own colour,
+        as decided by the usual matplotlib colour cycle (color=None),
+        unless `data_color`, `model_color` or `color` are supplied, in which
+        case they will take precedence (in that order).
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            An axes instance on which to plot this observational data.
+
+        ds_pattern : str
+            A pattern string to filter all dataset names on, using `fnmatch`.
+
+        y_key : str
+            The variable name of the observational data to plot.
+            Must exist within each filtered dataset.
+
+        model_data : u.Quantity[Nmasses, Ninterval, Nr]
+            Array of model profile data to plot. Final dimension should be
+            the same size as `self.r`.
+
+        y_unit : u.Unit, optional
+            Units to convert the y axis to.
+
+        residuals : bool, optional
+            If True, automatically adds a residuals axis including all
+            plotted datasets, using `_add_residuals`.
+
+        res_kwargs, data_kwargs, model_kwargs : dict, optional
+            Optional arguments passed to `_add_residuals`, `_plot_data`, and
+            `_plot_model`, respectively.
+
+        color : str, optional
+            Fallback default (single) colour for all plots.
+            By default, will utilize the internal matplotlib colour cycler,
+            which can be customized using `plt.rcParams["axes.prop_cycle"]`.
+            Both `data_color` and `model_color` have precedence over this.
+
+        data_color : str or list of str, optional
+            The colour passed to `_plot_data`, used to colour all observational
+            data (markers and errorbars). If a list of colours is given, it
+            must match (or be longer than) the number of datasets found by
+            the given pattern.
+
+        model_color : str, optional
+            The colour passed to `_plot_model`, used to colour all model
+            profiles (transparency added to colour in confidence intervals).
+            If a colour is *not* given, and multiple masses have been plotted
+            (either through the plotted data or given `mass_bins`), then the
+            colours of model profiles will be taken from the corresponding data
+            of the same masses.
+
+        mass_bins : list of int, optional
+            The mass bins from the model to plot. This should be a list of
+            indices corresponding to the desired mass bins in the given
+            `model_data` (i.e. along axis 0).
+            Note that not all subclasses store the full range of modelled mass
+            bins, and this argument may not be functional.
+            By default, plots the mass bin given by `self.star_bin`. This is
+            also the bin assumed to represent all plotted data, if there is
+            no tracer mass stored.
+
+        model_label : str, optional
+            An optional label to be given to each plotted model, to appear in
+            a legend.
+            Defaults to no label, unless `label_masses` is True, in which case
+            the default prefix is simply "Model ".
+
+        label_masses : bool, optional
+            If True, applies a postfix to all model labels indicating their
+            masses. Note that this may only function if `mass_bins` are
+            explicitly given. If you want this to apply when only using the
+            single default mass bin, must also supply
+            `mass_bins=[self.star_bin]`.
+
+        **kwargs : dict
+            All other arguments are passed to `ax.errorbar`.
+
+        Returns
+        -------
+        ax : matplotlib.axes.Axes
+            The provided axes instance, with all profiles and data plotted on
+            it.
+
+        res_ax : None or matplotlib.axes.Axes
+            None, if `residuals` is False, otherwise the automatically created
+            axes instance containing the residuals plot.
         '''
 
         ds_pattern = ds_pattern or ''
@@ -718,8 +909,60 @@ class _ClusterVisualizer:
     def _add_residuals(self, ax, ymodel, errorbars, percentage=False, *,
                        show_chi2=False, xmodel=None, y_unit=None, size="15%",
                        res_ax=None, divider_kwargs=None):
-        '''
-        errorbars : a list of outputs from calls to plt.errorbars
+        '''Append an extra axis to `ax` for plotting residuals.
+
+        Automatically appends a new axis to the the bottom of the given `ax`,
+        and plots the residuals between the given model and plotted data on it.
+
+        The models will be plotted with the median along the y=0 axis, and the
+        data values will attempt to be read from the output of plotted
+        errorbars. Honestly can't guarantee this will be correct if you use
+        weird transformed axes units/scales.
+        The styling of the data will attempt to match the primary plot as
+        closely as possible.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            An axes instance on which to plot this observational data.
+
+        ymodel : u.Quantity[Ninterval, Nr]
+            Array of model profile data to plot. Must be equivalent to
+            that plotted on `ax` using `_plot_model`.
+
+        errorbars : matplotlib.ErrorbarContainer
+            The outputs from a call to `plt.errorbars`, as returned from
+            `_plot_data`.
+
+        percentage : bool, optional
+            Whether to plot the residuals in physical units (model - data;
+            default) or in percentages (100 * (model - data) / data).
+
+        show_chi2 : bool, optional
+            If True, will add an annotation with the computed Chi-squared
+            value between all data and the plotted model median.
+
+        x_model : u.Quantity[Nr], optional
+            Alternative x-axis data to use instead of `self.r`.
+
+        y_unit : u.Unit, optional
+            Units to convert the y axis to.
+
+        size : str or float, optional
+            The size of the appended residuals axes, with respect to the
+            primary axes.
+            See `mpl_toolkits.axes_grid1.axes_divider.AxesDivider.append_axes`
+            for more information. Defaults to "15%".
+
+        res_ax : matplotlib.axes.Axes, optional
+            Optionally provide an already created axis to plot residuals on.
+            This is useful for overplotting multiple residuals (i.e. for
+            multiple datasets).
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+            The created axes instance containing the residuals plot.
         '''
         from mpl_toolkits.axes_grid1 import make_axes_locatable
 
@@ -876,7 +1119,9 @@ class _ClusterVisualizer:
         return res_ax
 
     def _add_hyperparam(self, ax, ymodel, xdata, ydata, yerr):
+        '''Unused. Supposed to add the value of bayesian hyperparameters'''
         # TODO this is still a complete mess
+        #   numerically correct, just need better way to track and place them.
 
         yspline = util.QuantitySpline(self.r, ymodel)
 

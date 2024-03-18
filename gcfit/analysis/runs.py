@@ -2161,6 +2161,8 @@ class NestedRun(_SingleRunAnalysis):
 
         Plots the "information" gain (H) multiplied by the current number of
         live points, as a function of run iteration.
+        Intended to compare against one of the termination conditions
+        described by (Skilling, 2006)
 
         Parameters
         ----------
