@@ -7,6 +7,7 @@ import numpy as np
 import astropy.units as u
 import matplotlib.pyplot as plt
 import matplotlib.colors as mpl_clr
+import matplotlib.legend as mpl_leg
 import matplotlib.ticker as mpl_tick
 import astropy.visualization as astroviz
 
@@ -711,9 +712,13 @@ class _ClusterVisualizer:
 
         # Create legend (remove if no handles found)
         if legend:
-            leg = ax.legend()
-            if not leg.legendHandles:
-                leg.remove()
+
+            # The empty legends warning is apparently impossible to catch, so
+            # we'll do it ourselves, and save the stdout clutter
+            handles, labels = mpl_leg._get_legend_handles_labels([ax])
+
+            if len(handles) > 0:
+                ax.legend(handles, labels)
 
         return ax, res_ax
 
