@@ -9,8 +9,14 @@ Units Utility Functions
 .. autosummary::
     :nosignatures:
     :toctree: generated/
+    :template: class_template.rst
 
     QuantitySpline
+
+.. autosummary::
+    :nosignatures:
+    :toctree: generated/
+
     angular_width
 
 
@@ -49,5 +55,6 @@ Mass Function Utilities
 .. autosummary::
     :nosignatures:
     :toctree: generated/
+    :template: class_template.rst
 
-    mass.Field
+    Field

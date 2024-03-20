@@ -11,7 +11,7 @@ __all__ = ["Field"]
 
 
 class Field:
-    '''Representation of an observational photometric field
+    '''Representation of an observational photometric field.
 
     Constructed based on imaged field coordinate boundaries, in RA and DEC,
     this class exists to facilitate the analysis of all mass function data.
@@ -24,14 +24,14 @@ class Field:
     ----------
     coords :  numpy.ndarray or shapely.geometry.Polygon
         Input polygon descriptor, either in the form of a already created
-        polygon (or multi-polygon) or as an array of ordered coordinates
+        polygon (or multi-polygon) or as an array of ordered coordinates.
 
     cen : 2-tuple of float, optional
         The central coordinate of the relevant globular cluster, in RA and
         DEC. If `cen` does not have any associated units, one must be supplied
         to the `unit` parameter. This is only used for initialization, all
         coordinates will be centred around (0, 0). Defaults to assuming this
-        centring has already happened
+        centring has already happened.
 
     unit : str or astropy.units.Unit, optional
         Unit associated with all coordinates. Only angular units (deg, rad,
@@ -42,26 +42,26 @@ class Field:
         class functionality (e.g. sampling) will be based on it.
 
     preprep : bool, optional
-        Whether to run `Field.prep` upon initialization. Defaults to False
+        Whether to run `Field.prep` upon initialization. Defaults to False.
 
     Attributes
     ----------
     polygon : shapely.geometry.Polygon
-        The `shapely` `Polygon` or `MultiPolygon` object representing the field
+        The `shapely` `Polygon` or `MultiPolygon` object representing the field.
 
     area : astropy.Quantity
-        The total area contained by the fields, in arcmin^2
+        The total area contained by the fields, in arcmin^2.
 
     Notes
     -----
     `preprep` will construct the prepared polygons immediately, however this
     geometry cannot be pickled, and thus the `Field` will not be passable using
     something like mpi. If that is desired, `prep` will have to be called
-    manually at a later time, before any calls to `__contains__`
+    manually at a later time, before any calls to `__contains__`.
 
     See Also
     --------
-    shapely : Source for all geometry operations
+    shapely : Source for all geometry operations.
     '''
 
     def __getstate__(self):
@@ -90,7 +90,7 @@ class Field:
             return self._prepped.contains(other)
 
     def _correct(self, crd, cen=(0, 0), unit=None):
-        '''Centre, convert and RA correct the given array of `crd`s'''
+        '''Centre, convert and RA correct the given array of `crd`s.'''
         RA, DEC = crd[:, 0], crd[:, 1]
 
         # Add and convert units to arcmin
@@ -105,7 +105,7 @@ class Field:
         return np.c_[RA.value, DEC.value]
 
     def prep(self):
-        '''Prepare the polygons for quicker containment searches'''
+        '''Prepare the polygons for quicker containment searches.'''
         if self._multi:
             self._prepped = [prepgeom.prep(p) for p in self.polygon.geoms]
         else:
@@ -181,7 +181,7 @@ class Field:
 
     @classmethod
     def from_dataset(cls, dataset, cen):
-        '''Create this field from a corresponding `gcfit.core.data.Dataset`'''
+        '''Create this field from a corresponding `gcfit.core.data.Dataset`.'''
         import string
 
         unit = dataset.mdata['field_unit']
@@ -199,7 +199,7 @@ class Field:
         return cls(coords, cen=cen, unit=unit)
 
     def slice_radially(self, r1, r2):
-        '''Return a new field representing a radial "slice" of this field'''
+        '''Return a new field representing a radial "slice" of this field.'''
 
         # make sure that r1,r2 are in correct units (fine with requiring them)
         r1, r2 = r1.to_value(self.unit), r2.to_value(self.unit)
@@ -216,7 +216,7 @@ class Field:
     #                              re-init. Just convert your own units before")
 
     def MC_sample(self, M, return_points=False):
-        '''Randomly sample `M` points from this field
+        '''Randomly sample `M` points from this field.
 
         Random points are generated (using `random.uniform`) between the
         minimum and maximum bounds of each polygon, and simple rejection
@@ -227,24 +227,23 @@ class Field:
         Parameters
         ----------
         M : int
-            The number of points to sample
+            The number of points to sample.
 
         return_points : bool, optional
             If `True`, returns a `shapely.geometry.MultiPoint` object containing
             all the points, otherwise simply returns the radial position of
-            each (in arcmin). Defaults to `False`
+            each (in arcmin). Defaults to `False`.
 
         Returns
         -------
-        sample : astropy.Quantity or shapely.geometry.MultiPoint
+        astropy.Quantity or shapely.geometry.MultiPoint
             Array of `M` sampled points, either in radial positions or
-            coordinates, based on `return_points`
-
+            coordinates, based on `return_points`.
         '''
         # TODO we should accept a seed or something for this randomness
 
         def rejection_sample(poly, prep_poly, M_i):
-            '''Rejection-sample `Mj` points from this given sub-`poly`'''
+            '''Rejection-sample `Mj` points from this given sub-`poly`.'''
 
             if poly.is_empty:
                 return []
@@ -291,7 +290,7 @@ class Field:
         return self._prev_sample
 
     def MC_integrate(self, func, sample=None, M=None):
-        '''Monte Carlo integration of `func` over this field
+        '''Monte Carlo integration of `func` over this field.
 
         Using a random sample of points within this field, either generated
         beforehand or using `Field.MC_sample`, computes the integral of the
@@ -309,11 +308,17 @@ class Field:
         sample : numpy.ndarray, optional
             The sample of points to be used in the integration, represented by
             their radial distances from the origin. If None (default), a new
-            sample will be generated using `Field.MC_sample` and `M`
+            sample will be generated using `Field.MC_sample` and `M`.
 
         M : int, optional
             The number of points to be sampled from `Field.MC_sample`, if
             `sample` is None.
+
+        Returns
+        -------
+        u.Quantity
+            The (definite) integral result. A single float value with units
+            corresponding to the `func` and field units.
         '''
 
         if sample is None:
@@ -345,7 +350,7 @@ class Field:
     # ----------------------------------------------------------------------
 
     def _patch(self, unit='arcmin', *args, **kwargs):
-        '''Create a `PathPatch` based on the polygon boundaries'''
+        '''Create a `PathPatch` based on the polygon boundaries.'''
         from matplotlib.path import Path
         from matplotlib.patches import PathPatch
 
@@ -368,24 +373,24 @@ class Field:
 
     def plot(self, ax, prev_sample=False, adjust_view=True, *, unit='arcmin',
              sample_kw=None, **kwargs):
-        '''Plot this field onto a given ax as a polygonal patch
+        '''Plot this field onto a given ax as a polygonal patch.
 
         Given an already-initialized matplotlib axes, add a patch representing
         all polygons in this field, using a `PathPatch` constructed from
         each polygons boundary lines.
 
         This method only adds a patch to existing plots, all other plotting
-        logic must be handled seperately
+        logic must be handled seperately.
 
         Parameters
         ----------
         ax : matplotlib.axes.Axes
-            The matplotlib axes object to add this plot to
+            The matplotlib axes object to add this plot to.
 
         prev_sample : bool, optional
             If True, also attempt to add a scatterplot of the last sampled
             points. `Field.MC_sample` must have been recently run, with
-            `return_points=True` for this to function. Defaults to False
+            `return_points=True` for this to function. Defaults to False.
 
         adjust_view : bool, optional
             If True (default), also calls the `autoscale_view` method of `ax`.
@@ -400,8 +405,17 @@ class Field:
             not enough to convert `Patch` coordinates correctly.
 
         sample_kw : dict, optional
-            kwargs to be passed to the `scatter` plot of the sample plot, if
-            `prev_sample=True`
+            Kwargs to be passed to the `scatter` plot of the sample plot, if
+            `prev_sample=True`.
+
+        **kwargs
+            All other arguments passed to the `PathPatch` object directly.
+
+        Returns
+        -------
+        matplotlib.patches.Patch
+            The patch which corresponds to this field and was added to the
+            given ax.
         '''
 
         pt = ax.add_patch(self._patch(unit=unit, **kwargs))

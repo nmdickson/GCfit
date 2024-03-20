@@ -19,10 +19,11 @@ Core Data Containers
 .. autosummary::
    :nosignatures:
    :toctree: generated/
+   :template: class_template.rst
 
    Model
    SingleMassModel
    FittableModel
-   data.SampledModel
+   SampledModel
    Observations
    data.Dataset

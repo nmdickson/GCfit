@@ -2,7 +2,8 @@
 Citations
 =========
 
-``GCfit`` was first introduced in Dickson et al. (2023; submitted).
+``GCfit`` was first introduced in
+`Dickson et al. (2023) <https://ui.adsabs.harvard.edu/abs/2023MNRAS.522.5320D>`_.
 
 If you find this package useful in your research, please consider citing the
 relevant papers below:
@@ -16,6 +17,8 @@ typically in the form of a
 
 While these can be accessed directly through the metadata attribute of each
 ``Dataset``:
+
+.. TODO update MF source in all data files, it's breaking `get_sources`
 
 .. code-block:: python
     
