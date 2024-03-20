@@ -741,7 +741,8 @@ class _ClusterVisualizer:
             `mass_bins=[self.star_bin]`.
 
         **kwargs : dict
-            All other arguments are passed to `ax.errorbar`.
+            All other arguments are passed to both `_plot_data` and
+            `_plot_model`. Arguments must be valid for both.
 
         Returns
         -------
@@ -1148,6 +1149,62 @@ class _ClusterVisualizer:
                  x_unit='pc', y_unit='km/s',
                  label_position='top', verbose_label=True, blank_xaxis=False,
                  res_kwargs=None, **kwargs):
+        r'''Plot the line-of-sight velocity dispersion profiles.
+
+        Plots the `self.LOS` model profiles, and the relevant observational
+        datasets (variable "σ" within the dataset pattern
+        "*velocity_dispersion*"), corresponding to the line-of-sight velocity
+        dispersion profiles.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this relation. Should be a
+            part of the given `fig`.
+
+        show_obs : bool, optional
+            Whether to also plot the corresponding observational datasets on
+            top of the relevant model profile. Defaults to True.
+
+        residuals : bool, optional
+            Whether to, if also plotting data, append a residuals ax to the
+            figure. Defaults to False.
+
+        x_unit, y_unit : u.Unit, optional
+            Units to convert the x and y axes to. By default, x-units are in
+            parsecs and y-units are in kilometres per second.
+
+        label_position : {'top', 'left', 'right'}, optional
+            Where to place the quantity (y) label. If "top" (default), will be
+            set as the ax title, otherwise will be set to one side. If on a
+            side, will also attempt to correctly append the units to the end
+            of the label.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "LOS Velocity Dispersion",
+            otherwise "$\sigma_{\mathrm{LOS}}$".
+
+        blank_xaxis : bool, optional
+            If True, will remove the tick markers and label from the x-axis.
+            May be useful if stacking multiple profiles vertically.
+
+        res_kwargs : dict, optional
+            Optional arguments passed to `_add_residuals`.
+
+        **kwargs : dict
+            All other arguments are passed to `_plot_profile`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -1188,6 +1245,62 @@ class _ClusterVisualizer:
                     x_unit='pc', y_unit='mas/yr',
                     label_position='top', verbose_label=True, blank_xaxis=False,
                     res_kwargs=None, **kwargs):
+        r'''Plot the total proper motion dispersion profiles.
+
+        Plots the `self.pm_tot` model profiles, and the relevant observational
+        datasets (variable "PM_tot" within the dataset pattern
+        "*proper_motion*"), corresponding to the total proper motion
+        dispersion profiles.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this relation. Should be a
+            part of the given `fig`.
+
+        show_obs : bool, optional
+            Whether to also plot the corresponding observational datasets on
+            top of the relevant model profile. Defaults to True.
+
+        residuals : bool, optional
+            Whether to, if also plotting data, append a residuals ax to the
+            figure. Defaults to False.
+
+        x_unit, y_unit : u.Unit, optional
+            Units to convert the x and y axes to. By default, x-units are in
+            parsecs and y-units are in milliarcseconds per year.
+
+        label_position : {'top', 'left', 'right'}, optional
+            Where to place the quantity (y) label. If "top" (default), will be
+            set as the ax title, otherwise will be set to one side. If on a
+            side, will also attempt to correctly append the units to the end
+            of the label.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "Total PM Dispersion",
+            otherwise "$\sigma_{\mathrm{PM},\mathrm{tot}}$".
+
+        blank_xaxis : bool, optional
+            If True, will remove the tick markers and label from the x-axis.
+            May be useful if stacking multiple profiles vertically.
+
+        res_kwargs : dict, optional
+            Optional arguments passed to `_add_residuals`.
+
+        **kwargs : dict
+            All other arguments are passed to `_plot_profile`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -1227,6 +1340,64 @@ class _ClusterVisualizer:
                       x_unit='pc', blank_xaxis=False,
                       label_position='top', verbose_label=True,
                       res_kwargs=None, **kwargs):
+        r'''Plot the proper motion dispersion anisotropy profiles.
+
+        Plots the `self.pm_ratio` model profiles, and the relevant observational
+        datasets (variable "PM_ratio" within the dataset pattern
+        "*proper_motion*"), corresponding to the proper motion dispersion
+        anisotropy profiles, defined as the ratio of the tangential over
+        radial proper motion dispersions.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this relation. Should be a
+            part of the given `fig`.
+
+        show_obs : bool, optional
+            Whether to also plot the corresponding observational datasets on
+            top of the relevant model profile. Defaults to True.
+
+        residuals : bool, optional
+            Whether to, if also plotting data, append a residuals ax to the
+            figure. Defaults to False.
+
+        x_unit, y_unit : u.Unit, optional
+            Units to convert the x and y axes to. By default, x-units are in
+            parsecs and y-units are in milliarcseconds per year.
+
+        label_position : {'top', 'left', 'right'}, optional
+            Where to place the quantity (y) label. If "top" (default), will be
+            set as the ax title, otherwise will be set to one side. If on a
+            side, will also attempt to correctly append the units to the end
+            of the label.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "PM Anisotropy Ratio",
+            otherwise "$\sigma_{\mathrm{PM},\mathrm{T}}
+            / \sigma_{\mathrm{PM},\mathrm{R}}$".
+
+        blank_xaxis : bool, optional
+            If True, will remove the tick markers and label from the x-axis.
+            May be useful if stacking multiple profiles vertically.
+
+        res_kwargs : dict, optional
+            Optional arguments passed to `_add_residuals`.
+
+        **kwargs : dict
+            All other arguments are passed to `_plot_profile`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -1267,6 +1438,62 @@ class _ClusterVisualizer:
                   x_unit='pc', y_unit='mas/yr',
                   label_position='top', verbose_label=True, blank_xaxis=False,
                   res_kwargs=None, **kwargs):
+        r'''Plot the tangential proper motion dispersion profiles.
+
+        Plots the `self.pm_T` model profiles, and the relevant observational
+        datasets (variable "PM_T" within the dataset pattern
+        "*proper_motion*"), corresponding to the tangential proper motion
+        dispersion profiles.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this relation. Should be a
+            part of the given `fig`.
+
+        show_obs : bool, optional
+            Whether to also plot the corresponding observational datasets on
+            top of the relevant model profile. Defaults to True.
+
+        residuals : bool, optional
+            Whether to, if also plotting data, append a residuals ax to the
+            figure. Defaults to False.
+
+        x_unit, y_unit : u.Unit, optional
+            Units to convert the x and y axes to. By default, x-units are in
+            parsecs and y-units are in milliarcseconds per year.
+
+        label_position : {'top', 'left', 'right'}, optional
+            Where to place the quantity (y) label. If "top" (default), will be
+            set as the ax title, otherwise will be set to one side. If on a
+            side, will also attempt to correctly append the units to the end
+            of the label.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "Tangential PM
+            Dispersion", otherwise "$\sigma_{\mathrm{PM},\mathrm{T}}$".
+
+        blank_xaxis : bool, optional
+            If True, will remove the tick markers and label from the x-axis.
+            May be useful if stacking multiple profiles vertically.
+
+        res_kwargs : dict, optional
+            Optional arguments passed to `_add_residuals`.
+
+        **kwargs : dict
+            All other arguments are passed to `_plot_profile`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -1306,6 +1533,62 @@ class _ClusterVisualizer:
                   x_unit='pc', y_unit='mas/yr',
                   label_position='top', verbose_label=True, blank_xaxis=False,
                   res_kwargs=None, **kwargs):
+        r'''Plot the radial proper motion dispersion profiles.
+
+        Plots the `self.pm_T` model profiles, and the relevant observational
+        datasets (variable "PM_T" within the dataset pattern
+        "*proper_motion*"), corresponding to the radial proper motion
+        dispersion profiles.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this relation. Should be a
+            part of the given `fig`.
+
+        show_obs : bool, optional
+            Whether to also plot the corresponding observational datasets on
+            top of the relevant model profile. Defaults to True.
+
+        residuals : bool, optional
+            Whether to, if also plotting data, append a residuals ax to the
+            figure. Defaults to False.
+
+        x_unit, y_unit : u.Unit, optional
+            Units to convert the x and y axes to. By default, x-units are in
+            parsecs and y-units are in milliarcseconds per year.
+
+        label_position : {'top', 'left', 'right'}, optional
+            Where to place the quantity (y) label. If "top" (default), will be
+            set as the ax title, otherwise will be set to one side. If on a
+            side, will also attempt to correctly append the units to the end
+            of the label.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "Radial PM Dispersion",
+            otherwise "$\sigma_{\mathrm{PM},\mathrm{R}}$".
+
+        blank_xaxis : bool, optional
+            If True, will remove the tick markers and label from the x-axis.
+            May be useful if stacking multiple profiles vertically.
+
+        res_kwargs : dict, optional
+            Optional arguments passed to `_add_residuals`.
+
+        **kwargs : dict
+            All other arguments are passed to `_plot_profile`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -1347,6 +1630,79 @@ class _ClusterVisualizer:
                             label_position='top', verbose_label=True,
                             blank_xaxis=False, res_kwargs=None,
                             data_kwargs=None, model_kwargs=None, **kwargs):
+        r'''Plot the projected number density profiles.
+
+        Plots the `self.numdens` model profiles, and the relevant observational
+        datasets (variable "Σ" within the dataset pattern
+        "*number_density*"), corresponding to the project number density
+        profiles.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this relation. Should be a
+            part of the given `fig`.
+
+        show_background : bool, optional
+            If True, also plots a horizontal line representing the value of
+            the background density, as taken from the observational datasets
+            (if possible).
+
+        subtract_background : bool, optional
+            If True, subtracts the background density value from the
+            number density model profiles and data.
+
+        show_obs : bool, optional
+            Whether to also plot the corresponding observational datasets on
+            top of the relevant model profile. Defaults to True.
+
+        residuals : bool, optional
+            Whether to, if also plotting data, append a residuals ax to the
+            figure. Defaults to False.
+
+        x_unit, y_unit : u.Unit, optional
+            Units to convert the x and y axes to. By default, x-units are in
+            parsecs and y-units are in stars per parsec squared.
+
+        scale_to : {"model", "data"}, optional
+            Number densities are typically scaled to match the normalization
+            of the data in GCfit, as they are fit to the shape, not value of
+            the number densities. This argument allows the absolute values of
+            the plotted quantities to be scaled to either the
+            model (data / K; default) or the data (model * K).
+
+        label_position : {'top', 'left', 'right'}, optional
+            Where to place the quantity (y) label. If "top" (default), will be
+            set as the ax title, otherwise will be set to one side. If on a
+            side, will also attempt to correctly append the units to the end
+            of the label.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "Tangential PM
+            Dispersion", otherwise "$\sigma_{\mathrm{PM},\mathrm{T}}$".
+
+        blank_xaxis : bool, optional
+            If True, will remove the tick markers and label from the x-axis.
+            May be useful if stacking multiple profiles vertically.
+
+        res_kwargs, data_kwargs, model_kwargs : dict, optional
+            Optional arguments passed to `_add_residuals`, `_plot_data`, and
+            `_plot_model`, respectively.
+
+        **kwargs : dict
+            All other arguments are passed to `_plot_profile`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         # TODO add minor ticks to y axis
 
@@ -1473,10 +1829,38 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_all(self, fig=None, sharex=True, **kwargs):
-        '''Plots all the primary profiles (numdens, LOS, PM)
-        but *not* the mass function, pulsars, or any secondary profiles
-        (cum-mass, remnants, etc)
+        '''Plot all primary model radial profiles in one figure.
+
+        Plots the six primary radial profile quantities used for fitting
+        (excluding notably the mass functions and pulsar accelerations).
+        That is, clockwise from the top left, number density, total PM,
+        tangential PM, radial PM, PM ratio and LOS dispersion profiles.
+
+        Simply sets up a figure with six axes and calls the various relevant
+        profile plotting functions to populate each ax.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place all axes on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_multi_artist` for more details.
+
+        sharex : bool, optional
+            If True, created subplots will all share the same x-axis.
+            Will also remove the x axis ticks and labels on all but the bottom
+            row.
+
+        **kwargs : dict
+            All other arguments are passed to each plotting function.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
         '''
+
         # TODO working with residuals here is hard because constrianed_layout
         #   doesn't seem super aware of them
 
@@ -1584,6 +1968,83 @@ class _ClusterVisualizer:
                        PI_legend=False, propid_legend=False,
                        label_unit='arcmin', model_color=None, model_label=None,
                        logscaled=False, field_kw=None, **kwargs):
+        """Plot present day mass functions in various radial bins.
+
+        Plots each of the stored `self.mass_func` radial (present-day) mass
+        function bins (i.e. binned star counts by mean star mass), in a
+        large figure of stacked axes, as well as the corresponding
+        observational datasets.
+
+        Each grouping of mass functions bins (i.e. under a certain data
+        source proposal) will be plotted with it's own colour and sorted to be
+        next to one another.
+
+        Optionally, a panel will be added to the left of the figure showing
+        the related field outlines on the sky (using `plot_MF_fields`).
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place all axes on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_multi_artist` for more details.
+
+        show_obs : bool, optional
+            Whether to also plot the corresponding observational datasets on
+            top of the relevant model profile. Defaults to True.
+
+        show_fields : bool, optional
+            Whether to include an extra panel (on the left of the figure)
+            showing the observed mass function fields (using `plot_MF_fields`).
+
+        PI_legend : bool, optional
+            If True, also notes the PI name of each proposal grouping under
+            each first radial bin annotation.
+            Only applies if `show_fields` is False, as otherwise they will be
+            noted in that panel better.
+
+        propid_legend : bool, False
+            If True, also notes the ID of each proposal grouping under each
+            first radial bin annotation.
+            Only applies if `show_fields` is False, as otherwise they will be
+            noted in that panel better.
+
+        label_unit : u.Unit, optional
+            The unit used to denote each radial bin in it's corresponding label.
+            Does not change anything about what is plotted, only the label.
+            Defaults to arcminutes (').
+
+        model_color : str, optional
+            Optionally colour all model profiles with a specific colour. This
+            will give the same colour to *all* radial bins, regardless of
+            proposal grouping. By default, models will match the colour of
+            their corresponding data, as dictated within `self.mass_func`, or
+            as set by the default matplotlib colour cycler, if not set.
+
+        model_label : str, optional
+            Optionally add a figure legend with this label corresponding to the
+            model profiles. Only valid if a single specific model colour was
+            given through `model_color`. The legend placement won't be great,
+            and this is mostly for inspection when overplotting multiple models
+            on a single figure.
+
+        logscaled : bool, optional
+            If True, applies a log scaling to the the x (i.e. mass) axis.
+
+        field_kw : dict, optional
+            Optional arguments passed to `plot_MF_fields` if `show_fields` is
+            True.
+
+        **kwargs : dict
+            All other arguments are passed to each `plt.errorbars` call.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        """
+
         # TODO support using other x units (arcsec, pc) here and in MF plot
 
         if self.obs is None:
