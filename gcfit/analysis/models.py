@@ -2293,8 +2293,59 @@ class _ClusterVisualizer:
     @_support_units
     def plot_MF_fields(self, fig=None, ax=None, *, unit='arcmin', radii=("rh",),
                        grid=True, label_grid=False, add_legend=True):
-        '''plot all mass function fields in this observation
+        '''Plot the on-sky HST fields corresponding to each mass function PI.
+
+        Plots the representation of the observed on-sky photometry footprints
+        for each stored mass function groupings, with the origin on the cluster
+        centre.
+        Each grouping of mass functions bins (i.e. under a certain data
+        source proposal) will be plotted with it's own colour.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot the fields. Should be a
+            part of the given `fig`.
+
+        unit : u.Unit, optional
+            Units to convert the x and y axes and grid lines to.
+            By default, the units are arcminutes.
+
+        radii : list of {'rh', 'ra', 'rt', 'r0', 'rhp', 'rv'}, optional
+            A collection of radius values to be overplotted (as circles)
+            on the plot. If the given radii have corresponding uncertainties,
+            they will also be shaded in. By default plots the half-mass radius.
+
+        grid : bool, optional
+            If True (default), adds a circular grid at 2 arcminute intervals,
+            out to the tidal radius.
+
+        label_grid : bool, optional
+            Optionally adds labels on to the figure noting the size of each
+            grid interval, if `grid` is True.
+
+        add_legend : bool, optional
+            If True (default), adds a legend with an entry for each grouping
+            with the proposal PI name and ID.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+
+        See Also
+        --------
+        util.mass.Field:
+            Class representing a given mass function field, containing all
+            associated plotting methods.
         '''
+
         import shapely.geometry as geom
 
         fig, ax = self._setup_artist(fig, ax)
@@ -2435,6 +2486,44 @@ class _ClusterVisualizer:
     @_support_units
     def plot_density(self, fig=None, ax=None, kind='all', *,
                      x_unit='pc', label_position='left', colors=None):
+        '''Plot model density profiles.
+
+        Plots the radial mass density (`self.rho_*`) profiles of the total,
+        main sequence, and dark remnant objects in this model.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot the profiles. Should be a
+            part of the given `fig`.
+
+        kind : list of {'tot', 'rem', 'MS', 'WD', 'NS', 'BH'}, optional
+            The density profiles to plot. By default plots all of them.
+
+        x_unit : u.Unit, optional
+            Units to convert the x axis to. By default, x-units are in parsecs.
+
+        label_position : {'top', 'left', 'right'}, optional
+            Where to place the quantity (y) label. If "top", will be
+            set as the ax title, otherwise will be set to one side. If on a
+            side, will also attempt to correctly append the units to the end
+            of the label. Defaults to the left.
+
+        colors : dict, optional
+            A dictionary of colours, where the keys correspond to the given
+            `kind`. Each object type has it's own default colour.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         if kind == 'all':
             kind = {'MS', 'tot', 'BH', 'WD', 'NS'}
@@ -2500,6 +2589,44 @@ class _ClusterVisualizer:
     @_support_units
     def plot_surface_density(self, fig=None, ax=None, kind='all', *,
                              x_unit='pc', label_position='left', colors=None):
+        '''Plot model surface density profiles.
+
+        Plots the radial surface mass density (`self.Sigma_*`) profiles of the
+        total, main sequence, and dark remnant objects in this model.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot the profiles. Should be a
+            part of the given `fig`.
+
+        kind : list of {'tot', 'rem', 'MS', 'WD', 'NS', 'BH'}, optional
+            The density profiles to plot. By default plots all of them.
+
+        x_unit : u.Unit, optional
+            Units to convert the x axis to. By default, x-units are in parsecs.
+
+        label_position : {'top', 'left', 'right'}, optional
+            Where to place the quantity (y) label. If "top", will be
+            set as the ax title, otherwise will be set to one side. If on a
+            side, will also attempt to correctly append the units to the end
+            of the label. Defaults to the left.
+
+        colors : dict, optional
+            A dictionary of colours, where the keys correspond to the given
+            `kind`. Each object type has it's own default colour.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         if kind == 'all':
             kind = {'MS', 'tot', 'BH', 'WD', 'NS'}
@@ -2566,6 +2693,44 @@ class _ClusterVisualizer:
     @_support_units
     def plot_cumulative_mass(self, fig=None, ax=None, kind='all', *,
                              x_unit='pc', label_position='left', colors=None):
+        '''Plot model cumulative mass profiles.
+
+        Plots the radial cumulative mass profiles of the total,
+        main sequence, and dark remnant objects in this model.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot the profiles. Should be a
+            part of the given `fig`.
+
+        kind : list of {'tot', 'rem', 'MS', 'WD', 'NS', 'BH'}, optional
+            The mass profiles to plot. By default plots all of them.
+
+        x_unit : u.Unit, optional
+            Units to convert the x axis to. By default, x-units are in parsecs.
+
+        label_position : {'top', 'left', 'right'}, optional
+            Where to place the quantity (y) label. If "top", will be
+            set as the ax title, otherwise will be set to one side. If on a
+            side, will also attempt to correctly append the units to the end
+            of the label. Defaults to the left.
+
+        colors : dict, optional
+            A dictionary of colours, where the keys correspond to the given
+            `kind`. Each object type has it's own default colour.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         if kind == 'all':
             kind = {'MS', 'tot', 'BH', 'WD', 'NS'}
@@ -2626,7 +2791,41 @@ class _ClusterVisualizer:
     @_support_units
     def plot_remnant_fraction(self, fig=None, ax=None, *, show_total=True,
                               x_unit='pc', label_position='left'):
-        '''Fraction of mass in remnants vs MS stars, like in baumgardt'''
+        '''Plot model stellar and remnant mass fraction profiles.
+
+        Plots the radial mass fraction profile of the main sequence stars
+        (`mass_MS / mass_tot`) and the dark remnants (`mass_rem / mass_tot`).
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot the profiles. Should be a
+            part of the given `fig`.
+
+        show_total : bool, optional
+            If True (default), places an anchored box in the upper centre of
+            the ax showing the total remnant mass fraction of the cluster.
+
+        x_unit : u.Unit, optional
+            Units to convert the x axis to. By default, x-units are in parsecs.
+
+        label_position : {'top', 'left', 'right'}, optional
+            Where to place the quantity (y) label. If "top", will be
+            set as the ax title, otherwise will be set to one side. If on a
+            side, will also attempt to correctly append the units to the end
+            of the label. Defaults to the left.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -2672,7 +2871,7 @@ class _ClusterVisualizer:
     @_support_units
     def _compute_profile_chi2(self, ds_pattern, y_key, model_data, *,
                               x_key='r', err_transform=None, reduced=True):
-        '''compute chi2 for this dataset (pattern)'''
+        '''Compute chi2 for this dataset (pattern)'''
 
         chi2 = 0.
 
@@ -2747,6 +2946,7 @@ class _ClusterVisualizer:
 
     @_support_units
     def _compute_massfunc_chi2(self, *, reduced=True):
+        '''Compute chi2 for all mass functions'''
 
         chi2 = 0.
 
@@ -2806,10 +3006,8 @@ class _ClusterVisualizer:
 
     @property
     def chi2(self):
-        '''compute chi2 between median model and all datasets
-        Be cognizant that this is only the median model chi2, and not
-        necessarily useful for actual statistics
-        '''
+        '''Compute χ^2 between the median model and all observational data.'''
+
         # TODO seems to produce alot of infs?
 
         def numdens_nuisance(err):
