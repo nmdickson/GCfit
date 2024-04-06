@@ -3039,16 +3039,67 @@ class _ClusterVisualizer:
 
 
 class ModelVisualizer(_ClusterVisualizer):
-    '''
-    class for making, showing, saving all the plots related to a single model
+    '''Analysis and visualization of a single model.
+
+    Provides a number of plotting methods useful for the analysis of a single
+    (multimass) model instance, and it's fit to all relevant observational
+    datasets.
+
+    A number of relevant (plottable) quantities will be initially computed and
+    stored to be used by the various plotting functions defined by the base
+    class `_ClusterVisualizer`.
+
+    Parameters
+    ----------
+    model : gcfit.Model
+        Model instance to visualize.
+
+    observations : gcfit.Observations or None, optional
+        The `Observations` instance corresponding to this cluster.
+        If None, the observations will first try to be read from the model
+        instance itself (`model.observations`). If no observations can be found,
+        this object will be unable to plot any observational data alongside
+        it's modelled profiles.
+
+    See Also
+    --------
+    _ClusterVisualizer : Base class providing all common plotting functions.
     '''
 
     @classmethod
     def from_chain(cls, chain, observations, method='median'):
+        '''Initialize a visualizer based on a full chain of parameters.
+
+        Classmethod which creates a single model visualizer object based on a
+        full chain of parameter values, by reducing the chain to a single set
+        of parameters (through the given `method`) and creating a `Model`
+        from that to initialize this class with.
+
+        Parameters
+        ----------
+        chain : np.ndarray[..., Nparams]
+            Array containing chain of parameters values. Final axis must be
+            of the size of the number of model parameters (13).
+
+        observations : gcfit.Observations
+            The `Observations` instance corresponding to this cluster.
+            Will be passed to `FittableModel`.
+
+        method : {"median", "mean", "final"}
+            Method used to reduce the chain to a single set of parameters.
+            "median" and "mean" find the average values, "final" will take the
+            final iteration in the chain.
+
+        Returns
+        -------
+        ModelVisualizer
+            The created model visualization object.
+
+        See Also
+        --------
+        gcfit.FittableModel : Model subclass used to initialize the model.
         '''
-        create a Visualizer instance based on a chain, y taking the median
-        of the chain parameters
-        '''
+
         reduc_methods = {'median': np.median, 'mean': np.mean,
                          'final': lambda ch, axis: ch[-1]}
 
@@ -3063,9 +3114,29 @@ class ModelVisualizer(_ClusterVisualizer):
 
     @classmethod
     def from_theta(cls, theta, observations):
-        '''
-        create a Visualizer instance based on a theta, see `Model` for allowed
-        theta types
+        '''Initialize a visualizer based on a single set of parameters.
+
+        Classmethod which creates a single model visualizer object based on a
+        set of parameter values, and uses that to initialize this class with.
+
+        Parameters
+        ----------
+        theta : dict or list
+            The set of model input parameters.
+            Must either be a dict, or a full list of all 13 parameters.
+
+        observations : gcfit.Observations
+            The `Observations` instance corresponding to this cluster.
+            Will be passed to `FittableModel`.
+
+        Returns
+        -------
+        ModelVisualizer
+            The created model visualization object.
+
+        See Also
+        --------
+        gcfit.FittableModel : Model subclass used to initialize the model.
         '''
         return cls(FittableModel(theta, observations), observations)
 
@@ -3091,7 +3162,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
         self.r = model.r
 
-        self.rlims = (9e-3, self.r.max().value + 5) << self.r.unit
+        self.rlims = (9e-3, model.r.max().value + 5) << model.r.unit
 
         self._2πr = 2 * np.pi * model.r
 
@@ -3127,6 +3198,7 @@ class ModelVisualizer(_ClusterVisualizer):
     # TODO alot of these init functions could be more homogenous
     @_ClusterVisualizer._support_units
     def _init_numdens(self, model, observations):
+        '''Initialize number density quantities.'''
 
         model_nd = model.Sigmaj / model.mj[:, np.newaxis]
 
@@ -3172,11 +3244,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
     @_ClusterVisualizer._support_units
     def _init_massfunc(self, model, observations):
-        '''
-        sets self.mass_func as a dict of PI's, where each PI has a list of
-        subdicts. Each subdict represents a single radial slice (within this PI)
-        and contains the radii, the mass func values, and the field slice
-        '''
+        '''Initialize mass function quantities, as dict of PIs.'''
 
         self.mass_func = {}
 
@@ -3225,7 +3293,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
     @_ClusterVisualizer._support_units
     def _spoof_empty_massfunc(self, model):
-        '''spoof an arbitrary massfunc, for use when no observations given'''
+        '''Spoof an arbitrary massfunc, for use when no observations given'''
         import shapely
 
         densityj = [util.QuantitySpline(model.r, model.Sigmaj[j])
@@ -3266,6 +3334,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
     @_ClusterVisualizer._support_units
     def _init_dens(self, model, observations):
+        '''Initialize mass density quantities.'''
 
         shp = (np.newaxis, np.newaxis, slice(None))
 
@@ -3278,6 +3347,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
     @_ClusterVisualizer._support_units
     def _init_surfdens(self, model, observations):
+        '''Initialize surface mass density quantities.'''
 
         shp = (np.newaxis, np.newaxis, slice(None))
 
@@ -3290,6 +3360,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
     @_ClusterVisualizer._support_units
     def _init_mass_frac(self, model, observations):
+        '''Initialize mass fraction quantities.'''
 
         int_MS = util.QuantitySpline(self.r, self._2πr * self.Sigma_MS)
         int_rem = util.QuantitySpline(self.r, self._2πr * self.Sigma_rem)
@@ -3312,6 +3383,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
     @_ClusterVisualizer._support_units
     def _init_cum_mass(self, model, observations):
+        '''Initialize cumulative mass quantities.'''
 
         int_tot = util.QuantitySpline(self.r, self._2πr * self.Sigma_tot)
         int_MS = util.QuantitySpline(self.r, self._2πr * self.Sigma_MS)
@@ -3340,9 +3412,31 @@ class ModelVisualizer(_ClusterVisualizer):
 
 
 class CIModelVisualizer(_ClusterVisualizer):
-    '''
-    class for making, showing, saving all the plots related to a bunch of models
-    in the form of confidence intervals
+    '''Analysis and visualization of a model, with confidence intervals.
+
+    Provides a number of plotting methods useful for the analysis of a
+    (multimass) model, and it's fit to all relevant observational datasets.
+    This class is based on a full set of parameter chains, which allows for the
+    estimation of errors on all plotted quantities, shown as confidence
+    intervals shaded on all plots.
+
+    A number of relevant (plottable) quantities (and their ±1σ and ±2σ
+    confidence intervals) will be initially computed and
+    stored to be used by the various plotting functions defined by the base
+    class `_ClusterVisualizer`.
+
+    Due to the time required to compute the large number of models needed, this
+    class can also be saved to disk (through the `save` method) and later
+    reloaded (through the `load` classmethod) instantly.
+
+    Notes
+    -----
+    This class should not be initialized directly, but through the `from_chain`
+    classmethod.
+
+    See Also
+    --------
+    _ClusterVisualizer : Base class providing all common plotting functions.
     '''
 
     @_ClusterVisualizer._support_units
@@ -3436,6 +3530,56 @@ class CIModelVisualizer(_ClusterVisualizer):
     @classmethod
     def from_chain(cls, chain, observations, N=100, *,
                    verbose=False, pool=None):
+        '''Initialize a CI visualizer based on a full chain of parameters.
+
+        Classmethod which creates a model visualizer object based on a
+        full chain of parameter values, by computing a model for each step in
+        the chain and determining the median and 1,2σ uncertainties, on each
+        relevant quantity, between all the models.
+
+        This function will take some time, as models must be computed for
+        every step in the chain. Parallelizing it via a given multiprocessing
+        `pool` is recommended.
+
+        Parameters
+        ----------
+        chain : np.ndarray[..., Nparams]
+            Array containing chain of parameters values. Final axis must be
+            of the size of the number of model parameters (13).
+
+        observations : gcfit.Observations
+            The `Observations` instance corresponding to this cluster.
+            Will be used to initialize every model in the chain.
+
+        N : int
+            The number of samples to use in computing the confidence intervals.
+            The chosen number of samples will be taken from the end of the
+            chain (`chain[..., -N:]`). Choose an N greater than the size of
+            the chain to use all samples.
+
+        verbose : bool, optional
+            Optionally show a `tqdm` loading bar while computing the models.
+
+        pool : Pool, optional
+            A `multiprocessing.Pool` (or other pool-like object implementing
+            an `imap_unordered` method) used to parallelize the computation
+            of the models.
+
+        Returns
+        -------
+        CIModelVisualizer
+            The created CI model visualization object.
+
+        See Also
+        --------
+        gcfit.FittableModel
+            Model subclass used to initialize each model.
+
+        gcfit.scripts.generate_model_CI
+            Script used to generate and save model CIs for a number of clusters
+            at once.
+        '''
+
         import functools
 
         viz = cls(observations)
@@ -3756,6 +3900,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         return viz
 
     def _init_velocities(self, model, mass_bin):
+        '''Initialize various velocity quantities.'''
 
         vT = np.sqrt(model.v2Tj[mass_bin])
         vT_interp = util.QuantitySpline(model.r, vT)
@@ -3781,6 +3926,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         return vT, vR, vtot, va, vp
 
     def _init_dens(self, model):
+        '''Initialize mass density quantities.'''
 
         rho_MS = np.sum(model.MS.rhoj, axis=0)
         rho_MS_interp = util.QuantitySpline(model.r, rho_MS)
@@ -3805,6 +3951,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         return rho_MS, rho_tot, rho_BH, rho_WD, rho_NS
 
     def _init_surfdens(self, model):
+        '''Initialize surface mass density quantities.'''
 
         Sigma_MS = np.sum(model.MS.Sigmaj, axis=0)
         Sigma_MS_interp = util.QuantitySpline(model.r, Sigma_MS)
@@ -3829,6 +3976,8 @@ class CIModelVisualizer(_ClusterVisualizer):
         return Sigma_MS, Sigma_tot, Sigma_BH, Sigma_WD, Sigma_NS
 
     def _init_cum_mass(self, model):
+        '''Initialize cumulative mass quantities.'''
+
         # TODO it seems like the integrated mass is a bit less than total Mj?
         # TODO why doing all this instead of using model.mc?
 
@@ -3857,6 +4006,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         return cum_M_MS, cum_M_tot, cum_M_BH, cum_M_WD, cum_M_NS
 
     def _init_mass_frac(self, model):
+        '''Initialize mass fraction quantities.'''
 
         _2πr = 2 * np.pi * model.r
 
@@ -3882,6 +4032,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         return mass_MS / mass_tot, mass_rem / mass_tot
 
     def _init_numdens(self, model, equivs=None):
+        '''Initialize number density quantities.'''
 
         model_nd = model.Sigmaj[model.nms - 1] / model.mj[model.nms - 1]
 
@@ -3890,6 +4041,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         return nd_interp(self.r).to('pc-2', equivs)
 
     def _init_K_scale(self, numdens):
+        '''Initialize the K scale on the number density.'''
 
         nd_interp = util.QuantitySpline(self.r, self._get_median(numdens[0]))
 
@@ -3923,6 +4075,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         return K
 
     def _prep_massfunc(self, observations):
+        '''Prepare the mass function dictionaries to be filled in.'''
 
         massfunc = {}
 
@@ -3952,7 +4105,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         return massfunc
 
     def _init_dNdm(self, model, rslice, equivs=None):
-        '''returns dndm for this model in this slice'''
+        '''Compute the dN/dm for this model in a given mass function slice.'''
 
         densityj = [util.QuantitySpline(model.r, model.Sigmaj[j])
                     for j in range(model.nms)]
