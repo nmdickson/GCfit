@@ -3442,6 +3442,41 @@ class CIModelVisualizer(_ClusterVisualizer):
     @_ClusterVisualizer._support_units
     def plot_f_rem(self, fig=None, ax=None, bins='auto', color='tab:blue',
                    verbose_label=True):
+        r'''Plot the remnant fraction of this model
+
+        Plots a histogram of the values of the total remnant mass fraction
+        (i.e. mass fraction in WD, NS, BH) in the given chain of models.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_ClusterVisualizer._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this quantity. Should be a
+            part of the given `fig`.
+
+        bins : int or sequence or str
+            Bins to use creating the histogram of this quantity.
+            See `plt.hist` for more details.
+
+        color : color, optional
+            The colour of the plotted histogram. This colour will be applied to
+            the edge (border) of the histogram as is, and to the face at 33%
+            transparency.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "Remnant Fraction",
+            otherwise "$f_{\mathrm{remn}}$".
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -3463,6 +3498,41 @@ class CIModelVisualizer(_ClusterVisualizer):
     @_ClusterVisualizer._support_units
     def plot_f_BH(self, fig=None, ax=None, bins='auto', color='tab:blue',
                   verbose_label=True):
+        r'''Plot the BH fraction of this model
+
+        Plots a histogram of the values of the total black hole mass fraction
+        (i.e. mass fraction in BH over total mass) in the given chain of models.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_ClusterVisualizer._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this quantity. Should be a
+            part of the given `fig`.
+
+        bins : int or sequence or str
+            Bins to use creating the histogram of this quantity.
+            See `plt.hist` for more details.
+
+        color : color, optional
+            The colour of the plotted histogram. This colour will be applied to
+            the edge (border) of the histogram as is, and to the face at 33%
+            transparency.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "BH Mass Fraction",
+            otherwise "$f_{\mathrm{BH}}$".
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -3484,6 +3554,41 @@ class CIModelVisualizer(_ClusterVisualizer):
     @_ClusterVisualizer._support_units
     def plot_BH_mass(self, fig=None, ax=None, bins='auto', color='tab:blue',
                      verbose_label=True):
+        r'''Plot the BH mass of this model
+
+        Plots a histogram of the values of the total black hole mass in the
+        given chain of models.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_ClusterVisualizer._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this quantity. Should be a
+            part of the given `fig`.
+
+        bins : int or sequence or str
+            Bins to use creating the histogram of this quantity.
+            See `plt.hist` for more details.
+
+        color : color, optional
+            The colour of the plotted histogram. This colour will be applied to
+            the edge (border) of the histogram as is, and to the face at 33%
+            transparency.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "BH Mass",
+            otherwise "$\mathrm{M}_{\mathrm{BH}}$".
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -3496,7 +3601,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         if verbose_label:
             label = "BH Mass"
         else:
-            label = r'$\mathrm{M}_{BH}$'
+            label = r'$\mathrm{M}_{\mathrm{BH}}$'
 
         self._set_xlabel(ax, label, unit=self.BH_mass.unit)
 
@@ -3505,6 +3610,41 @@ class CIModelVisualizer(_ClusterVisualizer):
     @_ClusterVisualizer._support_units
     def plot_BH_num(self, fig=None, ax=None, bins='auto', color='tab:blue',
                     verbose_label=True):
+        r'''Plot the number of BHs in this model
+
+        Plots a histogram of the values of the total amount of black holes
+        in the given chain of models.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_ClusterVisualizer._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this quantity. Should be a
+            part of the given `fig`.
+
+        bins : int or sequence or str
+            Bins to use creating the histogram of this quantity.
+            See `plt.hist` for more details.
+
+        color : color, optional
+            The colour of the plotted histogram. This colour will be applied to
+            the edge (border) of the histogram as is, and to the face at 33%
+            transparency.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "BH Amount",
+            otherwise "$\mathrm{N}_{\mathrm{BH}}$".
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -3517,7 +3657,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         if verbose_label:
             label = "BH Amount"
         else:
-            label = r'$\mathrm{N}_{BH}$'
+            label = r'$\mathrm{N}_{\mathrm{BH}}$'
 
         self._set_xlabel(ax, label, unit=self.BH_num.unit)
 
@@ -4127,8 +4267,32 @@ class CIModelVisualizer(_ClusterVisualizer):
     # ----------------------------------------------------------------------
 
     def save(self, filename, overwrite=False):
-        '''save the confidence intervals to a file so we can load them more
-        quickly next time. This should, in most cases, be the run output file
+        '''Save model CI quantities to a file for quicker future initialization.
+
+        Saves the computed confidence intervals on all model profiles, and the
+        full chains of computed quantities (e.g. BH mass, number), so that
+        the same CIModelVisualizer can be initialized later (through the
+        `CIModelVisualizer.load` classmethod) without needing to recompute a
+        large number of models again.
+
+        The desired file must be an existing HDF5 file. All quantities will
+        be stored under a "model_output" group, in the root group.
+        The easiest file to use may be the run output file for the cluster fit
+        that this CI model was based on.
+        Note that an existing saved CI model within this file will be
+        quietly overwritten if `overwrite=True`.
+
+        The full set of models used to initilize this class *will not* be
+        stored, only the quantities required to initialize this class.
+
+        Parameters
+        ----------
+        filename : pathlib.Path or str
+            Path to the output HDF5 file to save this CI model to.
+
+        overwrite : bool, optional
+            If True, will overwrite any existing saved model outputs in this
+            file. By default raises a ValueError if model output exists already.
         '''
 
         with h5py.File(filename, 'a') as file:
@@ -4233,9 +4397,34 @@ class CIModelVisualizer(_ClusterVisualizer):
                     slc_grp.create_dataset('dNdm', data=rbin['dNdm'])
 
     @classmethod
-    def load(cls, filename, observations=None, validate=False):
-        ''' load the CI from a file which was `save`d, to avoid rerunning models
-        validate: check while loading that all datasets are there, error if not
+    def load(cls, filename, observations=None):
+        '''Initialize this class by loading already saved model outputs.
+
+        Based on model outputs computed before (by initializing this class
+        through the `CIModelVisualizer.from_chain` classmethod) and
+        saved using the `CIModelVisualizer.save` method, loads in all required
+        model profiles and quantities from the given file and initializes this
+        class based on them.
+
+        Required quantities are read from the given HDF5 file under the
+        "/model_output" group.
+        Note that if this group was not created by the `save` method, unintended
+        errors may arise only later, during some plotting.
+
+        Parameters
+        ----------
+        filename : pathlib.Path or str
+            Path to the HDF5 file containing the saved "model_output".
+
+        observations : None or gcfit.Observations, optional
+            The `Observations` instance corresponding to this cluster.
+            If not given, an attempt will be made to create this class based on
+            the stored cluster name.
+
+        Returns
+        -------
+        CIModelVisualizer
+            The loaded CI model visualization object.
         '''
 
         with h5py.File(filename, 'r') as file:
