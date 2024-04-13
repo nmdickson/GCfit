@@ -4502,18 +4502,37 @@ class CIModelVisualizer(_ClusterVisualizer):
 
 
 class ObservationsVisualizer(_ClusterVisualizer):
-    '''
-    class for making, showing, saving all the plots related to observables data,
-    without any models at all
+    '''Analysis and visualization of a observational data, alone.
+
+    Provides a number of plotting methods useful for the analysis of a
+    observational datasets, without the need for a corresponding model.
+    This class provided the ability to plot (nearly) all of the usual profiles
+    provided by `ModelVisualizer`, but only showing the relevant observational
+    datasets in each. There are of course a number of model based quantities
+    (with no corresponding observables) which cannot be plotted through this,
+    and which will simply raise an error when called.
+
+    Parameters
+    ----------
+
+    observations : gcfit.Observations
+        The `Observations` instance corresponding to the cluster (data) to
+        be analyzed.
+
+    d : float or u.Quantity, optional
+        The distance to this cluster (assumed in kpc), which is used to convert
+        between on-sky angular and linear units in all plotting. Required
+        explicitly as it cannot be read from a model. By default will attempt
+        to use the stored initial value of "d".
+
+    See Also
+    --------
+    _ClusterVisualizer : Base class providing all common plotting functions.
     '''
 
     @_ClusterVisualizer._support_units
     def _init_massfunc(self, observations):
-        '''
-        sets self.mass_func as a dict of PI's, where each PI has a list of
-        subdicts. Each subdict represents a single radial slice (within this PI)
-        and contains the radii, the mass func values, and the field slice
-        '''
+        '''Initialize mass function quantities, as dict of PIs.'''
 
         self.mass_func = {}
 
@@ -4583,20 +4602,35 @@ class ObservationsVisualizer(_ClusterVisualizer):
 # --------------------------------------------------------------------------
 
 class SampledVisualizer:
-    '''
-    basic class for making some plots related to a sampled single model
+    '''Some visualizations of a sampled model.
+
+    Provides a few simple plotting methods useful for visualizing a sampled
+    (multimass) model.
+    This basic class provides only a few rudimentary plotting functions designed
+    to allow for a quick examination of a sampled model.
+
+    Parameters
+    ----------
+    sampledmodel : gcfit.SampledModel
+        Sampled model instance to be plotted.
+
+    thin : int, optional
+        Optional thinning parameter which will reduce the amount of stars
+        plotted by `[::thin]` each time. Can be useful at plotting models with
+        very high `N`.
     '''
 
     _setup_artist = _ClusterVisualizer._setup_artist
 
     def _get_stars(self, type_='all'):
+        '''Get a mask of stars to be plotted, based on `thin` and a star type'''
 
         mask = np.full(self.model.N, False)
 
         if type_ == 'all':
             mask[:] = True
         else:
-            mask[mask == type_] = True
+            mask[self.model.star_types == type_] = True
 
         mask[::self.thin] = False
 
@@ -4610,6 +4644,47 @@ class SampledVisualizer:
 
     def plot_positions(self, fig=None, ax=None, type_='all',
                        galactic=False, projection=None, **kwargs):
+        '''Plot the positions of each sampled star.
+
+        Creates a scatter plot of the positions of all sampled stars in the
+        model (after the `self.thin` thinning).
+        Optionally show these in the cartesian cluster-centred frame, or in
+        the projected galactic coordinates (if the model has been projected).
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_ClusterVisualizer._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot the positions. Should be a
+            part of the given `fig`.
+
+        type_ : {"all", "MS", "WD", "BH"}, optional
+            Optionally restrict to plotting only the stars of a given star
+            type. Defaults to all types.
+
+        galactic : bool, optional
+            If True, will plot the positions in the galactic frame
+            (e.g. lon, lat, dist). If the sampled model was not projected at
+            initialization, this will raise an error.
+
+        projection : {None, "3d", "polar"}
+            Optionally plot the positions in a 3-dimensional or polar frame.
+            Defaults to simply a 2D cartesian frame. "polar" cannot be combined
+            with the `galactic` frame.
+
+        **kwargs : dict
+            All other arguments are passed to `ax.scatter`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         subplot_kw = dict(projection=projection)
 
@@ -4644,6 +4719,47 @@ class SampledVisualizer:
 
     def plot_velocities(self, fig=None, ax=None, type_='all',
                         galactic=False, projection=None, **kwargs):
+        '''Plot the velocities of each sampled star.
+
+        Creates a scatter plot of the value of the velocities of all
+        sampled stars in the model (after the `self.thin` thinning).
+        Optionally show these in the cartesian cluster-centred frame, or in
+        the projected galactic coordinates (if the model has been projected).
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_ClusterVisualizer._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot the velocities. Should be a
+            part of the given `fig`.
+
+        type_ : {"all", "MS", "WD", "BH"}, optional
+            Optionally restrict to plotting only the stars of a given star
+            type. Defaults to all types.
+
+        galactic : bool, optional
+            If True, will plot the velocities in the galactic frame
+            (e.g. pm_l_cosb, pm_b, v_los). If the sampled model was not
+            projected at initialization, this will raise an error.
+
+        projection : {None, "3d", "polar"}
+            Optionally plot the positions in a 3-dimensional or polar frame.
+            Defaults to simply a 2D cartesian frame. "polar" cannot be combined
+            with the `galactic` frame.
+
+        **kwargs : dict
+            All other arguments are passed to `ax.scatter`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         subplot_kw = dict(projection=projection)
 
@@ -4683,15 +4799,78 @@ class SampledVisualizer:
                         ideal_imager=False, exptime=3600,
                         imager_kw=None, psf_kw=None,
                         observe_kw=None, rgb_kw=None, show_kw=None):
-        '''plot a simulated observation using `artpop`
+        '''Plot a simulated (RGB) photometric observation of the model.
 
-        This method basically provides a skeleton of what is necessary to
-        produce an artpop artificial RGB image of a sampled cluster, based on
+        This method provides a barebones skeleton of the necessary steps
+        required to create and plot a simulated observation (i.e. RGB image) of
+        the sampled cluster, using the `artpop` package.
+        This method relies on the `artpop.Source` object created by
         the `SampledModel.to_artpop` method.
-        All options for each step can be provided to the relevant `*_kw`
-        argument. If more manual control is required, simply use the
-        `artpop.Source` provided by `to_artpop` directly.
+
+        The source is passed through a PSF, artificial imager, and is observed
+        in the three given "RGB" bands, each of which is combined using the
+        astropy `make_lupton_rgb` function.
+
+        This is a very simple method which follows the bare requirements set
+        out by the `artpop` tutorial. If finer, more manual control is required,
+        the `artpop.Source` object from `SampledModel.to_artpop` should be
+        used directly in creating your own artpop-based imagery.
+
+        `artpop` may require the isochrones for a given photometric system be
+        already present, and may automatically start downloading them.
+
+        Parameters
+        ----------
+        phot_system : str
+            Name of the photometric system to simulate stellar magnitudes
+            within. Must be supported by `artpop`.
+
+        r_band, g_band, b_band : str
+            The names of the red, green and blue filters to use. Will be
+            passed to `artpop.ArtImager.observe`, and must be valid for the
+            given `phot_system.
+
+        pixel_scale : float or u.Quantity
+            The pixel scale of the mock image. If a float is given,
+            the units will be assumed to be `arcsec / pixels`.
+
+        FWHM : float or u.Quantity
+            Full width at half maximum of the psf. If a float is given,
+            the units will be assumed to be arcsec. The units can be
+            angular or in pixels. Passed to `artpop.moffat_psf`
+
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_ClusterVisualizer._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to place the simulated image. Should be a
+            part of the given `fig`.
+
+        source_kw : dict, optional
+            Optional arguments passed to `SampledModel.to_artpop`.
+
+        ideal_imager : bool, optional
+            Whether to use the imager class `artpop.IdealImager` or
+            `artpop.ArtImager` (default).
+
+        exptime : float, optional
+            Exposure time. If float is given, the units are assumed to be
+            seconds. Passed to `artpop.ArtImager.observe`.
+
+        imager_kw, psf_kw, observe_kw, rgb_kw, show_kw : dict, optional
+            Optional arguments passed to `artpop.ArtImager`,
+            `artpop.moffat_psf`, `artpop.ArtImager.observe`, `make_lupton_rgb`,
+            and `artpop.show_image`, respectively.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
         '''
+
         import artpop
         from astropy.visualization import make_lupton_rgb
 
