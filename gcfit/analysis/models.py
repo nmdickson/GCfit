@@ -4948,20 +4948,35 @@ class SampledVisualizer:
 
 
 class ModelCollection:
-    '''A collection of models, allowing for overplotting multiple models
-    with one another, and accessing the various parameters of multiple models at
-    once. Intimately tied to RunCollection.
+    '''Analysis and visualization of a collection of multiple models.
+
+    Provides easy and uniform access to the analysis and visualization of a
+    collection of different model visualizer instances, representing either
+    different clusters, or different representations of the same cluster.
+
+    This class is intimately tied to the `analysis.RunCollection` class,
+    and provides it's access to the models corresponding to each of it's runs.
+    The most likely way to initialize this class is therefore through the
+    `RunCollection.get_models`/`RunCollection.get_CImodels` method.
+
+    Parameters
+    ----------
+    visualizer : list of ModelVisualizer or CIModelVisualizer
+        List of model visualizer objects which will make up this collection.
+        Note that they must all be of the same type (`ModelVisualizer` or
+        `CIModelVisualizer`), and the other classes provided here
+        (e.g. `ObservationsVisualizer`) will not work.
     '''
 
     def __str__(self):
         return f"Collection of Models"
 
     def __iter__(self):
-        '''return an iterator over the individual model vizs'''
+        '''Return an iterator over the individual model vizualizers.'''
         return iter(self.visualizers)
 
     def __getattr__(self, key):
-        '''When accessing an attribute, fall back to get it from each model'''
+        '''When accessing an attribute, fall back to get it from each model.'''
         return [getattr(mv, key) for mv in self.visualizers]
 
     def __init__(self, visualizers):
@@ -4977,21 +4992,38 @@ class ModelCollection:
             raise TypeError(mssg)
 
     @classmethod
-    def load(cls, filenames, validate=False):
-        '''Load the models stored in the results files'''
-
-        return cls([CIModelVisualizer.load(fn, validate=validate)
-                    for fn in filenames])
+    def load(cls, filenames):
+        '''Load the model outputs previously saved in the a list of files.'''
+        return cls([CIModelVisualizer.load(fn) for fn in filenames])
 
     def save(self, filenames, overwrite=False):
-        '''save the models in the results files'''
-
+        '''Save the model outputs of all visualizers in the a list of files.'''
         for fn, mv in zip(filenames, self.visualizers):
             mv.save(fn, overwrite=overwrite)
 
     @classmethod
     def from_models(cls, models, obs_list=None):
-        '''init from a simple list of already computed of models'''
+        '''Initialize from a collection of models.
+
+        Initializes a `ModelCollection` instance of single `ModelVisualizer`s
+        based on a list of already computed models. A `ModelVisualizer`
+        instance will be created for every given model.
+
+        Parameters
+        ----------
+        models : list of gcfit.Model
+            Collection of models to create a collection of visualizers for.
+
+        obs_list : list of gcfit.Observations, optional
+            List of observations corresponding to each model. Must be the same
+            size as `models`. If None (default), all observations will attempt
+            to be read from each model (as is default in `ModelVisualizer`).
+
+        Returns
+        -------
+        ModelCollection
+            The created model collection object.
+        '''
 
         if obs_list is None:
             obs_list = [None, ] * len(models)
@@ -5000,12 +5032,34 @@ class ModelCollection:
 
     @classmethod
     def from_chains(cls, chains, obs_list, ci=True, *args, **kwargs):
-        '''init from an array of parameter chains for each run
+        '''Initialize from a collection of parameter chains.
 
-        chains is a list of chains (N models long) with each chain being an
-        array of either (N params,) for a from_theta init or
-        (N samples, N params) for a from_chain init.
-        if ci is True, must be (N samples, N params, otherwise makes no sense)
+        Initializes a `ModelCollection` instance of either `ModelVisualizer` or
+        `CIModelVisualizer`s based on a list of chains.
+
+        If each chain is an array of shape (Nsamples, Nparams), each visualizer
+        will be initialized using `from_chain`, otherwise if size (Nparams),
+        will be initialized using `from_theta`.
+
+        Parameters
+        ----------
+        models : list of gcfit.Model
+            Collection of models to create a collection of visualizers for.
+
+        obs_list : list of gcfit.Observations or None
+            List of observations corresponding to each model.
+
+        ci : bool, optional
+            If True (default) creates collection of `CIModelVisualizer`,
+            otherwise `ModelVisualizer`.
+
+        *args, **kwargs
+            Optional arguments passed to each individual visualizer init.
+
+        Returns
+        -------
+        ModelCollection
+            The created model collection object.
         '''
 
         viz = CIModelVisualizer if ci else ModelVisualizer
@@ -5029,9 +5083,7 @@ class ModelCollection:
     # ----------------------------------------------------------------------
 
     def iter_plots(self, plot_func, yield_model=False, *args, **kwargs):
-        '''calls each models's `plot_func`, yields a figure
-        all args, kwargs passed to plot func
-        '''
+        '''Iterator yielding a call to `plot_func` for each visualizer.'''
         for mv in self.visualizers:
             fig = getattr(mv, plot_func)(*args, **kwargs)
 
@@ -5039,11 +5091,34 @@ class ModelCollection:
 
     def save_plots(self, plot_func, fn_pattern=None, save_kw=None, size=None,
                    *args, **kwargs):
-        '''
-        fn_pattern is format string which will be passed the kw "cluster" name
-            (i.e. `fn_pattern.format(cluster=run.name)`)
-            if None, will be ./{cluster}_{plot_func[5:]}
-            (Include the desired dir here too)
+        '''Iterate over calls to `plot_func` on each model and save the figures.
+
+        Iterates over the `iter_plots` function and saves all individual
+        figures to separate files, under a custom iterative file naming schema.
+
+        Parameters
+        ----------
+        plot_func : str
+            The name of the plotting function called on each run.
+
+        fn_pattern : str, optional
+            A format string, which is passed the argument "cluster"
+            representing each model's name, and is used to create the filename
+            each figure is saved under.
+            Defaults to `f'./{cluster}_{plot_func[5:]}'`.
+
+        save_kw : dict, optional
+            Optional arguments are passed to the `fig.savefig` function.
+
+        size : 2-tuple of float, optional
+            Optional resizing of the figure, using `fig.set_size_inches`.
+
+        remove_name : bool, optional
+            Remove the sometimes present cluster name placed into the
+            figure's `suptitle`.
+
+        **kwargs : dict
+            All other arguments are passed to `iter_plots`.
         '''
 
         if fn_pattern is None:
