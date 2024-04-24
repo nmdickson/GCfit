@@ -431,7 +431,7 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
         # ------------------------------------------------------------------
 
         # mirrored/starting at zero so very small gaussians become the δ-func
-        lin_domain = np.linspace(0., 1e-11, 5_000 // 2)
+        lin_domain = np.linspace(0., 1e-9, 10_000 // 2)
         lin_domain = np.concatenate((np.flip(-lin_domain[1:]), lin_domain))
 
         # ------------------------------------------------------------------
