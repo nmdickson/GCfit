@@ -7,6 +7,7 @@ import numpy as np
 import astropy.units as u
 import matplotlib.pyplot as plt
 import matplotlib.colors as mpl_clr
+import matplotlib.legend as mpl_leg
 import matplotlib.ticker as mpl_tick
 import astropy.visualization as astroviz
 
@@ -649,7 +650,7 @@ class _ClusterVisualizer:
                            label=label, **kwargs)
 
     def _plot_profile(self, ax, ds_pattern, y_key, model_data, *,
-                      y_unit=None, residuals=False,
+                      y_unit=None, residuals=False, legend=False,
                       color=None, data_color=None, model_color=None,
                       mass_bins=None, model_label=None, label_masses=True,
                       res_kwargs=None, data_kwargs=None, model_kwargs=None,
@@ -901,6 +902,16 @@ class _ClusterVisualizer:
         if self.rlims is not None:
             ax.set_xlim(*self.rlims)
 
+        # Create legend (remove if no handles found)
+        if legend:
+
+            # The empty legends warning is apparently impossible to catch, so
+            # we'll do it ourselves, and save the stdout clutter
+            handles, labels = mpl_leg._get_legend_handles_labels([ax])
+
+            if len(handles) > 0:
+                ax.legend(handles, labels)
+
         return ax, res_ax
 
     # -----------------------------------------------------------------------
@@ -1146,7 +1157,7 @@ class _ClusterVisualizer:
     @_support_units
     def plot_LOS(self, fig=None, ax=None,
                  show_obs=True, residuals=False, *,
-                 x_unit='pc', y_unit='km/s',
+                 x_unit='pc', y_unit='km/s', legend=True,
                  label_position='top', verbose_label=True, blank_xaxis=False,
                  res_kwargs=None, **kwargs):
         r'''Plot the line-of-sight velocity dispersion profiles.
@@ -1221,7 +1232,8 @@ class _ClusterVisualizer:
         ax, res_ax = self._plot_profile(ax, pattern, var, self.LOS,
                                         strict=strict, residuals=residuals,
                                         x_unit=x_unit, y_unit=y_unit,
-                                        res_kwargs=res_kwargs, **kwargs)
+                                        legend=legend, res_kwargs=res_kwargs,
+                                        **kwargs)
 
         if verbose_label:
             label = 'LOS Velocity Dispersion'
@@ -1232,17 +1244,12 @@ class _ClusterVisualizer:
         self._set_xlabel(ax, unit=x_unit, residual_ax=res_ax,
                          remove_all=blank_xaxis)
 
-        leg = ax.legend()
-        # Remove empty legend boxes. TODO must be a better way to check this
-        if not leg.legendHandles:
-            leg.remove()
-
         return fig
 
     @_support_units
     def plot_pm_tot(self, fig=None, ax=None,
                     show_obs=True, residuals=False, *,
-                    x_unit='pc', y_unit='mas/yr',
+                    x_unit='pc', y_unit='mas/yr', legend=True,
                     label_position='top', verbose_label=True, blank_xaxis=False,
                     res_kwargs=None, **kwargs):
         r'''Plot the total proper motion dispersion profiles.
@@ -1317,7 +1324,8 @@ class _ClusterVisualizer:
         ax, res_ax = self._plot_profile(ax, pattern, var, self.pm_tot,
                                         strict=strict, residuals=residuals,
                                         x_unit=x_unit, y_unit=y_unit,
-                                        res_kwargs=res_kwargs, **kwargs)
+                                        legend=legend, res_kwargs=res_kwargs,
+                                        **kwargs)
 
         if verbose_label:
             label = "Total PM Dispersion"
@@ -1328,16 +1336,12 @@ class _ClusterVisualizer:
         self._set_xlabel(ax, unit=x_unit, residual_ax=res_ax,
                          remove_all=blank_xaxis)
 
-        leg = ax.legend()
-        if not leg.legendHandles:
-            leg.remove()
-
         return fig
 
     @_support_units
     def plot_pm_ratio(self, fig=None, ax=None,
                       show_obs=True, residuals=False, *,
-                      x_unit='pc', blank_xaxis=False,
+                      x_unit='pc', blank_xaxis=False, legend=True,
                       label_position='top', verbose_label=True,
                       res_kwargs=None, **kwargs):
         r'''Plot the proper motion dispersion anisotropy profiles.
@@ -1413,7 +1417,7 @@ class _ClusterVisualizer:
 
         ax, res_ax = self._plot_profile(ax, pattern, var, self.pm_ratio,
                                         strict=strict, residuals=residuals,
-                                        x_unit=x_unit,
+                                        x_unit=x_unit, legend=True,
                                         res_kwargs=res_kwargs, **kwargs)
 
         if verbose_label:
@@ -1426,16 +1430,12 @@ class _ClusterVisualizer:
         self._set_xlabel(ax, unit=x_unit, residual_ax=res_ax,
                          remove_all=blank_xaxis)
 
-        leg = ax.legend()
-        if not leg.legendHandles:
-            leg.remove()
-
         return fig
 
     @_support_units
     def plot_pm_T(self, fig=None, ax=None,
                   show_obs=True, residuals=False, *,
-                  x_unit='pc', y_unit='mas/yr',
+                  x_unit='pc', y_unit='mas/yr', legend=True,
                   label_position='top', verbose_label=True, blank_xaxis=False,
                   res_kwargs=None, **kwargs):
         r'''Plot the tangential proper motion dispersion profiles.
@@ -1510,7 +1510,8 @@ class _ClusterVisualizer:
         ax, res_ax = self._plot_profile(ax, pattern, var, self.pm_T,
                                         strict=strict, residuals=residuals,
                                         x_unit=x_unit, y_unit=y_unit,
-                                        res_kwargs=res_kwargs, **kwargs)
+                                        legend=legend, res_kwargs=res_kwargs,
+                                        **kwargs)
 
         if verbose_label:
             label = "Tangential PM Dispersion"
@@ -1521,16 +1522,12 @@ class _ClusterVisualizer:
         self._set_xlabel(ax, unit=x_unit, residual_ax=res_ax,
                          remove_all=blank_xaxis)
 
-        leg = ax.legend()
-        if not leg.legendHandles:
-            leg.remove()
-
         return fig
 
     @_support_units
     def plot_pm_R(self, fig=None, ax=None,
                   show_obs=True, residuals=False, *,
-                  x_unit='pc', y_unit='mas/yr',
+                  x_unit='pc', y_unit='mas/yr', legend=True,
                   label_position='top', verbose_label=True, blank_xaxis=False,
                   res_kwargs=None, **kwargs):
         r'''Plot the radial proper motion dispersion profiles.
@@ -1605,7 +1602,8 @@ class _ClusterVisualizer:
         ax, res_ax = self._plot_profile(ax, pattern, var, self.pm_R,
                                         strict=strict, residuals=residuals,
                                         x_unit=x_unit, y_unit=y_unit,
-                                        res_kwargs=res_kwargs, **kwargs)
+                                        legend=legend, res_kwargs=res_kwargs,
+                                        **kwargs)
 
         if verbose_label:
             label = "Radial PM Dispersion"
@@ -1616,16 +1614,12 @@ class _ClusterVisualizer:
         self._set_xlabel(ax, unit=x_unit, residual_ax=res_ax,
                          remove_all=blank_xaxis)
 
-        leg = ax.legend()
-        if not leg.legendHandles:
-            leg.remove()
-
         return fig
 
     @_support_units
     def plot_number_density(self, fig=None, ax=None,
                             show_background=False, subtract_background=False,
-                            show_obs=True, residuals=False, *,
+                            show_obs=True, residuals=False, *, legend=True,
                             x_unit='pc', y_unit='1/pc2', scale_to='model',
                             label_position='top', verbose_label=True,
                             blank_xaxis=False, res_kwargs=None,
@@ -1804,17 +1798,14 @@ class _ClusterVisualizer:
         ax, res_ax = self._plot_profile(ax, pattern, var, self.numdens,
                                         strict=strict, residuals=residuals,
                                         x_unit=x_unit, y_unit=y_unit,
+                                        legend=legend,
                                         model_kwargs=model_kwargs,
                                         data_kwargs=data_kwargs,
                                         res_kwargs=res_kwargs, **kwargs)
 
         # ------------------------------------------------------------------
-        # Add legends and labels
+        # Add labels
         # ------------------------------------------------------------------
-
-        leg = ax.legend()
-        if not leg.legendHandles:
-            leg.remove()
 
         if verbose_label:
             label = 'Number Density'
