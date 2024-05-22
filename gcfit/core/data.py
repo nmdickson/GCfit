@@ -430,7 +430,7 @@ class Observations:
                 # relies on visititems moving top-down
                 # this should theoretically remove all parent groups of groups
                 try:
-                    parent, name = key.rsplit('/', maxsplit=1)
+                    parent, _ = key.rsplit('/', maxsplit=1)
                     groups.remove(parent)
 
                 except ValueError:
@@ -688,7 +688,7 @@ class Observations:
                 rbins = np.c_[self[key]['r1'], self[key]['r2']]
 
                 fld_slices = []
-                for rind, (r_in, r_out) in enumerate(np.unique(rbins, axis=0)):
+                for r_in, r_out in np.unique(rbins, axis=0):
                     field_slice = field.slice_radially(r_in, r_out)
                     field_slice.MC_sample(M=self._MF_M_samples)
                     fld_slices.append(field_slice)
@@ -718,7 +718,7 @@ _attributes = namedtuple(
 
 
 class Model(lp.limepy):
-    r'''Wrapper class around a LIMEPY model, including mass function evolution
+    r'''Wrapper class around a LIMEPY model, including mass function evolution.
 
     Multimass globular cluster model implemented as a subclass around a
     `limepy.limepy` model, as defined by the input parameters,
@@ -911,14 +911,14 @@ class Model(lp.limepy):
         Array of 2-character strings representing the type of object in each
         mass bin (MS, WD, NS, BH).
 
-    {BH,NS,WD}_mj : astropy.Quantity
-        Black hole, neutron star or white dwarf component mass bin size
-
-    {BH,NS,WD}_Mj : astropy.Quantity
-        Black hole, neutron star or white dwarf total bin mass
-
-    {BH,NS,WD}_Nj : astropy.Quantity
-        Black hole, neutron star or white dwarf total bin number (Mj / mj)
+    {MS,BH,NS,WD} : collections.namedtuple
+        Named tuple (`_attributes`) containing the mean bin mass (mj), total bin
+        mass (Mj), total bin number (Nj), average mass (mavg), system and
+        surface density profiles (rhoj, Sigmaj), mass fraction (f) and
+        half-mass radius (rh), for all main sequence (MS), black hole (BH),
+        neutron star (NS) and white dwarf (WD) object types. Essentially
+        provides easy access to these quantities for each of the different
+        object types as defined by the `star_types` array.
 
     r : astropy.Quantity
         The projected radial distances, in pc, from the centre of the cluster,
@@ -952,20 +952,6 @@ class Model(lp.limepy):
     See Also
     --------
     limepy : Distribution-function model base of this class.
-
-    Notes
-    -----
-    The IMF of the model is defined using a three-component broken power law,
-    of the familiar form:
-
-    .. math::
-        \xi(m) \propto \begin{cases}
-            m^{-a_1} & 0.1 M_{\odot} < m \leq 0.5 M_{\odot}, \\
-            m^{-a_2} & 0.5 M_{\odot} < m \leq 1.0 M_{\odot}, \\
-            m^{-a_3} & 1.0 M_{\odot} < m \leq 100 M_{\odot}, \\
-        \end{cases}
-
-    where the `a` exponents are given as input parameters.
     '''
 
     def _assign_units(self):
@@ -1099,8 +1085,8 @@ class Model(lp.limepy):
             if age is None or FeH is None:
                 # Error here if age, FeH can't be found
                 # for Ndot, vesc, let them be, if necessary they'll fail later
-                mssg = {"Must supply either `age` and `FeH` or "
-                        "an `observations`, to read them from"}
+                mssg = ("Must supply either `age` and `FeH` or "
+                        "an `observations`, to read them from")
                 raise ValueError(mssg)
 
         self.age = age << u.Gyr
@@ -1282,7 +1268,28 @@ class Model(lp.limepy):
 
     @classmethod
     def canonical(cls, W0, M, rh, imf='kroupa', **kw):
-        '''Initialize with an IMF defined by a canonical IMF formulation.'''
+        '''Initialize with an IMF defined by a canonical IMF formulation.
+
+        Initializes a base `Model` with specific IMF break masses and power
+        law slopes, corresponding to a given IMF choice.
+
+        The available IMFs are Kroupa (2002), Salpeter (1955) and
+        Baumgardt et al. (2023).
+
+        Parameters
+        ----------
+        W0 : float or astropy.Quantity
+            The (dimensionless) central potential.
+
+        M : float or astropy.Quantity
+            The total mass of the system, in all mass components, in Msun.
+
+        rh : float or astropy.Quantity
+            The system half-mass radius, in parsecs.
+
+        imf : {"kroupa", "salpeter", "baumgardt"}, optional
+            The canonical IMF to use.
+        '''
 
         if imf.lower() == 'kroupa':
             a1, a2, a3 = 1.3, 2.3, 2.3
@@ -1291,6 +1298,7 @@ class Model(lp.limepy):
         elif imf.lower() == 'salpeter':
             # TODO once evolve_mf supports any number of exponents, use 1 here
             a1 = a2 = a3 = 2.35
+            m_breaks = [0.08, 0.5, 1.0, 100]  # doesn't really matter
 
         elif imf.lower() == 'baumgardt':
             a1, a2, a3 = 0.3, 1.65, 2.35
@@ -1574,7 +1582,7 @@ class FittableModel(Model):
     13 model parameters, in a specific order, and `observations` which the
     model should be compared to.
 
-    Unless you have a set of paramters `theta` taken directly from the fitting
+    Unless you have a set of parameters `theta` taken directly from the fitting
     results, you most likely do not want to use this class directly.
 
     Parameters
@@ -1591,6 +1599,9 @@ class FittableModel(Model):
         The `Observations` instance corresponding to this cluster. Required at
         initilization so that the models can be compared to these observations
         in the most consistent way possible.
+
+    **kwargs : dict
+        All other arguments are passed to `Model`.
 
     Attributes
     ----------
@@ -2300,10 +2311,11 @@ class SampledModel:
             iso_class = artpop.MISTIsochrone
 
         def abs2app(band, absmag, dist):
+            '''Convert absolute magnitude to apparent at distance `dist`.'''
             return absmag + (5 * np.log10(100 * dist / u.kpc)) + a_lam[band]
 
         # ------------------------------------------------------------------
-        # Setup isocrhone and mask any invalid mass ranges
+        # Setup isochrone and mask any invalid mass ranges
         # ------------------------------------------------------------------
 
         log_age = np.log10(self.age.to_value('yr'))

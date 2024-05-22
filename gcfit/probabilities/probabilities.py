@@ -314,7 +314,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
 @_angular_units
 def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
                               *, mass_bin=None, hyperparams=False):
-    '''Compute the loglikelihood of binary pulsar orbital period derivatives.
+    r'''Compute the loglikelihood of binary pulsar orbital period derivatives.
 
     Computes the log likelihood component of a cluster's binary pulsar's orbital
     period derivatives, evaluating the observed orbital timing solutions

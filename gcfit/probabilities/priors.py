@@ -218,7 +218,7 @@ class PriorTransforms(Priors):
     def _compile_dependants(self, prior, U, theta=None):
         '''Transform a passed U to theta recursively, so can use dependants'''
 
-        # TODO potentially repeating a lot of prior calls by not saving to theta?
+        # TODO potentially repeating a lot of prior calls by not saving to theta
 
         if not prior.dependants:
             return {}

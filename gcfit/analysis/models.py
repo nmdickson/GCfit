@@ -1368,9 +1368,9 @@ class _ClusterVisualizer:
             Whether to, if also plotting data, append a residuals ax to the
             figure. Defaults to False.
 
-        x_unit, y_unit : u.Unit, optional
-            Units to convert the x and y axes to. By default, x-units are in
-            parsecs and y-units are in milliarcseconds per year.
+        x_unit : u.Unit, optional
+            Units to convert the x axis to. By default, x-units are in
+            parsecs.
 
         label_position : {'top', 'left', 'right'}, optional
             Where to place the quantity (y) label. If "top" (default), will be
@@ -3429,20 +3429,20 @@ class CIModelVisualizer(_ClusterVisualizer):
     class can also be saved to disk (through the `save` method) and later
     reloaded (through the `load` classmethod) instantly.
 
+    See Also
+    --------
+    _ClusterVisualizer : Base class providing all common plotting functions.
+
     Notes
     -----
     This class should not be initialized directly, but through the `from_chain`
     classmethod.
-
-    See Also
-    --------
-    _ClusterVisualizer : Base class providing all common plotting functions.
     '''
 
     @_ClusterVisualizer._support_units
     def plot_f_rem(self, fig=None, ax=None, bins='auto', color='tab:blue',
                    verbose_label=True):
-        r'''Plot the remnant fraction of this model
+        r'''Plot the remnant fraction of this model.
 
         Plots a histogram of the values of the total remnant mass fraction
         (i.e. mass fraction in WD, NS, BH) in the given chain of models.
@@ -3498,7 +3498,7 @@ class CIModelVisualizer(_ClusterVisualizer):
     @_ClusterVisualizer._support_units
     def plot_f_BH(self, fig=None, ax=None, bins='auto', color='tab:blue',
                   verbose_label=True):
-        r'''Plot the BH fraction of this model
+        r'''Plot the BH fraction of this model.
 
         Plots a histogram of the values of the total black hole mass fraction
         (i.e. mass fraction in BH over total mass) in the given chain of models.
@@ -3554,7 +3554,7 @@ class CIModelVisualizer(_ClusterVisualizer):
     @_ClusterVisualizer._support_units
     def plot_BH_mass(self, fig=None, ax=None, bins='auto', color='tab:blue',
                      verbose_label=True):
-        r'''Plot the BH mass of this model
+        r'''Plot the BH mass of this model.
 
         Plots a histogram of the values of the total black hole mass in the
         given chain of models.
@@ -3610,7 +3610,7 @@ class CIModelVisualizer(_ClusterVisualizer):
     @_ClusterVisualizer._support_units
     def plot_BH_num(self, fig=None, ax=None, bins='auto', color='tab:blue',
                     verbose_label=True):
-        r'''Plot the number of BHs in this model
+        r'''Plot the number of BHs in this model.
 
         Plots a histogram of the values of the total amount of black holes
         in the given chain of models.
@@ -4837,7 +4837,7 @@ class SampledVisualizer:
         FWHM : float or u.Quantity
             Full width at half maximum of the psf. If a float is given,
             the units will be assumed to be arcsec. The units can be
-            angular or in pixels. Passed to `artpop.moffat_psf`
+            angular or in pixels. Passed to `artpop.moffat_psf`.
 
         fig : None or matplotlib.figure.Figure, optional
             Figure to place the ax on. If None (default), a new figure will
@@ -4961,7 +4961,7 @@ class ModelCollection:
 
     Parameters
     ----------
-    visualizer : list of ModelVisualizer or CIModelVisualizer
+    visualizers : list of ModelVisualizer or CIModelVisualizer
         List of model visualizer objects which will make up this collection.
         Note that they must all be of the same type (`ModelVisualizer` or
         `CIModelVisualizer`), and the other classes provided here
@@ -5043,8 +5043,11 @@ class ModelCollection:
 
         Parameters
         ----------
-        models : list of gcfit.Model
-            Collection of models to create a collection of visualizers for.
+        chains : list of np.ndarray[Nsamples, Nparams] or np.ndarray[Nparams]
+            List of parameter chains for each model, used to create each model.
+            Either a single theta value or a full chain of values for each.
+            Final axis of the chains must be of the size of the number of
+            model parameters (13).
 
         obs_list : list of gcfit.Observations or None
             List of observations corresponding to each model.
@@ -5112,10 +5115,6 @@ class ModelCollection:
 
         size : 2-tuple of float, optional
             Optional resizing of the figure, using `fig.set_size_inches`.
-
-        remove_name : bool, optional
-            Remove the sometimes present cluster name placed into the
-            figure's `suptitle`.
 
         **kwargs : dict
             All other arguments are passed to `iter_plots`.

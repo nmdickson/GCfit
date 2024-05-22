@@ -276,7 +276,49 @@ class _RunAnalysis:
 
     def add_residuals(self, ax, y1, y2, e1, e2, clrs=None,
                       res_ax=None, loc='bottom', size='15%', pad=0.1):
-        '''add an axis showing the residuals of two quantities'''
+        '''Append an extra axis to `ax` for plotting residuals.
+
+        Automatically appends a new axis to the the bottom of the given `ax`,
+        and plots the residuals between the two given quantities (and their
+        errors) on it, as a percentage.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            An axes instance on which to plot this observational data.
+
+        y1, y2 : np.ndarray
+            Arrays of data values to plot the residual between. Residuals
+            are of (y2 - y1) / y1.
+
+        e1, e2 : np.ndarray
+            Arrays of errors on each datapoint.
+
+        clrs : color, optional
+            Colour used for all datapoints, passed to `errorbar` and `scatter`.
+
+        res_ax : matplotlib.axes.Axes, optional
+            Optionally provide an already created axis to plot residuals on.
+            This is useful for overplotting multiple residuals (i.e. for
+            multiple datasets).
+
+        loc : {"left", "right", "bottom", "top"}, optional
+            Where the new axes is positioned relative to the main axes.
+
+        size : str or float, optional
+            The size of the appended residuals axes, with respect to the
+            primary axes.
+            See `mpl_toolkits.axes_grid1.axes_divider.AxesDivider.append_axes`
+            for more information. Defaults to "15%".
+
+        pad : float, optional
+            Padding between the axes. Defaults to 0.1.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+            The created axes instance containing the residuals plot.
+        '''
 
         # make a newres ax if needed
         if res_ax is None:
@@ -735,7 +777,7 @@ class MCMCRun(_SingleRunAnalysis):
     # ----------------------------------------------------------------------
 
     def plot_chains(self, fig=None, params=None):
-        '''Plot trace plot of the chains of walkers for all parameters
+        '''Plot trace plot of the chains of walkers for all parameters.
 
         Plots an Nparam-panel figure following the evolution of the different
         walkers throughout all iterations.
@@ -981,7 +1023,7 @@ class MCMCRun(_SingleRunAnalysis):
         return fig
 
     def plot_indiv(self, fig=None):
-        '''Plot the evolution of each individual likelihood component over time
+        '''Plot the evolution of each individual likelihood component over time.
 
         Plots a multipanel figure tracing the value of the log-likelihood of
         each likelihood component (i.e. based on `self.obs.valid_likelihoods`,
@@ -1079,7 +1121,7 @@ class MCMCRun(_SingleRunAnalysis):
     def plot_posterior(self, param, fig=None, ax=None, chain=None,
                        flipped=True, truth=None, truth_ci=None,
                        *args, **kwargs):
-        '''Plot a smoothed posterior distribution of a single parameter
+        '''Plot a smoothed posterior distribution of a single parameter.
 
         Plots a gaussian-KDE smoothed posterior probability distribution of
         a given parameter.
@@ -1118,7 +1160,7 @@ class MCMCRun(_SingleRunAnalysis):
             Optionally shade between the lower and upper limits of the "truth"
             values, using `plt.axhspan`.
 
-        **kwargs : dict
+        *args, **kwargs
             All other arguments are passed to the `ax.fill_between` function.
 
         Returns
@@ -1176,7 +1218,7 @@ class MCMCRun(_SingleRunAnalysis):
         return fig
 
     def plot_acceptance(self, fig=None, ax=None):
-        '''Plot the sampler acceptance rate over time
+        '''Plot the sampler acceptance rate over time.
 
         Plots the "acceptance rate" of the MCMC sampler as a function of
         iterations.
@@ -1217,7 +1259,7 @@ class MCMCRun(_SingleRunAnalysis):
         return fig
 
     def plot_probability(self, fig=None, ax=None):
-        '''Plot the posterior probability over time
+        '''Plot the posterior probability over time.
 
         Plots the total (sum of all components) logged posterior probability
         of the MCMC sampler as a function of iterations.
@@ -1266,7 +1308,7 @@ class MCMCRun(_SingleRunAnalysis):
 
         Parameters
         ----------
-        out : None or file-like object, string, or pathlib.Path, optional
+        out : None or file-like object, str, or pathlib.Path, optional
             The file to write out the summary to. If None (default) will be
             printed to stdout.
 
@@ -1372,11 +1414,14 @@ class NestedRun(_SingleRunAnalysis):
 
     name : str, optional
         Custom name for this run.
+
+    *args, **kwargs : dict
+        All other arguments are passed to `_SingleRunAnalysis`.
     '''
 
     @property
     def weights(self):
-        '''Array of weights, based on the default `dynesty.weight_function`'''
+        '''Array of weights, based on the default `dynesty.weight_function`.'''
 
         from dynesty.dynamicsampler import weight_function
 
@@ -1401,6 +1446,7 @@ class NestedRun(_SingleRunAnalysis):
 
     @property
     def AIC(self):
+        '''Akaike information criterion.'''
 
         with self._openfile() as file:
 
@@ -1419,6 +1465,7 @@ class NestedRun(_SingleRunAnalysis):
 
     @property
     def BIC(self):
+        '''Bayesian information criterion.'''
 
         with self._openfile() as file:
 
@@ -1437,7 +1484,7 @@ class NestedRun(_SingleRunAnalysis):
 
     @property
     def _resampled_weights(self):
-        '''Resample `weights`'''
+        '''Resample `weights`.'''
         from scipy.stats import gaussian_kde
         from dynesty.utils import resample_equal
 
@@ -2638,7 +2685,7 @@ class NestedRun(_SingleRunAnalysis):
         return fig
 
     def plot_IMF(self, fig=None, ax=None, show_canonical='all', ci=True):
-        '''Plot the IMF, based on the alpha exponents'''
+        '''Plot the IMF, based on the alpha exponents.'''
         def salpeter(m):
             return m**-2.35
 
@@ -2722,7 +2769,7 @@ class NestedRun(_SingleRunAnalysis):
         return [resample_run(self.results) for _ in range(Nruns)]
 
     def parameter_means(self, Nruns=250, sim_runs=None, return_samples=True):
-        '''Compute the mean of each parameter with corresponding errors
+        '''Compute the mean of each parameter with corresponding errors.
 
         Returns the means of each parameter posterior estimation, with the
         corresponding error on this statistic. The uncertainties come from the
@@ -2782,7 +2829,7 @@ class NestedRun(_SingleRunAnalysis):
             return mean, err
 
     def parameter_vars(self, Nruns=250, sim_runs=None, return_samples=True):
-        '''Compute the variance of each parameter with corresponding errors
+        '''Compute the variance of each parameter with corresponding errors.
 
         Returns the covariance array for each parameter posterior estimation,
         with the corresponding error on this statistic.
@@ -2844,7 +2891,7 @@ class NestedRun(_SingleRunAnalysis):
     # ----------------------------------------------------------------------
 
     def parameter_summary(self, *, N_simruns=100, label_fixed=False):
-        '''Compute the mean and std.dev. on each parameter
+        '''Compute the mean and std.dev. on each parameter.
 
         Computes and returns a dictionary with the mean and standard deviation
         of each parameter, as given by `parameter_means` and
@@ -2855,6 +2902,10 @@ class NestedRun(_SingleRunAnalysis):
         N_simruns : int, optional
             The number of simulated runs used to compute the means and errors
             on each parameter, through `parameter_{means,vars}`.
+
+        label_fixed : bool, optional
+            If True, adds " (fixed)" to the end of any parameters which were
+            fixed during fitting.
 
         Returns
         -------
@@ -2882,7 +2933,7 @@ class NestedRun(_SingleRunAnalysis):
 
         Parameters
         ----------
-        out : None or file-like object, string, or pathlib.Path, optional
+        out : None or file-like object, str, or pathlib.Path, optional
             The file to write out the summary to. If None (default) will be
             printed to stdout.
 
@@ -3168,7 +3219,7 @@ class RunCollection(_RunAnalysis):
         return RunCollection(new_runs, sort=False)
 
     def get_run(self, name):
-        '''Return the a single run from this collection with a given `name`'''
+        '''Return the a single run from this collection with a given `name`.'''
         for run in self.runs:
             if run.name == name:
                 return run
@@ -3177,7 +3228,7 @@ class RunCollection(_RunAnalysis):
             raise ValueError(mssg)
 
     def filter_runs(self, pattern, sort_by=None, sort=True, **kwargs):
-        '''filter all runs based on names and return a new object with them
+        '''Filter all runs based on names and return a new object with them.
 
         Based on a given string pattern, filters out all runs within this
         collection matching this pattern (as based on `fnmatch.filter`) and
@@ -3192,7 +3243,7 @@ class RunCollection(_RunAnalysis):
             the matching runs. A list of names will not use pattern matching,
             and the given names must match exactly.
 
-        sort_by: {'old', 'new', None}, optional
+        sort_by : {'old', 'new', None}, optional
             Sort runs in new collection by either the order in this collection
             or the list of names (if it is a list, otherwise does None).
             If None (default), simply passes `sort` to the new collection init
@@ -3305,7 +3356,7 @@ class RunCollection(_RunAnalysis):
         run_kwargs : dict, optional
             Optional arguments passed to all individual run initialization.
 
-        **kwargs : dict
+        *args, **kwargs
             All other arguments are passed to the new RunCollection object.
         '''
 
@@ -3378,7 +3429,7 @@ class RunCollection(_RunAnalysis):
         run_kwargs : dict, optional
             Optional arguments passed to all individual run initialization.
 
-        **kwargs : dict
+        *args, **kwargs
             All other arguments are passed to the new RunCollection object.
         '''
 
@@ -3975,7 +4026,7 @@ class RunCollection(_RunAnalysis):
             Remove the sometimes present cluster name placed into the
             figure's `suptitle`.
 
-        **kwargs : dict
+        *args, **kwargs
             All other arguments are passed to `iter_plots`.
         '''
 
@@ -4022,7 +4073,7 @@ class RunCollection(_RunAnalysis):
         return fig
 
     def plot_relation(self, param1, param2, fig=None, ax=None, *,
-                      errors='bars', show_pearsonr=False, force_model=False,
+                      show_pearsonr=False, force_model=False,
                       annotate=False, annotate_kwargs=None,
                       clr_param=None, clr_kwargs=None, label=None, marker='o',
                       **kwargs):
@@ -4771,10 +4822,10 @@ class RunCollection(_RunAnalysis):
             Transparency value applied to all distributions.
 
         edgecolor : str, optional
-            The color of the border placed around each distribution
+            The color of the border placed around each distribution.
 
         edgewidth : float, optional
-            The width of the border placed around each distribution
+            The width of the border placed around each distribution.
 
         quantiles : list of float, optional
             The quantiles shown as ticks on the central errorbars inside the
@@ -4984,6 +5035,11 @@ class RunCollection(_RunAnalysis):
 
         **kwargs : dict
             All other arguments are passed to `plot_relation`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
         '''
 
         if params is None:
