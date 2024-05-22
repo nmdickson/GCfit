@@ -9,7 +9,7 @@ Sampling Run Analysis
 .. autosummary::
     :nosignatures:
     :toctree: generated/
-    :template: class_template.rst
+    :template: class_inherit_template.rst
 
     MCMCRun
     NestedRun
@@ -21,7 +21,7 @@ Model Analysis
 .. autosummary::
     :nosignatures:
     :toctree: generated/
-    :template: class_template.rst
+    :template: class_inherit_template.rst
 
     ModelVisualizer
     CIModelVisualizer

@@ -2458,8 +2458,9 @@ class NestedRun(_SingleRunAnalysis):
         posterior distribution for each parameter.
 
         Provides a diagnostic figure for examining the parameter estimation.
-        This is a modified version of the diagnostic plot first introduced in
-        `Higson et al. (2018) <ui.adsabs.harvard.edu/abs/2018BayAn..13..873H>`_.
+        This is a modified version of the diagnostic plot
+        first introduced in `Higson et al.
+        (2018) <https://ui.adsabs.harvard.edu/abs/2018BayAn..13..873H>`_.
 
         Parameters
         ----------
