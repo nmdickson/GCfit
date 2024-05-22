@@ -316,7 +316,7 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
              fixed_params=None, excluded_likelihoods=None, hyperparams=False,
              cont_run=False, savedir=_here, backup=False, restrict_to=None,
              verbose=False, progress=False):
-    '''Main MCMC fitting pipeline
+    '''Main MCMC fitting pipeline.
 
     Execute the full MCMC cluster fitting algorithm.
 
@@ -333,16 +333,16 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     The MCMC sampler is sampled for `Niters` iterations, parallelized over
     `Ncpu` or using `mpi`, with calls to `gcfit.posterior`.
 
-    parameters
+    Parameters
     ----------
     cluster : str
-        Cluster common name, as used to load `gcfit.Observations`
+        Cluster common name, as used to load `gcfit.Observations`.
 
     Niters : int
-        Number of sampler iterations
+        Number of sampler iterations.
 
     Nwalkers : int
-        Number of sampler walkers
+        Number of sampler walkers.
 
     Ncpu : int, optional
         Number of CPU's to parallelize the sampling computation over. Is
@@ -380,25 +380,29 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         in all likelihood functions.
 
     cont_run : bool, optional
-        Not Implemented
+        Not Implemented.
 
     savedir : path-like, optional
         The directory within which the HDF output file is stored, defaults to
         the current working directory.
 
     backup : bool, optional
-        If True, create a continuous backup HDF file every 100 iterations
+        If True, create a continuous backup HDF file every 100 iterations.
+
+    restrict_to : {None, 'local', 'core'}
+        Where to search for the cluster data file, see
+        `gcfit.util.get_cluster_path` for more information.
 
     verbose : bool, optional
-        Increase verbosity (currently only affects output of run final summary)
+        Increase verbosity (currently only affects output of run final summary).
 
     progress : bool, optional
         Whether to displace emcee's progress bar.
 
     See Also
     --------
-    emcee : MCMC Ensemble sampler implementation
-    schwimmbad : Interface to parallel processing pools
+    emcee : MCMC Ensemble sampler implementation.
+    schwimmbad : Interface to parallel processing pools.
     '''
 
     logging.info("BEGIN")
@@ -643,7 +647,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
                Ncpu=2, mpi=False, initials=None, param_priors=None,
                fixed_params=None, excluded_likelihoods=None, hyperparams=False,
                savedir=_here, restrict_to=None, verbose=False):
-    '''Main nested sampling fitting pipeline
+    '''Main nested sampling fitting pipeline.
 
     Execute the full nested sampling cluster fitting algorithm.
 
@@ -667,10 +671,10 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
     `gcfit.posterior` defined based on a uniform sampling of the
     `PriorTransforms`.
 
-    parameters
+    Parameters
     ----------
     cluster : str
-        Cluster common name, as used to load `gcfit.Observations`
+        Cluster common name, as used to load `gcfit.Observations`.
 
     bound_type : {'none', 'single', 'multi', 'balls', 'cubes'}, optional
         Method used to approximately bound the prior using the current
@@ -682,12 +686,12 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         Method used to sample uniformly within the likelihood constraint.
 
     initial_kwargs : dict, optional
-        kwargs to be passed to the `dynesty.DynamicNestedSampler.sample_initial`
+        Kwargs to be passed to the `dynesty.DynamicNestedSampler.sample_initial`
         initial baseline sampling function. Defaults include `dlogz` of 0.25
         and `nlive` of 100. See `dynesty` for more info and all other defaults.
 
     batch_kwargs : dict, optional
-        kwargs to be passed to the `dynesty.DynamicNestedSampler.sample_batch`
+        Kwargs to be passed to the `dynesty.DynamicNestedSampler.sample_batch`
         batch sampling function. Defaults include `nlive_new` of 100.
         See `dynesty` for more info and all other defaults.
 
@@ -740,13 +744,17 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         The directory within which the HDF output file is stored, defaults to
         the current working directory.
 
+    restrict_to : {None, 'local', 'core'}
+        Where to search for the cluster data file, see
+        `gcfit.util.get_cluster_path` for more information.
+
     verbose : bool, optional
-        Increase verbosity (currently only affects output of run final summary)
+        Increase verbosity (currently only affects output of run final summary).
 
     See Also
     --------
-    dynesty : Nested sampler implementation
-    schwimmbad : Interface to parallel processing pools
+    dynesty : Nested sampler implementation.
+    schwimmbad : Interface to parallel processing pools.
     '''
 
     logging.info("BEGIN NESTED SAMPLING")

@@ -21,6 +21,7 @@ __all__ = ['ModelVisualizer', 'CIModelVisualizer', 'ObservationsVisualizer',
 
 
 def _get_model(theta, observations):
+    '''Compute a model based on `theta` and fail quietly'''
     try:
         return FittableModel(theta, observations=observations)
     except ValueError:
@@ -33,6 +34,7 @@ def _get_model(theta, observations):
 
 
 class _ClusterVisualizer:
+    '''Base class for all visualizers of all Model types.'''
 
     _MARKERS = ('o', '^', 'D', '+', 'x', '*', 's', 'p', 'h', 'v', '1', '2')
 
@@ -290,6 +292,7 @@ class _ClusterVisualizer:
 
     def _set_ylabel(self, ax, label, unit=None, label_position='left', *,
                     residual_ax=None, inline_latex=True):
+        '''Set the label for the quantity on the y axis of this plot.'''
 
         tick_prms = dict(which='both',
                          labelright=(label_position == 'right'),
@@ -341,6 +344,7 @@ class _ClusterVisualizer:
 
     def _set_xlabel(self, ax, label='Distance from centre', unit=None, *,
                     residual_ax=None, remove_all=False, inline_latex=True):
+        '''Set the label for the quantity on the x axis of this plot.'''
 
         bottom_ax = ax if residual_ax is None else residual_ax
 
@@ -378,6 +382,7 @@ class _ClusterVisualizer:
     # -----------------------------------------------------------------------
 
     def _support_units(method):
+        '''Decorator adding units support to any wrapped plotting function.'''
         import functools
 
         @functools.wraps(method)
@@ -396,11 +401,11 @@ class _ClusterVisualizer:
     # -----------------------------------------------------------------------
 
     def _get_median(self, percs):
-        '''from an array of data percentiles, return the median array'''
+        '''From an array of data percentiles, return the median array.'''
         return percs[percs.shape[0] // 2] if percs.ndim > 1 else percs
 
     def _get_err(self, dataset, key):
-        '''gather the error variables corresponding to `key` from `dataset`'''
+        '''Gather the error variables corresponding to `key` from `dataset`.'''
         try:
             return dataset[f'Δ{key}']
         except KeyError:
@@ -413,6 +418,53 @@ class _ClusterVisualizer:
                     x_data=None, x_unit='pc', y_unit=None,
                     scale=1.0, background=0.0,
                     CI_kwargs=None, **kwargs):
+        '''Base plotting function for all model profiles.
+
+        Plots a given array of y-values representing a radial profile
+        from a given model, on `ax`, as a solid connected line.
+        If `data` is a higher dimensional array, will overplot a desired number
+        of confidence intervals.
+
+        This base function is to be used by `plot_profile` to handle the
+        plotting of all model quantities.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            An axes instance on which to plot this model profile.
+
+        data : u.Quantity[Ninterval, Nr]
+            Array of model profile data to plot. Final dimension should be
+            the same size as `self.r`. If two dimensional, the first dimension
+            must be an odd size, with the median profile in the middle row
+            and each other an extra σ away.
+
+        intervals : int, optional
+            The number of σ confidence intervals to plot (e.g. intervals=2 will
+            plot the median, 1σ and 2σ). The first dimension of `data` must
+            be of size 1 + 2(intervals).
+
+        x_data : u.Quantity[Nr], optional
+            Alternative x-axis data to use instead of `self.r`.
+
+        x_unit, y_unit : u.Unit, optional
+            Units to convert the x and y data to. By default, x-units are in
+            parsecs and y-units are whatever units `data` is passed in with.
+
+        scale : float, optional
+            An optional y-scaling factor applied to the `data`.
+
+        background : float, optional
+            An optional background level to be subtracted from the `data`.
+
+        CI_kwargs : dict, optional
+            Optional arguments passed to `ax.fill_between` when overplotting
+            confidence intervals.
+
+        **kwargs : dict
+            All other arguments are passed to `ax.plot` when plotting median
+            profile.
+        '''
 
         CI_kwargs = dict() if CI_kwargs is None else CI_kwargs
 
@@ -493,6 +545,55 @@ class _ClusterVisualizer:
     def _plot_data(self, ax, dataset, y_key, *,
                    x_key='r', x_unit='pc', y_unit=None,
                    err_transform=None, scale=1.0, background=0.0, **kwargs):
+        '''Base plotting function for all observed data profiles.
+
+        Plots the observational data corrseponding to the variable `y_key`
+        from a given dataset, with correspoonding errorbars (if they exist).
+
+        This base function is to be used by `plot_profile` to handle the
+        plotting of all observational data.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            An axes instance on which to plot this observational data.
+
+        dataset : gcfit.data.Dataset
+            The observational dataset to load the variable and errors from.
+
+        y_key : str
+            The variable name of the observational data to plot.
+            Must exist within `dataset`.
+
+        x_key : str, optional
+            Alternative x-axis variable name to use instead of `dataset['r']`.
+            Must exist within `dataset`.
+
+        x_unit, y_unit : u.Unit, optional
+            Units to convert the x and y data to. By default, x-units are in
+            parsecs and y-units are in the stored data units.
+
+        err_transform : callable, optional
+            An optional transformation function which, if given, will be
+            called on the y-errors before plotting. Must accept an array of
+            error values and return an array of the same size.
+
+        scale : float, optional
+            An optional y-scaling factor applied to the variable data.
+
+        background : float, optional
+            An optional background level to be subtracted from the variable
+            data.
+
+        **kwargs : dict
+            All other arguments are passed to `ax.errorbar`.
+
+        Returns
+        -------
+        matplotlib.ErrorbarContainer
+            The outputs from the call to `plt.errorbars` using the given
+            dataset.
+        '''
 
         # ------------------------------------------------------------------
         # Get data and relevant errors for plotting
@@ -550,18 +651,109 @@ class _ClusterVisualizer:
 
     def _plot_profile(self, ax, ds_pattern, y_key, model_data, *,
                       y_unit=None, residuals=False, legend=False,
-                      res_kwargs=None, data_kwargs=None, model_kwargs=None,
                       color=None, data_color=None, model_color=None,
-                      mass_bins=None, label_masses=True, model_label=None,
+                      mass_bins=None, model_label=None, label_masses=True,
+                      res_kwargs=None, data_kwargs=None, model_kwargs=None,
                       **kwargs):
-        '''figure out what needs to be plotted and call model/data plotters
-        all **kwargs passed to both _plot_model and _plot_data
-        model_data dimensions *must* be (mass bins, intervals, r axis)
+        '''Base plotting function for all profiles.
 
-        Each mass bin will be plotted with it's own colour, as
-        decided by the usual matplotlib colour cycle (color=None),
-        Unless data_color, model_color or color are supplied, in which case
-        they will take precedence (in that order)
+        Base function handling the plotting of all profile-based (i.e. `self.r`
+        on the x-axis) model plots. This includes both the full model profiles
+        and observational datasets.
+        This function determines what needs to be plotted, and calls the
+        `_plot_model` and `_plot_data` functions as necessary.
+
+        Model data for all datasets matching `ds_pattern` will be plotted
+        separately with different markers.
+
+        Each mass (both model and data) will be plotted  with it's own colour,
+        as decided by the usual matplotlib colour cycle (color=None),
+        unless `data_color`, `model_color` or `color` are supplied, in which
+        case they will take precedence (in that order).
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            An axes instance on which to plot this observational data.
+
+        ds_pattern : str
+            A pattern string to filter all dataset names on, using `fnmatch`.
+
+        y_key : str
+            The variable name of the observational data to plot.
+            Must exist within each filtered dataset.
+
+        model_data : u.Quantity[Nmasses, Ninterval, Nr]
+            Array of model profile data to plot. Final dimension should be
+            the same size as `self.r`.
+
+        y_unit : u.Unit, optional
+            Units to convert the y axis to.
+
+        residuals : bool, optional
+            If True, automatically adds a residuals axis including all
+            plotted datasets, using `_add_residuals`.
+
+        res_kwargs, data_kwargs, model_kwargs : dict, optional
+            Optional arguments passed to `_add_residuals`, `_plot_data`, and
+            `_plot_model`, respectively.
+
+        color : str, optional
+            Fallback default (single) colour for all plots.
+            By default, will utilize the internal matplotlib colour cycler,
+            which can be customized using `plt.rcParams["axes.prop_cycle"]`.
+            Both `data_color` and `model_color` have precedence over this.
+
+        data_color : str or list of str, optional
+            The colour passed to `_plot_data`, used to colour all observational
+            data (markers and errorbars). If a list of colours is given, it
+            must match (or be longer than) the number of datasets found by
+            the given pattern.
+
+        model_color : str, optional
+            The colour passed to `_plot_model`, used to colour all model
+            profiles (transparency added to colour in confidence intervals).
+            If a colour is *not* given, and multiple masses have been plotted
+            (either through the plotted data or given `mass_bins`), then the
+            colours of model profiles will be taken from the corresponding data
+            of the same masses.
+
+        mass_bins : list of int, optional
+            The mass bins from the model to plot. This should be a list of
+            indices corresponding to the desired mass bins in the given
+            `model_data` (i.e. along axis 0).
+            Note that not all subclasses store the full range of modelled mass
+            bins, and this argument may not be functional.
+            By default, plots the mass bin given by `self.star_bin`. This is
+            also the bin assumed to represent all plotted data, if there is
+            no tracer mass stored.
+
+        model_label : str, optional
+            An optional label to be given to each plotted model, to appear in
+            a legend.
+            Defaults to no label, unless `label_masses` is True, in which case
+            the default prefix is simply "Model ".
+
+        label_masses : bool, optional
+            If True, applies a postfix to all model labels indicating their
+            masses. Note that this may only function if `mass_bins` are
+            explicitly given. If you want this to apply when only using the
+            single default mass bin, must also supply
+            `mass_bins=[self.star_bin]`.
+
+        **kwargs : dict
+            All other arguments are passed to both `_plot_data` and
+            `_plot_model`. Arguments must be valid for both.
+
+        Returns
+        -------
+        ax : matplotlib.axes.Axes
+            The provided axes instance, with all profiles and data plotted on
+            it.
+
+        res_ax : None or matplotlib.axes.Axes
+            None, if `residuals` is False, otherwise the automatically created
+            axes instance containing the residuals plot.
         '''
 
         ds_pattern = ds_pattern or ''
@@ -729,8 +921,60 @@ class _ClusterVisualizer:
     def _add_residuals(self, ax, ymodel, errorbars, percentage=False, *,
                        show_chi2=False, xmodel=None, y_unit=None, size="15%",
                        res_ax=None, divider_kwargs=None):
-        '''
-        errorbars : a list of outputs from calls to plt.errorbars
+        '''Append an extra axis to `ax` for plotting residuals.
+
+        Automatically appends a new axis to the the bottom of the given `ax`,
+        and plots the residuals between the given model and plotted data on it.
+
+        The models will be plotted with the median along the y=0 axis, and the
+        data values will attempt to be read from the output of plotted
+        errorbars. Honestly can't guarantee this will be correct if you use
+        weird transformed axes units/scales.
+        The styling of the data will attempt to match the primary plot as
+        closely as possible.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            An axes instance on which to plot this observational data.
+
+        ymodel : u.Quantity[Ninterval, Nr]
+            Array of model profile data to plot. Must be equivalent to
+            that plotted on `ax` using `_plot_model`.
+
+        errorbars : matplotlib.ErrorbarContainer
+            The outputs from a call to `plt.errorbars`, as returned from
+            `_plot_data`.
+
+        percentage : bool, optional
+            Whether to plot the residuals in physical units (model - data;
+            default) or in percentages (100 * (model - data) / data).
+
+        show_chi2 : bool, optional
+            If True, will add an annotation with the computed Chi-squared
+            value between all data and the plotted model median.
+
+        x_model : u.Quantity[Nr], optional
+            Alternative x-axis data to use instead of `self.r`.
+
+        y_unit : u.Unit, optional
+            Units to convert the y axis to.
+
+        size : str or float, optional
+            The size of the appended residuals axes, with respect to the
+            primary axes.
+            See `mpl_toolkits.axes_grid1.axes_divider.AxesDivider.append_axes`
+            for more information. Defaults to "15%".
+
+        res_ax : matplotlib.axes.Axes, optional
+            Optionally provide an already created axis to plot residuals on.
+            This is useful for overplotting multiple residuals (i.e. for
+            multiple datasets).
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+            The created axes instance containing the residuals plot.
         '''
         from mpl_toolkits.axes_grid1 import make_axes_locatable
 
@@ -887,7 +1131,9 @@ class _ClusterVisualizer:
         return res_ax
 
     def _add_hyperparam(self, ax, ymodel, xdata, ydata, yerr):
+        '''Unused. Supposed to add the value of bayesian hyperparameters'''
         # TODO this is still a complete mess
+        #   numerically correct, just need better way to track and place them.
 
         yspline = util.QuantitySpline(self.r, ymodel)
 
@@ -914,6 +1160,62 @@ class _ClusterVisualizer:
                  x_unit='pc', y_unit='km/s', legend=True,
                  label_position='top', verbose_label=True, blank_xaxis=False,
                  res_kwargs=None, **kwargs):
+        r'''Plot the line-of-sight velocity dispersion profiles.
+
+        Plots the `self.LOS` model profiles, and the relevant observational
+        datasets (variable "σ" within the dataset pattern
+        "*velocity_dispersion*"), corresponding to the line-of-sight velocity
+        dispersion profiles.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this relation. Should be a
+            part of the given `fig`.
+
+        show_obs : bool, optional
+            Whether to also plot the corresponding observational datasets on
+            top of the relevant model profile. Defaults to True.
+
+        residuals : bool, optional
+            Whether to, if also plotting data, append a residuals ax to the
+            figure. Defaults to False.
+
+        x_unit, y_unit : u.Unit, optional
+            Units to convert the x and y axes to. By default, x-units are in
+            parsecs and y-units are in kilometres per second.
+
+        label_position : {'top', 'left', 'right'}, optional
+            Where to place the quantity (y) label. If "top" (default), will be
+            set as the ax title, otherwise will be set to one side. If on a
+            side, will also attempt to correctly append the units to the end
+            of the label.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "LOS Velocity Dispersion",
+            otherwise "$\sigma_{\mathrm{LOS}}$".
+
+        blank_xaxis : bool, optional
+            If True, will remove the tick markers and label from the x-axis.
+            May be useful if stacking multiple profiles vertically.
+
+        res_kwargs : dict, optional
+            Optional arguments passed to `_add_residuals`.
+
+        **kwargs : dict
+            All other arguments are passed to `_plot_profile`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -950,6 +1252,62 @@ class _ClusterVisualizer:
                     x_unit='pc', y_unit='mas/yr', legend=True,
                     label_position='top', verbose_label=True, blank_xaxis=False,
                     res_kwargs=None, **kwargs):
+        r'''Plot the total proper motion dispersion profiles.
+
+        Plots the `self.pm_tot` model profiles, and the relevant observational
+        datasets (variable "PM_tot" within the dataset pattern
+        "*proper_motion*"), corresponding to the total proper motion
+        dispersion profiles.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this relation. Should be a
+            part of the given `fig`.
+
+        show_obs : bool, optional
+            Whether to also plot the corresponding observational datasets on
+            top of the relevant model profile. Defaults to True.
+
+        residuals : bool, optional
+            Whether to, if also plotting data, append a residuals ax to the
+            figure. Defaults to False.
+
+        x_unit, y_unit : u.Unit, optional
+            Units to convert the x and y axes to. By default, x-units are in
+            parsecs and y-units are in milliarcseconds per year.
+
+        label_position : {'top', 'left', 'right'}, optional
+            Where to place the quantity (y) label. If "top" (default), will be
+            set as the ax title, otherwise will be set to one side. If on a
+            side, will also attempt to correctly append the units to the end
+            of the label.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "Total PM Dispersion",
+            otherwise "$\sigma_{\mathrm{PM},\mathrm{tot}}$".
+
+        blank_xaxis : bool, optional
+            If True, will remove the tick markers and label from the x-axis.
+            May be useful if stacking multiple profiles vertically.
+
+        res_kwargs : dict, optional
+            Optional arguments passed to `_add_residuals`.
+
+        **kwargs : dict
+            All other arguments are passed to `_plot_profile`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -986,6 +1344,64 @@ class _ClusterVisualizer:
                       x_unit='pc', blank_xaxis=False, legend=True,
                       label_position='top', verbose_label=True,
                       res_kwargs=None, **kwargs):
+        r'''Plot the proper motion dispersion anisotropy profiles.
+
+        Plots the `self.pm_ratio` model profiles, and the relevant observational
+        datasets (variable "PM_ratio" within the dataset pattern
+        "*proper_motion*"), corresponding to the proper motion dispersion
+        anisotropy profiles, defined as the ratio of the tangential over
+        radial proper motion dispersions.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this relation. Should be a
+            part of the given `fig`.
+
+        show_obs : bool, optional
+            Whether to also plot the corresponding observational datasets on
+            top of the relevant model profile. Defaults to True.
+
+        residuals : bool, optional
+            Whether to, if also plotting data, append a residuals ax to the
+            figure. Defaults to False.
+
+        x_unit : u.Unit, optional
+            Units to convert the x axis to. By default, x-units are in
+            parsecs.
+
+        label_position : {'top', 'left', 'right'}, optional
+            Where to place the quantity (y) label. If "top" (default), will be
+            set as the ax title, otherwise will be set to one side. If on a
+            side, will also attempt to correctly append the units to the end
+            of the label.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "PM Anisotropy Ratio",
+            otherwise "$\sigma_{\mathrm{PM},\mathrm{T}}
+            / \sigma_{\mathrm{PM},\mathrm{R}}$".
+
+        blank_xaxis : bool, optional
+            If True, will remove the tick markers and label from the x-axis.
+            May be useful if stacking multiple profiles vertically.
+
+        res_kwargs : dict, optional
+            Optional arguments passed to `_add_residuals`.
+
+        **kwargs : dict
+            All other arguments are passed to `_plot_profile`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -1022,6 +1438,62 @@ class _ClusterVisualizer:
                   x_unit='pc', y_unit='mas/yr', legend=True,
                   label_position='top', verbose_label=True, blank_xaxis=False,
                   res_kwargs=None, **kwargs):
+        r'''Plot the tangential proper motion dispersion profiles.
+
+        Plots the `self.pm_T` model profiles, and the relevant observational
+        datasets (variable "PM_T" within the dataset pattern
+        "*proper_motion*"), corresponding to the tangential proper motion
+        dispersion profiles.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this relation. Should be a
+            part of the given `fig`.
+
+        show_obs : bool, optional
+            Whether to also plot the corresponding observational datasets on
+            top of the relevant model profile. Defaults to True.
+
+        residuals : bool, optional
+            Whether to, if also plotting data, append a residuals ax to the
+            figure. Defaults to False.
+
+        x_unit, y_unit : u.Unit, optional
+            Units to convert the x and y axes to. By default, x-units are in
+            parsecs and y-units are in milliarcseconds per year.
+
+        label_position : {'top', 'left', 'right'}, optional
+            Where to place the quantity (y) label. If "top" (default), will be
+            set as the ax title, otherwise will be set to one side. If on a
+            side, will also attempt to correctly append the units to the end
+            of the label.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "Tangential PM
+            Dispersion", otherwise "$\sigma_{\mathrm{PM},\mathrm{T}}$".
+
+        blank_xaxis : bool, optional
+            If True, will remove the tick markers and label from the x-axis.
+            May be useful if stacking multiple profiles vertically.
+
+        res_kwargs : dict, optional
+            Optional arguments passed to `_add_residuals`.
+
+        **kwargs : dict
+            All other arguments are passed to `_plot_profile`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -1058,6 +1530,62 @@ class _ClusterVisualizer:
                   x_unit='pc', y_unit='mas/yr', legend=True,
                   label_position='top', verbose_label=True, blank_xaxis=False,
                   res_kwargs=None, **kwargs):
+        r'''Plot the radial proper motion dispersion profiles.
+
+        Plots the `self.pm_T` model profiles, and the relevant observational
+        datasets (variable "PM_T" within the dataset pattern
+        "*proper_motion*"), corresponding to the radial proper motion
+        dispersion profiles.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this relation. Should be a
+            part of the given `fig`.
+
+        show_obs : bool, optional
+            Whether to also plot the corresponding observational datasets on
+            top of the relevant model profile. Defaults to True.
+
+        residuals : bool, optional
+            Whether to, if also plotting data, append a residuals ax to the
+            figure. Defaults to False.
+
+        x_unit, y_unit : u.Unit, optional
+            Units to convert the x and y axes to. By default, x-units are in
+            parsecs and y-units are in milliarcseconds per year.
+
+        label_position : {'top', 'left', 'right'}, optional
+            Where to place the quantity (y) label. If "top" (default), will be
+            set as the ax title, otherwise will be set to one side. If on a
+            side, will also attempt to correctly append the units to the end
+            of the label.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "Radial PM Dispersion",
+            otherwise "$\sigma_{\mathrm{PM},\mathrm{R}}$".
+
+        blank_xaxis : bool, optional
+            If True, will remove the tick markers and label from the x-axis.
+            May be useful if stacking multiple profiles vertically.
+
+        res_kwargs : dict, optional
+            Optional arguments passed to `_add_residuals`.
+
+        **kwargs : dict
+            All other arguments are passed to `_plot_profile`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -1096,6 +1624,79 @@ class _ClusterVisualizer:
                             label_position='top', verbose_label=True,
                             blank_xaxis=False, res_kwargs=None,
                             data_kwargs=None, model_kwargs=None, **kwargs):
+        r'''Plot the projected number density profiles.
+
+        Plots the `self.numdens` model profiles, and the relevant observational
+        datasets (variable "Σ" within the dataset pattern
+        "*number_density*"), corresponding to the project number density
+        profiles.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this relation. Should be a
+            part of the given `fig`.
+
+        show_background : bool, optional
+            If True, also plots a horizontal line representing the value of
+            the background density, as taken from the observational datasets
+            (if possible).
+
+        subtract_background : bool, optional
+            If True, subtracts the background density value from the
+            number density model profiles and data.
+
+        show_obs : bool, optional
+            Whether to also plot the corresponding observational datasets on
+            top of the relevant model profile. Defaults to True.
+
+        residuals : bool, optional
+            Whether to, if also plotting data, append a residuals ax to the
+            figure. Defaults to False.
+
+        x_unit, y_unit : u.Unit, optional
+            Units to convert the x and y axes to. By default, x-units are in
+            parsecs and y-units are in stars per parsec squared.
+
+        scale_to : {"model", "data"}, optional
+            Number densities are typically scaled to match the normalization
+            of the data in GCfit, as they are fit to the shape, not value of
+            the number densities. This argument allows the absolute values of
+            the plotted quantities to be scaled to either the
+            model (data / K; default) or the data (model * K).
+
+        label_position : {'top', 'left', 'right'}, optional
+            Where to place the quantity (y) label. If "top" (default), will be
+            set as the ax title, otherwise will be set to one side. If on a
+            side, will also attempt to correctly append the units to the end
+            of the label.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "Tangential PM
+            Dispersion", otherwise "$\sigma_{\mathrm{PM},\mathrm{T}}$".
+
+        blank_xaxis : bool, optional
+            If True, will remove the tick markers and label from the x-axis.
+            May be useful if stacking multiple profiles vertically.
+
+        res_kwargs, data_kwargs, model_kwargs : dict, optional
+            Optional arguments passed to `_add_residuals`, `_plot_data`, and
+            `_plot_model`, respectively.
+
+        **kwargs : dict
+            All other arguments are passed to `_plot_profile`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         # TODO add minor ticks to y axis
 
@@ -1219,10 +1820,38 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_all(self, fig=None, sharex=True, **kwargs):
-        '''Plots all the primary profiles (numdens, LOS, PM)
-        but *not* the mass function, pulsars, or any secondary profiles
-        (cum-mass, remnants, etc)
+        '''Plot all primary model radial profiles in one figure.
+
+        Plots the six primary radial profile quantities used for fitting
+        (excluding notably the mass functions and pulsar accelerations).
+        That is, clockwise from the top left, number density, total PM,
+        tangential PM, radial PM, PM ratio and LOS dispersion profiles.
+
+        Simply sets up a figure with six axes and calls the various relevant
+        profile plotting functions to populate each ax.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place all axes on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_multi_artist` for more details.
+
+        sharex : bool, optional
+            If True, created subplots will all share the same x-axis.
+            Will also remove the x axis ticks and labels on all but the bottom
+            row.
+
+        **kwargs : dict
+            All other arguments are passed to each plotting function.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
         '''
+
         # TODO working with residuals here is hard because constrianed_layout
         #   doesn't seem super aware of them
 
@@ -1330,6 +1959,83 @@ class _ClusterVisualizer:
                        PI_legend=False, propid_legend=False,
                        label_unit='arcmin', model_color=None, model_label=None,
                        logscaled=False, field_kw=None, **kwargs):
+        """Plot present day mass functions in various radial bins.
+
+        Plots each of the stored `self.mass_func` radial (present-day) mass
+        function bins (i.e. binned star counts by mean star mass), in a
+        large figure of stacked axes, as well as the corresponding
+        observational datasets.
+
+        Each grouping of mass functions bins (i.e. under a certain data
+        source proposal) will be plotted with it's own colour and sorted to be
+        next to one another.
+
+        Optionally, a panel will be added to the left of the figure showing
+        the related field outlines on the sky (using `plot_MF_fields`).
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place all axes on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_multi_artist` for more details.
+
+        show_obs : bool, optional
+            Whether to also plot the corresponding observational datasets on
+            top of the relevant model profile. Defaults to True.
+
+        show_fields : bool, optional
+            Whether to include an extra panel (on the left of the figure)
+            showing the observed mass function fields (using `plot_MF_fields`).
+
+        PI_legend : bool, optional
+            If True, also notes the PI name of each proposal grouping under
+            each first radial bin annotation.
+            Only applies if `show_fields` is False, as otherwise they will be
+            noted in that panel better.
+
+        propid_legend : bool, False
+            If True, also notes the ID of each proposal grouping under each
+            first radial bin annotation.
+            Only applies if `show_fields` is False, as otherwise they will be
+            noted in that panel better.
+
+        label_unit : u.Unit, optional
+            The unit used to denote each radial bin in it's corresponding label.
+            Does not change anything about what is plotted, only the label.
+            Defaults to arcminutes (').
+
+        model_color : str, optional
+            Optionally colour all model profiles with a specific colour. This
+            will give the same colour to *all* radial bins, regardless of
+            proposal grouping. By default, models will match the colour of
+            their corresponding data, as dictated within `self.mass_func`, or
+            as set by the default matplotlib colour cycler, if not set.
+
+        model_label : str, optional
+            Optionally add a figure legend with this label corresponding to the
+            model profiles. Only valid if a single specific model colour was
+            given through `model_color`. The legend placement won't be great,
+            and this is mostly for inspection when overplotting multiple models
+            on a single figure.
+
+        logscaled : bool, optional
+            If True, applies a log scaling to the the x (i.e. mass) axis.
+
+        field_kw : dict, optional
+            Optional arguments passed to `plot_MF_fields` if `show_fields` is
+            True.
+
+        **kwargs : dict
+            All other arguments are passed to each `plt.errorbars` call.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        """
+
         # TODO support using other x units (arcsec, pc) here and in MF plot
 
         if self.obs is None:
@@ -1578,8 +2284,59 @@ class _ClusterVisualizer:
     @_support_units
     def plot_MF_fields(self, fig=None, ax=None, *, unit='arcmin', radii=("rh",),
                        grid=True, label_grid=False, add_legend=True):
-        '''plot all mass function fields in this observation
+        '''Plot the on-sky HST fields corresponding to each mass function PI.
+
+        Plots the representation of the observed on-sky photometry footprints
+        for each stored mass function groupings, with the origin on the cluster
+        centre.
+        Each grouping of mass functions bins (i.e. under a certain data
+        source proposal) will be plotted with it's own colour.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot the fields. Should be a
+            part of the given `fig`.
+
+        unit : u.Unit, optional
+            Units to convert the x and y axes and grid lines to.
+            By default, the units are arcminutes.
+
+        radii : list of {'rh', 'ra', 'rt', 'r0', 'rhp', 'rv'}, optional
+            A collection of radius values to be overplotted (as circles)
+            on the plot. If the given radii have corresponding uncertainties,
+            they will also be shaded in. By default plots the half-mass radius.
+
+        grid : bool, optional
+            If True (default), adds a circular grid at 2 arcminute intervals,
+            out to the tidal radius.
+
+        label_grid : bool, optional
+            Optionally adds labels on to the figure noting the size of each
+            grid interval, if `grid` is True.
+
+        add_legend : bool, optional
+            If True (default), adds a legend with an entry for each grouping
+            with the proposal PI name and ID.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+
+        See Also
+        --------
+        util.mass.Field:
+            Class representing a given mass function field, containing all
+            associated plotting methods.
         '''
+
         import shapely.geometry as geom
 
         fig, ax = self._setup_artist(fig, ax)
@@ -1720,6 +2477,44 @@ class _ClusterVisualizer:
     @_support_units
     def plot_density(self, fig=None, ax=None, kind='all', *,
                      x_unit='pc', label_position='left', colors=None):
+        '''Plot model density profiles.
+
+        Plots the radial mass density (`self.rho_*`) profiles of the total,
+        main sequence, and dark remnant objects in this model.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot the profiles. Should be a
+            part of the given `fig`.
+
+        kind : list of {'tot', 'rem', 'MS', 'WD', 'NS', 'BH'}, optional
+            The density profiles to plot. By default plots all of them.
+
+        x_unit : u.Unit, optional
+            Units to convert the x axis to. By default, x-units are in parsecs.
+
+        label_position : {'top', 'left', 'right'}, optional
+            Where to place the quantity (y) label. If "top", will be
+            set as the ax title, otherwise will be set to one side. If on a
+            side, will also attempt to correctly append the units to the end
+            of the label. Defaults to the left.
+
+        colors : dict, optional
+            A dictionary of colours, where the keys correspond to the given
+            `kind`. Each object type has it's own default colour.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         if kind == 'all':
             kind = {'MS', 'tot', 'BH', 'WD', 'NS'}
@@ -1785,6 +2580,44 @@ class _ClusterVisualizer:
     @_support_units
     def plot_surface_density(self, fig=None, ax=None, kind='all', *,
                              x_unit='pc', label_position='left', colors=None):
+        '''Plot model surface density profiles.
+
+        Plots the radial surface mass density (`self.Sigma_*`) profiles of the
+        total, main sequence, and dark remnant objects in this model.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot the profiles. Should be a
+            part of the given `fig`.
+
+        kind : list of {'tot', 'rem', 'MS', 'WD', 'NS', 'BH'}, optional
+            The density profiles to plot. By default plots all of them.
+
+        x_unit : u.Unit, optional
+            Units to convert the x axis to. By default, x-units are in parsecs.
+
+        label_position : {'top', 'left', 'right'}, optional
+            Where to place the quantity (y) label. If "top", will be
+            set as the ax title, otherwise will be set to one side. If on a
+            side, will also attempt to correctly append the units to the end
+            of the label. Defaults to the left.
+
+        colors : dict, optional
+            A dictionary of colours, where the keys correspond to the given
+            `kind`. Each object type has it's own default colour.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         if kind == 'all':
             kind = {'MS', 'tot', 'BH', 'WD', 'NS'}
@@ -1851,6 +2684,44 @@ class _ClusterVisualizer:
     @_support_units
     def plot_cumulative_mass(self, fig=None, ax=None, kind='all', *,
                              x_unit='pc', label_position='left', colors=None):
+        '''Plot model cumulative mass profiles.
+
+        Plots the radial cumulative mass profiles of the total,
+        main sequence, and dark remnant objects in this model.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot the profiles. Should be a
+            part of the given `fig`.
+
+        kind : list of {'tot', 'rem', 'MS', 'WD', 'NS', 'BH'}, optional
+            The mass profiles to plot. By default plots all of them.
+
+        x_unit : u.Unit, optional
+            Units to convert the x axis to. By default, x-units are in parsecs.
+
+        label_position : {'top', 'left', 'right'}, optional
+            Where to place the quantity (y) label. If "top", will be
+            set as the ax title, otherwise will be set to one side. If on a
+            side, will also attempt to correctly append the units to the end
+            of the label. Defaults to the left.
+
+        colors : dict, optional
+            A dictionary of colours, where the keys correspond to the given
+            `kind`. Each object type has it's own default colour.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         if kind == 'all':
             kind = {'MS', 'tot', 'BH', 'WD', 'NS'}
@@ -1911,7 +2782,41 @@ class _ClusterVisualizer:
     @_support_units
     def plot_remnant_fraction(self, fig=None, ax=None, *, show_total=True,
                               x_unit='pc', label_position='left'):
-        '''Fraction of mass in remnants vs MS stars, like in baumgardt'''
+        '''Plot model stellar and remnant mass fraction profiles.
+
+        Plots the radial mass fraction profile of the main sequence stars
+        (`mass_MS / mass_tot`) and the dark remnants (`mass_rem / mass_tot`).
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot the profiles. Should be a
+            part of the given `fig`.
+
+        show_total : bool, optional
+            If True (default), places an anchored box in the upper centre of
+            the ax showing the total remnant mass fraction of the cluster.
+
+        x_unit : u.Unit, optional
+            Units to convert the x axis to. By default, x-units are in parsecs.
+
+        label_position : {'top', 'left', 'right'}, optional
+            Where to place the quantity (y) label. If "top", will be
+            set as the ax title, otherwise will be set to one side. If on a
+            side, will also attempt to correctly append the units to the end
+            of the label. Defaults to the left.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -1957,7 +2862,7 @@ class _ClusterVisualizer:
     @_support_units
     def _compute_profile_chi2(self, ds_pattern, y_key, model_data, *,
                               x_key='r', err_transform=None, reduced=True):
-        '''compute chi2 for this dataset (pattern)'''
+        '''Compute chi2 for this dataset (pattern)'''
 
         chi2 = 0.
 
@@ -2032,6 +2937,7 @@ class _ClusterVisualizer:
 
     @_support_units
     def _compute_massfunc_chi2(self, *, reduced=True):
+        '''Compute chi2 for all mass functions'''
 
         chi2 = 0.
 
@@ -2091,10 +2997,8 @@ class _ClusterVisualizer:
 
     @property
     def chi2(self):
-        '''compute chi2 between median model and all datasets
-        Be cognizant that this is only the median model chi2, and not
-        necessarily useful for actual statistics
-        '''
+        '''Compute χ^2 between the median model and all observational data.'''
+
         # TODO seems to produce alot of infs?
 
         def numdens_nuisance(err):
@@ -2126,16 +3030,67 @@ class _ClusterVisualizer:
 
 
 class ModelVisualizer(_ClusterVisualizer):
-    '''
-    class for making, showing, saving all the plots related to a single model
+    '''Analysis and visualization of a single model.
+
+    Provides a number of plotting methods useful for the analysis of a single
+    (multimass) model instance, and it's fit to all relevant observational
+    datasets.
+
+    A number of relevant (plottable) quantities will be initially computed and
+    stored to be used by the various plotting functions defined by the base
+    class `_ClusterVisualizer`.
+
+    Parameters
+    ----------
+    model : gcfit.Model
+        Model instance to visualize.
+
+    observations : gcfit.Observations or None, optional
+        The `Observations` instance corresponding to this cluster.
+        If None, the observations will first try to be read from the model
+        instance itself (`model.observations`). If no observations can be found,
+        this object will be unable to plot any observational data alongside
+        it's modelled profiles.
+
+    See Also
+    --------
+    _ClusterVisualizer : Base class providing all common plotting functions.
     '''
 
     @classmethod
     def from_chain(cls, chain, observations, method='median'):
+        '''Initialize a visualizer based on a full chain of parameters.
+
+        Classmethod which creates a single model visualizer object based on a
+        full chain of parameter values, by reducing the chain to a single set
+        of parameters (through the given `method`) and creating a `Model`
+        from that to initialize this class with.
+
+        Parameters
+        ----------
+        chain : np.ndarray[..., Nparams]
+            Array containing chain of parameters values. Final axis must be
+            of the size of the number of model parameters (13).
+
+        observations : gcfit.Observations
+            The `Observations` instance corresponding to this cluster.
+            Will be passed to `FittableModel`.
+
+        method : {"median", "mean", "final"}
+            Method used to reduce the chain to a single set of parameters.
+            "median" and "mean" find the average values, "final" will take the
+            final iteration in the chain.
+
+        Returns
+        -------
+        ModelVisualizer
+            The created model visualization object.
+
+        See Also
+        --------
+        gcfit.FittableModel : Model subclass used to initialize the model.
         '''
-        create a Visualizer instance based on a chain, y taking the median
-        of the chain parameters
-        '''
+
         reduc_methods = {'median': np.median, 'mean': np.mean,
                          'final': lambda ch, axis: ch[-1]}
 
@@ -2150,9 +3105,29 @@ class ModelVisualizer(_ClusterVisualizer):
 
     @classmethod
     def from_theta(cls, theta, observations):
-        '''
-        create a Visualizer instance based on a theta, see `Model` for allowed
-        theta types
+        '''Initialize a visualizer based on a single set of parameters.
+
+        Classmethod which creates a single model visualizer object based on a
+        set of parameter values, and uses that to initialize this class with.
+
+        Parameters
+        ----------
+        theta : dict or list
+            The set of model input parameters.
+            Must either be a dict, or a full list of all 13 parameters.
+
+        observations : gcfit.Observations
+            The `Observations` instance corresponding to this cluster.
+            Will be passed to `FittableModel`.
+
+        Returns
+        -------
+        ModelVisualizer
+            The created model visualization object.
+
+        See Also
+        --------
+        gcfit.FittableModel : Model subclass used to initialize the model.
         '''
         return cls(FittableModel(theta, observations), observations)
 
@@ -2178,7 +3153,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
         self.r = model.r
 
-        self.rlims = (9e-3, self.r.max().value + 5) << self.r.unit
+        self.rlims = (9e-3, model.r.max().value + 5) << model.r.unit
 
         self._2πr = 2 * np.pi * model.r
 
@@ -2214,6 +3189,7 @@ class ModelVisualizer(_ClusterVisualizer):
     # TODO alot of these init functions could be more homogenous
     @_ClusterVisualizer._support_units
     def _init_numdens(self, model, observations):
+        '''Initialize number density quantities.'''
 
         model_nd = model.Sigmaj / model.mj[:, np.newaxis]
 
@@ -2259,11 +3235,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
     @_ClusterVisualizer._support_units
     def _init_massfunc(self, model, observations):
-        '''
-        sets self.mass_func as a dict of PI's, where each PI has a list of
-        subdicts. Each subdict represents a single radial slice (within this PI)
-        and contains the radii, the mass func values, and the field slice
-        '''
+        '''Initialize mass function quantities, as dict of PIs.'''
 
         self.mass_func = {}
 
@@ -2312,7 +3284,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
     @_ClusterVisualizer._support_units
     def _spoof_empty_massfunc(self, model):
-        '''spoof an arbitrary massfunc, for use when no observations given'''
+        '''Spoof an arbitrary massfunc, for use when no observations given'''
         import shapely
 
         densityj = [util.QuantitySpline(model.r, model.Sigmaj[j])
@@ -2353,6 +3325,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
     @_ClusterVisualizer._support_units
     def _init_dens(self, model, observations):
+        '''Initialize mass density quantities.'''
 
         shp = (np.newaxis, np.newaxis, slice(None))
 
@@ -2365,6 +3338,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
     @_ClusterVisualizer._support_units
     def _init_surfdens(self, model, observations):
+        '''Initialize surface mass density quantities.'''
 
         shp = (np.newaxis, np.newaxis, slice(None))
 
@@ -2377,6 +3351,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
     @_ClusterVisualizer._support_units
     def _init_mass_frac(self, model, observations):
+        '''Initialize mass fraction quantities.'''
 
         int_MS = util.QuantitySpline(self.r, self._2πr * self.Sigma_MS)
         int_rem = util.QuantitySpline(self.r, self._2πr * self.Sigma_rem)
@@ -2399,6 +3374,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
     @_ClusterVisualizer._support_units
     def _init_cum_mass(self, model, observations):
+        '''Initialize cumulative mass quantities.'''
 
         int_tot = util.QuantitySpline(self.r, self._2πr * self.Sigma_tot)
         int_MS = util.QuantitySpline(self.r, self._2πr * self.Sigma_MS)
@@ -2427,14 +3403,71 @@ class ModelVisualizer(_ClusterVisualizer):
 
 
 class CIModelVisualizer(_ClusterVisualizer):
-    '''
-    class for making, showing, saving all the plots related to a bunch of models
-    in the form of confidence intervals
+    '''Analysis and visualization of a model, with confidence intervals.
+
+    Provides a number of plotting methods useful for the analysis of a
+    (multimass) model, and it's fit to all relevant observational datasets.
+    This class is based on a full set of parameter chains, which allows for the
+    estimation of errors on all plotted quantities, shown as confidence
+    intervals shaded on all plots.
+
+    A number of relevant (plottable) quantities (and their ±1σ and ±2σ
+    confidence intervals) will be initially computed and
+    stored to be used by the various plotting functions defined by the base
+    class `_ClusterVisualizer`.
+
+    Due to the time required to compute the large number of models needed, this
+    class can also be saved to disk (through the `save` method) and later
+    reloaded (through the `load` classmethod) instantly.
+
+    See Also
+    --------
+    _ClusterVisualizer : Base class providing all common plotting functions.
+
+    Notes
+    -----
+    This class should not be initialized directly, but through the `from_chain`
+    classmethod.
     '''
 
     @_ClusterVisualizer._support_units
     def plot_f_rem(self, fig=None, ax=None, bins='auto', color='tab:blue',
                    verbose_label=True):
+        r'''Plot the remnant fraction of this model.
+
+        Plots a histogram of the values of the total remnant mass fraction
+        (i.e. mass fraction in WD, NS, BH) in the given chain of models.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_ClusterVisualizer._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this quantity. Should be a
+            part of the given `fig`.
+
+        bins : int or sequence or str
+            Bins to use creating the histogram of this quantity.
+            See `plt.hist` for more details.
+
+        color : color, optional
+            The colour of the plotted histogram. This colour will be applied to
+            the edge (border) of the histogram as is, and to the face at 33%
+            transparency.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "Remnant Fraction",
+            otherwise "$f_{\mathrm{remn}}$".
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -2456,6 +3489,41 @@ class CIModelVisualizer(_ClusterVisualizer):
     @_ClusterVisualizer._support_units
     def plot_f_BH(self, fig=None, ax=None, bins='auto', color='tab:blue',
                   verbose_label=True):
+        r'''Plot the BH fraction of this model.
+
+        Plots a histogram of the values of the total black hole mass fraction
+        (i.e. mass fraction in BH over total mass) in the given chain of models.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_ClusterVisualizer._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this quantity. Should be a
+            part of the given `fig`.
+
+        bins : int or sequence or str
+            Bins to use creating the histogram of this quantity.
+            See `plt.hist` for more details.
+
+        color : color, optional
+            The colour of the plotted histogram. This colour will be applied to
+            the edge (border) of the histogram as is, and to the face at 33%
+            transparency.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "BH Mass Fraction",
+            otherwise "$f_{\mathrm{BH}}$".
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -2477,6 +3545,41 @@ class CIModelVisualizer(_ClusterVisualizer):
     @_ClusterVisualizer._support_units
     def plot_BH_mass(self, fig=None, ax=None, bins='auto', color='tab:blue',
                      verbose_label=True):
+        r'''Plot the BH mass of this model.
+
+        Plots a histogram of the values of the total black hole mass in the
+        given chain of models.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_ClusterVisualizer._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this quantity. Should be a
+            part of the given `fig`.
+
+        bins : int or sequence or str
+            Bins to use creating the histogram of this quantity.
+            See `plt.hist` for more details.
+
+        color : color, optional
+            The colour of the plotted histogram. This colour will be applied to
+            the edge (border) of the histogram as is, and to the face at 33%
+            transparency.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "BH Mass",
+            otherwise "$\mathrm{M}_{\mathrm{BH}}$".
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -2489,7 +3592,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         if verbose_label:
             label = "BH Mass"
         else:
-            label = r'$\mathrm{M}_{BH}$'
+            label = r'$\mathrm{M}_{\mathrm{BH}}$'
 
         self._set_xlabel(ax, label, unit=self.BH_mass.unit)
 
@@ -2498,6 +3601,41 @@ class CIModelVisualizer(_ClusterVisualizer):
     @_ClusterVisualizer._support_units
     def plot_BH_num(self, fig=None, ax=None, bins='auto', color='tab:blue',
                     verbose_label=True):
+        r'''Plot the number of BHs in this model.
+
+        Plots a histogram of the values of the total amount of black holes
+        in the given chain of models.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_ClusterVisualizer._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this quantity. Should be a
+            part of the given `fig`.
+
+        bins : int or sequence or str
+            Bins to use creating the histogram of this quantity.
+            See `plt.hist` for more details.
+
+        color : color, optional
+            The colour of the plotted histogram. This colour will be applied to
+            the edge (border) of the histogram as is, and to the face at 33%
+            transparency.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "BH Amount",
+            otherwise "$\mathrm{N}_{\mathrm{BH}}$".
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -2510,7 +3648,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         if verbose_label:
             label = "BH Amount"
         else:
-            label = r'$\mathrm{N}_{BH}$'
+            label = r'$\mathrm{N}_{\mathrm{BH}}$'
 
         self._set_xlabel(ax, label, unit=self.BH_num.unit)
 
@@ -2523,6 +3661,56 @@ class CIModelVisualizer(_ClusterVisualizer):
     @classmethod
     def from_chain(cls, chain, observations, N=100, *,
                    verbose=False, pool=None):
+        '''Initialize a CI visualizer based on a full chain of parameters.
+
+        Classmethod which creates a model visualizer object based on a
+        full chain of parameter values, by computing a model for each step in
+        the chain and determining the median and 1,2σ uncertainties, on each
+        relevant quantity, between all the models.
+
+        This function will take some time, as models must be computed for
+        every step in the chain. Parallelizing it via a given multiprocessing
+        `pool` is recommended.
+
+        Parameters
+        ----------
+        chain : np.ndarray[..., Nparams]
+            Array containing chain of parameters values. Final axis must be
+            of the size of the number of model parameters (13).
+
+        observations : gcfit.Observations
+            The `Observations` instance corresponding to this cluster.
+            Will be used to initialize every model in the chain.
+
+        N : int
+            The number of samples to use in computing the confidence intervals.
+            The chosen number of samples will be taken from the end of the
+            chain (`chain[..., -N:]`). Choose an N greater than the size of
+            the chain to use all samples.
+
+        verbose : bool, optional
+            Optionally show a `tqdm` loading bar while computing the models.
+
+        pool : Pool, optional
+            A `multiprocessing.Pool` (or other pool-like object implementing
+            an `imap_unordered` method) used to parallelize the computation
+            of the models.
+
+        Returns
+        -------
+        CIModelVisualizer
+            The created CI model visualization object.
+
+        See Also
+        --------
+        gcfit.FittableModel
+            Model subclass used to initialize each model.
+
+        gcfit.scripts.generate_model_CI
+            Script used to generate and save model CIs for a number of clusters
+            at once.
+        '''
+
         import functools
 
         viz = cls(observations)
@@ -2843,6 +4031,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         return viz
 
     def _init_velocities(self, model, mass_bin):
+        '''Initialize various velocity quantities.'''
 
         vT = np.sqrt(model.v2Tj[mass_bin])
         vT_interp = util.QuantitySpline(model.r, vT)
@@ -2868,6 +4057,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         return vT, vR, vtot, va, vp
 
     def _init_dens(self, model):
+        '''Initialize mass density quantities.'''
 
         rho_MS = np.sum(model.MS.rhoj, axis=0)
         rho_MS_interp = util.QuantitySpline(model.r, rho_MS)
@@ -2892,6 +4082,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         return rho_MS, rho_tot, rho_BH, rho_WD, rho_NS
 
     def _init_surfdens(self, model):
+        '''Initialize surface mass density quantities.'''
 
         Sigma_MS = np.sum(model.MS.Sigmaj, axis=0)
         Sigma_MS_interp = util.QuantitySpline(model.r, Sigma_MS)
@@ -2916,6 +4107,8 @@ class CIModelVisualizer(_ClusterVisualizer):
         return Sigma_MS, Sigma_tot, Sigma_BH, Sigma_WD, Sigma_NS
 
     def _init_cum_mass(self, model):
+        '''Initialize cumulative mass quantities.'''
+
         # TODO it seems like the integrated mass is a bit less than total Mj?
         # TODO why doing all this instead of using model.mc?
 
@@ -2944,6 +4137,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         return cum_M_MS, cum_M_tot, cum_M_BH, cum_M_WD, cum_M_NS
 
     def _init_mass_frac(self, model):
+        '''Initialize mass fraction quantities.'''
 
         _2πr = 2 * np.pi * model.r
 
@@ -2969,6 +4163,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         return mass_MS / mass_tot, mass_rem / mass_tot
 
     def _init_numdens(self, model, equivs=None):
+        '''Initialize number density quantities.'''
 
         model_nd = model.Sigmaj[model.nms - 1] / model.mj[model.nms - 1]
 
@@ -2977,6 +4172,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         return nd_interp(self.r).to('pc-2', equivs)
 
     def _init_K_scale(self, numdens):
+        '''Initialize the K scale on the number density.'''
 
         nd_interp = util.QuantitySpline(self.r, self._get_median(numdens[0]))
 
@@ -3010,6 +4206,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         return K
 
     def _prep_massfunc(self, observations):
+        '''Prepare the mass function dictionaries to be filled in.'''
 
         massfunc = {}
 
@@ -3039,7 +4236,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         return massfunc
 
     def _init_dNdm(self, model, rslice, equivs=None):
-        '''returns dndm for this model in this slice'''
+        '''Compute the dN/dm for this model in a given mass function slice.'''
 
         densityj = [util.QuantitySpline(model.r, model.Sigmaj[j])
                     for j in range(model.nms)]
@@ -3061,8 +4258,32 @@ class CIModelVisualizer(_ClusterVisualizer):
     # ----------------------------------------------------------------------
 
     def save(self, filename, overwrite=False):
-        '''save the confidence intervals to a file so we can load them more
-        quickly next time. This should, in most cases, be the run output file
+        '''Save model CI quantities to a file for quicker future initialization.
+
+        Saves the computed confidence intervals on all model profiles, and the
+        full chains of computed quantities (e.g. BH mass, number), so that
+        the same CIModelVisualizer can be initialized later (through the
+        `CIModelVisualizer.load` classmethod) without needing to recompute a
+        large number of models again.
+
+        The desired file must be an existing HDF5 file. All quantities will
+        be stored under a "model_output" group, in the root group.
+        The easiest file to use may be the run output file for the cluster fit
+        that this CI model was based on.
+        Note that an existing saved CI model within this file will be
+        quietly overwritten if `overwrite=True`.
+
+        The full set of models used to initilize this class *will not* be
+        stored, only the quantities required to initialize this class.
+
+        Parameters
+        ----------
+        filename : pathlib.Path or str
+            Path to the output HDF5 file to save this CI model to.
+
+        overwrite : bool, optional
+            If True, will overwrite any existing saved model outputs in this
+            file. By default raises a ValueError if model output exists already.
         '''
 
         with h5py.File(filename, 'a') as file:
@@ -3167,9 +4388,34 @@ class CIModelVisualizer(_ClusterVisualizer):
                     slc_grp.create_dataset('dNdm', data=rbin['dNdm'])
 
     @classmethod
-    def load(cls, filename, observations=None, validate=False):
-        ''' load the CI from a file which was `save`d, to avoid rerunning models
-        validate: check while loading that all datasets are there, error if not
+    def load(cls, filename, observations=None):
+        '''Initialize this class by loading already saved model outputs.
+
+        Based on model outputs computed before (by initializing this class
+        through the `CIModelVisualizer.from_chain` classmethod) and
+        saved using the `CIModelVisualizer.save` method, loads in all required
+        model profiles and quantities from the given file and initializes this
+        class based on them.
+
+        Required quantities are read from the given HDF5 file under the
+        "/model_output" group.
+        Note that if this group was not created by the `save` method, unintended
+        errors may arise only later, during some plotting.
+
+        Parameters
+        ----------
+        filename : pathlib.Path or str
+            Path to the HDF5 file containing the saved "model_output".
+
+        observations : None or gcfit.Observations, optional
+            The `Observations` instance corresponding to this cluster.
+            If not given, an attempt will be made to create this class based on
+            the stored cluster name.
+
+        Returns
+        -------
+        CIModelVisualizer
+            The loaded CI model visualization object.
         '''
 
         with h5py.File(filename, 'r') as file:
@@ -3247,18 +4493,37 @@ class CIModelVisualizer(_ClusterVisualizer):
 
 
 class ObservationsVisualizer(_ClusterVisualizer):
-    '''
-    class for making, showing, saving all the plots related to observables data,
-    without any models at all
+    '''Analysis and visualization of a observational data, alone.
+
+    Provides a number of plotting methods useful for the analysis of a
+    observational datasets, without the need for a corresponding model.
+    This class provided the ability to plot (nearly) all of the usual profiles
+    provided by `ModelVisualizer`, but only showing the relevant observational
+    datasets in each. There are of course a number of model based quantities
+    (with no corresponding observables) which cannot be plotted through this,
+    and which will simply raise an error when called.
+
+    Parameters
+    ----------
+
+    observations : gcfit.Observations
+        The `Observations` instance corresponding to the cluster (data) to
+        be analyzed.
+
+    d : float or u.Quantity, optional
+        The distance to this cluster (assumed in kpc), which is used to convert
+        between on-sky angular and linear units in all plotting. Required
+        explicitly as it cannot be read from a model. By default will attempt
+        to use the stored initial value of "d".
+
+    See Also
+    --------
+    _ClusterVisualizer : Base class providing all common plotting functions.
     '''
 
     @_ClusterVisualizer._support_units
     def _init_massfunc(self, observations):
-        '''
-        sets self.mass_func as a dict of PI's, where each PI has a list of
-        subdicts. Each subdict represents a single radial slice (within this PI)
-        and contains the radii, the mass func values, and the field slice
-        '''
+        '''Initialize mass function quantities, as dict of PIs.'''
 
         self.mass_func = {}
 
@@ -3328,20 +4593,35 @@ class ObservationsVisualizer(_ClusterVisualizer):
 # --------------------------------------------------------------------------
 
 class SampledVisualizer:
-    '''
-    basic class for making some plots related to a sampled single model
+    '''Some visualizations of a sampled model.
+
+    Provides a few simple plotting methods useful for visualizing a sampled
+    (multimass) model.
+    This basic class provides only a few rudimentary plotting functions designed
+    to allow for a quick examination of a sampled model.
+
+    Parameters
+    ----------
+    sampledmodel : gcfit.SampledModel
+        Sampled model instance to be plotted.
+
+    thin : int, optional
+        Optional thinning parameter which will reduce the amount of stars
+        plotted by `[::thin]` each time. Can be useful at plotting models with
+        very high `N`.
     '''
 
     _setup_artist = _ClusterVisualizer._setup_artist
 
     def _get_stars(self, type_='all'):
+        '''Get a mask of stars to be plotted, based on `thin` and a star type'''
 
         mask = np.full(self.model.N, False)
 
         if type_ == 'all':
             mask[:] = True
         else:
-            mask[mask == type_] = True
+            mask[self.model.star_types == type_] = True
 
         mask[::self.thin] = False
 
@@ -3355,6 +4635,47 @@ class SampledVisualizer:
 
     def plot_positions(self, fig=None, ax=None, type_='all',
                        galactic=False, projection=None, **kwargs):
+        '''Plot the positions of each sampled star.
+
+        Creates a scatter plot of the positions of all sampled stars in the
+        model (after the `self.thin` thinning).
+        Optionally show these in the cartesian cluster-centred frame, or in
+        the projected galactic coordinates (if the model has been projected).
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_ClusterVisualizer._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot the positions. Should be a
+            part of the given `fig`.
+
+        type_ : {"all", "MS", "WD", "BH"}, optional
+            Optionally restrict to plotting only the stars of a given star
+            type. Defaults to all types.
+
+        galactic : bool, optional
+            If True, will plot the positions in the galactic frame
+            (e.g. lon, lat, dist). If the sampled model was not projected at
+            initialization, this will raise an error.
+
+        projection : {None, "3d", "polar"}
+            Optionally plot the positions in a 3-dimensional or polar frame.
+            Defaults to simply a 2D cartesian frame. "polar" cannot be combined
+            with the `galactic` frame.
+
+        **kwargs : dict
+            All other arguments are passed to `ax.scatter`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         subplot_kw = dict(projection=projection)
 
@@ -3389,6 +4710,47 @@ class SampledVisualizer:
 
     def plot_velocities(self, fig=None, ax=None, type_='all',
                         galactic=False, projection=None, **kwargs):
+        '''Plot the velocities of each sampled star.
+
+        Creates a scatter plot of the value of the velocities of all
+        sampled stars in the model (after the `self.thin` thinning).
+        Optionally show these in the cartesian cluster-centred frame, or in
+        the projected galactic coordinates (if the model has been projected).
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_ClusterVisualizer._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot the velocities. Should be a
+            part of the given `fig`.
+
+        type_ : {"all", "MS", "WD", "BH"}, optional
+            Optionally restrict to plotting only the stars of a given star
+            type. Defaults to all types.
+
+        galactic : bool, optional
+            If True, will plot the velocities in the galactic frame
+            (e.g. pm_l_cosb, pm_b, v_los). If the sampled model was not
+            projected at initialization, this will raise an error.
+
+        projection : {None, "3d", "polar"}
+            Optionally plot the positions in a 3-dimensional or polar frame.
+            Defaults to simply a 2D cartesian frame. "polar" cannot be combined
+            with the `galactic` frame.
+
+        **kwargs : dict
+            All other arguments are passed to `ax.scatter`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
 
         subplot_kw = dict(projection=projection)
 
@@ -3428,15 +4790,78 @@ class SampledVisualizer:
                         ideal_imager=False, exptime=3600,
                         imager_kw=None, psf_kw=None,
                         observe_kw=None, rgb_kw=None, show_kw=None):
-        '''plot a simulated observation using `artpop`
+        '''Plot a simulated (RGB) photometric observation of the model.
 
-        This method basically provides a skeleton of what is necessary to
-        produce an artpop artificial RGB image of a sampled cluster, based on
+        This method provides a barebones skeleton of the necessary steps
+        required to create and plot a simulated observation (i.e. RGB image) of
+        the sampled cluster, using the `artpop` package.
+        This method relies on the `artpop.Source` object created by
         the `SampledModel.to_artpop` method.
-        All options for each step can be provided to the relevant `*_kw`
-        argument. If more manual control is required, simply use the
-        `artpop.Source` provided by `to_artpop` directly.
+
+        The source is passed through a PSF, artificial imager, and is observed
+        in the three given "RGB" bands, each of which is combined using the
+        astropy `make_lupton_rgb` function.
+
+        This is a very simple method which follows the bare requirements set
+        out by the `artpop` tutorial. If finer, more manual control is required,
+        the `artpop.Source` object from `SampledModel.to_artpop` should be
+        used directly in creating your own artpop-based imagery.
+
+        `artpop` may require the isochrones for a given photometric system be
+        already present, and may automatically start downloading them.
+
+        Parameters
+        ----------
+        phot_system : str
+            Name of the photometric system to simulate stellar magnitudes
+            within. Must be supported by `artpop`.
+
+        r_band, g_band, b_band : str
+            The names of the red, green and blue filters to use. Will be
+            passed to `artpop.ArtImager.observe`, and must be valid for the
+            given `phot_system.
+
+        pixel_scale : float or u.Quantity
+            The pixel scale of the mock image. If a float is given,
+            the units will be assumed to be `arcsec / pixels`.
+
+        FWHM : float or u.Quantity
+            Full width at half maximum of the psf. If a float is given,
+            the units will be assumed to be arcsec. The units can be
+            angular or in pixels. Passed to `artpop.moffat_psf`.
+
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_ClusterVisualizer._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to place the simulated image. Should be a
+            part of the given `fig`.
+
+        source_kw : dict, optional
+            Optional arguments passed to `SampledModel.to_artpop`.
+
+        ideal_imager : bool, optional
+            Whether to use the imager class `artpop.IdealImager` or
+            `artpop.ArtImager` (default).
+
+        exptime : float, optional
+            Exposure time. If float is given, the units are assumed to be
+            seconds. Passed to `artpop.ArtImager.observe`.
+
+        imager_kw, psf_kw, observe_kw, rgb_kw, show_kw : dict, optional
+            Optional arguments passed to `artpop.ArtImager`,
+            `artpop.moffat_psf`, `artpop.ArtImager.observe`, `make_lupton_rgb`,
+            and `artpop.show_image`, respectively.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
         '''
+
         import artpop
         from astropy.visualization import make_lupton_rgb
 
@@ -3514,20 +4939,35 @@ class SampledVisualizer:
 
 
 class ModelCollection:
-    '''A collection of models, allowing for overplotting multiple models
-    with one another, and accessing the various parameters of multiple models at
-    once. Intimately tied to RunCollection.
+    '''Analysis and visualization of a collection of multiple models.
+
+    Provides easy and uniform access to the analysis and visualization of a
+    collection of different model visualizer instances, representing either
+    different clusters, or different representations of the same cluster.
+
+    This class is intimately tied to the `analysis.RunCollection` class,
+    and provides it's access to the models corresponding to each of it's runs.
+    The most likely way to initialize this class is therefore through the
+    `RunCollection.get_models`/`RunCollection.get_CImodels` method.
+
+    Parameters
+    ----------
+    visualizers : list of ModelVisualizer or CIModelVisualizer
+        List of model visualizer objects which will make up this collection.
+        Note that they must all be of the same type (`ModelVisualizer` or
+        `CIModelVisualizer`), and the other classes provided here
+        (e.g. `ObservationsVisualizer`) will not work.
     '''
 
     def __str__(self):
         return f"Collection of Models"
 
     def __iter__(self):
-        '''return an iterator over the individual model vizs'''
+        '''Return an iterator over the individual model vizualizers.'''
         return iter(self.visualizers)
 
     def __getattr__(self, key):
-        '''When accessing an attribute, fall back to get it from each model'''
+        '''When accessing an attribute, fall back to get it from each model.'''
         return [getattr(mv, key) for mv in self.visualizers]
 
     def __init__(self, visualizers):
@@ -3543,21 +4983,38 @@ class ModelCollection:
             raise TypeError(mssg)
 
     @classmethod
-    def load(cls, filenames, validate=False):
-        '''Load the models stored in the results files'''
-
-        return cls([CIModelVisualizer.load(fn, validate=validate)
-                    for fn in filenames])
+    def load(cls, filenames):
+        '''Load the model outputs previously saved in the a list of files.'''
+        return cls([CIModelVisualizer.load(fn) for fn in filenames])
 
     def save(self, filenames, overwrite=False):
-        '''save the models in the results files'''
-
+        '''Save the model outputs of all visualizers in the a list of files.'''
         for fn, mv in zip(filenames, self.visualizers):
             mv.save(fn, overwrite=overwrite)
 
     @classmethod
     def from_models(cls, models, obs_list=None):
-        '''init from a simple list of already computed of models'''
+        '''Initialize from a collection of models.
+
+        Initializes a `ModelCollection` instance of single `ModelVisualizer`s
+        based on a list of already computed models. A `ModelVisualizer`
+        instance will be created for every given model.
+
+        Parameters
+        ----------
+        models : list of gcfit.Model
+            Collection of models to create a collection of visualizers for.
+
+        obs_list : list of gcfit.Observations, optional
+            List of observations corresponding to each model. Must be the same
+            size as `models`. If None (default), all observations will attempt
+            to be read from each model (as is default in `ModelVisualizer`).
+
+        Returns
+        -------
+        ModelCollection
+            The created model collection object.
+        '''
 
         if obs_list is None:
             obs_list = [None, ] * len(models)
@@ -3566,12 +5023,37 @@ class ModelCollection:
 
     @classmethod
     def from_chains(cls, chains, obs_list, ci=True, *args, **kwargs):
-        '''init from an array of parameter chains for each run
+        '''Initialize from a collection of parameter chains.
 
-        chains is a list of chains (N models long) with each chain being an
-        array of either (N params,) for a from_theta init or
-        (N samples, N params) for a from_chain init.
-        if ci is True, must be (N samples, N params, otherwise makes no sense)
+        Initializes a `ModelCollection` instance of either `ModelVisualizer` or
+        `CIModelVisualizer`s based on a list of chains.
+
+        If each chain is an array of shape (Nsamples, Nparams), each visualizer
+        will be initialized using `from_chain`, otherwise if size (Nparams),
+        will be initialized using `from_theta`.
+
+        Parameters
+        ----------
+        chains : list of np.ndarray[Nsamples, Nparams] or np.ndarray[Nparams]
+            List of parameter chains for each model, used to create each model.
+            Either a single theta value or a full chain of values for each.
+            Final axis of the chains must be of the size of the number of
+            model parameters (13).
+
+        obs_list : list of gcfit.Observations or None
+            List of observations corresponding to each model.
+
+        ci : bool, optional
+            If True (default) creates collection of `CIModelVisualizer`,
+            otherwise `ModelVisualizer`.
+
+        *args, **kwargs
+            Optional arguments passed to each individual visualizer init.
+
+        Returns
+        -------
+        ModelCollection
+            The created model collection object.
         '''
 
         viz = CIModelVisualizer if ci else ModelVisualizer
@@ -3595,9 +5077,7 @@ class ModelCollection:
     # ----------------------------------------------------------------------
 
     def iter_plots(self, plot_func, yield_model=False, *args, **kwargs):
-        '''calls each models's `plot_func`, yields a figure
-        all args, kwargs passed to plot func
-        '''
+        '''Iterator yielding a call to `plot_func` for each visualizer.'''
         for mv in self.visualizers:
             fig = getattr(mv, plot_func)(*args, **kwargs)
 
@@ -3605,11 +5085,30 @@ class ModelCollection:
 
     def save_plots(self, plot_func, fn_pattern=None, save_kw=None, size=None,
                    *args, **kwargs):
-        '''
-        fn_pattern is format string which will be passed the kw "cluster" name
-            (i.e. `fn_pattern.format(cluster=run.name)`)
-            if None, will be ./{cluster}_{plot_func[5:]}
-            (Include the desired dir here too)
+        '''Iterate over calls to `plot_func` on each model and save the figures.
+
+        Iterates over the `iter_plots` function and saves all individual
+        figures to separate files, under a custom iterative file naming schema.
+
+        Parameters
+        ----------
+        plot_func : str
+            The name of the plotting function called on each run.
+
+        fn_pattern : str, optional
+            A format string, which is passed the argument "cluster"
+            representing each model's name, and is used to create the filename
+            each figure is saved under.
+            Defaults to `f'./{cluster}_{plot_func[5:]}'`.
+
+        save_kw : dict, optional
+            Optional arguments are passed to the `fig.savefig` function.
+
+        size : 2-tuple of float, optional
+            Optional resizing of the figure, using `fig.set_size_inches`.
+
+        **kwargs : dict
+            All other arguments are passed to `iter_plots`.
         '''
 
         if fn_pattern is None:
