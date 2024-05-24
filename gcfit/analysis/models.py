@@ -1889,7 +1889,7 @@ class _ClusterVisualizer:
                                  show_background=show_numdens_background,
                                  **kwargs)
 
-        if self.numdens and bg_lim is not None:
+        if self.numdens is not None and bg_lim is not None:
             bg_lim = min([bg_lim, np.abs(self.numdens[..., :-2].min())])
 
         # Sometime deBoer lists BGlev=0.000, but only due to digits cut off
@@ -3294,7 +3294,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
         limit = 3 * model.rh.to_value('pc')
 
-        base = mass.Field(shapely.Point((0, 0)).buffer(10 * limit))
+        base = mass.Field(shapely.Point((0, 0)).buffer(10 * limit), unit='pc')
 
         domain = np.arange(0, limit, 1) * u.pc
 
