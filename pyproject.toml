@@ -26,7 +26,8 @@ dependencies = [
     "matplotlib",
     "corner",
     "shapely",
-    "sphinx-toggleprompt"
+    "sphinx-toggleprompt",
+    "ads"
 ]
 
 classifiers = [

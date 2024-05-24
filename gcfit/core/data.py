@@ -182,7 +182,7 @@ class Dataset:
                 try:
                     self._citation = util.bibcode2cite(bibcodes)
 
-                except RuntimeError:
+                except (RuntimeError, ModuleNotFoundError):
                     # Failed to get citation, just return raw source
                     self._citation = '; '.join(bibcodes)
 
