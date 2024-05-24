@@ -1889,7 +1889,7 @@ class _ClusterVisualizer:
                                  show_background=show_numdens_background,
                                  **kwargs)
 
-        if self.numdens and bg_lim is not None:
+        if self.numdens is not None and bg_lim is not None:
             bg_lim = min([bg_lim, np.abs(self.numdens[..., :-2].min())])
 
         # Sometime deBoer lists BGlev=0.000, but only due to digits cut off
@@ -2572,8 +2572,7 @@ class _ClusterVisualizer:
         self._set_ylabel(ax, 'Mass Density', self.rho_tot.unit, label_position)
         self._set_xlabel(ax, unit=x_unit)
 
-        fig.legend(loc='upper center', ncol=6,
-                   bbox_to_anchor=(0.5, 1.), fancybox=True)
+        ax.legend(loc='upper center', ncol=len(kind), fancybox=True)
 
         return fig
 
@@ -2676,8 +2675,7 @@ class _ClusterVisualizer:
                          label_position)
         self._set_xlabel(ax, unit=x_unit)
 
-        fig.legend(loc='upper center', ncol=6,
-                   bbox_to_anchor=(0.5, 1.), fancybox=True)
+        ax.legend(loc='upper center', ncol=len(kind), fancybox=True)
 
         return fig
 
@@ -2773,9 +2771,7 @@ class _ClusterVisualizer:
                          label_position)
         self._set_xlabel(ax, unit=x_unit)
 
-        # TODO stop ever doing fig.legend, put legend on inside of ax
-        #   also maybe make it optional
-        ax.legend(loc='lower center', ncol=5, fancybox=True)
+        ax.legend(loc='lower center', ncol=len(kind), fancybox=True)
 
         return fig
 
@@ -3294,7 +3290,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
         limit = 3 * model.rh.to_value('pc')
 
-        base = mass.Field(shapely.Point((0, 0)).buffer(10 * limit))
+        base = mass.Field(shapely.Point((0, 0)).buffer(10 * limit), unit='pc')
 
         domain = np.arange(0, limit, 1) * u.pc
 
