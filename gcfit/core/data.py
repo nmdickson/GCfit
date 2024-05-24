@@ -864,7 +864,7 @@ class Model(lp.limepy):
 
     vesc : float or astropy.Quantity, optional
         Initial cluster escape velocity, in km/s, for use in the computation of
-        the effects of BH natal kick. Defaults to 90 km/s.
+        the effects of BH natal kick. Defaults to 90 km/s. Stored as `vesc0`.
 
     meanmassdef : {'global', 'central'}, optional
         Definition of the mean mass :math:`\bar{m}` used to define the
@@ -931,6 +931,11 @@ class Model(lp.limepy):
     rho, rhoj : astropy.Quantity
         System (total, per mass bin) density as a function of distance from
         the centre of the cluster.
+
+    vesc : astropy.Quantity
+        Escape velocity of the system (at the present day) as a function of
+        distance from the centre of the cluster, as given by
+        :math:`\sqrt{2 |\phi(r)|}`.
 
     v2, v2j : astropy.Quantity
         System (total, per mass bin) mean-square velocity as a function of
@@ -1003,6 +1008,7 @@ class Model(lp.limepy):
         self.s2 <<= V2_units
         self.s2j <<= V2_units
 
+        self.phi <<= V2_units
         self.rho <<= (M_units / R_units**3)
         self.rhoj <<= (M_units / R_units**3)
         self.Sigma <<= (M_units / R_units**2)
@@ -1091,7 +1097,7 @@ class Model(lp.limepy):
 
         self.age = age << u.Gyr
         self.FeH = FeH
-        self.vesc = vesc << (u.km / u.s)
+        self.vesc0 = vesc << (u.km / u.s)
 
         self.observations = observations
 
@@ -1112,7 +1118,7 @@ class Model(lp.limepy):
             BH_ret_int=BH_ret_int,
             BH_ret_dyn=BHret / 100.,
             natal_kicks=natal_kicks,
-            vesc=self.vesc.value
+            vesc=self.vesc0.value
         )
 
         self._mf = EvolvedMF(**self._mf_kwargs)
@@ -1231,6 +1237,10 @@ class Model(lp.limepy):
         # ------------------------------------------------------------------
         # Get some derived quantities
         # ------------------------------------------------------------------
+
+        # Escape Velocity
+
+        self.vesc = np.sqrt(2 * self.phi)
 
         # Relaxation Time
 
@@ -1473,6 +1483,7 @@ class SingleMassModel(lp.limepy):
         self.v2p <<= V2_units
         self.s2 <<= V2_units
 
+        self.phi <<= V2_units
         self.rho <<= (M_units / R_units**3)
         self.Sigma <<= (M_units / R_units**2)
 

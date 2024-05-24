@@ -2851,6 +2851,119 @@ class _ClusterVisualizer:
 
         return fig
 
+    @_support_units
+    def plot_potential(self, fig=None, ax=None, *, x_unit='pc',
+                       label_position='left', verbose_label=True, **kwargs):
+        r'''Plot model potential profile.
+
+        Plots the total radial gravitational potential (`self.phi`) profile of
+        this model.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot the profiles. Should be a
+            part of the given `fig`.
+
+        x_unit : u.Unit, optional
+            Units to convert the x axis to. By default, x-units are in parsecs.
+
+        label_position : {'top', 'left', 'right'}, optional
+            Where to place the quantity (y) label. If "top", will be
+            set as the ax title, otherwise will be set to one side. If on a
+            side, will also attempt to correctly append the units to the end
+            of the label. Defaults to the left.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "Potential",
+            otherwise "$\Phi$".
+
+        **kwargs : dict, optional
+            All other arguments are passed to `_plot_profile`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        self._plot_profile(ax, None, None, self.phi,
+                           x_unit=x_unit, mass_bins=[0], label_masses=False,)
+
+        label = "Potential" if verbose_label else r'$\Phi$'
+
+        self._set_ylabel(ax, label, self.phi.unit, label_position)
+        self._set_xlabel(ax, unit=x_unit)
+
+        ax.set_yscale("log")
+        ax.set_xscale("log")
+
+        return fig
+
+    @_support_units
+    def plot_vesc(self, fig=None, ax=None, *, x_unit='pc',
+                  label_position='left', verbose_label=True, **kwargs):
+        r'''Plot model escape velocity profile.
+
+        Plots the escape velocity profile (`self.vesc`) of this model, as
+        given by :math:`v_{\mathrm{esc}}=\sqrt{2 |\phi(r)|}`.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot the profiles. Should be a
+            part of the given `fig`.
+
+        x_unit : u.Unit, optional
+            Units to convert the x axis to. By default, x-units are in parsecs.
+
+        label_position : {'top', 'left', 'right'}, optional
+            Where to place the quantity (y) label. If "top", will be
+            set as the ax title, otherwise will be set to one side. If on a
+            side, will also attempt to correctly append the units to the end
+            of the label. Defaults to the left.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "Escape Velocity",
+            otherwise "$v_{\mathrm{esc}}$".
+
+        **kwargs : dict, optional
+            All other arguments are passed to `_plot_profile`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        self._plot_profile(ax, None, None, self.vesc,
+                           x_unit=x_unit, mass_bins=[0], label_masses=False,)
+
+        label = "Escape Velocity" if verbose_label else r'$v_{\mathrm{esc}}$'
+
+        self._set_ylabel(ax, label, self.vesc.unit, label_position)
+        self._set_xlabel(ax, unit=x_unit)
+
+        ax.set_xscale("log")
+
+        return fig
+
     # -----------------------------------------------------------------------
     # Goodness of fit statistics
     # -----------------------------------------------------------------------
@@ -3172,6 +3285,9 @@ class ModelVisualizer(_ClusterVisualizer):
 
         self.pm_tot = np.sqrt(0.5 * (self.pm_T**2 + self.pm_R**2))
         self.pm_ratio = self.pm_T / self.pm_R
+
+        self.phi = model.phi[np.newaxis, np.newaxis, :]
+        self.vesc = model.vesc[np.newaxis, np.newaxis, :]
 
         self._init_numdens(model, self.obs)
         self._init_massfunc(model, self.obs)
@@ -3777,6 +3893,11 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         vaj = np.full((Nm, N, Nr), np.nan) << u.dimensionless_unscaled
 
+        # Potential
+
+        phi = np.full((1, N, Nr), np.nan) << huge_model.phi.unit
+        vesc = np.full((1, N, Nr), np.nan) << vel_unit
+
         # mass density
 
         rho_unit = huge_model.rhoj.unit
@@ -3900,6 +4021,11 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             slc = (0, model_ind, slice(None))
 
+            # Potential
+
+            phi[slc] = util.QuantitySpline(model.r, model.phi)(viz.r)
+            vesc[slc] = util.QuantitySpline(model.r, model.vesc)(viz.r)
+
             # Mass Densities
 
             rho_MS[slc], rho_tot[slc], rho_BH[slc], \
@@ -3970,6 +4096,9 @@ class CIModelVisualizer(_ClusterVisualizer):
         viz.pm_tot = np.transpose(perc(vtotj, q, axis=1), axes)
         viz.pm_ratio = np.transpose(perc(vaj, q, axis=1), axes)
         viz.LOS = np.transpose(perc(vpj, q, axis=1), axes)
+
+        viz.phi = np.transpose(perc(phi, q, axis=1), axes)
+        viz.vesc = np.transpose(perc(vesc, q, axis=1), axes)
 
         viz.rho_MS = np.transpose(perc(rho_MS, q, axis=1), axes)
         viz.rho_tot = np.transpose(perc(rho_tot, q, axis=1), axes)
@@ -4324,7 +4453,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             profile_keys = (
                 'rho_MS', 'rho_tot', 'rho_BH', 'rho_WD', 'rho_NS',
-                'pm_T', 'pm_R', 'pm_tot', 'pm_ratio', 'LOS',
+                'pm_T', 'pm_R', 'pm_tot', 'pm_ratio', 'LOS', 'phi', 'vesc',
                 'Sigma_MS', 'Sigma_tot', 'Sigma_BH', 'Sigma_WD',
                 'Sigma_NS', 'cum_M_MS', 'cum_M_tot', 'cum_M_BH', 'cum_M_WD',
                 'cum_M_NS', 'frac_M_MS', 'frac_M_rem', 'numdens'
