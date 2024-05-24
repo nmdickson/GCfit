@@ -2572,8 +2572,7 @@ class _ClusterVisualizer:
         self._set_ylabel(ax, 'Mass Density', self.rho_tot.unit, label_position)
         self._set_xlabel(ax, unit=x_unit)
 
-        fig.legend(loc='upper center', ncol=6,
-                   bbox_to_anchor=(0.5, 1.), fancybox=True)
+        ax.legend(loc='upper center', ncol=len(kind), fancybox=True)
 
         return fig
 
@@ -2676,8 +2675,7 @@ class _ClusterVisualizer:
                          label_position)
         self._set_xlabel(ax, unit=x_unit)
 
-        fig.legend(loc='upper center', ncol=6,
-                   bbox_to_anchor=(0.5, 1.), fancybox=True)
+        ax.legend(loc='upper center', ncol=len(kind), fancybox=True)
 
         return fig
 
@@ -2773,9 +2771,7 @@ class _ClusterVisualizer:
                          label_position)
         self._set_xlabel(ax, unit=x_unit)
 
-        # TODO stop ever doing fig.legend, put legend on inside of ax
-        #   also maybe make it optional
-        ax.legend(loc='lower center', ncol=5, fancybox=True)
+        ax.legend(loc='lower center', ncol=len(kind), fancybox=True)
 
         return fig
 
