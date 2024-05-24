@@ -2914,7 +2914,7 @@ class _ClusterVisualizer:
         r'''Plot model escape velocity profile.
 
         Plots the escape velocity profile (`self.vesc`) of this model, as
-        given by :math:`\sqrt{2 |\phi(r)|}`.
+        given by :math:`v_{\mathrm{esc}}=\sqrt{2 |\phi(r)|}`.
 
         Parameters
         ----------
@@ -2938,8 +2938,8 @@ class _ClusterVisualizer:
             of the label. Defaults to the left.
 
         verbose_label : bool, optional
-            If True (default), quantity label will be "Potential",
-            otherwise "$\Phi$".
+            If True (default), quantity label will be "Escape Velocity",
+            otherwise "$v_{\mathrm{esc}}$".
 
         **kwargs : dict, optional
             All other arguments are passed to `_plot_profile`.
