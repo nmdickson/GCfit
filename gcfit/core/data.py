@@ -3,6 +3,7 @@ from .. import util
 import h5py
 import numpy as np
 import limepy as lp
+from scipy import integrate
 from astropy import units as u
 from astropy import constants as const
 from ssptools import EvolvedMF
@@ -1265,6 +1266,23 @@ class Model(lp.limepy):
                              * (self.BH.mavg / self.nonBH.mavg)**(1.5))
 
         self.spitzer_stable = (self._spitzer_chi < 0.16)
+
+        # Mass segregation (see Weatherford et al. 2018, projected quantities)
+        # 0.8, 0.4 Msun taken from Weatherford et al. 2020, but are arbitrary
+
+        pop_1 = (np.abs(self.mj - (0.8 << u.Msun))).argmin()
+        pop_2 = (np.abs(self.mj - (0.4 << u.Msun))).argmin()
+
+        mc = self.mcpj / np.repeat(self.mcpj[:, -1, None], self.r.size, axis=1)
+
+        self._r50_1 = np.interp(0.5, mc[pop_1], self.r)
+        self._r50_2 = np.interp(0.5, mc[pop_2], self.r)
+
+        self.delta_r50 = (self._r50_2 - self._r50_1) / self.rhp
+
+        A = integrate.simpson(x=self.r, y=mc)
+
+        self.delta_A = (A[pop_1] - A[pop_2]) / self.rhp.value  # TODO units?
 
     # ----------------------------------------------------------------------
     # Alternative generators
