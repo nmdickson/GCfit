@@ -3565,6 +3565,9 @@ class CIModelVisualizer(_ClusterVisualizer):
         ax.hist(quant, histtype='stepfilled',
                 ec=color, fc=facecolor, lw=2, **kwargs)
 
+        if xlabel is None:
+            xlabel = quant_name
+
         self._set_xlabel(ax, xlabel, unit=quant.unit)
 
         return fig
