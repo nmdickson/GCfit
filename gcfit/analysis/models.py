@@ -3279,6 +3279,9 @@ class ModelVisualizer(_ClusterVisualizer):
         self.trh = model.trh
         self.N_relax = model.N_relax
 
+        self.delta_r50 = model.delta_r50
+        self.delta_A = model.delta_A
+
         self.LOS = np.sqrt(self.model.v2pj)[:, np.newaxis, :]
         self.pm_T = np.sqrt(model.v2Tj)[:, np.newaxis, :]
         self.pm_R = np.sqrt(model.v2Rj)[:, np.newaxis, :]
@@ -3973,6 +3976,11 @@ class CIModelVisualizer(_ClusterVisualizer):
         trh = np.full(N, np.nan) << u.Gyr
         N_relax = np.full(N, np.nan) << u.dimensionless_unscaled
 
+        # Mass segregation
+
+        delta_r50 = np.full(N, np.nan) << u.dimensionless_unscaled
+        delta_A = np.full(N, np.nan) << u.dimensionless_unscaled
+
         # ------------------------------------------------------------------
         # Setup iteration and pooling
         # ------------------------------------------------------------------
@@ -4081,6 +4089,9 @@ class CIModelVisualizer(_ClusterVisualizer):
             trh[model_ind] = model.trh
             N_relax[model_ind] = model.N_relax
 
+            delta_r50[model_ind] = model.delta_r50
+            delta_A[model_ind] = model.delta_A
+
         # ------------------------------------------------------------------
         # compute and store the percentiles and medians
         # ------------------------------------------------------------------
@@ -4152,6 +4163,9 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         viz.trh = trh
         viz.N_relax = N_relax
+
+        viz.delta_r50 = delta_r50
+        viz.delta_A = delta_A
 
         return viz
 
@@ -4474,7 +4488,8 @@ class CIModelVisualizer(_ClusterVisualizer):
             quant_keys = (
                 'f_rem', 'f_BH', 'BH_mass', 'BH_num',
                 'r0', 'rt', 'rh', 'rhp', 'ra', 'rv', 'mmean', 'volume',
-                'BH_rh', 'spitzer_chi', 'trh', 'N_relax', 'K_scale'
+                'BH_rh', 'spitzer_chi', 'trh', 'N_relax', 'K_scale',
+                'delta_r50', 'delta_A'
             )
 
             for key in quant_keys:
