@@ -3546,8 +3546,32 @@ class CIModelVisualizer(_ClusterVisualizer):
     '''
 
     @_ClusterVisualizer._support_units
-    def plot_f_rem(self, fig=None, ax=None, bins='auto', color='tab:blue',
-                   verbose_label=True):
+    def _plot_quantity(self, quant_name, fig=None, ax=None,
+                       color='tab:blue', xlabel=None, **kwargs):
+        '''Helper function for plotting histograms of singular quantities.'''
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        quant = getattr(self, quant_name)
+
+        if quant.ndim > 1:
+            mssg = (f"Invalid shape of quantity array {quant.shape}, "
+                    "must be 1-dimensional")
+            raise ValueError(mssg)
+
+        color = mpl_clr.to_rgb(color)
+        facecolor = color + (0.33, )
+
+        ax.hist(quant, histtype='stepfilled',
+                ec=color, fc=facecolor, lw=2, **kwargs)
+
+        self._set_xlabel(ax, xlabel, unit=quant.unit)
+
+        return fig
+
+    @_ClusterVisualizer._support_units
+    def plot_f_rem(self, fig=None, ax=None, color='tab:blue',
+                   verbose_label=True, **kwargs):
         r'''Plot the remnant fraction of this model.
 
         Plots a histogram of the values of the total remnant mass fraction
@@ -3565,10 +3589,6 @@ class CIModelVisualizer(_ClusterVisualizer):
             An axes instance on which to plot this quantity. Should be a
             part of the given `fig`.
 
-        bins : int or sequence or str
-            Bins to use creating the histogram of this quantity.
-            See `plt.hist` for more details.
-
         color : color, optional
             The colour of the plotted histogram. This colour will be applied to
             the edge (border) of the histogram as is, and to the face at 33%
@@ -3578,32 +3598,23 @@ class CIModelVisualizer(_ClusterVisualizer):
             If True (default), quantity label will be "Remnant Fraction",
             otherwise "$f_{\mathrm{remn}}$".
 
+        **kwargs : dict, optional
+            All other arguments are passed to `plt.hist`.
+
         Returns
         -------
         matplotlib.figure.Figure
             The corresponding figure, containing all axes and plot artists.
         '''
 
-        fig, ax = self._setup_artist(fig, ax)
+        label = "Remnant Fraction" if verbose_label else r'$f_{\mathrm{remn}}$'
 
-        color = mpl_clr.to_rgb(color)
-        facecolor = color + (0.33, )
-
-        ax.hist(self.f_rem, histtype='stepfilled',
-                bins=bins, ec=color, fc=facecolor, lw=2)
-
-        if verbose_label:
-            label = "Remnant Fraction"
-        else:
-            label = r'$f_{\mathrm{remn}}$'
-
-        self._set_xlabel(ax, label, unit=self.f_rem.unit)
-
-        return fig
+        return self._plot_quantity('f_rem', fig=fig, ax=ax, color=color,
+                                   xlabel=label, **kwargs)
 
     @_ClusterVisualizer._support_units
-    def plot_f_BH(self, fig=None, ax=None, bins='auto', color='tab:blue',
-                  verbose_label=True):
+    def plot_f_BH(self, fig=None, ax=None, color='tab:blue',
+                  verbose_label=True, **kwargs):
         r'''Plot the BH fraction of this model.
 
         Plots a histogram of the values of the total black hole mass fraction
@@ -3621,10 +3632,6 @@ class CIModelVisualizer(_ClusterVisualizer):
             An axes instance on which to plot this quantity. Should be a
             part of the given `fig`.
 
-        bins : int or sequence or str
-            Bins to use creating the histogram of this quantity.
-            See `plt.hist` for more details.
-
         color : color, optional
             The colour of the plotted histogram. This colour will be applied to
             the edge (border) of the histogram as is, and to the face at 33%
@@ -3634,32 +3641,23 @@ class CIModelVisualizer(_ClusterVisualizer):
             If True (default), quantity label will be "BH Mass Fraction",
             otherwise "$f_{\mathrm{BH}}$".
 
+        **kwargs : dict, optional
+            All other arguments are passed to `plt.hist`.
+
         Returns
         -------
         matplotlib.figure.Figure
             The corresponding figure, containing all axes and plot artists.
         '''
 
-        fig, ax = self._setup_artist(fig, ax)
+        label = "BH Mass Fraction" if verbose_label else r'$f_{\mathrm{BH}}$'
 
-        color = mpl_clr.to_rgb(color)
-        facecolor = color + (0.33, )
-
-        ax.hist(self.f_BH, histtype='stepfilled',
-                bins=bins, ec=color, fc=facecolor, lw=2)
-
-        if verbose_label:
-            label = "BH Mass Fraction"
-        else:
-            label = r'$f_{\mathrm{BH}}$'
-
-        self._set_xlabel(ax, label, unit=self.f_BH.unit)
-
-        return fig
+        return self._plot_quantity('f_BH', fig=fig, ax=ax, color=color,
+                                   xlabel=label, **kwargs)
 
     @_ClusterVisualizer._support_units
-    def plot_BH_mass(self, fig=None, ax=None, bins='auto', color='tab:blue',
-                     verbose_label=True):
+    def plot_BH_mass(self, fig=None, ax=None, color='tab:blue',
+                     verbose_label=True, **kwargs):
         r'''Plot the BH mass of this model.
 
         Plots a histogram of the values of the total black hole mass in the
@@ -3677,10 +3675,6 @@ class CIModelVisualizer(_ClusterVisualizer):
             An axes instance on which to plot this quantity. Should be a
             part of the given `fig`.
 
-        bins : int or sequence or str
-            Bins to use creating the histogram of this quantity.
-            See `plt.hist` for more details.
-
         color : color, optional
             The colour of the plotted histogram. This colour will be applied to
             the edge (border) of the histogram as is, and to the face at 33%
@@ -3690,32 +3684,23 @@ class CIModelVisualizer(_ClusterVisualizer):
             If True (default), quantity label will be "BH Mass",
             otherwise "$\mathrm{M}_{\mathrm{BH}}$".
 
+        **kwargs : dict, optional
+        All other arguments are passed to `plt.hist`.
+
         Returns
         -------
         matplotlib.figure.Figure
             The corresponding figure, containing all axes and plot artists.
         '''
 
-        fig, ax = self._setup_artist(fig, ax)
+        label = "BH Mass" if verbose_label else r'$\mathrm{M}_{\mathrm{BH}}$'
 
-        color = mpl_clr.to_rgb(color)
-        facecolor = color + (0.33, )
-
-        ax.hist(self.BH_mass, histtype='stepfilled',
-                bins=bins, ec=color, fc=facecolor, lw=2)
-
-        if verbose_label:
-            label = "BH Mass"
-        else:
-            label = r'$\mathrm{M}_{\mathrm{BH}}$'
-
-        self._set_xlabel(ax, label, unit=self.BH_mass.unit)
-
-        return fig
+        return self._plot_quantity('BH_mass', fig=fig, ax=ax, color=color,
+                                   xlabel=label, **kwargs)
 
     @_ClusterVisualizer._support_units
-    def plot_BH_num(self, fig=None, ax=None, bins='auto', color='tab:blue',
-                    verbose_label=True):
+    def plot_BH_num(self, fig=None, ax=None, color='tab:blue',
+                    verbose_label=True, **kwargs):
         r'''Plot the number of BHs in this model.
 
         Plots a histogram of the values of the total amount of black holes
@@ -3733,10 +3718,6 @@ class CIModelVisualizer(_ClusterVisualizer):
             An axes instance on which to plot this quantity. Should be a
             part of the given `fig`.
 
-        bins : int or sequence or str
-            Bins to use creating the histogram of this quantity.
-            See `plt.hist` for more details.
-
         color : color, optional
             The colour of the plotted histogram. This colour will be applied to
             the edge (border) of the histogram as is, and to the face at 33%
@@ -3746,28 +3727,19 @@ class CIModelVisualizer(_ClusterVisualizer):
             If True (default), quantity label will be "BH Amount",
             otherwise "$\mathrm{N}_{\mathrm{BH}}$".
 
+        **kwargs : dict, optional
+            All other arguments are passed to `plt.hist`.
+
         Returns
         -------
         matplotlib.figure.Figure
             The corresponding figure, containing all axes and plot artists.
         '''
 
-        fig, ax = self._setup_artist(fig, ax)
+        label = "BH Amount" if verbose_label else r'$\mathrm{N}_{\mathrm{BH}}$'
 
-        color = mpl_clr.to_rgb(color)
-        facecolor = color + (0.33, )
-
-        ax.hist(self.BH_num, histtype='stepfilled',
-                bins=bins, ec=color, fc=facecolor, lw=2)
-
-        if verbose_label:
-            label = "BH Amount"
-        else:
-            label = r'$\mathrm{N}_{\mathrm{BH}}$'
-
-        self._set_xlabel(ax, label, unit=self.BH_num.unit)
-
-        return fig
+        return self._plot_quantity('BH_num', fig=fig, ax=ax, color=color,
+                                   xlabel=label, **kwargs)
 
     def __init__(self, observations):
         self.obs = observations
