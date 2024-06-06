@@ -15,8 +15,8 @@ dependencies = [
     "numpy",
     "scipy",
     "astropy",
-    "astro-limepy @ git+https://github.com/mgieles/limepy.git",
-    "ssptools @ git+https://github.com/SMU-clusters/ssptools.git",
+    "astro-limepy",
+    "astro-ssptools",
     "emcee",
     "dynesty",
     "h5py",
@@ -31,7 +31,7 @@ dependencies = [
 ]
 
 classifiers = [
-  "Development Status :: 4 - Beta",
+  "Development Status :: 5 - Production/Stable",
   "Programming Language :: Python",
   "License :: OSI Approved :: MIT License",
   "Intended Audience :: Science/Research",
