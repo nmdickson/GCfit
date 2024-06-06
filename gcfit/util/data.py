@@ -101,9 +101,7 @@ def _open_resources():
 
 def core_cluster_list():
     '''Return a list of cluster names, useable by `gcfit.Observations`'''
-
-    with _open_resources() as datadir:
-        return [f.stem for f in pathlib.Path(datadir).glob('[!TEST]*.hdf')]
+    return [f.stem for f in _open_resources().glob('[!TEST]*.hdf')]
 
 
 # TODO could switch this up to use ClusterFile maybe?
@@ -182,16 +180,15 @@ def hdf_view(cluster, attrs=False, spacing='normal', *, outfile="stdout"):
     # ----------------------------------------------------------------------
 
     # TODO use get_std_cluster_name here
-    with _open_resources() as datadir:
-        with h5py.File(f'{datadir}/{cluster}.hdf', 'r') as file:
+    with h5py.File(f'{_open_resources()}/{cluster}.hdf', 'r') as file:
 
-            out = f"{f' {cluster} ':=^40}\n\n"
+        out = f"{f' {cluster} ':=^40}\n\n"
 
-            if attrs:
-                out += '\n'.join(f"|- {k}: {v}" for k, v in file.attrs.items())
-                out += '\n\n'
+        if attrs:
+            out += '\n'.join(f"|- {k}: {v}" for k, v in file.attrs.items())
+            out += '\n\n'
 
-            out += _crawler(file)
+        out += _crawler(file)
 
     # ----------------------------------------------------------------------
     # Write the ouput
@@ -381,8 +378,7 @@ def get_cluster_path(name, standardize_name=True, restrict_to=None):
     # Get full paths to each file
     local_file = pathlib.Path(local_dir, filename)
 
-    with _open_resources() as core_dir:
-        core_file = pathlib.Path(core_dir, std_filename)
+    core_file = pathlib.Path(_open_resources(), std_filename)
 
     # ----------------------------------------------------------------------
     # Check which files exists and return based on restrict_to
@@ -514,11 +510,11 @@ class ClusterFile:
 
             # TODO Add a flag that this is a local file? or only n Observations?
 
-            with _open_resources() as core_dir:
-                core_file = pathlib.Path(core_dir, std_name).with_suffix('.hdf')
-                shutil.copyfile(core_file, local_file)
+            core_dir = _open_resources()
+            core_file = pathlib.Path(core_dir, std_name).with_suffix('.hdf')
+            shutil.copyfile(core_file, local_file)
 
-                self.file = h5py.File(local_file, 'r+')
+            self.file = h5py.File(local_file, 'r+')
 
         # else make a new local file
         else:
@@ -1086,9 +1082,8 @@ class ClusterFile:
     def _test_dataset(self, key, dataset):
         '''Make all checks of this dataset.'''
 
-        with _open_resources() as datadir:
-            with open(f'{datadir}/specification.json') as ofile:
-                fullspec = json.load(ofile)
+        with open(f'{_open_resources()}/specification.json') as ofile:
+            fullspec = json.load(ofile)
 
         for spec_pattern in fullspec.keys() - {'INITIALS', 'METADATA'}:
             if fnmatch.fnmatch(key, spec_pattern):
@@ -1122,9 +1117,8 @@ class ClusterFile:
     def _test_metadata(self, metadata):
         '''Make all checks of this metadata.'''
 
-        with _open_resources() as datadir:
-            with open(f'{datadir}/specification.json') as ofile:
-                mdata_spec = json.load(ofile)['METADATA']
+        with open(f'{_open_resources()}/specification.json') as ofile:
+            mdata_spec = json.load(ofile)['METADATA']
 
         valid = True
 
@@ -1146,9 +1140,8 @@ class ClusterFile:
     def _test_initials(self, initials):
         '''Make all checks of these initials.'''
 
-        with _open_resources() as datadir:
-            with open(f'{datadir}/specification.json') as ofile:
-                init_spec = json.load(ofile)['INITIALS']
+        with open(f'{_open_resources()}/specification.json') as ofile:
+            init_spec = json.load(ofile)['INITIALS']
 
         valid = True
 
