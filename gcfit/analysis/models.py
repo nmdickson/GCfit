@@ -2271,7 +2271,7 @@ class _ClusterVisualizer:
 
             if sf.legends:
                 old_leg = sf.legends[0]
-                handles = old_leg.legendHandles + [lbl_fake]
+                handles = old_leg.legend_handles + [lbl_fake]
 
                 sf.legend(handles=handles, **loc)
                 old_leg.remove()
