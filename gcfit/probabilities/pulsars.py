@@ -487,10 +487,9 @@ def field_Pdot_KDE(*, pulsar_db='field_msp.dat'):
 
     # Get field pulsars data
 
-    with _open_resources() as datadir:
-        pulsar_db = pathlib.Path(f"{datadir}/{pulsar_db}")
-        cols = (0, 3, 6, 7, 8, 9)
-        P, Pdot, Pdot_pm, lat, lon, D = np.genfromtxt(pulsar_db, usecols=cols).T
+    pulsar_db = pathlib.Path(f"{_open_resources()}/{pulsar_db}")
+    cols = (0, 3, 6, 7, 8, 9)
+    P, Pdot, Pdot_pm, lat, lon, D = np.genfromtxt(pulsar_db, usecols=cols).T
 
     lat <<= u.deg
     lon <<= u.deg
