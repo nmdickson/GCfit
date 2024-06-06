@@ -50,8 +50,14 @@ GCfitter = "gcfit.scripts:GCfitter.main"
 generate_model_CI = "gcfit.scripts:generate_model_CI.main"
 
 [build-system]
-requires = ["setuptools", "setuptools-scm"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.setuptools.package-data]
-"gcfit.resources" = ["*.hdf", "*msp.dat"]
+[tool.hatch.build]
+include = [
+  "/gcfit/resources/*.hdf",
+  "/gcfit/resources/*msp.dat",
+]
+
+[tool.hatch.metadata]
+allow-direct-references = true
