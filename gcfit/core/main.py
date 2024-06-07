@@ -11,10 +11,12 @@ import dynesty.dynamicsampler as dysamp
 
 import sys
 import time
+import enum
 import shutil
 import logging
 import pathlib
 import datetime
+from typing import Union
 from collections import abc
 
 
@@ -23,6 +25,23 @@ __all__ = ['MCMC_fit', 'nested_fit']
 
 _here = pathlib.Path()
 _str_types = (str, bytes)
+
+
+# TODO would be useful to include current state in all GCfitter logging calls
+class MCMCFittingState(enum.IntEnum):
+    START = 0  # Before sampling begins
+    SAMPLING = 3  # During sampling
+    POST_SAMPLING = 4  # After sampling
+    FINAL = 5  # Fitting complete
+
+
+class NestedFittingState(enum.IntEnum):
+    START = 0  # Before sampling begins
+    INITIAL_SAMPLING = 1  # During sampling of initial batch
+    POST_INITIAL = 2  # After sampling of initial batch
+    DYNAMIC_SAMPLING = 3  # During sampling of dynamically allocated batches
+    POST_DYNAMIC = 4  # After dynamic sampling
+    FINAL = 5  # Fitting complete
 
 
 class Output:
@@ -107,6 +126,9 @@ class Output:
 
         if not file:
             hdf.close()
+
+    def set_state(self, state: Union[NestedFittingState, MCMCFittingState]):
+        self.store_metadata('STATE', state.value)
 
 
 class MCMCOutput(emcee.backends.HDFBackend, Output):
@@ -445,6 +467,8 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     # backend = emcee.backends.HDFBackend(backend_fn)
     backend = MCMCOutput(backend_fn)
 
+    backend.set_state(MCMCFittingState.START)
+
     accept_rate = np.empty((Niters, Nwalkers))
     iter_rate = np.empty(Niters)
 
@@ -524,6 +548,8 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
         t0 = t = time.time()
 
+        backend.set_state(MCMCFittingState.SAMPLING)
+
         # TODO implement cont_run
         # Set initial state to None if resuming run (`cont_run`)
         for _ in sampler.sample(init_pos, iterations=Niters, progress=progress):
@@ -557,6 +583,8 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
     logging.info("Finished iteration")
 
+    backend.set_state(MCMCFittingState.POST_SAMPLING)
+
     # ----------------------------------------------------------------------
     # Write extra metadata and statistics to output (backend) file
     # ----------------------------------------------------------------------
@@ -570,6 +598,8 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     backend.store_dataset('acceptance_rate', accept_rate)
 
     logging.debug(f"Final state: {sampler}")
+
+    backend.set_state(MCMCFittingState.FINAL)
 
     # ----------------------------------------------------------------------
     # Print some verbose results to stdout
@@ -800,6 +830,8 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
     backend = NestedSamplingOutput(backend_fn)
 
+    backend.set_state(NestedFittingState.START)
+
     # ----------------------------------------------------------------------
     # Setup multi-processing pool
     # ----------------------------------------------------------------------
@@ -895,14 +927,21 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         weight_kw = {'pfrac': pfrac, 'maxfrac': maxfrac}
 
         # runs an initial set of set samples, as if using `NestedSampler`
+
+        backend.set_state(NestedFittingState.INITIAL_SAMPLING)
+
         for _ in sampler.sample_initial(**initial_kwargs):
             backend.store_results(sampler.results)
+
+        backend.set_state(NestedFittingState.POST_INITIAL)
 
         # Repeat the storage because some attrs are added after loop completes
         backend.store_results(sampler.results)
 
         tn = datetime.timedelta(seconds=time.time() - t0)
         logging.info(f"Beginning dynamic batch sampling ({tn})")
+
+        backend.set_state(NestedFittingState.DYNAMIC_SAMPLING)
 
         # run the dynamic sampler in batches, until the stop condition is met
         while not dysamp.stopping_function(sampler.results, args=stop_kw,
@@ -929,6 +968,8 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
     logging.info("Finished sampling")
 
+    backend.set_state(NestedFittingState.POST_DYNAMIC)
+
     # ----------------------------------------------------------------------
     # Write extra metadata and statistics to output (backend) file
     # ----------------------------------------------------------------------
@@ -937,6 +978,8 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
     backend.store_metadata('runtime', tf.total_seconds())
 
     logging.debug(f"Final state: {sampler} ({tf})")
+
+    backend.set_state(NestedFittingState.FINAL)
 
     # ----------------------------------------------------------------------
     # Print some verbose results to stdout

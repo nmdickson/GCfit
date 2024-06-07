@@ -1,5 +1,6 @@
 from .. import Observations
 from ..probabilities import priors
+from ..core.main import MCMCFittingState, NestedFittingState
 from .models import CIModelVisualizer, ModelVisualizer, ModelCollection
 
 import sys
@@ -419,6 +420,20 @@ class _SingleRunAnalysis(_RunAnalysis):
         else:
             self.mask |= mask
 
+    @property
+    def state(self):
+        '''Return a flag representing where in the fitting this run reached.'''
+
+        scls = MCMCFittingState if self._gname == 'mcmc' else NestedFittingState
+
+        with self._openfile('metadata') as mdata:
+            try:
+                return scls(mdata.attrs.get('STATE', -1))
+
+            except ValueError as err:
+                mssg = "No valid fitting state was stored. Is this an old run?"
+                raise RuntimeError(mssg) from err
+
     def __str__(self):
         try:
             return f'{self._filename} - Run Results'
@@ -441,6 +456,24 @@ class _SingleRunAnalysis(_RunAnalysis):
                         "Are you sure this was created by GCfit?")
 
                 raise RuntimeError(mssg)
+
+            # Check what the state of the fit was
+            fitting_state = file['metadata'].attrs.get('STATE', -1)
+
+            # works for both mcmc & nested
+            if fitting_state < MCMCFittingState.START:
+                # assume this is just an old fit, we cannot say what state
+                pass
+
+            elif fitting_state < MCMCFittingState.SAMPLING:
+                mssg = ("This fit did not begin final sampling; results are "
+                        "likely incorrect and some functionality may break.")
+                warnings.warn(mssg)
+
+            elif fitting_state < MCMCFittingState.FINAL:
+                mssg = ("This fit did not reach the full stopping conditions; "
+                        "sampling may not be fully converged.")
+                warnings.warn(mssg)
 
             # Check if this run seems to have used a local cluster data file
             restrict_to = file['metadata'].attrs.get('restrict_to', None)
