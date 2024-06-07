@@ -163,6 +163,12 @@ def plateau_weight_function(results, args=None, return_weights=False):
     allowing for it to end before reaching extremely low `dlogz`
     (this may not be valid if the plateau is a perfectly flat plateau, however).
 
+    Note
+    ----
+    This should not be required for `dynesty >= 2.1.0`, which has a more
+    explicit (and probably correct) handling of plateaus within the likelihood
+    sampling itself
+
     '''
     # TODO this^ explanation should be in some docs, not the docstring
 

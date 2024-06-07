@@ -1,7 +1,6 @@
 from .data import Observations
 from ..util.data import GCFIT_DIR
 from ..probabilities import posterior, priors
-from ..util.probabilities import plateau_weight_function
 
 import h5py
 import emcee
@@ -643,7 +642,7 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
 def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
                initial_kwargs=None, batch_kwargs=None,
-               pfrac=1.0, maxfrac=0.8, eff_samples=5000,
+               pfrac=1.0, maxfrac=0.8, eff_samples=5000, plat_wt_func=False,
                Ncpu=2, mpi=False, initials=None, param_priors=None,
                fixed_params=None, excluded_likelihoods=None, hyperparams=False,
                savedir=_here, restrict_to=None, verbose=False):
@@ -785,6 +784,12 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
     savedir = pathlib.Path(savedir)
     if not savedir.is_dir():
         raise ValueError(f"Cannot access '{savedir}': No such directory")
+
+    if plat_wt_func:
+        from ..util.probabilities import plateau_weight_function
+        wt_function = plateau_weight_function
+    else:
+        wt_function = dysamp.weight_function
 
     # ----------------------------------------------------------------------
     # Load obeservational data, determine which likelihoods are valid/desired
@@ -965,7 +970,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
             backend.reset_current_batch()
 
-            wt = plateau_weight_function(sampler.results, args=weight_kw)
+            wt = wt_function(sampler.results, args=weight_kw)
 
             tn = datetime.timedelta(seconds=time.time() - t0)
             logging.info(f"Sampling new batch bebtween logl bounds {wt} ({tn})")
