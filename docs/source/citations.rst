@@ -3,7 +3,9 @@ Citations
 =========
 
 ``GCfit`` was first introduced in
-`Dickson et al. (2023) <https://ui.adsabs.harvard.edu/abs/2023MNRAS.522.5320D>`_.
+`Dickson et al. (2023) <https://ui.adsabs.harvard.edu/abs/2023MNRAS.522.5320D>`_
+and updated in
+`Dickson et al. (2024) <https://ui.adsabs.harvard.edu/abs/2024MNRAS.529..331D>`_.
 
 If you find this package useful in your research, please consider citing the
 relevant papers below:
@@ -70,8 +72,9 @@ The equilibrium models used should be cited from the ``limepy`` paper:
 
 The mass evolution algorithm (`ssptools <https://github.com/SMU-clusters/ssptools>`_)
 is based off of the algorithm first introduced in
-`2018MNRAS.474.2479B <https://ui.adsabs.harvard.edu/abs/2018MNRAS.474.2479B>`_.
-
+`2018MNRAS.474.2479B <https://ui.adsabs.harvard.edu/abs/2018MNRAS.474.2479B>`_
+(and updated in
+`Dickson et al., 2023 <https://ui.adsabs.harvard.edu/abs/2023MNRAS.522.5320D>`_).
 
 
 Samplers
