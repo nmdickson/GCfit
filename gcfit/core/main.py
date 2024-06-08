@@ -371,108 +371,6 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     logging.info("BEGIN")
 
     # ----------------------------------------------------------------------
-    # Check arguments
-    # ----------------------------------------------------------------------
-
-    if fixed_params is None:
-        fixed_params = []
-
-    if excluded_likelihoods is None:
-        excluded_likelihoods = []
-
-    if param_priors is None:
-        param_priors = {}
-
-    if cont_run:
-        raise NotImplementedError
-
-    savedir = pathlib.Path(savedir)
-    if not savedir.is_dir():
-        raise ValueError(f"Cannot access '{savedir}': No such directory")
-
-    # ----------------------------------------------------------------------
-    # Load obeservational data, determine which likelihoods are valid/desired
-    # ----------------------------------------------------------------------
-
-    logging.info(f"Loading {cluster} data")
-
-    observations = Observations(cluster, restrict_to=restrict_to)
-
-    logging.debug(f"Observation datasets: {observations}")
-
-    likelihoods = observations.filter_likelihoods(excluded_likelihoods, True)
-
-    blobs_dtype = [(f'{key}/{func.__qualname__}', float)
-                   for (key, func, *_) in likelihoods]
-
-    logging.debug(f"Likelihood components: {likelihoods}")
-
-    # ----------------------------------------------------------------------
-    # Initialize the walker positions
-    # ----------------------------------------------------------------------
-
-    # *_params -> list of keys, *_initials -> dictionary
-
-    spec_initials = initials
-
-    # get supplied initials, or read them from the data files if not given
-    if initials is None:
-        initials = observations.initials
-    else:
-        # fill manually supplied dict with defaults
-        initials = observations.initials | initials
-
-    logging.debug(f"Inital initals: {initials}")
-
-    if extraneous_params := (set(fixed_params) - initials.keys()):
-        raise ValueError(f"Invalid fixed parameters: {extraneous_params}")
-
-    variable_params = (initials.keys() - set(fixed_params))
-    if not variable_params:
-        raise ValueError(f"No non-fixed parameters left, fix less parameters")
-
-    # variable params sorting matters for setup of theta, but fixed does not
-    fixed_initials = {key: initials[key] for key in fixed_params}
-    variable_initials = {key: initials[key] for key in
-                         sorted(variable_params, key=list(initials).index)}
-
-    logging.debug(f"Fixed initals: {fixed_initials}")
-    logging.debug(f"Variable initals: {variable_initials}")
-
-    init_pos = np.fromiter(variable_initials.values(), np.float64)
-    init_pos = 1e-4 * np.random.randn(Nwalkers, init_pos.size) + init_pos
-
-    # ----------------------------------------------------------------------
-    # Setup and check param_priors
-    # ----------------------------------------------------------------------
-
-    spec_prior_type = {k: v[0] for k, v in param_priors.items()}
-    spec_prior_args = {k: v[1:] for k, v in param_priors.items()}
-
-    prior_likelihood = priors.Priors(param_priors)
-
-    # check if initials are outside priors, if so then error right here
-    if not np.isfinite(prior_likelihood(initials)):
-        raise ValueError("Initial positions outside prior boundaries")
-
-    # ----------------------------------------------------------------------
-    # Setup MCMC backend
-    # ----------------------------------------------------------------------
-
-    # TODO if not cont_run, need to make sure this file doesnt already exist
-    backend_fn = f"{savedir}/{cluster}_sampler.hdf"
-
-    logging.debug(f"Using hdf backend at {backend_fn}")
-
-    # backend = emcee.backends.HDFBackend(backend_fn)
-    backend = MCMCOutput(backend_fn)
-
-    backend.set_state(MCMCFittingState.START)
-
-    accept_rate = np.empty((Niters, Nwalkers))
-    iter_rate = np.empty(Niters)
-
-    # ----------------------------------------------------------------------
     # Setup multi-processing pool
     # ----------------------------------------------------------------------
 
@@ -486,6 +384,111 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
             logging.debug("This process is not master")
             pool.wait()
             sys.exit(0)
+
+        # ------------------------------------------------------------------
+        # Check arguments
+        # ------------------------------------------------------------------
+
+        if fixed_params is None:
+            fixed_params = []
+
+        if excluded_likelihoods is None:
+            excluded_likelihoods = []
+
+        if param_priors is None:
+            param_priors = {}
+
+        if cont_run:
+            raise NotImplementedError
+
+        savedir = pathlib.Path(savedir)
+        if not savedir.is_dir():
+            raise ValueError(f"Cannot access '{savedir}': No such directory")
+
+        # ------------------------------------------------------------------
+        # Setup MCMC backend
+        # ------------------------------------------------------------------
+
+        # TODO if not cont_run, need to make sure this file doesnt already exist
+        backend_fn = f"{savedir}/{cluster}_sampler.hdf"
+
+        logging.debug(f"Using hdf backend at {backend_fn}")
+
+        # backend = emcee.backends.HDFBackend(backend_fn)
+        backend = MCMCOutput(backend_fn)
+
+        backend.set_state(MCMCFittingState.START)
+
+        accept_rate = np.empty((Niters, Nwalkers))
+        iter_rate = np.empty(Niters)
+
+        # ------------------------------------------------------------------
+        # Load obeservational data, determine which likelihoods are
+        # valid/desired
+        # ------------------------------------------------------------------
+
+        logging.info(f"Loading {cluster} data")
+
+        observations = Observations(cluster, restrict_to=restrict_to)
+
+        logging.debug(f"Observation datasets: {observations}")
+
+        likelihoods = observations.filter_likelihoods(excluded_likelihoods,
+                                                      exclude=True)
+
+        blobs_dtype = [(f'{key}/{func.__qualname__}', float)
+                       for (key, func, *_) in likelihoods]
+
+        logging.debug(f"Likelihood components: {likelihoods}")
+
+        # ------------------------------------------------------------------
+        # Initialize the walker positions
+        # ------------------------------------------------------------------
+
+        # *_params -> list of keys, *_initials -> dictionary
+
+        spec_initials = initials
+
+        # get supplied initials, or read them from the data files if not given
+        if initials is None:
+            initials = observations.initials
+        else:
+            # fill manually supplied dict with defaults
+            initials = observations.initials | initials
+
+        logging.debug(f"Inital initals: {initials}")
+
+        if extraneous_params := (set(fixed_params) - initials.keys()):
+            raise ValueError(f"Invalid fixed parameters: {extraneous_params}")
+
+        variable_params = (initials.keys() - set(fixed_params))
+        if not variable_params:
+            mssg = f"No non-fixed parameters left, fix less parameters"
+            raise ValueError(mssg)
+
+        # variable params sorting matters for setup of theta, but fixed does not
+        fixed_initials = {key: initials[key] for key in fixed_params}
+        variable_initials = {key: initials[key] for key in
+                             sorted(variable_params, key=list(initials).index)}
+
+        logging.debug(f"Fixed initals: {fixed_initials}")
+        logging.debug(f"Variable initals: {variable_initials}")
+
+        init_pos = np.fromiter(variable_initials.values(), np.float64)
+        init_pos = 1e-4 * np.random.randn(Nwalkers, init_pos.size) + init_pos
+
+        # ------------------------------------------------------------------
+        # Setup and check param_priors
+        # ------------------------------------------------------------------
+
+        spec_prior_type = {k: v[0] for k, v in param_priors.items()}
+        spec_prior_args = {k: v[1:] for k, v in param_priors.items()}
+
+        prior_likelihood = priors.Priors(param_priors)
+
+        # check if initials are outside priors, if so then error right here
+        if not np.isfinite(prior_likelihood(initials)):
+            raise ValueError("Initial positions outside prior boundaries")
 
         # ------------------------------------------------------------------
         # Write run metadata to output (backend) file
@@ -731,109 +734,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
     logging.info("BEGIN NESTED SAMPLING")
 
     # ----------------------------------------------------------------------
-    # Check arguments
-    # ----------------------------------------------------------------------
-
-    if fixed_params is None:
-        fixed_params = []
-
-    if excluded_likelihoods is None:
-        excluded_likelihoods = []
-
-    if param_priors is None:
-        param_priors = {}
-
-    if initial_kwargs is None:
-        initial_kwargs = {}
-
-    if batch_kwargs is None:
-        batch_kwargs = {}
-
-    # Apply some better default sampler arguments
-    initial_kwargs = {'nlive': 100, 'dlogz': 0.25} | initial_kwargs
-    batch_kwargs = {'nlive_new': 100} | batch_kwargs
-
-    savedir = pathlib.Path(savedir)
-    if not savedir.is_dir():
-        raise ValueError(f"Cannot access '{savedir}': No such directory")
-
-    if plat_wt_func:
-        from ..util.probabilities import plateau_weight_function
-        wt_function = plateau_weight_function
-    else:
-        wt_function = dysamp.weight_function
-
-    # ----------------------------------------------------------------------
-    # Load obeservational data, determine which likelihoods are valid/desired
-    # ----------------------------------------------------------------------
-
-    logging.info(f"Loading {cluster} data")
-
-    observations = Observations(cluster, restrict_to=restrict_to)
-
-    logging.debug(f"Observation datasets: {observations}")
-
-    likelihoods = observations.filter_likelihoods(excluded_likelihoods, True)
-
-    logging.debug(f"Likelihood components: {likelihoods}")
-
-    # ----------------------------------------------------------------------
-    # Initialize the walker positions
-    # ----------------------------------------------------------------------
-
-    # *_params -> list of keys, *_initials -> dictionary
-
-    spec_initials = initials
-
-    # get supplied initials, or read them from the data files if not given
-    if initials is None:
-        initials = observations.initials
-    else:
-        # fill manually supplied dict with defaults
-        initials = observations.initials | initials
-
-    logging.debug(f"Inital initals: {initials}")
-
-    if extraneous_params := (set(fixed_params) - initials.keys()):
-        raise ValueError(f"Invalid fixed parameters: {extraneous_params}")
-
-    variable_params = (initials.keys() - set(fixed_params))
-    if not variable_params:
-        raise ValueError(f"No non-fixed parameters left, fix less parameters")
-
-    # variable params sorting matters for setup of theta, but fixed does not
-    fixed_initials = {key: initials[key] for key in fixed_params}
-    variable_initials = {key: initials[key] for key in
-                         sorted(variable_params, key=list(initials).index)}
-
-    logging.debug(f"Fixed initals: {fixed_initials}")
-    logging.debug(f"Variable initals: {variable_initials}")
-
-    # ----------------------------------------------------------------------
-    # Setup param_priors transforms
-    # ----------------------------------------------------------------------
-    # TODO shouldnt this function also accept Prior objects themselves?
-
-    spec_prior_type = {k: v[0] for k, v in param_priors.items()}
-    spec_prior_args = {k: v[1:] for k, v in param_priors.items()}
-
-    prior_kwargs = {'fixed_initials': fixed_initials, 'err_on_fail': False}
-    prior_transform = priors.PriorTransforms(param_priors, **prior_kwargs)
-
-    # ----------------------------------------------------------------------
-    # Setup Nested Sampling backend
-    # ----------------------------------------------------------------------
-
-    backend_fn = f"{savedir}/{cluster}_sampler.hdf"
-
-    logging.debug(f"Using hdf backend at {backend_fn}")
-
-    backend = NestedSamplingOutput(backend_fn)
-
-    backend.set_state(NestedFittingState.START)
-
-    # ----------------------------------------------------------------------
-    # Setup multi-processing pool
+    # Setup multi-processing pool (right at start to avoid repetition in mpi)
     # ----------------------------------------------------------------------
 
     logging.info("Beginning pool")
@@ -849,11 +750,114 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
             pool.wait()
             sys.exit(0)
 
-        ndim = len(variable_initials)
+        # ----------------------------------------------------------------------
+        # Check arguments
+        # ----------------------------------------------------------------------
 
-        # ----------------------------------------------------------------------
+        if fixed_params is None:
+            fixed_params = []
+
+        if excluded_likelihoods is None:
+            excluded_likelihoods = []
+
+        if param_priors is None:
+            param_priors = {}
+
+        if initial_kwargs is None:
+            initial_kwargs = {}
+
+        if batch_kwargs is None:
+            batch_kwargs = {}
+
+        # Apply some better default sampler arguments
+        initial_kwargs = {'nlive': 100, 'dlogz': 0.25} | initial_kwargs
+        batch_kwargs = {'nlive_new': 100} | batch_kwargs
+
+        savedir = pathlib.Path(savedir)
+        if not savedir.is_dir():
+            raise ValueError(f"Cannot access '{savedir}': No such directory")
+
+        if plat_wt_func:
+            from ..util.probabilities import plateau_weight_function
+            wt_function = plateau_weight_function
+        else:
+            wt_function = dysamp.weight_function
+
+        # ------------------------------------------------------------------
+        # Setup Nested Sampling backend
+        # ------------------------------------------------------------------
+
+        backend_fn = f"{savedir}/{cluster}_sampler.hdf"
+
+        logging.debug(f"Using hdf backend at {backend_fn}")
+
+        backend = NestedSamplingOutput(backend_fn)
+
+        backend.set_state(NestedFittingState.START)
+
+        # ------------------------------------------------------------------
+        # Load obeservational data, determine which likelihoods are
+        # valid/desired
+        # ------------------------------------------------------------------
+
+        logging.info(f"Loading {cluster} data")
+
+        observations = Observations(cluster, restrict_to=restrict_to)
+
+        logging.debug(f"Observation datasets: {observations}")
+
+        likelihoods = observations.filter_likelihoods(excluded_likelihoods,
+                                                      exclude=True)
+
+        logging.debug(f"Likelihood components: {likelihoods}")
+
+        # ------------------------------------------------------------------
+        # Initialize the walker positions
+        # ------------------------------------------------------------------
+
+        # *_params -> list of keys, *_initials -> dictionary
+
+        spec_initials = initials
+
+        # get supplied initials, or read them from the data files if not given
+        if initials is None:
+            initials = observations.initials
+        else:
+            # fill manually supplied dict with defaults
+            initials = observations.initials | initials
+
+        logging.debug(f"Inital initals: {initials}")
+
+        if extraneous_params := (set(fixed_params) - initials.keys()):
+            raise ValueError(f"Invalid fixed parameters: {extraneous_params}")
+
+        variable_params = (initials.keys() - set(fixed_params))
+        if not variable_params:
+            mssg = f"No non-fixed parameters left, fix less parameters"
+            raise ValueError(mssg)
+
+        # variable params sorting matters for setup of theta, but fixed does not
+        fixed_initials = {key: initials[key] for key in fixed_params}
+        variable_initials = {key: initials[key] for key in
+                             sorted(variable_params, key=list(initials).index)}
+
+        logging.debug(f"Fixed initals: {fixed_initials}")
+        logging.debug(f"Variable initals: {variable_initials}")
+
+        # ------------------------------------------------------------------
+        # Setup param_priors transforms
+        # ------------------------------------------------------------------
+        # TODO shouldnt this function also accept Prior objects themselves?
+
+        spec_prior_type = {k: v[0] for k, v in param_priors.items()}
+        spec_prior_args = {k: v[1:] for k, v in param_priors.items()}
+
+        prior_kwargs = {'fixed_initials': fixed_initials, 'err_on_fail': False}
+        prior_transform = priors.PriorTransforms(param_priors, **prior_kwargs)
+
+        # ------------------------------------------------------------------
         # Write run metadata to output (backend) file
-        # ----------------------------------------------------------------------
+        # ------------------------------------------------------------------
 
         backend.store_metadata('cluster', cluster)
 
@@ -867,6 +871,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         backend.store_metadata('mpi', mpi)
         backend.store_metadata('Ncpu', Ncpu)
 
+        ndim = len(variable_initials)
         backend.store_metadata('ndim', ndim)
         backend.store_metadata('pfrac', pfrac)
         backend.store_metadata('maxfrac', maxfrac)
