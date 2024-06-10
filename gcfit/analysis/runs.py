@@ -1593,6 +1593,8 @@ class NestedRun(_SingleRunAnalysis):
         except KeyError:
             r['bound'] = None
 
+        r['blob'] = np.full_like(r['logl'], np.nan)  # should be None, but okay
+
         return Results(r)
 
     def _reconstruct_bounds(self):
