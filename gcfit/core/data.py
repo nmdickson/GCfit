@@ -520,7 +520,6 @@ class Observations:
 
     def get_sources(self, fmt='bibtex'):
         '''Return a dict of formatted citations for each contained dataset'''
-        # TODO make this use dataset __citation__'s so it doesnt pull each time
 
         res = {}
 
@@ -536,11 +535,13 @@ class Observations:
                 res[key] = bibcode
 
             elif fmt == 'bibtex' or fmt is None:
-                res[key] = util.bibcode2bibtex(bibcode)
+                try:
+                    res[key] = util.bibcode2bibtex(bibcode)
+                except ValueError:
+                    res[key] = f'ERROR: INVALID BIBCODE {bibcode}'
 
-            elif fmt == 'citep':
-                # TODO allow some formats which we parse the bibtex into
-                raise NotImplementedError
+            elif fmt in ('cite', 'citep'):
+                res[key] = self[key].cite()
 
         return res
 

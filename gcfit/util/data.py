@@ -52,6 +52,9 @@ def bibcode2bibtex(bibcode):
     '''
     import ads
 
+    if isinstance(bibcode, (str, bytes)):
+        bibcode = [bibcode]
+
     if not _validate_bibcodes(bibcode):
         mssg = f"{bibcode} is not a valid bibcode"
         raise ValueError(mssg)
@@ -59,7 +62,7 @@ def bibcode2bibtex(bibcode):
     query = ads.ExportQuery(bibcode, format='bibtex')
 
     try:
-        return query.execute()
+        return query.execute().strip().split('\n\n')
 
     except ads.exceptions.APIResponseError as err:
         mssg = "Failed to retrieve citation from ads"
@@ -88,7 +91,7 @@ def bibcode2cite(bibcode, strict=True):
             mssg = f"{bibcode} contains an invalid bibcode"
             raise ValueError(mssg)
         else:
-            return bibcode
+            return '; '.join(bibcode)
 
     query = ads.ExportQuery(bibcode, format='aastex')
 
