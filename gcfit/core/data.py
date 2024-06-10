@@ -181,9 +181,9 @@ class Dataset:
                 bibcodes = self.mdata['source'].split(';')
 
                 try:
-                    self._citation = util.bibcode2cite(bibcodes)
+                    self._citation = util.bibcode2cite(bibcodes, strict=True)
 
-                except (RuntimeError, ModuleNotFoundError):
+                except (ValueError, RuntimeError, ModuleNotFoundError):
                     # Failed to get citation, just return raw source
                     self._citation = '; '.join(bibcodes)
 

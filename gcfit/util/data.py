@@ -27,6 +27,13 @@ GCFIT_DIR = pathlib.Path(os.getenv('GCFIT_DIR', '~/.GCfit')).expanduser()
 # --------------------------------------------------------------------------
 
 
+def _validate_bibcodes(bibcodes):
+    '''Simple check that a list of bibcodes at least *looks* valid.'''
+    import re
+    bibcode_pattern = r"\b\d{4}[a-zA-Z][0-9a-zA-Z&.]{14}\b"
+    return all(re.fullmatch(bibcode_pattern, bib) for bib in bibcodes)
+
+
 def doi2bibtex(doi):
     '''Request the bibtex entry of this `doi` from crossref.'''
     import requests
@@ -45,6 +52,10 @@ def bibcode2bibtex(bibcode):
     '''
     import ads
 
+    if not _validate_bibcodes(bibcode):
+        mssg = f"{bibcode} is not a valid bibcode"
+        raise ValueError(mssg)
+
     query = ads.ExportQuery(bibcode, format='bibtex')
 
     try:
@@ -55,7 +66,7 @@ def bibcode2bibtex(bibcode):
         raise RuntimeError(mssg) from err
 
 
-def bibcode2cite(bibcode):
+def bibcode2cite(bibcode, strict=True):
     r'''Request this `bibcode` from ADS and attempt to parse a \cite from it.
 
     Requires the `ads` package and a NASA ADS API-key saved to a file called
@@ -63,8 +74,21 @@ def bibcode2cite(bibcode):
 
     For lack of a more sophisticated parser, simply grabs the start of a full
     format which begins with the "\cite" style (aastex) and uses that.
+
+    If the given bibcode is not valid, won't even attempt to query ads, and
+    will simply error or return the bibcode (depending on `strict`).
     '''
     import ads
+
+    if isinstance(bibcode, (str, bytes)):
+        bibcode = [bibcode]
+
+    if not _validate_bibcodes(bibcode):
+        if strict:
+            mssg = f"{bibcode} contains an invalid bibcode"
+            raise ValueError(mssg)
+        else:
+            return bibcode
 
     query = ads.ExportQuery(bibcode, format='aastex')
 
