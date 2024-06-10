@@ -15,6 +15,7 @@ import enum
 import shutil
 import logging
 import pathlib
+import warnings
 import datetime
 from typing import Union
 from collections import abc
@@ -145,9 +146,16 @@ class NestedSamplingOutput(Output):
         self.filename = filename
         self.group = group
 
-    def open(self, mode="r"):
+        # TODO this touching is different behaviour than the emcee HDFBackend
+        if pathlib.Path(self.filename).exists():
+            warnings.warn(f"{self.filename} already exists, overwriting.")
+
+        # touch file, with correct file space management strategy
+        self.open('w', fs_strategy='fsm', fs_persist=True).close()
+
+    def open(self, mode="r", **kwargs):
         '''Open file and return root `h5py` group'''
-        return h5py.File(self.filename, mode)
+        return h5py.File(self.filename, mode, **kwargs)
 
     def _store_bounds(self, bounds, key='bound', group=None, *, file=None):
         '''store_dataset alternative for the 'bounds' key which is returned in
