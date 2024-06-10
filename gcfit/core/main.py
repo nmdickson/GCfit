@@ -48,6 +48,9 @@ class NestedFittingState(enum.IntEnum):
 class Output:
     '''Base backend file class, to be subclassed for specific sampler needs'''
 
+    compression = None
+    compression_opts = None
+
     def store_dataset(self, key, data, group='statistics', *, file=None):
         '''currently only works for adding a full array once, will overwrite'''
 
@@ -63,7 +66,13 @@ class Output:
         if key in grp:
             del grp[key]
 
-        grp[key] = data
+        if np.ndim(data) > 0:
+            comp = dict(compression=self.compression,
+                        compression_opts=self.compression_opts)
+        else:
+            comp = {}
+
+        grp.create_dataset(key, data=data, **comp)
 
         # TODO is this really the best way to allow for passing open files?
         if not file:
@@ -142,16 +151,22 @@ class MCMCOutput(emcee.backends.HDFBackend, Output):
 class NestedSamplingOutput(Output):
     '''HDF backend file for nested sampling runs'''
 
-    def __init__(self, filename, group='nested', overwrite=False):
+    def __init__(self, filename, group='nested', *,
+                 fs_strategy='fsm', fs_persist=True,
+                 compression=None, compression_opts=None):
+
         self.filename = filename
         self.group = group
+
+        self.compression = compression
+        self.compression_opts = compression_opts
 
         # TODO this touching is different behaviour than the emcee HDFBackend
         if pathlib.Path(self.filename).exists():
             warnings.warn(f"{self.filename} already exists, overwriting.")
 
         # touch file, with correct file space management strategy
-        self.open('w', fs_strategy='fsm', fs_persist=True).close()
+        self.open('w', fs_strategy=fs_strategy, fs_persist=fs_persist).close()
 
     def open(self, mode="r", **kwargs):
         '''Open file and return root `h5py` group'''
@@ -286,7 +301,7 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
              mpi=False, initials=None, param_priors=None, moves=None,
              fixed_params=None, excluded_likelihoods=None, hyperparams=False,
              cont_run=False, savedir=_here, backup=False, restrict_to=None,
-             verbose=False, progress=False):
+             compress=False, verbose=False, progress=False):
     '''Main MCMC fitting pipeline.
 
     Execute the full MCMC cluster fitting algorithm.
@@ -364,6 +379,10 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         Where to search for the cluster data file, see
         `gcfit.util.get_cluster_path` for more information.
 
+    compress : bool, optional
+        If True, applies "gzip" compression to all datasets stored in the output
+        file. Defaults to no compression.
+
     verbose : bool, optional
         Increase verbosity (currently only affects output of run final summary).
 
@@ -422,8 +441,9 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
         logging.debug(f"Using hdf backend at {backend_fn}")
 
-        # backend = emcee.backends.HDFBackend(backend_fn)
-        backend = MCMCOutput(backend_fn)
+        compression = 'gzip' if compress else None
+
+        backend = MCMCOutput(backend_fn, compression=compression)
 
         backend.set_state(MCMCFittingState.START)
 
@@ -628,7 +648,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
                pfrac=1.0, maxfrac=0.8, eff_samples=5000, plat_wt_func=False,
                Ncpu=2, mpi=False, initials=None, param_priors=None,
                fixed_params=None, excluded_likelihoods=None, hyperparams=False,
-               savedir=_here, restrict_to=None, verbose=False):
+               savedir=_here, restrict_to=None, compress=False, verbose=False):
     '''Main nested sampling fitting pipeline.
 
     Execute the full nested sampling cluster fitting algorithm.
@@ -730,6 +750,10 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         Where to search for the cluster data file, see
         `gcfit.util.get_cluster_path` for more information.
 
+    compress : bool, optional
+        If True, applies "gzip" compression to all datasets stored in the output
+        file. Defaults to no compression.
+
     verbose : bool, optional
         Increase verbosity (currently only affects output of run final summary).
 
@@ -799,7 +823,9 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
         logging.debug(f"Using hdf backend at {backend_fn}")
 
-        backend = NestedSamplingOutput(backend_fn)
+        compression = 'gzip' if compress else None
+
+        backend = NestedSamplingOutput(backend_fn, compression=compression)
 
         backend.set_state(NestedFittingState.START)
 
