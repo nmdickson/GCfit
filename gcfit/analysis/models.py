@@ -45,7 +45,7 @@ class _ClusterVisualizer:
 
     @property
     def cmap(self):
-        return plt.cm.get_cmap(self._cmap)
+        return plt.colormaps.get_cmap(self._cmap)
 
     @cmap.setter
     def cmap(self, cm):
