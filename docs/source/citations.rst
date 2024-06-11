@@ -18,8 +18,6 @@ typically in the form of a
 While these can be accessed directly through the metadata attribute of each
 ``Dataset``:
 
-.. TODO update MF source in all data files, it's breaking `get_sources`
-
 .. code-block:: python
     
     >>> dset = obs['number_density']
@@ -37,7 +35,7 @@ formats directly:
 .. code-block:: python
 
     >>> sources = obs.get_sources()
-    >>> print(sources['number_density'])
+    >>> print(sources['number_density'][0])
     @ARTICLE{2019MNRAS.485.4906D,
            author = {{de Boer}, T.~J.~L. and {Gieles}, M. and {Balbinot}, E. and {H{\'e}nault-Brunet}, V. and {Sollima}, A. and {Watkins}, L.~L. and {Claydon}, I.},
             title = "{Globular cluster number density profiles using Gaia DR2}",
@@ -51,7 +49,7 @@ Or the utility methods can be used directly:
 
 .. code-block:: python
 
-    >>> print(gcfit.util.bibcode2bibtex(dset.mdata['source']))
+    >>> print(gcfit.util.bibcode2bibtex(dset.mdata['source'])[0])
     @ARTICLE{2019MNRAS.485.4906D,
            author = {{de Boer}, T.~J.~L. and {Gieles}, M. and {Balbinot}, E. and {H{\'e}nault-Brunet}, V. and {Sollima}, A. and {Watkins}, L.~L. and {Claydon}, I.},
             title = "{Globular cluster number density profiles using Gaia DR2}",
