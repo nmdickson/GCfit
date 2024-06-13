@@ -763,20 +763,36 @@ class _ClusterVisualizer:
         # Restart marker styles each plotting call
         markers = iter(self._MARKERS)
 
+        # Get various kwarg dicts, kinda try to avoid altering any dicts
         if res_kwargs is None:
             res_kwargs = {}
+        else:
+            res_kwargs = res_kwargs.copy()
 
         if data_kwargs is None:
             data_kwargs = {}
+        else:
+            data_kwargs = data_kwargs.copy()
 
         if model_kwargs is None:
             model_kwargs = {}
+        else:
+            model_kwargs = model_kwargs.copy()
 
         # Unless specified, each mass bin should cycle colour from matplotlib
         default_color = color
 
         data_color = data_color or default_color
         model_color = model_color or default_color
+
+        if 'label' in kwargs:
+            if model_label is None:
+                # I'll let you get away with it this time.
+                model_label = kwargs.pop('label')
+            else:
+                mssg = ("Multiple labels provided. "
+                        "Must specify only a `model_label`")
+                raise ValueError(mssg)
 
         # if mass bins are supplied, label all models, for use in legends
         if label_masses:
@@ -2896,7 +2912,8 @@ class _ClusterVisualizer:
         fig, ax = self._setup_artist(fig, ax)
 
         self._plot_profile(ax, None, None, self.phi,
-                           x_unit=x_unit, mass_bins=[0], label_masses=False,)
+                           x_unit=x_unit, mass_bins=[0], label_masses=False,
+                           **kwargs)
 
         label = "Potential" if verbose_label else r'$\Phi$'
 
@@ -2953,7 +2970,8 @@ class _ClusterVisualizer:
         fig, ax = self._setup_artist(fig, ax)
 
         self._plot_profile(ax, None, None, self.vesc,
-                           x_unit=x_unit, mass_bins=[0], label_masses=False,)
+                           x_unit=x_unit, mass_bins=[0], label_masses=False,
+                           **kwargs)
 
         label = "Escape Velocity" if verbose_label else r'$v_{\mathrm{esc}}$'
 
