@@ -75,7 +75,7 @@ a number of dispersion measurements at different projected radial distances:
 
 .. math::
 
-    \ln(\mathcal{L}_i) = \frac{1}{2} \sum_j
+    \ln(\mathcal{L}_i) = -\frac{1}{2} \sum_j
         \left[
             \frac{(\sigma_{j,\mathrm{obs}}
             - \sigma_{j,\mathrm{model}})^2}
@@ -88,7 +88,7 @@ where :math:`\sigma_j \equiv \sigma(r_j)` corresponds to the dispersion at a dis
 :math:`\delta\sigma_j \equiv \delta\sigma(r_j)`.
 Dispersions with subscript *obs* correspond to the observed dispersions and
 uncertainties, while subscript *model* corresponds to the predicted model
-dispersions.
+dispersions. [#f1]_
 
 Number Densities
 """"""""""""""""
@@ -131,7 +131,7 @@ The likelihood is then given in similar fashion to the dispersion profiles:
 
 .. math::
 
-        \ln(\mathcal{L}_i) = \frac{1}{2} \sum_j
+        \ln(\mathcal{L}_i) = -\frac{1}{2} \sum_j
             \left[
                 \frac{(\Sigma_{j,\mathrm{obs}}
                 - K\Sigma_{j,\mathrm{model}})^2}{\delta\Sigma^2_j}
@@ -164,7 +164,7 @@ This star count can then be used to compute the Gaussian likelihood:
 
 .. math::
 
-    \ln(\mathcal{L}_i) = \frac{1}{2}
+    \ln(\mathcal{L}_i) = -\frac{1}{2}
         \sum_j^{\substack{\mathrm{radial}\\\mathrm{bins}}}
         \sum_k^{\substack{\mathrm{mass}\\\mathrm{bins}}}
         \left[
@@ -344,3 +344,8 @@ set.
 
 ``GCfit`` utilizes the `dynesty <https://dynesty.readthedocs.io/>`_
 Dynamic Nested Sampling package.
+
+
+.. rubric:: Footnotes
+
+.. [#f1] Note: the leading negative signs in all likelihood equations were accidentally omitted in Dickson et al. (2023).

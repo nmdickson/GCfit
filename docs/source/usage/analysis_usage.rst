@@ -55,6 +55,11 @@ The run visualizers are split into specific classes once again for the MCMC
     >>> plt.show()
 
 
+Make sure the correct class for the sampling method is used. Otherwise,
+an error will be raised saying the file is missing the required "mcmc" or
+"nested" group.
+
+
 Best Fit Models
 ^^^^^^^^^^^^^^^
 
