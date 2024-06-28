@@ -5,7 +5,7 @@ import numpy as np
 import limepy as lp
 from astropy import units as u
 from astropy import constants as const
-from ssptools import EvolvedMF
+from ssptools import EvolvedMF, masses
 
 import fnmatch
 import logging
@@ -982,14 +982,16 @@ class Model(lp.limepy):
                    NS_ret, BH_ret_int, BHret, natal_kicks, vesc):
         '''Compute an evolved mass function using `ssptools.EvolvedMF`'''
 
+        self._imf = masses.PowerLawIMF(
+            m_break=m_breaks.value, a=[-a1, -a2, -a3], ext='zeros', N0=5e5
+        )
+
         self._mf_kwargs = dict(
-            m_breaks=m_breaks.value,
-            a_slopes=[-a1, -a2, -a3],
+            IMF=self._imf,
             nbins=nbins,
             FeH=FeH,
             tout=np.array([age.to_value('Myr')]),
             Ndot=Ndot,
-            N0=5e5,
             tcc=tcc,
             NS_ret=NS_ret,
             BH_ret_int=BH_ret_int,
@@ -1692,14 +1694,13 @@ class EvolvedModel(Model):
         from ssptools import EvolvedMFWithBH
 
         self._mf_kwargs = dict(
-            m_breaks=m_breaks.value,
-            a_slopes=[-a1, -a2, -a3],
+            IMF=self._imf,
             nbins=nbins,
             FeH=FeH,
             tout=np.array([age.to_value('Myr')]),
             Ndot=Ndot,
             f_BH=self._clusterbh.fbh[-1],
-            N0=self._clusterbh.N,
+            N0=self._clusterbh.N0,
             tcc=tcc,
             NS_ret=NS_ret,
             BH_ret_int=BH_ret_int,
@@ -1711,18 +1712,26 @@ class EvolvedModel(Model):
 
     def __init__(self, W0, M0, rh0, g=1.5, delta=0.45, ra=1e8,
                  a1=1.3, a2=2.3, a3=2.3, d=5,
-                 s2=0., F=1., *, observations=None, cbh_kwargs=None, **kwargs):
+                 s2=0., F=1., *, observations=None, age=None, FeH=None,
+                 m_breaks=[0.1, 0.5, 1.0, 100], cbh_kwargs=None, **kwargs):
         import clusterbh
 
         self.M0 = M0
         self.rh0 = rh0
 
-        if cbh_kwargs is None:
-            cbh_kwargs = {}
+        cbh_kwargs = {} if cbh_kwargs is None else cbh_kwargs.copy()
+
+        m_breaks <<= u.Msun
+
+        # TODO unfortunately repeating this imf init here and in clusterBH
+        self._imf = masses.PowerLawIMF.from_M0(
+            m_break=m_breaks.value, a=[-a1, -a2, -a3], ext='zeros', M0=M0
+        )
+
+        m0 = self._imf.mmean
 
         # first convert the more useful M0, rh0 to the N0, rhoh0 required
-        m0 = 0.638  # For Kroupa (2001) IMF 0.1-100 Msun
-        N = M0 / m0
+        N0 = M0 / m0
         rhoh0 = (3 * M0) / (8 * np.pi * rh0**3)
 
         if observations is not None:
@@ -1739,7 +1748,7 @@ class EvolvedModel(Model):
 
         cbh_kwargs.setdefault('kick', True)
 
-        self._clusterbh = clusterbh.clusterBH(N, rhoh0, **cbh_kwargs)
+        self._clusterbh = clusterbh.clusterBH(N0, rhoh0, **cbh_kwargs)
 
         self.cbh_kwargs = cbh_kwargs
 
@@ -1754,7 +1763,8 @@ class EvolvedModel(Model):
 
         super().__init__(W0, M, rh, g=g, delta=delta, ra=ra,
                          a1=a1, a2=a2, a3=a3, BHret=BHret, d=d,
-                         s2=s2, F=F, observations=observations, **kwargs)
+                         s2=s2, F=F, observations=observations, age=age,
+                         FeH=FeH, m_breaks=m_breaks, **kwargs)
 
 
 class FittableEvolvedModel(EvolvedModel):
