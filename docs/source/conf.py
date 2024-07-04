@@ -22,7 +22,7 @@ copyright = '2024, Nolan Dickson'
 author = 'Nolan Dickson'
 
 # The full version, including alpha/beta/rc tags
-release = '1.1'
+release = '2.0'
 
 
 # -- General configuration ---------------------------------------------------
