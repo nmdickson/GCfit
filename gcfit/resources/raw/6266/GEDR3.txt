@@ -1,6 +1,0 @@
-# Converted to mas/yr using D=6.412 kpc
-<r>      σ      ΔσUp    ΔσLow
-['']   [mas/yr]  [mas/yr]  [mas/yr]
-27.32   0.45569   0.03421    0.03059    GEDR3
-51.16   0.45536   0.03388    0.03027    GEDR3
-70.47   0.39121   0.02895    0.02599    GEDR3

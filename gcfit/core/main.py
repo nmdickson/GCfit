@@ -1,7 +1,6 @@
 from .data import Observations
 from ..util.data import GCFIT_DIR
 from ..probabilities import posterior, priors
-from ..util.probabilities import plateau_weight_function
 
 import h5py
 import emcee
@@ -12,10 +11,13 @@ import dynesty.dynamicsampler as dysamp
 
 import sys
 import time
+import enum
 import shutil
 import logging
 import pathlib
+import warnings
 import datetime
+from typing import Union
 from collections import abc
 
 
@@ -26,8 +28,28 @@ _here = pathlib.Path()
 _str_types = (str, bytes)
 
 
+# TODO would be useful to include current state in all GCfitter logging calls
+class MCMCFittingState(enum.IntEnum):
+    START = 0  # Before sampling begins
+    SAMPLING = 3  # During sampling
+    POST_SAMPLING = 4  # After sampling
+    FINAL = 5  # Fitting complete
+
+
+class NestedFittingState(enum.IntEnum):
+    START = 0  # Before sampling begins
+    INITIAL_SAMPLING = 1  # During sampling of initial batch
+    POST_INITIAL = 2  # After sampling of initial batch
+    DYNAMIC_SAMPLING = 3  # During sampling of dynamically allocated batches
+    POST_DYNAMIC = 4  # After dynamic sampling
+    FINAL = 5  # Fitting complete
+
+
 class Output:
     '''Base backend file class, to be subclassed for specific sampler needs'''
+
+    compression = None
+    compression_opts = None
 
     def store_dataset(self, key, data, group='statistics', *, file=None):
         '''currently only works for adding a full array once, will overwrite'''
@@ -44,7 +66,13 @@ class Output:
         if key in grp:
             del grp[key]
 
-        grp[key] = data
+        if np.ndim(data) > 0:
+            comp = dict(compression=self.compression,
+                        compression_opts=self.compression_opts)
+        else:
+            comp = {}
+
+        grp.create_dataset(key, data=data, **comp)
 
         # TODO is this really the best way to allow for passing open files?
         if not file:
@@ -109,6 +137,9 @@ class Output:
         if not file:
             hdf.close()
 
+    def set_state(self, state: Union[NestedFittingState, MCMCFittingState]):
+        self.store_metadata('STATE', state.value)
+
 
 class MCMCOutput(emcee.backends.HDFBackend, Output):
     '''HDF backend file for MCMC sampling runs'''
@@ -120,13 +151,26 @@ class MCMCOutput(emcee.backends.HDFBackend, Output):
 class NestedSamplingOutput(Output):
     '''HDF backend file for nested sampling runs'''
 
-    def __init__(self, filename, group='nested', overwrite=False):
+    def __init__(self, filename, group='nested', *,
+                 fs_strategy='fsm', fs_persist=True,
+                 compression=None, compression_opts=None):
+
         self.filename = filename
         self.group = group
 
-    def open(self, mode="r"):
+        self.compression = compression
+        self.compression_opts = compression_opts
+
+        # TODO this touching is different behaviour than the emcee HDFBackend
+        if pathlib.Path(self.filename).exists():
+            warnings.warn(f"{self.filename} already exists, overwriting.")
+
+        # touch file, with correct file space management strategy
+        self.open('w', fs_strategy=fs_strategy, fs_persist=fs_persist).close()
+
+    def open(self, mode="r", **kwargs):
         '''Open file and return root `h5py` group'''
-        return h5py.File(self.filename, mode)
+        return h5py.File(self.filename, mode, **kwargs)
 
     def _store_bounds(self, bounds, key='bound', group=None, *, file=None):
         '''store_dataset alternative for the 'bounds' key which is returned in
@@ -186,6 +230,8 @@ class NestedSamplingOutput(Output):
             for key, data in results.items():
                 if key == 'bound':
                     self._store_bounds(data, group=self.group, file=hdf)
+                elif key == 'blob':
+                    continue
                 else:
                     self.store_dataset(key, data, group=self.group, file=hdf)
 
@@ -250,72 +296,12 @@ class NestedSamplingOutput(Output):
             for key, val in results.items():
                 grp[key][-n_grow:] = val
 
-    # ----------------------------------------------------------------------
-    # Tracking of initial batch sampling
-    # ----------------------------------------------------------------------
-
-    _initial_batch_keys = ('worst', 'ustar', 'vstar', 'loglstar', 'logvol',
-                           'logwt', 'logz', 'logzvar', 'h', 'ncall',
-                           'worst_orig', 'bound_orig', 'bound_iter', 'eff',
-                           'delta_logz')
-
-    def create_initial_batch(self, *, strict=False):
-        '''initialize the initial batch group'''
-
-        with self.open('a') as hdf:
-
-            base_grp = hdf.require_group(name=self.group)
-
-            if 'initial_batch' not in base_grp:
-                grp = base_grp.create_group(name='initial_batch')
-
-                # Two-dimensional datasets
-                for k in {'vstar', 'ustar'}:
-                    grp.create_dataset(k, shape=(0, self.ndim),
-                                       maxshape=(None, self.ndim))
-
-                # One-dimensional datasets
-                for k in set(self._initial_batch_keys) - {'ustar', 'vstar'}:
-                    grp.create_dataset(k, shape=(0,), maxshape=(None,))
-
-            elif strict:
-                mssg = 'initial_batch already exists'
-                raise ValueError(mssg)
-
-    def _grow_initial_batch(self, n_grow=1):
-        '''called in the background to dynamically resize the relevant datasets
-        '''
-
-        with self.open('r+') as hdf:
-            base_grp = hdf.require_group(name=self.group)
-
-            grp = base_grp['initial_batch']
-
-            for k in self._initial_batch_keys:
-                grp[k].resize(grp['vstar'].shape[0] + n_grow, axis=0)
-
-    def update_intial_batch(self, results):
-        '''Append to the "initial batch" the results of each sampling iteration
-        '''
-
-        results = dict(zip(self._initial_batch_keys, results))
-
-        n_grow = results['vstar'].shape[0]
-        self._grow_initial_batch(n_grow)
-
-        with self.open('a') as hdf:
-            base_grp = hdf.require_group(name=self.group)
-            grp = base_grp['initial_batch']
-
-            for key, val in results.items():
-                grp[key][-n_grow:] = val
-
 
 def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
              mpi=False, initials=None, param_priors=None, moves=None,
              fixed_params=None, excluded_likelihoods=None, hyperparams=False,
              cont_run=False, savedir=_here, backup=False, restrict_to=None,
-             verbose=False, progress=False):
+             compress=False, verbose=False, progress=False):
     '''Main MCMC fitting pipeline.
 
     Execute the full MCMC cluster fitting algorithm.
@@ -393,6 +379,10 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         Where to search for the cluster data file, see
         `gcfit.util.get_cluster_path` for more information.
 
+    compress : bool, optional
+        If True, applies "gzip" compression to all datasets stored in the output
+        file. Defaults to no compression.
+
     verbose : bool, optional
         Increase verbosity (currently only affects output of run final summary).
 
@@ -408,106 +398,6 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
     logging.info("BEGIN")
 
     # ----------------------------------------------------------------------
-    # Check arguments
-    # ----------------------------------------------------------------------
-
-    if fixed_params is None:
-        fixed_params = []
-
-    if excluded_likelihoods is None:
-        excluded_likelihoods = []
-
-    if param_priors is None:
-        param_priors = {}
-
-    if cont_run:
-        raise NotImplementedError
-
-    savedir = pathlib.Path(savedir)
-    if not savedir.is_dir():
-        raise ValueError(f"Cannot access '{savedir}': No such directory")
-
-    # ----------------------------------------------------------------------
-    # Load obeservational data, determine which likelihoods are valid/desired
-    # ----------------------------------------------------------------------
-
-    logging.info(f"Loading {cluster} data")
-
-    observations = Observations(cluster, restrict_to=restrict_to)
-
-    logging.debug(f"Observation datasets: {observations}")
-
-    likelihoods = observations.filter_likelihoods(excluded_likelihoods, True)
-
-    blobs_dtype = [(f'{key}/{func.__qualname__}', float)
-                   for (key, func, *_) in likelihoods]
-
-    logging.debug(f"Likelihood components: {likelihoods}")
-
-    # ----------------------------------------------------------------------
-    # Initialize the walker positions
-    # ----------------------------------------------------------------------
-
-    # *_params -> list of keys, *_initials -> dictionary
-
-    spec_initials = initials
-
-    # get supplied initials, or read them from the data files if not given
-    if initials is None:
-        initials = observations.initials
-    else:
-        # fill manually supplied dict with defaults
-        initials = observations.initials | initials
-
-    logging.debug(f"Inital initals: {initials}")
-
-    if extraneous_params := (set(fixed_params) - initials.keys()):
-        raise ValueError(f"Invalid fixed parameters: {extraneous_params}")
-
-    variable_params = (initials.keys() - set(fixed_params))
-    if not variable_params:
-        raise ValueError(f"No non-fixed parameters left, fix less parameters")
-
-    # variable params sorting matters for setup of theta, but fixed does not
-    fixed_initials = {key: initials[key] for key in fixed_params}
-    variable_initials = {key: initials[key] for key in
-                         sorted(variable_params, key=list(initials).index)}
-
-    logging.debug(f"Fixed initals: {fixed_initials}")
-    logging.debug(f"Variable initals: {variable_initials}")
-
-    init_pos = np.fromiter(variable_initials.values(), np.float64)
-    init_pos = 1e-4 * np.random.randn(Nwalkers, init_pos.size) + init_pos
-
-    # ----------------------------------------------------------------------
-    # Setup and check param_priors
-    # ----------------------------------------------------------------------
-
-    spec_prior_type = {k: v[0] for k, v in param_priors.items()}
-    spec_prior_args = {k: v[1:] for k, v in param_priors.items()}
-
-    prior_likelihood = priors.Priors(param_priors)
-
-    # check if initials are outside priors, if so then error right here
-    if not np.isfinite(prior_likelihood(initials)):
-        raise ValueError("Initial positions outside prior boundaries")
-
-    # ----------------------------------------------------------------------
-    # Setup MCMC backend
-    # ----------------------------------------------------------------------
-
-    # TODO if not cont_run, need to make sure this file doesnt already exist
-    backend_fn = f"{savedir}/{cluster}_sampler.hdf"
-
-    logging.debug(f"Using hdf backend at {backend_fn}")
-
-    # backend = emcee.backends.HDFBackend(backend_fn)
-    backend = MCMCOutput(backend_fn)
-
-    accept_rate = np.empty((Niters, Nwalkers))
-    iter_rate = np.empty(Niters)
-
-    # ----------------------------------------------------------------------
     # Setup multi-processing pool
     # ----------------------------------------------------------------------
 
@@ -521,6 +411,112 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
             logging.debug("This process is not master")
             pool.wait()
             sys.exit(0)
+
+        # ------------------------------------------------------------------
+        # Check arguments
+        # ------------------------------------------------------------------
+
+        if fixed_params is None:
+            fixed_params = []
+
+        if excluded_likelihoods is None:
+            excluded_likelihoods = []
+
+        if param_priors is None:
+            param_priors = {}
+
+        if cont_run:
+            raise NotImplementedError
+
+        savedir = pathlib.Path(savedir)
+        if not savedir.is_dir():
+            raise ValueError(f"Cannot access '{savedir}': No such directory")
+
+        # ------------------------------------------------------------------
+        # Setup MCMC backend
+        # ------------------------------------------------------------------
+
+        # TODO if not cont_run, need to make sure this file doesnt already exist
+        backend_fn = f"{savedir}/{cluster}_sampler.hdf"
+
+        logging.debug(f"Using hdf backend at {backend_fn}")
+
+        compression = 'gzip' if compress else None
+
+        backend = MCMCOutput(backend_fn, compression=compression)
+
+        backend.set_state(MCMCFittingState.START)
+
+        accept_rate = np.empty((Niters, Nwalkers))
+        iter_rate = np.empty(Niters)
+
+        # ------------------------------------------------------------------
+        # Load obeservational data, determine which likelihoods are
+        # valid/desired
+        # ------------------------------------------------------------------
+
+        logging.info(f"Loading {cluster} data")
+
+        observations = Observations(cluster, restrict_to=restrict_to)
+
+        logging.debug(f"Observation datasets: {observations}")
+
+        likelihoods = observations.filter_likelihoods(excluded_likelihoods,
+                                                      exclude=True)
+
+        blobs_dtype = [(f'{key}/{func.__qualname__}', float)
+                       for (key, func, *_) in likelihoods]
+
+        logging.debug(f"Likelihood components: {likelihoods}")
+
+        # ------------------------------------------------------------------
+        # Initialize the walker positions
+        # ------------------------------------------------------------------
+
+        # *_params -> list of keys, *_initials -> dictionary
+
+        spec_initials = initials
+
+        # get supplied initials, or read them from the data files if not given
+        if initials is None:
+            initials = observations.initials
+        else:
+            # fill manually supplied dict with defaults
+            initials = observations.initials | initials
+
+        logging.debug(f"Inital initals: {initials}")
+
+        if extraneous_params := (set(fixed_params) - initials.keys()):
+            raise ValueError(f"Invalid fixed parameters: {extraneous_params}")
+
+        variable_params = (initials.keys() - set(fixed_params))
+        if not variable_params:
+            mssg = f"No non-fixed parameters left, fix less parameters"
+            raise ValueError(mssg)
+
+        # variable params sorting matters for setup of theta, but fixed does not
+        fixed_initials = {key: initials[key] for key in fixed_params}
+        variable_initials = {key: initials[key] for key in
+                             sorted(variable_params, key=list(initials).index)}
+
+        logging.debug(f"Fixed initals: {fixed_initials}")
+        logging.debug(f"Variable initals: {variable_initials}")
+
+        init_pos = np.fromiter(variable_initials.values(), np.float64)
+        init_pos = 1e-4 * np.random.randn(Nwalkers, init_pos.size) + init_pos
+
+        # ------------------------------------------------------------------
+        # Setup and check param_priors
+        # ------------------------------------------------------------------
+
+        spec_prior_type = {k: v[0] for k, v in param_priors.items()}
+        spec_prior_args = {k: v[1:] for k, v in param_priors.items()}
+
+        prior_likelihood = priors.Priors(param_priors)
+
+        # check if initials are outside priors, if so then error right here
+        if not np.isfinite(prior_likelihood(initials)):
+            raise ValueError("Initial positions outside prior boundaries")
 
         # ------------------------------------------------------------------
         # Write run metadata to output (backend) file
@@ -583,6 +579,8 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
         t0 = t = time.time()
 
+        backend.set_state(MCMCFittingState.SAMPLING)
+
         # TODO implement cont_run
         # Set initial state to None if resuming run (`cont_run`)
         for _ in sampler.sample(init_pos, iterations=Niters, progress=progress):
@@ -616,6 +614,8 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
     logging.info("Finished iteration")
 
+    backend.set_state(MCMCFittingState.POST_SAMPLING)
+
     # ----------------------------------------------------------------------
     # Write extra metadata and statistics to output (backend) file
     # ----------------------------------------------------------------------
@@ -630,6 +630,8 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
     logging.debug(f"Final state: {sampler}")
 
+    backend.set_state(MCMCFittingState.FINAL)
+
     # ----------------------------------------------------------------------
     # Print some verbose results to stdout
     # ----------------------------------------------------------------------
@@ -643,10 +645,10 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
 
 def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
                initial_kwargs=None, batch_kwargs=None,
-               pfrac=1.0, maxfrac=0.8, eff_samples=5000,
+               pfrac=1.0, maxfrac=0.8, eff_samples=5000, plat_wt_func=False,
                Ncpu=2, mpi=False, initials=None, param_priors=None,
                fixed_params=None, excluded_likelihoods=None, hyperparams=False,
-               savedir=_here, restrict_to=None, verbose=False):
+               savedir=_here, restrict_to=None, compress=False, verbose=False):
     '''Main nested sampling fitting pipeline.
 
     Execute the full nested sampling cluster fitting algorithm.
@@ -748,6 +750,10 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         Where to search for the cluster data file, see
         `gcfit.util.get_cluster_path` for more information.
 
+    compress : bool, optional
+        If True, applies "gzip" compression to all datasets stored in the output
+        file. Defaults to no compression.
+
     verbose : bool, optional
         Increase verbosity (currently only affects output of run final summary).
 
@@ -760,101 +766,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
     logging.info("BEGIN NESTED SAMPLING")
 
     # ----------------------------------------------------------------------
-    # Check arguments
-    # ----------------------------------------------------------------------
-
-    if fixed_params is None:
-        fixed_params = []
-
-    if excluded_likelihoods is None:
-        excluded_likelihoods = []
-
-    if param_priors is None:
-        param_priors = {}
-
-    if initial_kwargs is None:
-        initial_kwargs = {}
-
-    if batch_kwargs is None:
-        batch_kwargs = {}
-
-    # Apply some better default sampler arguments
-    initial_kwargs = {'nlive': 100, 'dlogz': 0.25} | initial_kwargs
-    batch_kwargs = {'nlive_new': 100} | batch_kwargs
-
-    savedir = pathlib.Path(savedir)
-    if not savedir.is_dir():
-        raise ValueError(f"Cannot access '{savedir}': No such directory")
-
-    # ----------------------------------------------------------------------
-    # Load obeservational data, determine which likelihoods are valid/desired
-    # ----------------------------------------------------------------------
-
-    logging.info(f"Loading {cluster} data")
-
-    observations = Observations(cluster, restrict_to=restrict_to)
-
-    logging.debug(f"Observation datasets: {observations}")
-
-    likelihoods = observations.filter_likelihoods(excluded_likelihoods, True)
-
-    logging.debug(f"Likelihood components: {likelihoods}")
-
-    # ----------------------------------------------------------------------
-    # Initialize the walker positions
-    # ----------------------------------------------------------------------
-
-    # *_params -> list of keys, *_initials -> dictionary
-
-    spec_initials = initials
-
-    # get supplied initials, or read them from the data files if not given
-    if initials is None:
-        initials = observations.initials
-    else:
-        # fill manually supplied dict with defaults
-        initials = observations.initials | initials
-
-    logging.debug(f"Inital initals: {initials}")
-
-    if extraneous_params := (set(fixed_params) - initials.keys()):
-        raise ValueError(f"Invalid fixed parameters: {extraneous_params}")
-
-    variable_params = (initials.keys() - set(fixed_params))
-    if not variable_params:
-        raise ValueError(f"No non-fixed parameters left, fix less parameters")
-
-    # variable params sorting matters for setup of theta, but fixed does not
-    fixed_initials = {key: initials[key] for key in fixed_params}
-    variable_initials = {key: initials[key] for key in
-                         sorted(variable_params, key=list(initials).index)}
-
-    logging.debug(f"Fixed initals: {fixed_initials}")
-    logging.debug(f"Variable initals: {variable_initials}")
-
-    # ----------------------------------------------------------------------
-    # Setup param_priors transforms
-    # ----------------------------------------------------------------------
-    # TODO shouldnt this function also accept Prior objects themselves?
-
-    spec_prior_type = {k: v[0] for k, v in param_priors.items()}
-    spec_prior_args = {k: v[1:] for k, v in param_priors.items()}
-
-    prior_kwargs = {'fixed_initials': fixed_initials, 'err_on_fail': False}
-    prior_transform = priors.PriorTransforms(param_priors, **prior_kwargs)
-
-    # ----------------------------------------------------------------------
-    # Setup Nested Sampling backend
-    # ----------------------------------------------------------------------
-
-    backend_fn = f"{savedir}/{cluster}_sampler.hdf"
-
-    logging.debug(f"Using hdf backend at {backend_fn}")
-
-    backend = NestedSamplingOutput(backend_fn)
-
-    # ----------------------------------------------------------------------
-    # Setup multi-processing pool
+    # Setup multi-processing pool (right at start to avoid repetition in mpi)
     # ----------------------------------------------------------------------
 
     logging.info("Beginning pool")
@@ -870,11 +782,116 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
             pool.wait()
             sys.exit(0)
 
-        ndim = len(variable_initials)
+        # ----------------------------------------------------------------------
+        # Check arguments
+        # ----------------------------------------------------------------------
 
-        # ----------------------------------------------------------------------
+        if fixed_params is None:
+            fixed_params = []
+
+        if excluded_likelihoods is None:
+            excluded_likelihoods = []
+
+        if param_priors is None:
+            param_priors = {}
+
+        if initial_kwargs is None:
+            initial_kwargs = {}
+
+        if batch_kwargs is None:
+            batch_kwargs = {}
+
+        # Apply some better default sampler arguments
+        initial_kwargs = {'nlive': 100, 'dlogz': 0.25} | initial_kwargs
+        batch_kwargs = {'nlive_new': 100} | batch_kwargs
+
+        savedir = pathlib.Path(savedir)
+        if not savedir.is_dir():
+            raise ValueError(f"Cannot access '{savedir}': No such directory")
+
+        if plat_wt_func:
+            from ..util.probabilities import plateau_weight_function
+            wt_function = plateau_weight_function
+        else:
+            wt_function = dysamp.weight_function
+
+        # ------------------------------------------------------------------
+        # Setup Nested Sampling backend
+        # ------------------------------------------------------------------
+
+        backend_fn = f"{savedir}/{cluster}_sampler.hdf"
+
+        logging.debug(f"Using hdf backend at {backend_fn}")
+
+        compression = 'gzip' if compress else None
+
+        backend = NestedSamplingOutput(backend_fn, compression=compression)
+
+        backend.set_state(NestedFittingState.START)
+
+        # ------------------------------------------------------------------
+        # Load obeservational data, determine which likelihoods are
+        # valid/desired
+        # ------------------------------------------------------------------
+
+        logging.info(f"Loading {cluster} data")
+
+        observations = Observations(cluster, restrict_to=restrict_to)
+
+        logging.debug(f"Observation datasets: {observations}")
+
+        likelihoods = observations.filter_likelihoods(excluded_likelihoods,
+                                                      exclude=True)
+
+        logging.debug(f"Likelihood components: {likelihoods}")
+
+        # ------------------------------------------------------------------
+        # Initialize the walker positions
+        # ------------------------------------------------------------------
+
+        # *_params -> list of keys, *_initials -> dictionary
+
+        spec_initials = initials
+
+        # get supplied initials, or read them from the data files if not given
+        if initials is None:
+            initials = observations.initials
+        else:
+            # fill manually supplied dict with defaults
+            initials = observations.initials | initials
+
+        logging.debug(f"Inital initals: {initials}")
+
+        if extraneous_params := (set(fixed_params) - initials.keys()):
+            raise ValueError(f"Invalid fixed parameters: {extraneous_params}")
+
+        variable_params = (initials.keys() - set(fixed_params))
+        if not variable_params:
+            mssg = f"No non-fixed parameters left, fix less parameters"
+            raise ValueError(mssg)
+
+        # variable params sorting matters for setup of theta, but fixed does not
+        fixed_initials = {key: initials[key] for key in fixed_params}
+        variable_initials = {key: initials[key] for key in
+                             sorted(variable_params, key=list(initials).index)}
+
+        logging.debug(f"Fixed initals: {fixed_initials}")
+        logging.debug(f"Variable initals: {variable_initials}")
+
+        # ------------------------------------------------------------------
+        # Setup param_priors transforms
+        # ------------------------------------------------------------------
+        # TODO shouldnt this function also accept Prior objects themselves?
+
+        spec_prior_type = {k: v[0] for k, v in param_priors.items()}
+        spec_prior_args = {k: v[1:] for k, v in param_priors.items()}
+
+        prior_kwargs = {'fixed_initials': fixed_initials, 'err_on_fail': False}
+        prior_transform = priors.PriorTransforms(param_priors, **prior_kwargs)
+
+        # ------------------------------------------------------------------
         # Write run metadata to output (backend) file
-        # ----------------------------------------------------------------------
+        # ------------------------------------------------------------------
 
         backend.store_metadata('cluster', cluster)
 
@@ -888,6 +905,7 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         backend.store_metadata('mpi', mpi)
         backend.store_metadata('Ncpu', Ncpu)
 
+        ndim = len(variable_initials)
         backend.store_metadata('ndim', ndim)
         backend.store_metadata('pfrac', pfrac)
         backend.store_metadata('maxfrac', maxfrac)
@@ -948,16 +966,21 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
         weight_kw = {'pfrac': pfrac, 'maxfrac': maxfrac}
 
         # runs an initial set of set samples, as if using `NestedSampler`
-        # TODO I'm not sure how to handle "initial_batch" on restarted runs
-        backend.create_initial_batch()
 
-        for results in sampler.sample_initial(**initial_kwargs):
-            backend.update_intial_batch(results)
+        backend.set_state(NestedFittingState.INITIAL_SAMPLING)
 
+        for _ in sampler.sample_initial(**initial_kwargs):
+            backend.store_results(sampler.results)
+
+        backend.set_state(NestedFittingState.POST_INITIAL)
+
+        # Repeat the storage because some attrs are added after loop completes
         backend.store_results(sampler.results)
 
         tn = datetime.timedelta(seconds=time.time() - t0)
         logging.info(f"Beginning dynamic batch sampling ({tn})")
+
+        backend.set_state(NestedFittingState.DYNAMIC_SAMPLING)
 
         # run the dynamic sampler in batches, until the stop condition is met
         while not dysamp.stopping_function(sampler.results, args=stop_kw,
@@ -965,12 +988,13 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
             backend.reset_current_batch()
 
-            wt = plateau_weight_function(sampler.results, args=weight_kw)
+            wt = wt_function(sampler.results, args=weight_kw)
 
             tn = datetime.timedelta(seconds=time.time() - t0)
             logging.info(f"Sampling new batch bebtween logl bounds {wt} ({tn})")
 
             for results in sampler.sample_batch(logl_bounds=wt, **batch_kwargs):
+                # Shouldn't save full run results until they are combined below
                 backend.update_current_batch(results)
 
             logging.info(f"Combining batch with existing results "
@@ -983,6 +1007,8 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
 
     logging.info("Finished sampling")
 
+    backend.set_state(NestedFittingState.POST_DYNAMIC)
+
     # ----------------------------------------------------------------------
     # Write extra metadata and statistics to output (backend) file
     # ----------------------------------------------------------------------
@@ -991,6 +1017,8 @@ def nested_fit(cluster, *, bound_type='multi', sample_type='auto',
     backend.store_metadata('runtime', tf.total_seconds())
 
     logging.debug(f"Final state: {sampler} ({tf})")
+
+    backend.set_state(NestedFittingState.FINAL)
 
     # ----------------------------------------------------------------------
     # Print some verbose results to stdout

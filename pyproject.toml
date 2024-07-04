@@ -1,6 +1,6 @@
 [project]
 name = "GCfit"
-version = "1.0"
+version = "2.0"
 description = "Fitting of multimass equilibrium models of globular clusters"
 authors = [
     {name = "Nolan Dickson", email = "nolan.dickson@smu.ca"},
@@ -15,8 +15,8 @@ dependencies = [
     "numpy",
     "scipy",
     "astropy",
-    "astro-limepy @ git+https://github.com/mgieles/limepy.git",
-    "ssptools @ git+https://github.com/SMU-clusters/ssptools.git",
+    "astro-limepy",
+    "astro-ssptools",
     "emcee",
     "dynesty",
     "h5py",
@@ -31,7 +31,7 @@ dependencies = [
 ]
 
 classifiers = [
-  "Development Status :: 4 - Beta",
+  "Development Status :: 5 - Production/Stable",
   "Programming Language :: Python",
   "License :: OSI Approved :: MIT License",
   "Intended Audience :: Science/Research",
@@ -50,8 +50,17 @@ GCfitter = "gcfit.scripts:GCfitter.main"
 generate_model_CI = "gcfit.scripts:generate_model_CI.main"
 
 [build-system]
-requires = ["setuptools", "setuptools-scm"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.setuptools.package-data]
-"gcfit.resources" = ["*.hdf", "*msp.dat"]
+[tool.hatch.build]
+include = [
+  "gcfit/resources/*.hdf",
+  "gcfit/resources/*msp.dat",
+]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["gcfit"]

@@ -205,6 +205,8 @@ def main():
                              choices=sample_choices,
                              help='Method used to sample uniformly within the '
                                   'likelihood, based on the provided bounds')
+    parser_nest.add_argument('--plat-wt-func', action='store_true',
+                             help="Use custom `util.plateau_weight_function`")
 
     parser_nest.set_defaults(fit_func=gcfit.nested_fit)
 
