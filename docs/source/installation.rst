@@ -2,9 +2,13 @@
 Installation
 ============
 
-GCfit can be installed directly using pip, from it's github page:
+GCfit can be installed directly using pip, from PyPI:
 
-.. TODO update this when it's put on pypi
+.. code-block:: console
+
+   $ pip install GCfit
+
+or from it's github page directly:
 
 .. code-block:: console
 

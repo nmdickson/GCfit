@@ -11,21 +11,23 @@ __all__ = ['gaussian', 'RV_transform', 'gaussian_likelihood',
 
 
 def gaussian(x, sigma, mu):
-    '''Gaussian PDF, evaluated over `x` with mean `mu` and width `sigma`'''
+    '''Gaussian PDF, evaluated over `x` with mean `mu` and width `sigma`.'''
     norm = 1 / (sigma * np.sqrt(2 * np.pi))
     exponent = np.exp(-0.5 * (((x - mu) / sigma) ** 2))
     return norm * exponent
 
 
 def RV_transform(domain, f_X, h, h_prime):
-    '''Transformation of a random variable over a function :math:`g=h^{-1}`'''
+    '''Transformation of a random variable over a function :math:`g=h^{-1}`.'''
     f_Y = f_X(h(domain)) * np.abs(h_prime(domain))
     return np.nan_to_num(f_Y)
+
 
 def find_intersections(y, x, value):
     '''Find the intersections of a function with a given value.'''
     spl = QuantitySpline(x, y - value, k=3, ext=2)
     return spl.roots()
+
 
 # --------------------------------------------------------------------------
 # Gaussian Likelihood
@@ -33,7 +35,7 @@ def find_intersections(y, x, value):
 
 
 def gaussian_likelihood(X_data, X_model, err):
-    '''Gaussian log-likelihood function'''
+    '''Gaussian log-likelihood function.'''
 
     chi2 = (X_data - X_model)**2 / err**2
 
@@ -48,9 +50,9 @@ def gaussian_likelihood(X_data, X_model, err):
 
 
 def hyperparam_likelihood(X_data, X_model, err):
-    '''Gaussian log-likelihood function with marginalized hyperparameters
+    '''Gaussian log-likelihood function with marginalized hyperparameters.
 
-    (see Hobson et al., 2002)
+    (see Hobson et al., 2002).
     '''
 
     from scipy.special import gammaln
@@ -69,9 +71,9 @@ def hyperparam_likelihood(X_data, X_model, err):
 
 
 def hyperparam_effective(X_data, X_model, err):
-    '''Compute the "effective" α_k scaling value for a given X_model
+    '''Compute the "effective" α_k scaling value for a given X_model.
 
-    (see Hobson et al., 2002; eq.44)
+    (see Hobson et al., 2002; eq.44).
     '''
 
     n_k = X_data.size
@@ -86,7 +88,7 @@ def hyperparam_effective(X_data, X_model, err):
 
 
 def div_error(a, a_err, b, b_err):
-    '''Gaussian error propagation for division of two quantities, with errors'''
+    '''Gaussian error propagation for division of two quantities with errors.'''
     return abs(a / b) * np.sqrt((a_err / a) ** 2 + (b_err / b) ** 2)
 
 
@@ -96,7 +98,7 @@ def div_error(a, a_err, b, b_err):
 
 
 def trim_peaks(az_domain, Paz):
-    '''Remove all "peaks" from a distribution while maintaining normalization'''
+    '''Remove all "peaks" from distribution while maintaining normalization.'''
 
     from scipy.signal import find_peaks
     from scipy.integrate import trapz
@@ -160,6 +162,12 @@ def plateau_weight_function(results, args=None, return_weights=False):
     require the sampler to probe the space around this "plateau", while still
     allowing for it to end before reaching extremely low `dlogz`
     (this may not be valid if the plateau is a perfectly flat plateau, however).
+
+    Note
+    ----
+    This should not be required for `dynesty >= 2.1.0`, which has a more
+    explicit (and probably correct) handling of plateaus within the likelihood
+    sampling itself
 
     '''
     # TODO this^ explanation should be in some docs, not the docstring

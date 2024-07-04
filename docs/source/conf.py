@@ -18,11 +18,11 @@ sys.path.insert(0, os.path.abspath('../..'))
 # -- Project information -----------------------------------------------------
 
 project = 'GCfit'
-copyright = '2023, Nolan Dickson'
+copyright = '2024, Nolan Dickson'
 author = 'Nolan Dickson'
 
 # The full version, including alpha/beta/rc tags
-release = '1.0'
+release = '2.0'
 
 
 # -- General configuration ---------------------------------------------------
@@ -44,6 +44,8 @@ autodoc_inherit_docstrings = False
 
 numpydoc_show_class_members = False
 numpydoc_show_inherited_class_members = False
+# numpydoc_class_members_toctree = True
+# numpydoc_validation_checks = {"all", "GL01", "EX01", "SA01"}
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
