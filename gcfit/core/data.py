@@ -733,8 +733,8 @@ class Model(lp.limepy):
     velocity and mass-loss rates and fractions, either as given during
     initilization or as defined in the metadata of a given `Observations`.
     The resulting mass bins are arranged correctly, and have any possibly
-    required (by the `Observations`) tracer masses added, before being used
-    to solve the Limepy distribution function.
+    required (by the `Observations`) or desired tracer masses added, before
+    being used to solve the Limepy distribution function.
 
     The first 13 arguments are the main model parameters, which are used by
     the `FittableModel` as well. Most other arguments provide more fine control
@@ -844,6 +844,12 @@ class Model(lp.limepy):
         Number of mass bins in each regime of the IMF, as defined by `m_breaks`.
         This number of bins will be log-spaced between each of the break masses.
         Defaults to [5, 5, 20].
+
+    tracer_masses : list of float, optional
+        A list of tracer (individual) masses to add to the model, each with a
+        negligible total mass. These will be added on top of any tracer masses
+        possibly required by the observations. Defaults to adding no tracer
+        mass bins, except those in a given observations.
 
     tcc : float, optional
         Core collapse time, in years. Defaults to 0, effectively being ignored.
@@ -1039,7 +1045,7 @@ class Model(lp.limepy):
                  a1=1.3, a2=2.3, a3=2.3, BHret=1.0, d=5,
                  s2=0., F=1., *, observations=None, age=None, FeH=None,
                  m_breaks=[0.1, 0.5, 1.0, 100], nbins=[5, 5, 20],
-                 tcc=0.0, NS_ret=0.1, BH_ret_int=1.0,
+                 tracer_masses=None, tcc=0.0, NS_ret=0.1, BH_ret_int=1.0,
                  natal_kicks=True, Ndot=0.0, vesc=90.,
                  meanmassdef='global', ode_maxstep=1e10, ode_rtol=1e-7):
 
@@ -1135,13 +1141,21 @@ class Model(lp.limepy):
         self.star_types = self._mf.types
 
         # append tracer mass bins (must be appended to end to not affect nms)
-        if observations is not None:
+        if tracer_masses is not None or observations is not None:
+
+            tracer_mj = tracer_masses or []
 
             # TODO should only append tracer masses for valid likelihood dsets?
-            tracer_mj = np.unique([
-                dataset.mdata['m'] for dataset in observations.datasets.values()
-                if 'm' in dataset.mdata
-            ])
+            if observations is not None:
+
+                obs_tracers = [
+                    dataset.mdata['m']
+                    for dataset in observations.datasets.values()
+                    if 'm' in dataset.mdata
+                ]
+                tracer_mj = np.concatenate((tracer_mj, obs_tracers))
+
+            tracer_mj = np.unique(tracer_mj)  # sort and remove any duplicates
 
             mj = np.concatenate((mj, tracer_mj))
             Mj = np.concatenate((Mj, 0.1 * np.ones_like(tracer_mj)))
@@ -1150,9 +1164,6 @@ class Model(lp.limepy):
                                               ['TR'] * tracer_mj.size))
 
             self._tracer_bins = slice(self.nms + self.nmr, None)
-
-        else:
-            logging.info("No `Observations` given, no tracer masses added")
 
         # ------------------------------------------------------------------
         # Create the limepy model base
