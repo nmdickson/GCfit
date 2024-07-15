@@ -39,9 +39,9 @@ DEFAULT_THETA = {
 
 
 DEFAULT_EV_THETA = {
-    'W0': 6.0,
-    'M0': 5.0,
-    'rh0': 10.0,
+    'W0': 5.0,
+    'M0': 1.0,
+    'rh0': 3.0,
     'ra': 1.23,
     'g': 0.75,
     'delta': 0.45,
@@ -1765,8 +1765,9 @@ class EvolvedModel(Model):
     and removes the need for a BH_ret (gets target M_BH from clusterBH)
     '''
 
-    def _evolve_mf(self, m_breaks, a1, a2, a3, nbins, FeH, age, Ndot, tcc,
+    def _evolve_mf(self, m_breaks, a1, a2, a3, nbins, FeH, age, esc_rate, tcc,
                    NS_ret, BH_ret_int, BHret, natal_kicks, vesc):
+        '''Alternative MF init using prior-computed IMF and clusterBH outputs'''
         from ssptools import EvolvedMFWithBH
 
         self._mf_kwargs = dict(
@@ -1775,6 +1776,7 @@ class EvolvedModel(Model):
             FeH=FeH,
             tout=np.array([age.to_value('Myr')]),
             esc_rate=esc_rate,
+            f_BH=self._clusterbh.fbh[-1],
             N0=self._clusterbh.N0,
             tcc=tcc,
             NS_ret=NS_ret,
@@ -1782,6 +1784,7 @@ class EvolvedModel(Model):
             natal_kicks=natal_kicks,
             vesc=vesc.value,
             esc_norm='M',
+            md=self.md
         )
 
         return EvolvedMFWithBH(**self._mf_kwargs)
@@ -1789,7 +1792,8 @@ class EvolvedModel(Model):
     def __init__(self, W0, M0, rh0, g=1.5, delta=0.45, ra=1e8,
                  a1=1.3, a2=2.3, a3=2.3, d=5,
                  s2=0., F=1., *, observations=None, age=None, FeH=None,
-                 m_breaks=[0.1, 0.5, 1.0, 100], cbh_kwargs=None, **kwargs):
+                 m_breaks=[0.1, 0.5, 1.0, 100], nbins=[5, 5, 20], md=1.2,
+                 cbh_kwargs=None, **kwargs):
         import clusterbh
 
         self.M0 = M0
@@ -1797,11 +1801,24 @@ class EvolvedModel(Model):
 
         cbh_kwargs = {} if cbh_kwargs is None else cbh_kwargs.copy()
 
+        # Parameters fit to N-body models
+        cbh_fit_prms = dict(
+            zeta=0.1,
+            n=1.5,
+            alpha_c=0.01,
+            Rht=0.5,
+        )
+
+        cbh_kwargs = cbh_fit_prms | cbh_kwargs
+
         m_breaks <<= u.Msun
+        a_slopes = [-a1, -a2, -a3]
+
+        self.md = md
 
         # TODO unfortunately repeating this imf init here and in clusterBH
         self._imf = masses.PowerLawIMF.from_M0(
-            m_break=m_breaks.value, a=[-a1, -a2, -a3], ext='zeros', M0=M0
+            m_break=m_breaks.value, a=a_slopes, ext='zeros', M0=M0
         )
 
         m0 = self._imf.mmean
@@ -1809,6 +1826,10 @@ class EvolvedModel(Model):
         # first convert the more useful M0, rh0 to the N0, rhoh0 required
         N0 = M0 / m0
         rhoh0 = (3 * M0) / (8 * np.pi * rh0**3)
+
+        # ------------------------------------------------------------------
+        # Try to read some metadata from the observations
+        # ------------------------------------------------------------------
 
         if observations is not None:
 
@@ -1819,30 +1840,69 @@ class EvolvedModel(Model):
             cbh_kwargs.setdefault('rg', Rgal.to_value('kpc'))
 
             # Get age to evolve to
-            age = (observations.mdata['age'] << u.Gyr).to_value('Myr')
-            cbh_kwargs.setdefault('tend', age)
+            age = (observations.mdata['age'] << u.Gyr)
+            cbh_kwargs.setdefault('tend', age.to_value('Myr'))
+
+            # Get metallicity
+            cbh_kwargs.setdefault('Z', 0.014 * 10**observations.mdata['FeH'])
+
+        # ------------------------------------------------------------------
+        # Get age and metallicity, if given (TODO make this logic match others)
+        # ------------------------------------------------------------------
+
+        if age:
+            cbh_kwargs.setdefault('tend', age.to_value('Myr'))
+
+        if FeH:
+            cbh_kwargs.setdefault('Z', 0.014 * 10**FeH)
+
+        # ------------------------------------------------------------------
+        # Set some default clusterBH parameters
+        # ------------------------------------------------------------------
 
         cbh_kwargs.setdefault('kick', True)
+        cbh_kwargs.setdefault('escapers', True)  # ???
+        cbh_kwargs.setdefault('tsev', 2)  # Myr
+        cbh_kwargs.setdefault('Mval', 3)
 
-        self._clusterbh = clusterbh.clusterBH(N0, rhoh0, **cbh_kwargs)
+        # ------------------------------------------------------------------
+        # Make sure clusterBH IMF matches this one
+        # ------------------------------------------------------------------
+
+        cbh_kwargs.setdefault('m_breaks', m_breaks.value)
+        cbh_kwargs.setdefault('a_slopes', a_slopes)
+        cbh_kwargs.setdefault('nbins', nbins)
+
+        # ------------------------------------------------------------------
+        # Compute evolutionary model
+        # ------------------------------------------------------------------
 
         self.cbh_kwargs = cbh_kwargs
+
+        self._clusterbh = clusterbh.clusterBH(N0, rhoh0, **self.cbh_kwargs)
+
+        # Make sure no negative f_BH values are allowed
+        self._clusterbh.fbh[self._clusterbh.fbh < 0] = 0.
+
+        # ------------------------------------------------------------------
+        # Determine present day values from the model
+        # ------------------------------------------------------------------
 
         M = self._clusterbh.M[-1] << u.Msun
         rh = self._clusterbh.rh[-1] << u.pc
 
+        # ------------------------------------------------------------------
+        # Compute some relevant quantities for mass function evolution
+        # ------------------------------------------------------------------
+
         vesc = self._clusterbh.vesc0 << u.km / u.s
-        # Ndot = (self._clusterbh.Np[-1] - N0) / age.to_value('Myr')
         tcc = self._clusterbh.tcc
 
+        # Compute Mdot_esc based on the clusterBH formulation, for ssptools
         xi = 0.6 * self._clusterbh.zeta * (self._clusterbh.rh / self._clusterbh.rt / self._clusterbh.Rht) ** self._clusterbh.n
         xit = np.where(self._clusterbh.t>self._clusterbh.tcc, xi+self._clusterbh.alpha_c, xi)
         Mst_dot = -xi * self._clusterbh.M / (self._clusterbh.trh*self._clusterbh.f*self._clusterbh._psi(self._clusterbh.fbh)) + (xit-xi)*self._clusterbh.M / self._clusterbh.trh
         Mdot_t = util.QuantitySpline(self._clusterbh.t * 1e3, Mst_dot)
-
-        # if np.abs(self._clusterbh.fbh[-1]) - np.finfo(float).eps < 0.:
-        if self._clusterbh.fbh[-1] < 0.:
-            self._clusterbh.fbh[-1] = 0.0
 
         BHret = -1
 
@@ -1850,8 +1910,7 @@ class EvolvedModel(Model):
                          a1=a1, a2=a2, a3=a3, BHret=BHret, d=d,
                          s2=s2, F=F, observations=observations, age=age,
                          FeH=FeH, m_breaks=m_breaks, vesc=vesc,
-                         esc_rate=Mdot_t, esc_norm='M',
-                         tcc=tcc, **kwargs)
+                         esc_rate=Mdot_t, tcc=tcc, **kwargs)
 
 
 class FittableEvolvedModel(EvolvedModel):
