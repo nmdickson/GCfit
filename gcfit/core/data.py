@@ -897,11 +897,12 @@ class Model(lp.limepy):
         Whether to account for natal kicks in the BH dynamical retention.
         Defaults to True.
 
-    Ndot : float, optional
-        Represents rate of change of the number of stars N over time, in stars
-        per Myr. Regulates low-mass object depletion (ejection) due to dynamical
-        evolution. Do not use unless you know what you're doing.
-        Defaults to 0.
+    esc_rate : float or callable
+        Represents rate of change of stars over time due to tidal
+        ejections (and other escape mechanisms). Regulates low-mass object
+        depletion (ejection) due to dynamical evolution. See
+        `ssptools.EvolvedMF` for more information. Likely should not be used
+        unless you know what you're doing. Defaults to 0.
 
     vesc : float or astropy.Quantity, optional
         Initial cluster escape velocity, in km/s, for use in the computation of
@@ -1000,7 +1001,7 @@ class Model(lp.limepy):
     limepy : Distribution-function model base of this class.
     '''
 
-    def _evolve_mf(self, m_breaks, a1, a2, a3, nbins, FeH, age, Ndot, tcc,
+    def _evolve_mf(self, m_breaks, a1, a2, a3, nbins, FeH, age, esc_rate, tcc,
                    NS_ret, BH_ret_int, BHret, natal_kicks, vesc):
         '''Compute an evolved mass function using `ssptools.EvolvedMF`'''
 
@@ -1013,7 +1014,7 @@ class Model(lp.limepy):
             nbins=nbins,
             FeH=FeH,
             tout=np.array([age.to_value('Myr')]),
-            Ndot=Ndot,
+            esc_rate=esc_rate,
             tcc=tcc,
             NS_ret=NS_ret,
             BH_ret_int=BH_ret_int,
@@ -1103,7 +1104,7 @@ class Model(lp.limepy):
                  s2=0., F=1., *, observations=None, age=None, FeH=None,
                  m_breaks=[0.1, 0.5, 1.0, 100], nbins=[5, 5, 20],
                  tracer_masses=None, tcc=0.0, NS_ret=0.1, BH_ret_int=1.0,
-                 natal_kicks=True, Ndot=0.0, vesc=90.,
+                 natal_kicks=True, esc_rate=0.0, vesc=90.,
                  meanmassdef='global', ode_maxstep=1e10, ode_rtol=1e-7):
 
         # ------------------------------------------------------------------
@@ -1146,8 +1147,8 @@ class Model(lp.limepy):
 
             # These are maybe required, but have actual defaults from the start;
             # if you explicitly set None and its not in obs, then that's on you
-            if Ndot is None:
-                Ndot = observations.mdata['Ndot']
+            if esc_rate is None:
+                esc_rate = observations.mdata['esc_rate']
 
             if vesc is None:
                 vesc = observations.mdata['vesc'] << u.km / u.s
@@ -1171,7 +1172,7 @@ class Model(lp.limepy):
         # ------------------------------------------------------------------
 
         self._mf = self._evolve_mf(m_breaks, a1, a2, a3, nbins,
-                                   FeH, age, Ndot, tcc,
+                                   FeH, age, esc_rate, tcc,
                                    NS_ret, BH_ret_int, BHret, natal_kicks, vesc)
 
         mj, Mj = self._mf.m, self._mf.M
@@ -1745,8 +1746,8 @@ class FittableModel(Model):
         if ('vesc' not in kwargs) and ('vesc' in observations.mdata):
             kwargs['vesc'] = observations.mdata['vesc'] << u.km / u.s
 
-        if ('Ndot' not in kwargs) and ('Ndot' in observations.mdata):
-            kwargs['Ndot'] = observations.mdata['Ndot']
+        if ('esc_rate' not in kwargs) and ('esc_rate' in observations.mdata):
+            kwargs['esc_rate'] = observations.mdata['esc_rate']
 
         super().__init__(observations=observations, **theta, **kwargs)
 
@@ -1773,14 +1774,14 @@ class EvolvedModel(Model):
             nbins=nbins,
             FeH=FeH,
             tout=np.array([age.to_value('Myr')]),
-            Ndot=Ndot,
-            f_BH=self._clusterbh.fbh[-1],
+            esc_rate=esc_rate,
             N0=self._clusterbh.N0,
             tcc=tcc,
             NS_ret=NS_ret,
             BH_ret_int=BH_ret_int,
             natal_kicks=natal_kicks,
-            vesc=vesc.value
+            vesc=vesc.value,
+            esc_norm='M',
         )
 
         return EvolvedMFWithBH(**self._mf_kwargs)
@@ -1830,6 +1831,15 @@ class EvolvedModel(Model):
         M = self._clusterbh.M[-1] << u.Msun
         rh = self._clusterbh.rh[-1] << u.pc
 
+        vesc = self._clusterbh.vesc0 << u.km / u.s
+        # Ndot = (self._clusterbh.Np[-1] - N0) / age.to_value('Myr')
+        tcc = self._clusterbh.tcc
+
+        xi = 0.6 * self._clusterbh.zeta * (self._clusterbh.rh / self._clusterbh.rt / self._clusterbh.Rht) ** self._clusterbh.n
+        xit = np.where(self._clusterbh.t>self._clusterbh.tcc, xi+self._clusterbh.alpha_c, xi)
+        Mst_dot = -xi * self._clusterbh.M / (self._clusterbh.trh*self._clusterbh.f*self._clusterbh._psi(self._clusterbh.fbh)) + (xit-xi)*self._clusterbh.M / self._clusterbh.trh
+        Mdot_t = util.QuantitySpline(self._clusterbh.t * 1e3, Mst_dot)
+
         # if np.abs(self._clusterbh.fbh[-1]) - np.finfo(float).eps < 0.:
         if self._clusterbh.fbh[-1] < 0.:
             self._clusterbh.fbh[-1] = 0.0
@@ -1839,7 +1849,9 @@ class EvolvedModel(Model):
         super().__init__(W0, M, rh, g=g, delta=delta, ra=ra,
                          a1=a1, a2=a2, a3=a3, BHret=BHret, d=d,
                          s2=s2, F=F, observations=observations, age=age,
-                         FeH=FeH, m_breaks=m_breaks, **kwargs)
+                         FeH=FeH, m_breaks=m_breaks, vesc=vesc,
+                         esc_rate=Mdot_t, esc_norm='M',
+                         tcc=tcc, **kwargs)
 
 
 class FittableEvolvedModel(EvolvedModel):
@@ -1884,8 +1896,8 @@ class FittableEvolvedModel(EvolvedModel):
         if ('vesc' not in kwargs) and ('vesc' in observations.mdata):
             kwargs['vesc'] = observations.mdata['vesc'] << u.km / u.s
 
-        if ('Ndot' not in kwargs) and ('Ndot' in observations.mdata):
-            kwargs['Ndot'] = observations.mdata['Ndot']
+        if ('esc_rate' not in kwargs) and ('esc_rate' in observations.mdata):
+            kwargs['esc_rate'] = observations.mdata['esc_rate']
 
         super().__init__(observations=observations, **theta, **kwargs)
 
