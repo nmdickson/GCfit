@@ -1173,7 +1173,8 @@ class Model(lp.limepy):
 
         self._mf = self._evolve_mf(m_breaks, a1, a2, a3, nbins,
                                    FeH, age, esc_rate, tcc,
-                                   NS_ret, BH_ret_int, BHret, natal_kicks, vesc)
+                                   NS_ret, BH_ret_int, BHret,
+                                   natal_kicks, self.vesc0)
 
         mj, Mj = self._mf.m, self._mf.M
 
@@ -1850,10 +1851,10 @@ class EvolvedModel(Model):
         # Get age and metallicity, if given (TODO make this logic match others)
         # ------------------------------------------------------------------
 
-        if age:
+        if age is not None:
             cbh_kwargs.setdefault('tend', age.to_value('Myr'))
 
-        if FeH:
+        if FeH is not None:
             cbh_kwargs.setdefault('Z', 0.014 * 10**FeH)
 
         # ------------------------------------------------------------------
@@ -1950,10 +1951,8 @@ class FittableEvolvedModel(EvolvedModel):
 
         kwargs = kwargs.copy()
 
-        # Extra check if vesc/Ndot exist in obs first, otherwise use default
+        # Extra check if esc_rate exist in obs first, otherwise use default
         #   Necessary because checks in Model aren't sufficient
-        if ('vesc' not in kwargs) and ('vesc' in observations.mdata):
-            kwargs['vesc'] = observations.mdata['vesc'] << u.km / u.s
 
         if ('esc_rate' not in kwargs) and ('esc_rate' in observations.mdata):
             kwargs['esc_rate'] = observations.mdata['esc_rate']
