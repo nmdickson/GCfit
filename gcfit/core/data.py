@@ -1176,6 +1176,11 @@ class Model(lp.limepy):
                                    NS_ret, BH_ret_int, BHret,
                                    natal_kicks, self.vesc0)
 
+        if not self._mf.converged:
+            mssg = ("Mass function evolution ODE failed to converge"
+                    f" with kwargs={self._mf_kwargs}")
+            raise ValueError(mssg)
+
         mj, Mj = self._mf.m, self._mf.M
 
         self.mbin_widths = self._mf.bin_widths
