@@ -23,6 +23,84 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 __all__ = ['RunCollection', 'MCMCRun', 'NestedRun']
 
 
+_label_math_mapping = {
+    # Model Base Parameters
+    'W0': r'\hat{\phi}_0',
+    'M': r'M',
+    'rh': r'r_{\mathrm{h}}',
+    'ra': r'\log\left(\hat{r}_\mathrm{a}\right)',
+    'g': r'g',
+    'delta': r'\delta',
+    's2': r's^2',
+    'F': r'F',
+    'a1': r'\alpha_1',
+    'a2': r'\alpha_2',
+    'a3': r'\alpha_3',
+    'BHret': r'\mathrm{BH}_{ret}',
+    'd': r'd',
+    # Evolved Model Parameters
+    'M0': r'M_{0}',
+    'rh0': r'r_{\mathrm{h},0}',
+    # Cluster Metadata
+    'FeH': r'[\mathrm{Fe}/\mathrm{H}]',
+    'Ndot': r'\dot{N}',
+    'RA': r'\mathrm{RA}',
+    'DEC': r'\mathrm{DEC}',
+    'chi2': r'\chi^{2}',
+    # Derived Model Quantities
+    'BH_mass': r'\mathrm{M}_{\mathrm{BH}}',
+    'BH_num': r'\mathrm{N}_{\mathrm{BH}}',
+    'f_rem': r'f_{\mathrm{remn}}',
+    'f_BH': r'f_{\mathrm{BH}}',
+    'spitzer_chi': r'\chi_{\mathrm{Spitzer}}',
+    'trh': r't_{\mathrm{r_h}}',
+    'N_relax': r'N_{\mathrm{relax}}',
+    'r0': r'r_{0}',
+    'ra_model': r'r_{\mathrm{a}}',
+    'rt': r'r_{\mathrm{t}}',
+    'rv': r'r_{\mathrm{v}}',
+    'rhp': r'r_{\mathrm{hp}}',
+    'mmean': r'\bar{m}',
+}
+
+
+_label_unit_mapping = {
+    'M': r'10^6\ M_\odot',
+    'M0': r'10^6\ M_\odot',
+    'rh': r'\mathrm{pc}',
+    'rh0': r'\mathrm{pc}',
+    's2': r'\mathrm{arcmin^{-4}}',
+    'BHret': r'\%',
+    'd': r'\mathrm{kpc}',
+    'Ndot': r'\dot{N}',
+    'RA': r'\deg',
+    'DEC': r'\deg',
+    'BH_mass': r'M_\odot',
+    'f_rem': r'\%',
+    'f_BH': r'\%',
+    'trh': r'\mathrm{Gyr}',
+    'r0': r'\mathrm{pc}',
+    'ra_model': r'\mathrm{pc}',
+    'rt': r'\mathrm{pc}',
+    'rv': r'\mathrm{pc}',
+    'rhp': r'\mathrm{pc}',
+    'mmean': r'M_\odot',
+}
+
+
+def _get_latex_label(param, with_units=True):
+    '''Return param name in latex form, optionally with units.'''
+
+    name = _label_math_mapping.get(param, param)
+    unit = _label_unit_mapping.get(param, None)
+
+    if with_units and unit is not None:
+        label = rf'${name.strip("$")}\ \left[{unit}\right]$'
+    else:
+        label = rf'${name.strip("$")}$' if name else name
+
+    return label
+
 # --------------------------------------------------------------------------
 # Individual Run Analysis
 # --------------------------------------------------------------------------
@@ -475,6 +553,9 @@ class _SingleRunAnalysis(_RunAnalysis):
                         "sampling may not be fully converged.")
                 warnings.warn(mssg)
 
+            # Check if this is an evolved modelling fit or not
+            self._evolved = file['metadata'].attrs.get('evolved', False)
+
             # Check if this run seems to have used a local cluster data file
             restrict_to = file['metadata'].attrs.get('restrict_to', None)
 
@@ -496,6 +577,9 @@ class _SingleRunAnalysis(_RunAnalysis):
                 mssg = "No cluster name in metadata, must supply observations"
                 raise ValueError(mssg) from err
 
+        self._parameters = list(self.obs.initials if not self._evolved
+                                else self.obs.ev_initials)
+
     @contextlib.contextmanager
     def _openfile(self, group=None, mode='r'):
         file = h5py.File(self._filename, mode)
@@ -510,6 +594,28 @@ class _SingleRunAnalysis(_RunAnalysis):
 
         finally:
             file.close()
+
+    def _get_labels(self, label_fixed=True, math_labels=False):
+        '''Retrieve labels for all parameters.'''
+
+        labels = self._parameters
+
+        if math_labels:
+            labels = [_get_latex_label(lbl, with_units=True) for lbl in labels]
+
+        if label_fixed:
+
+            with self._openfile('metadata') as mdata:
+
+                fixed = sorted(
+                    ((k, labels.index(k)) for k in mdata['fixed_params'].attrs),
+                    key=lambda item: labels.index(item[0])
+                )
+
+            for k, i in fixed:
+                labels[i] += ' (fixed)'
+
+        return labels
 
 
 class MCMCRun(_SingleRunAnalysis):
@@ -647,53 +753,13 @@ class MCMCRun(_SingleRunAnalysis):
     # Helpers
     # ----------------------------------------------------------------------
 
-    def _get_labels(self, label_fixed=True, math_labels=False):
-        '''Retrieve labels for all parameters.'''
-
-        labels = list(self.obs.initials)
-
-        if math_labels:
-
-            math_mapping = {
-                'W0': r'$\hat{\phi}_0$',
-                'M': r'$M\ \left[10^6\ M_\odot\right]$',
-                'rh': r'$r_h\ \left[\mathrm{pc}\right]$',
-                'ra': r'$\log\left(\hat{r}_a\right)$',
-                'g': r'$g$',
-                'delta': r'$\delta$',
-                's2': r'$s^2\ \left[\mathrm{arcmin^{-4}}\right]$',
-                'F': r'$F$',
-                'a1': r'$\alpha_1$',
-                'a2': r'$\alpha_2$',
-                'a3': r'$\alpha_3$',
-                'BHret': r'$\mathrm{BH}_{ret}\ \left[\%\right]$',
-                'd': r'$d\ \left[\mathrm{kpc}\right]$',
-            }
-
-            labels = [math_mapping[lbl] for lbl in labels]
-
-        if label_fixed:
-
-            with self._openfile('metadata') as mdata:
-
-                fixed = sorted(
-                    ((k, labels.index(k)) for k in
-                     mdata['fixed_params'].attrs),
-                    key=lambda item: labels.index(item[0])
-                )
-
-            for k, i in fixed:
-                labels[i] += ' (fixed)'
-
-        return labels
-
     def _get_chains(self, flatten=False):
         '''Get the MCMC chains, properly using the iterations and walkers
         slices, and accounting for fixed params'''
 
         with self._openfile() as file:
 
-            labels = list(self.obs.initials)
+            labels = self._parameters
 
             chain = self._reduce(file[self._gname]['chain'])
 
@@ -724,7 +790,7 @@ class MCMCRun(_SingleRunAnalysis):
 
         prior_params = {}
 
-        for key in list(self.obs.initials):
+        for key in self._parameters:
             try:
                 type_ = stored_priors[f'{key}_type'].decode('utf-8')
                 args = stored_priors[f'{key}_args']
@@ -1640,45 +1706,6 @@ class NestedRun(_SingleRunAnalysis):
 
         return bnds
 
-    def _get_labels(self, label_fixed=True, math_labels=False):
-        '''Return full list of labels for all parameters.'''
-
-        labels = list(self.obs.initials)
-
-        if math_labels:
-
-            math_mapping = {
-                'W0': r'$\hat{\phi}_0$',
-                'M': r'$M\ \left[10^6\ M_\odot\right]$',
-                'rh': r'$r_h\ \left[\mathrm{pc}\right]$',
-                'ra': r'$\log\left(\hat{r}_a\right)$',
-                'g': r'$g$',
-                'delta': r'$\delta$',
-                's2': r'$s^2\ \left[\mathrm{arcmin^{-4}}\right]$',
-                'F': r'$F$',
-                'a1': r'$\alpha_1$',
-                'a2': r'$\alpha_2$',
-                'a3': r'$\alpha_3$',
-                'BHret': r'$\mathrm{BH}_{ret}\ \left[\%\right]$',
-                'd': r'$d\ \left[\mathrm{kpc}\right]$',
-            }
-
-            labels = [math_mapping[lbl] for lbl in labels]
-
-        if label_fixed:
-
-            with self._openfile('metadata') as mdata:
-
-                fixed = sorted(
-                    ((k, labels.index(k)) for k in mdata['fixed_params'].attrs),
-                    key=lambda item: labels.index(item[0])
-                )
-
-            for k, i in fixed:
-                labels[i] += ' (fixed)'
-
-        return labels
-
     # TODO some ways of handling and plotting initial_batch only clusters
     def _get_chains(self, include_fixed=True, *, apply_mask=True):
         '''Get the "chains" of all samples from this nested sampling run.'''
@@ -1690,7 +1717,7 @@ class NestedRun(_SingleRunAnalysis):
             if apply_mask and self.mask is not None:
                 chain = chain[self.mask, :]
 
-            labels = list(self.obs.initials)
+            labels = self._parameters
 
             fixed = sorted(
                 ((k, v, labels.index(k)) for k, v in
@@ -1730,7 +1757,7 @@ class NestedRun(_SingleRunAnalysis):
                 sim_wt = weight_function(sim_run, {'pfrac': 1.}, True)[1][2]
                 eq_chain = resample_equal(sim_run.samples, sim_wt)
 
-            labels = list(self.obs.initials)
+            labels = self._parameters
 
             fixed = sorted(
                 ((k, v, labels.index(k)) for k, v in
@@ -1759,7 +1786,7 @@ class NestedRun(_SingleRunAnalysis):
 
         prior_params = {}
 
-        for key in list(self.obs.initials):
+        for key in self._parameters:
             try:
                 type_ = stored_priors[f'{key}_type'].decode('utf-8')
                 args = stored_priors[f'{key}_args']
@@ -3703,68 +3730,10 @@ class RunCollection(_RunAnalysis):
             logged = False
             pass
 
-        math_mapping = {
-            'W0': r'\hat{\phi}_0',
-            'M': r'M',
-            'rh': r'r_{\mathrm{h}}',
-            'ra': (r'r_{\mathrm{a}}' if force_model
-                   else r'\log_{10}\left(\hat{r}_{\mathrm{a}}\right)'),
-            'g': r'g',
-            'delta': r'\delta',
-            's2': r's^{2}',
-            'F': r'F',
-            'a1': r'\alpha_{1}',
-            'a2': r'\alpha_{2}',
-            'a3': r'\alpha_{3}',
-            'BHret': r'\mathrm{BH}_{\mathrm{ret}}',
-            'd': r'd',
-            'FeH': r'[\mathrm{Fe}/\mathrm{H}]',
-            'Ndot': r'\dot{N}',
-            'RA': r'\mathrm{RA}',
-            'DEC': r'\mathrm{DEC}',
-            'chi2': r'\chi^{2}',
-            'BH_mass': r'\mathrm{M}_{\mathrm{BH}}',
-            'BH_num': r'\mathrm{N}_{\mathrm{BH}}',
-            'f_rem': r'f_{\mathrm{remn}}',
-            'f_BH': r'f_{\mathrm{BH}}',
-            'spitzer_chi': r'\chi_{\mathrm{Spitzer}}',
-            'trh': r't_{\mathrm{r_h}}',
-            'N_relax': r'N_{\mathrm{relax}}',
-            'r0': r'r_{0}',
-            'rt': r'r_{\mathrm{t}}',
-            'rv': r'r_{\mathrm{v}}',
-            'rhp': r'r_{\mathrm{hp}}',
-            'mmean': r'\bar{m}',
-        }
+        if param == 'ra' and force_model:
+            param = 'ra_model'
 
-        unit_mapping = {
-            'M': r'10^6\ M_\odot',
-            'rh': r'\mathrm{pc}',
-            'ra': r'\mathrm{pc}' if force_model else None,
-            's2': r'\mathrm{arcmin^{-4}}',
-            'BHret': r'\%',
-            'd': r'\mathrm{kpc}',
-            'Ndot': r'\dot{N}',
-            'RA': r'\deg',
-            'DEC': r'\deg',
-            'BH_mass': r'M_\odot',
-            'f_rem': r'\%',
-            'f_BH': r'\%',
-            'trh': r'\mathrm{Gyr}',
-            'r0': r'\mathrm{pc}',
-            'rt': r'\mathrm{pc}',
-            'rv': r'\mathrm{pc}',
-            'rhp': r'\mathrm{pc}',
-            'mmean': r'M_\odot',
-        }
-
-        name = math_mapping.get(param, param)
-        unit = unit_mapping.get(param, None)
-
-        if with_units and unit is not None:
-            label = rf'${name.strip("$")}\ \left[{unit}\right]$'
-        else:
-            label = rf'${name.strip("$")}$' if name else name
+        label = _get_latex_label(param, with_units=with_units)
 
         if logged:
             # TODO obviously currently fails for operation-param pairs
