@@ -1,7 +1,9 @@
 from .. import Observations
 from ..probabilities import priors
 from ..core.main import MCMCFittingState, NestedFittingState
-from .models import CIModelVisualizer, ModelVisualizer, ModelCollection
+from .models import CIModelVisualizer, ModelVisualizer
+from .models import EvolvedVisualizer, CIEvolvedVisualizer
+from .models import ModelCollection
 
 import sys
 import pathlib
@@ -829,7 +831,9 @@ class MCMCRun(_SingleRunAnalysis):
 
         labels, chain = self._get_chains()
 
-        return ModelVisualizer.from_chain(chain, self.obs, method)
+        model_cls = ModelVisualizer if not self.evolved else EvolvedVisualizer
+
+        return model_cls.from_chain(chain, self.obs, method)
 
     def get_CImodel(self, N=100, Nprocesses=1, load=False):
         '''Return a `CIModelVisualizer` instance corresponding to this run.
@@ -860,16 +864,17 @@ class MCMCRun(_SingleRunAnalysis):
         '''
         import multiprocessing
 
+        viz_cls = CIModelVisualizer if not self.evolved else CIEvolvedVisualizer
+
         if load:
-            return CIModelVisualizer.load(self._filename, observations=self.obs)
+            return viz_cls.load(self._filename, observations=self.obs)
 
         else:
 
             labels, chain = self._get_chains()
 
             with multiprocessing.Pool(processes=Nprocesses) as pool:
-                return CIModelVisualizer.from_chain(chain, self.obs,
-                                                    N, pool=pool)
+                return viz_cls.from_chain(chain, self.obs, N, pool=pool)
 
     # ----------------------------------------------------------------------
     # Plots
@@ -1828,13 +1833,15 @@ class NestedRun(_SingleRunAnalysis):
             The created model visualization object.
         '''
 
+        model_cls = ModelVisualizer if not self._evolved else EvolvedVisualizer
+
         if method == 'mean':
             theta = self.parameter_means()[0]
-            return ModelVisualizer.from_theta(theta, self.obs)
+            return model_cls.from_theta(theta, self.obs)
 
         else:
             labels, chain = self._get_equal_weight_chains(add_errors=add_errors)
-            return ModelVisualizer.from_chain(chain, self.obs, method)
+            return model_cls.from_chain(chain, self.obs, method)
 
     def get_CImodel(self, N=100, Nprocesses=1, add_errors=False, shuffle=True,
                     load=False):
@@ -1877,8 +1884,10 @@ class NestedRun(_SingleRunAnalysis):
         '''
         import multiprocessing
 
+        ci_cls = CIModelVisualizer if not self._evolved else CIEvolvedVisualizer
+
         if load:
-            return CIModelVisualizer.load(self._filename, observations=self.obs)
+            return ci_cls.load(self._filename, observations=self.obs)
 
         else:
             labels, chain = self._get_equal_weight_chains(add_errors=add_errors)
@@ -1887,8 +1896,7 @@ class NestedRun(_SingleRunAnalysis):
                 np.random.default_rng().shuffle(chain, axis=0)
 
             with multiprocessing.Pool(processes=Nprocesses) as pool:
-                return CIModelVisualizer.from_chain(chain, self.obs,
-                                                    N, pool=pool)
+                return ci_cls.from_chain(chain, self.obs, N, pool=pool)
 
     # ----------------------------------------------------------------------
     # Plots
@@ -3914,8 +3922,10 @@ class RunCollection(_RunAnalysis):
         chains = [run._get_equal_weight_chains()[1] for run in self.runs]
 
         obs_list = [run.obs for run in self.runs]
+        ev_list = [run._evolved for run in self.runs]
 
-        mc = ModelCollection.from_chains(chains, obs_list, ci=False, **kwargs)
+        mc = ModelCollection.from_chains(chains, obs_list, ci=False,
+                                         evolved=ev_list, **kwargs)
 
         # save a copy of models here
         self.models = mc
@@ -3972,6 +3982,7 @@ class RunCollection(_RunAnalysis):
         else:
             chains = []
             obs_list = []
+            ev_list = []
 
             for run in self.runs:
                 _, ch = run._get_equal_weight_chains(add_errors=add_errors)
@@ -3981,11 +3992,12 @@ class RunCollection(_RunAnalysis):
 
                 chains.append(ch)
                 obs_list.append(run.obs)
+                ev_list.append(run._evolved)
 
             with multiprocessing.Pool(processes=Nprocesses) as pool:
 
-                mc = ModelCollection.from_chains(chains, obs_list, ci=True,
-                                                 N=N, pool=pool)
+                mc = ModelCollection.from_chains(chains, obs_list, ci=True, N=N,
+                                                 pool=pool, evolved=ev_list)
 
         # save a copy of models here
         self.models = mc

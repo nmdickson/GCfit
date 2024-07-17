@@ -1918,6 +1918,11 @@ class EvolvedModel(Model):
                          FeH=FeH, m_breaks=m_breaks, vesc=vesc,
                          esc_rate=Mdot_t, tcc=tcc, **kwargs)
 
+    def get_visualizer(self):
+        '''Return a `analysis.ModelVisualizer` instance based on this model.'''
+        from ..analysis import EvolvedVisualizer
+        return EvolvedVisualizer(self, observations=self.observations)
+
 
 class FittableEvolvedModel(EvolvedModel):
     '''Evolved Model subclass for use in all fitting functions.'''
@@ -2723,3 +2728,8 @@ class SampledModel:
                             pixel_scale=pixel_scale, **kwargs)
 
         return (src, (rem_x, rem_y, rem_t)) if return_rem else src
+
+    def get_visualizer(self):
+        '''Return `analysis.SampledVisualizer` instance based on this model.'''
+        from ..analysis import SampledVisualizer
+        return SampledVisualizer(self, observations=self.observations)
