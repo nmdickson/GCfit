@@ -939,6 +939,69 @@ class _ClusterVisualizer:
 
         return ax, res_ax
 
+    def _plot_evolution(self, ax, model_data, *,
+                        x_unit='Gyr', y_unit=None, legend=False,
+                        color=None, model_color=None,
+                        mass_bins=None, model_label=None, **kwargs):
+        '''Plot a model quantity with time on the x axis. only available for
+        evolved models obviously'''
+
+        # Unless specified, each mass bin should cycle colour from matplotlib
+        default_color = color
+
+        model_color = model_color or default_color
+
+        if 'label' in kwargs:
+            if model_label is None:
+                # I'll let you get away with it this time.
+                model_label = kwargs.pop('label')
+            else:
+                mssg = ("Multiple labels provided. "
+                        "Must specify only a `model_label`")
+                raise ValueError(mssg)
+
+        # ------------------------------------------------------------------
+        # Based on the masses of data plotted, plot the corresponding axes of
+        # the model data, calling `_plot_model`
+        # ------------------------------------------------------------------
+
+        # ensure that the data is (mass bin, intervals, r domain)
+        if len(model_data.shape) != 3:
+            raise ValueError("invalid model data shape")
+
+        # No mass bins supplied, default to star_bin
+        if mass_bins is None:
+            mass_bins = (0, )
+
+        for mbin in mass_bins:
+
+            try:
+                ymodel = model_data[mbin, :, :]
+            except IndexError:
+                mssg = (f"Mass bin index {mbin} is out of "
+                        f"range (0-{self.mj.size - 1})")
+                raise ValueError(mssg)
+
+            clr = model_color
+
+            label = model_label
+
+            self._plot_model(ax, x_data=self.t, data=ymodel, color=clr,
+                             x_unit=x_unit, y_unit=y_unit, label=label,
+                             **kwargs)
+
+        # Create legend (remove if no handles found)
+        if legend:
+
+            # The empty legends warning is apparently impossible to catch, so
+            # we'll do it ourselves, and save the stdout clutter
+            handles, labels = mpl_leg._get_legend_handles_labels([ax])
+
+            if len(handles) > 0:
+                ax.legend(handles, labels)
+
+        return ax
+
     # -----------------------------------------------------------------------
     # Plot extras
     # -----------------------------------------------------------------------
@@ -4642,6 +4705,158 @@ class CIModelVisualizer(_ClusterVisualizer):
 
 class EvolvedVisualizer(ModelVisualizer):
 
+    @_ClusterVisualizer._support_units
+    def plot_mass_evolution(self, fig=None, ax=None, kind='all', *,
+                            x_unit='Gyr', y_unit='Msun', legend=True,
+                            label_position='top', verbose_label=True,
+                            blank_xaxis=False, **kwargs):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        if kind == 'all':
+            kind = {'total', 'MS', 'BH'}
+
+        if 'total' in kind:
+            ax = self._plot_evolution(ax, self.M_t,
+                                      model_label="Total", legend=legend,
+                                      x_unit=x_unit, y_unit=y_unit, **kwargs)
+
+        if 'MS' in kind:
+            ax = self._plot_evolution(ax, self.Ms_t,
+                                      model_label="Stars", legend=legend,
+                                      x_unit=x_unit, y_unit=y_unit, **kwargs)
+
+        if 'BH' in kind:
+            ax = self._plot_evolution(ax, self.Mbh_t,
+                                      model_label="Black Holes", legend=legend,
+                                      x_unit=x_unit, y_unit=y_unit, **kwargs)
+
+        label = "Total Mass" if verbose_label else r'$M\,(t)$'
+
+        self._set_ylabel(ax, label, y_unit, label_position)
+        self._set_xlabel(ax, 'Time', unit=x_unit, remove_all=blank_xaxis)
+
+        return fig
+
+    @_ClusterVisualizer._support_units
+    def plot_radius_evolution(self, fig=None, ax=None, kind='rh', *,
+                              x_unit='Gyr', y_unit='pc', legend=True,
+                              label_position='top', verbose_label=True,
+                              blank_xaxis=False, **kwargs):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        if kind == 'all':
+            kind = {'rh', 'rt', 'rv'}
+
+        if 'rh' in kind:
+            ax = self._plot_evolution(ax, self.rh_t,
+                                      model_label="Half-mass radius",
+                                      x_unit=x_unit, y_unit=y_unit,
+                                      legend=legend, **kwargs)
+
+        if 'rt' in kind:
+            ax = self._plot_evolution(ax, self.rh_t,
+                                      model_label="Tidal radius",
+                                      x_unit=x_unit, y_unit=y_unit,
+                                      legend=legend, **kwargs)
+
+        if 'rv' in kind:
+            ax = self._plot_evolution(ax, self.rh_t,
+                                      model_label="Virial radius",
+                                      x_unit=x_unit, y_unit=y_unit,
+                                      legend=legend, **kwargs)
+
+        label = "Radius" if verbose_label else r'$r\,(t)$'
+
+        self._set_ylabel(ax, label, y_unit, label_position)
+        self._set_xlabel(ax, 'Time', unit=x_unit, remove_all=blank_xaxis)
+
+        return fig
+
+    @_ClusterVisualizer._support_units
+    def plot_fbh_evolution(self, fig=None, ax=None, *,
+                           x_unit='Gyr', y_unit='', legend=False,
+                           label_position='top', verbose_label=True,
+                           blank_xaxis=False, **kwargs):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        ax = self._plot_evolution(ax, self.fbh_t,
+                                  model_label=r"$f_{\mathrm{BH}}$",
+                                  x_unit=x_unit, y_unit=y_unit,
+                                  legend=legend, **kwargs)
+
+        label = "BH Mass Fraction" if verbose_label else r'$f_{\mathrm{BH}}$'
+
+        self._set_ylabel(ax, label, y_unit, label_position)
+        self._set_xlabel(ax, 'Time', unit=x_unit, remove_all=blank_xaxis)
+
+        return fig
+
+    @_ClusterVisualizer._support_units
+    def plot_trh_evolution(self, fig=None, ax=None, *,
+                           x_unit='Gyr', y_unit='Myr', legend=True,
+                           label_position='top', verbose_label=True,
+                           blank_xaxis=False, **kwargs):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        ax = self._plot_evolution(ax, self.trh_t, legend=legend,
+                                  x_unit=x_unit, y_unit=y_unit, **kwargs)
+
+        if verbose_label:
+            label = "Half-mass Relaxation time"
+        else:
+            label = r'$t_{\mathrm{r_h}}$'
+
+        self._set_ylabel(ax, label, y_unit, label_position)
+        self._set_xlabel(ax, 'Time', unit=x_unit, remove_all=blank_xaxis)
+
+        return fig
+
+    @_ClusterVisualizer._support_units
+    def plot_psi_evolution(self, fig=None, ax=None, *,
+                           x_unit='Gyr', y_unit='', legend=True,
+                           label_position='top', verbose_label=True,
+                           blank_xaxis=False, **kwargs):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        ax = self._plot_evolution(ax, self.psi_t, legend=legend,
+                                  x_unit=x_unit, y_unit=y_unit, **kwargs)
+
+        if verbose_label:
+            label = "Psi"
+        else:
+            label = r'$\psi$'
+
+        self._set_ylabel(ax, label, y_unit, label_position)
+        self._set_xlabel(ax, 'Time', unit=x_unit, remove_all=blank_xaxis)
+
+        return fig
+
+    @_ClusterVisualizer._support_units
+    def plot_E_evolution(self, fig=None, ax=None, *,
+                         x_unit='Gyr', y_unit='', legend=True,
+                         label_position='top', verbose_label=True,
+                         blank_xaxis=False, **kwargs):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        ax = self._plot_evolution(ax, self.E_t, legend=legend,
+                                  x_unit=x_unit, y_unit=y_unit, **kwargs)
+
+        if verbose_label:
+            label = "Energy"
+        else:
+            label = r'$E\,(t)$'
+
+        self._set_ylabel(ax, label, y_unit, label_position)
+        self._set_xlabel(ax, 'Time', unit=x_unit, remove_all=blank_xaxis)
+
+        return fig
+
     @classmethod
     def from_chain(cls, chain, observations, method='median'):
         '''Initialize a visualizer based on a full chain of parameters.
@@ -4721,6 +4936,24 @@ class EvolvedVisualizer(ModelVisualizer):
         super().__init__(model, observations=observations)
 
         # clusterBH quantities
+        self.t = model._clusterbh.t << u.Gyr
+
+        slc = (np.newaxis, np.newaxis, ...)
+
+        self.M_t = model._clusterbh.M[slc] << u.Msun
+        self.Ms_t = model._clusterbh.Mst[slc] << u.Msun
+        self.Mbh_t = model._clusterbh.Mbh[slc] << u.Msun
+        self.fbh_t = model._clusterbh.fbh[slc] << u.dimensionless_unscaled
+        self.mav_t = model._clusterbh.mav[slc] << u.Msun
+
+        self.rh_t = model._clusterbh.rh[slc] << u.pc
+        self.rt_t = model._clusterbh.rt[slc] << u.pc
+        self.rv_t = model._clusterbh.rv[slc] << u.pc
+
+        # TODO units on these?
+        self.psi_t = model._clusterbh.psi[slc] << u.dimensionless_unscaled
+        self.E_t = model._clusterbh.E[slc] << u.dimensionless_unscaled
+        self.trh_t = model._clusterbh.trh[slc] << u.Myr
 
 
 class CIEvolvedVisualizer(CIModelVisualizer):
