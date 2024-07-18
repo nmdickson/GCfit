@@ -1246,7 +1246,7 @@ class _ClusterVisualizer:
     def plot_LOS(self, fig=None, ax=None,
                  show_obs=True, residuals=False, *,
                  x_unit='pc', y_unit='km/s', legend=True,
-                 label_position='top', verbose_label=True, blank_xaxis=False,
+                 label_position='left', verbose_label=True, blank_xaxis=False,
                  res_kwargs=None, **kwargs):
         r'''Plot the line-of-sight velocity dispersion profiles.
 
@@ -1338,8 +1338,8 @@ class _ClusterVisualizer:
     def plot_pm_tot(self, fig=None, ax=None,
                     show_obs=True, residuals=False, *,
                     x_unit='pc', y_unit='mas/yr', legend=True,
-                    label_position='top', verbose_label=True, blank_xaxis=False,
-                    res_kwargs=None, **kwargs):
+                    label_position='left', verbose_label=True,
+                    blank_xaxis=False, res_kwargs=None, **kwargs):
         r'''Plot the total proper motion dispersion profiles.
 
         Plots the `self.pm_tot` model profiles, and the relevant observational
@@ -1430,7 +1430,7 @@ class _ClusterVisualizer:
     def plot_pm_ratio(self, fig=None, ax=None,
                       show_obs=True, residuals=False, *,
                       x_unit='pc', blank_xaxis=False, legend=True,
-                      label_position='top', verbose_label=True,
+                      label_position='left', verbose_label=True,
                       res_kwargs=None, **kwargs):
         r'''Plot the proper motion dispersion anisotropy profiles.
 
@@ -1524,7 +1524,7 @@ class _ClusterVisualizer:
     def plot_pm_T(self, fig=None, ax=None,
                   show_obs=True, residuals=False, *,
                   x_unit='pc', y_unit='mas/yr', legend=True,
-                  label_position='top', verbose_label=True, blank_xaxis=False,
+                  label_position='left', verbose_label=True, blank_xaxis=False,
                   res_kwargs=None, **kwargs):
         r'''Plot the tangential proper motion dispersion profiles.
 
@@ -1616,7 +1616,7 @@ class _ClusterVisualizer:
     def plot_pm_R(self, fig=None, ax=None,
                   show_obs=True, residuals=False, *,
                   x_unit='pc', y_unit='mas/yr', legend=True,
-                  label_position='top', verbose_label=True, blank_xaxis=False,
+                  label_position='left', verbose_label=True, blank_xaxis=False,
                   res_kwargs=None, **kwargs):
         r'''Plot the radial proper motion dispersion profiles.
 
@@ -1709,7 +1709,7 @@ class _ClusterVisualizer:
                             show_background=False, subtract_background=False,
                             show_obs=True, residuals=False, *, legend=True,
                             x_unit='pc', y_unit='1/pc2', scale_to='model',
-                            label_position='top', verbose_label=True,
+                            label_position='left', verbose_label=True,
                             blank_xaxis=False, res_kwargs=None,
                             data_kwargs=None, model_kwargs=None, **kwargs):
         r'''Plot the projected number density profiles.
@@ -4708,7 +4708,7 @@ class EvolvedVisualizer(ModelVisualizer):
     @_ClusterVisualizer._support_units
     def plot_mass_evolution(self, fig=None, ax=None, kind='all', *,
                             x_unit='Gyr', y_unit='Msun', legend=True,
-                            label_position='top', verbose_label=True,
+                            label_position='left', verbose_label=True,
                             blank_xaxis=False, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -4741,7 +4741,7 @@ class EvolvedVisualizer(ModelVisualizer):
     @_ClusterVisualizer._support_units
     def plot_radius_evolution(self, fig=None, ax=None, kind='rh', *,
                               x_unit='Gyr', y_unit='pc', legend=True,
-                              label_position='top', verbose_label=True,
+                              label_position='left', verbose_label=True,
                               blank_xaxis=False, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -4777,7 +4777,7 @@ class EvolvedVisualizer(ModelVisualizer):
     @_ClusterVisualizer._support_units
     def plot_fbh_evolution(self, fig=None, ax=None, *,
                            x_unit='Gyr', y_unit='', legend=False,
-                           label_position='top', verbose_label=True,
+                           label_position='left', verbose_label=True,
                            blank_xaxis=False, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -4797,7 +4797,7 @@ class EvolvedVisualizer(ModelVisualizer):
     @_ClusterVisualizer._support_units
     def plot_trh_evolution(self, fig=None, ax=None, *,
                            x_unit='Gyr', y_unit='Myr', legend=True,
-                           label_position='top', verbose_label=True,
+                           label_position='left', verbose_label=True,
                            blank_xaxis=False, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -4818,7 +4818,7 @@ class EvolvedVisualizer(ModelVisualizer):
     @_ClusterVisualizer._support_units
     def plot_psi_evolution(self, fig=None, ax=None, *,
                            x_unit='Gyr', y_unit='', legend=True,
-                           label_position='top', verbose_label=True,
+                           label_position='left', verbose_label=True,
                            blank_xaxis=False, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
@@ -4839,7 +4839,7 @@ class EvolvedVisualizer(ModelVisualizer):
     @_ClusterVisualizer._support_units
     def plot_E_evolution(self, fig=None, ax=None, *,
                          x_unit='Gyr', y_unit='', legend=True,
-                         label_position='top', verbose_label=True,
+                         label_position='left', verbose_label=True,
                          blank_xaxis=False, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
