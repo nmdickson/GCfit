@@ -4857,6 +4857,41 @@ class EvolvedVisualizer(ModelVisualizer):
 
         return fig
 
+    def plot_all_evolution(self, fig=None, sharex=True, **kwargs):
+
+        # ------------------------------------------------------------------
+        # Setup figure
+        # ------------------------------------------------------------------
+
+        fig, axes = self._setup_multi_artist(fig, (3, 1), sharex=sharex)
+
+        # ------------------------------------------------------------------
+        # Plots
+        # ------------------------------------------------------------------
+
+        # Mass
+
+        self.plot_mass_evolution(fig=fig, ax=axes[0], label_position='left',
+                                 blank_xaxis=True, **kwargs)
+
+        # Radius
+
+        self.plot_radius_evolution(fig=fig, ax=axes[1], label_position='left',
+                                   blank_xaxis=True, **kwargs)
+
+        # f_BH
+
+        self.plot_fbh_evolution(fig=fig, ax=axes[2], label_position='left',
+                                **kwargs)
+
+        # ------------------------------------------------------------------
+        # Style plots
+        # ------------------------------------------------------------------
+
+        fig.align_ylabels()
+
+        return fig
+
     @classmethod
     def from_chain(cls, chain, observations, method='median'):
         '''Initialize a visualizer based on a full chain of parameters.
