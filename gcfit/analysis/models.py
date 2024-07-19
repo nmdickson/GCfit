@@ -3642,12 +3642,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        quant = getattr(self, quant_name)
-
-        if quant.ndim > 1:
-            mssg = (f"Invalid shape of quantity array {quant.shape}, "
-                    "must be 1-dimensional")
-            raise ValueError(mssg)
+        quant = getattr(self, quant_name)[0, :, -1]
 
         color = mpl_clr.to_rgb(color)
         facecolor = color + (0.33, )
@@ -3936,6 +3931,9 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         viz.rlims = (9e-3, viz.r.max().value + 5) << viz.r.unit
 
+        # viz.t = huge_model._clusterbh.t << u.Gyr
+        viz.t = [huge_model.age] << u.Gyr
+
         # Assume that this example model has same nms bin as all models
         # This approximation isn't exactly correct (especially when Ndot != 0),
         # but close enough for plots
@@ -3955,6 +3953,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         # ------------------------------------------------------------------
 
         Nr = viz.r.size
+        Nt = viz.t.size
 
         # velocities
 
@@ -4001,8 +4000,8 @@ class CIModelVisualizer(_ClusterVisualizer):
         frac_M_MS = np.full((1, N, Nr), np.nan) << u.dimensionless_unscaled
         frac_M_rem = frac_M_MS.copy()
 
-        f_rem = np.full(N, np.nan) << u.pct
-        f_BH = np.full(N, np.nan) << u.pct
+        f_rem = np.full((1, N, Nt), np.nan) << u.pct
+        f_BH = np.full((1, N, Nt), np.nan) << u.pct
 
         # number density
 
@@ -4023,34 +4022,34 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         # BH mass
 
-        BH_mass = np.full(N, np.nan) << u.Msun
-        BH_num = np.full(N, np.nan) << u.dimensionless_unscaled
+        BH_mass = np.full((1, N, Nt), np.nan) << u.Msun
+        BH_num = np.full((1, N, Nt), np.nan) << u.dimensionless_unscaled
 
         # Structural params
 
-        r0 = np.full(N, np.nan) << huge_model.r0.unit
-        rt = np.full(N, np.nan) << huge_model.rt.unit
-        rh = np.full(N, np.nan) << huge_model.rh.unit
-        rhp = np.full(N, np.nan) << huge_model.rhp.unit
-        ra = np.full(N, np.nan) << huge_model.ra.unit
-        rv = np.full(N, np.nan) << huge_model.rv.unit
-        mmean = np.full(N, np.nan) << huge_model.mmean.unit
-        volume = np.full(N, np.nan) << huge_model.volume.unit
+        r0 = np.full((1, N, Nt), np.nan) << huge_model.r0.unit
+        rt = np.full((1, N, Nt), np.nan) << huge_model.rt.unit
+        rh = np.full((1, N, Nt), np.nan) << huge_model.rh.unit
+        rhp = np.full((1, N, Nt), np.nan) << huge_model.rhp.unit
+        ra = np.full((1, N, Nt), np.nan) << huge_model.ra.unit
+        rv = np.full((1, N, Nt), np.nan) << huge_model.rv.unit
+        mmean = np.full((1, N, Nt), np.nan) << huge_model.mmean.unit
+        volume = np.full((1, N, Nt), np.nan) << huge_model.volume.unit
 
         # BH derived quantities
 
-        BH_rh = np.full(N, np.nan) << huge_model.BH.rh.unit
-        spitz_chi = np.full(N, np.nan) << u.dimensionless_unscaled
+        BH_rh = np.full((1, N, Nt), np.nan) << huge_model.BH.rh.unit
+        spitz_chi = np.full((1, N, Nt), np.nan) << u.dimensionless_unscaled
 
         # Relaxation times
 
-        trh = np.full(N, np.nan) << u.Gyr
-        N_relax = np.full(N, np.nan) << u.dimensionless_unscaled
+        trh = np.full((1, N, Nt), np.nan) << u.Gyr
+        N_relax = np.full((1, N, Nt), np.nan) << u.dimensionless_unscaled
 
         # Mass segregation
 
-        delta_r50 = np.full(N, np.nan) << u.dimensionless_unscaled
-        delta_A = np.full(N, np.nan) << u.dimensionless_unscaled
+        delta_r50 = np.full((1, N, Nt), np.nan) << u.dimensionless_unscaled
+        delta_A = np.full((1, N, Nt), np.nan) << u.dimensionless_unscaled
 
         # ------------------------------------------------------------------
         # Setup iteration and pooling
@@ -4135,33 +4134,33 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             frac_M_MS[slc], frac_M_rem[slc] = viz._init_mass_frac(model)
 
-            f_rem[model_ind] = model.rem.f
-            f_BH[model_ind] = model.BH.f
+            f_rem[slc] = model.rem.f
+            f_BH[slc] = model.BH.f
 
             # Black holes
 
-            BH_mass[model_ind] = np.sum(model.BH.Mj)
-            BH_num[model_ind] = np.sum(model.BH.Nj)
+            BH_mass[slc] = np.sum(model.BH.Mj)
+            BH_num[slc] = np.sum(model.BH.Nj)
 
             # Structural params
 
-            r0[model_ind] = model.r0
-            rt[model_ind] = model.rt
-            rh[model_ind] = model.rh
-            rhp[model_ind] = model.rhp
-            ra[model_ind] = model.ra
-            rv[model_ind] = model.rv
-            mmean[model_ind] = model.mmean
-            volume[model_ind] = model.volume
+            r0[slc] = model.r0
+            rt[slc] = model.rt
+            rh[slc] = model.rh
+            rhp[slc] = model.rhp
+            ra[slc] = model.ra
+            rv[slc] = model.rv
+            mmean[slc] = model.mmean
+            volume[slc] = model.volume
 
-            BH_rh[model_ind] = model.BH.rh
-            spitz_chi[model_ind] = model._spitzer_chi
+            BH_rh[slc] = model.BH.rh
+            spitz_chi[slc] = model._spitzer_chi
 
-            trh[model_ind] = model.trh
-            N_relax[model_ind] = model.N_relax
+            trh[slc] = model.trh
+            N_relax[slc] = model.N_relax
 
-            delta_r50[model_ind] = model.delta_r50
-            delta_A[model_ind] = model.delta_A
+            delta_r50[slc] = model.delta_r50
+            delta_A[slc] = model.delta_A
 
         # ------------------------------------------------------------------
         # compute and store the percentiles and medians
@@ -4208,7 +4207,6 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         for rbins in viz.mass_func.values():
             for rslice in rbins:
-
                 rslice['dNdm'] = perc(rslice['dNdm'], q, axis=0)
 
         viz.frac_M_MS = perc(frac_M_MS, q, axis=1)
