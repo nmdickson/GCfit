@@ -4015,10 +4015,14 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         # massfunc = np.empty((N, N_rbins, huge_model.nms))
 
+        mb0 = huge_model._mf.massbins.bins.MS.lower[0]
+        mb1 = huge_model._mf.compute_mto(huge_model.age.to_value('Myr'))
+        viz._mf_domain = np.linspace(mb0, mb1)
+
         for rbins in massfunc.values():
             for rslice in rbins:
-                rslice['mj'] = huge_model.mj[:huge_model.nms]
-                rslice['dNdm'] = np.full((N, huge_model.nms), np.nan)
+                rslice['mj'] = viz._mf_domain
+                rslice['dNdm'] = np.full((N, viz._mf_domain.size), np.nan)
 
         # BH mass
 
@@ -4459,7 +4463,9 @@ class CIModelVisualizer(_ClusterVisualizer):
                 widthj = (model.mj[j] * model.mbin_widths[j])
                 dNdm[j] = (Nj / widthj).value
 
-        return dNdm
+            dNdm_interp = util.QuantitySpline(model.mj[:model.nms], dNdm, ext=0)
+
+        return dNdm_interp(self._mf_domain)
 
     # ----------------------------------------------------------------------
     # Save and load confidence intervals to a file
