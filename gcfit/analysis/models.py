@@ -945,6 +945,7 @@ class _ClusterVisualizer:
                         mass_bins=None, model_label=None, **kwargs):
         '''Plot a model quantity with time on the x axis. only available for
         evolved models obviously'''
+        # TODO make it still plot a point if only one datapoint given
 
         # Unless specified, each mass bin should cycle colour from matplotlib
         default_color = color
@@ -973,7 +974,7 @@ class _ClusterVisualizer:
         if mass_bins is None:
             mass_bins = (0, )
 
-        for mbin in mass_bins:
+        for mbin in mass_bins:  # currently only global quantities so no mbins
 
             try:
                 ymodel = model_data[mbin, :, :]
@@ -3351,6 +3352,7 @@ class ModelVisualizer(_ClusterVisualizer):
         self.d = model.d
 
         self.r = model.r
+        self.t = [model.age] << u.Gyr
 
         self.rlims = (9e-3, model.r.max().value + 5) << model.r.unit
 
@@ -3390,6 +3392,21 @@ class ModelVisualizer(_ClusterVisualizer):
 
         self._init_mass_frac(model, self.obs)
         self._init_cum_mass(model, self.obs)
+
+        # Spoof evolutionary quantities
+
+        t_slc = (np.newaxis, np.newaxis, np.newaxis)
+
+        self.f_BH_t = self.f_BH[t_slc]
+        self.M_BH_t = model.BH.Mj.sum()[t_slc]
+        self.M_t = model.M[t_slc]
+        self.Ms_t = model.nonBH.Mj.sum()[t_slc]
+        self.mmean_t = model.mmean[t_slc]
+        self.rt_t = model.rt[t_slc]
+        self.rh_t = model.rh[t_slc]
+        self.rv_t = model.rv[t_slc]
+        self.psi_t = np.full((1, 1, 1), np.nan) << u.dimensionless_unscaled
+        self.E_t = np.full((1, 1, 1), np.nan) << u.dimensionless_unscaled
 
     # TODO alot of these init functions could be more homogenous
     @_ClusterVisualizer._support_units
@@ -3642,7 +3659,12 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        quant = getattr(self, quant_name)[0, :, -1]
+        quant = getattr(self, quant_name)
+
+        if quant.ndim > 1:
+            mssg = (f"Invalid shape of quantity array {quant.shape}, "
+                    "must be 1-dimensional")
+            raise ValueError(mssg)
 
         color = mpl_clr.to_rgb(color)
         facecolor = color + (0.33, )
@@ -3931,7 +3953,6 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         viz.rlims = (9e-3, viz.r.max().value + 5) << viz.r.unit
 
-        # viz.t = huge_model._clusterbh.t << u.Gyr
         viz.t = [huge_model.age] << u.Gyr
 
         # Assume that this example model has same nms bin as all models
@@ -4000,8 +4021,9 @@ class CIModelVisualizer(_ClusterVisualizer):
         frac_M_MS = np.full((1, N, Nr), np.nan) << u.dimensionless_unscaled
         frac_M_rem = frac_M_MS.copy()
 
-        f_rem = np.full((1, N, Nt), np.nan) << u.pct
-        f_BH = np.full((1, N, Nt), np.nan) << u.pct
+        f_rem = np.full(N, np.nan) << u.pct
+        f_BH = np.full(N, np.nan) << u.pct
+        f_BH_t = np.full((1, N, Nt), np.nan) << u.pct
 
         # number density
 
@@ -4026,34 +4048,49 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         # BH mass
 
-        BH_mass = np.full((1, N, Nt), np.nan) << u.Msun
-        BH_num = np.full((1, N, Nt), np.nan) << u.dimensionless_unscaled
+        # TODO change weird BH_mass to M_BH
+        BH_mass = np.full(N, np.nan) << u.Msun
+        BH_num = np.full(N, np.nan) << u.dimensionless_unscaled
+
+        M_BH_t = np.full((1, N, Nt), np.nan) << u.Msun
 
         # Structural params
 
-        r0 = np.full((1, N, Nt), np.nan) << huge_model.r0.unit
-        rt = np.full((1, N, Nt), np.nan) << huge_model.rt.unit
-        rh = np.full((1, N, Nt), np.nan) << huge_model.rh.unit
-        rhp = np.full((1, N, Nt), np.nan) << huge_model.rhp.unit
-        ra = np.full((1, N, Nt), np.nan) << huge_model.ra.unit
-        rv = np.full((1, N, Nt), np.nan) << huge_model.rv.unit
-        mmean = np.full((1, N, Nt), np.nan) << huge_model.mmean.unit
-        volume = np.full((1, N, Nt), np.nan) << huge_model.volume.unit
+        M_t = np.full((1, N, Nt), np.nan) << huge_model.M.unit
+        Ms_t = np.full((1, N, Nt), np.nan) << huge_model.M.unit
+        mmean_t = np.full((1, N, Nt), np.nan) << huge_model.mmean.unit
+
+        r0 = np.full(N, np.nan) << huge_model.r0.unit
+        rt = np.full(N, np.nan) << huge_model.rt.unit
+        rh = np.full(N, np.nan) << huge_model.rh.unit
+        rhp = np.full(N, np.nan) << huge_model.rhp.unit
+        ra = np.full(N, np.nan) << huge_model.ra.unit
+        rv = np.full(N, np.nan) << huge_model.rv.unit
+        mmean = np.full(N, np.nan) << huge_model.mmean.unit
+        volume = np.full(N, np.nan) << huge_model.volume.unit
+
+        rt_t = np.full((1, N, Nt), np.nan) << huge_model.rt.unit
+        rh_t = np.full((1, N, Nt), np.nan) << huge_model.rh.unit
+        rv_t = np.full((1, N, Nt), np.nan) << huge_model.rv.unit
+
+        psi_t = np.full((1, N, Nt), np.nan) << u.dimensionless_unscaled
+        E_t = np.full((1, N, Nt), np.nan) << u.dimensionless_unscaled
 
         # BH derived quantities
 
-        BH_rh = np.full((1, N, Nt), np.nan) << huge_model.BH.rh.unit
-        spitz_chi = np.full((1, N, Nt), np.nan) << u.dimensionless_unscaled
+        BH_rh = np.full(N, np.nan) << huge_model.BH.rh.unit
+        spitz_chi = np.full(N, np.nan) << u.dimensionless_unscaled
 
         # Relaxation times
 
-        trh = np.full((1, N, Nt), np.nan) << u.Gyr
-        N_relax = np.full((1, N, Nt), np.nan) << u.dimensionless_unscaled
+        trh = np.full(N, np.nan) << u.Gyr
+        N_relax = np.full(N, np.nan) << u.dimensionless_unscaled
+        trh_t = np.full((1, N, Nt), np.nan)
 
         # Mass segregation
 
-        delta_r50 = np.full((1, N, Nt), np.nan) << u.dimensionless_unscaled
-        delta_A = np.full((1, N, Nt), np.nan) << u.dimensionless_unscaled
+        delta_r50 = np.full(N, np.nan) << u.dimensionless_unscaled
+        delta_A = np.full(N, np.nan) << u.dimensionless_unscaled
 
         # ------------------------------------------------------------------
         # Setup iteration and pooling
@@ -4138,33 +4175,37 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             frac_M_MS[slc], frac_M_rem[slc] = viz._init_mass_frac(model)
 
-            f_rem[slc] = model.rem.f
-            f_BH[slc] = model.BH.f
+            f_rem[model_ind] = model.rem.f
+            f_BH[model_ind] = f_BH_t[slc] = model.BH.f
 
             # Black holes
 
-            BH_mass[slc] = np.sum(model.BH.Mj)
-            BH_num[slc] = np.sum(model.BH.Nj)
+            BH_mass[model_ind] = M_BH_t[slc] = np.sum(model.BH.Mj)
+            BH_num[model_ind] = np.sum(model.BH.Nj)
 
             # Structural params
 
-            r0[slc] = model.r0
-            rt[slc] = model.rt
-            rh[slc] = model.rh
-            rhp[slc] = model.rhp
-            ra[slc] = model.ra
-            rv[slc] = model.rv
-            mmean[slc] = model.mmean
-            volume[slc] = model.volume
+            M_t[slc] = model.M
+            Ms_t[slc] = model.nonBH.Mj.sum()
+            mmean_t[slc] = model.mmean
 
-            BH_rh[slc] = model.BH.rh
-            spitz_chi[slc] = model._spitzer_chi
+            r0[model_ind] = model.r0
+            rt[model_ind] = rt_t[slc] = model.rt
+            rh[model_ind] = rh_t[slc] = model.rh
+            rhp[model_ind] = model.rhp
+            ra[model_ind] = model.ra
+            rv[model_ind] = rv_t[slc] = model.rv
+            mmean[model_ind] = model.mmean
+            volume[model_ind] = model.volume
 
-            trh[slc] = model.trh
-            N_relax[slc] = model.N_relax
+            BH_rh[model_ind] = model.BH.rh
+            spitz_chi[model_ind] = model._spitzer_chi
 
-            delta_r50[slc] = model.delta_r50
-            delta_A[slc] = model.delta_A
+            trh[model_ind] = trh_t[slc] = model.trh
+            N_relax[model_ind] = model.N_relax
+
+            delta_r50[model_ind] = model.delta_r50
+            delta_A[model_ind] = model.delta_A
 
         # ------------------------------------------------------------------
         # compute and store the percentiles and medians
@@ -4215,6 +4256,17 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         viz.frac_M_MS = perc(frac_M_MS, q, axis=1)
         viz.frac_M_rem = perc(frac_M_rem, q, axis=1)
+
+        viz.f_BH_t = np.transpose(perc(f_BH_t, q, axis=1), axes)
+        viz.M_BH_t = np.transpose(perc(M_BH_t, q, axis=1), axes)
+        viz.M_t = np.transpose(perc(M_t, q, axis=1), axes)
+        viz.Ms_t = np.transpose(perc(Ms_t, q, axis=1), axes)
+        viz.mmean_t = np.transpose(perc(mmean_t, q, axis=1), axes)
+        viz.rt_t = np.transpose(perc(rt_t, q, axis=1), axes)
+        viz.rh_t = np.transpose(perc(rh_t, q, axis=1), axes)
+        viz.rv_t = np.transpose(perc(rv_t, q, axis=1), axes)
+        viz.psi_t = np.transpose(perc(psi_t, q, axis=1), axes)
+        viz.E_t = np.transpose(perc(E_t, q, axis=1), axes)
 
         viz.f_rem = f_rem
         viz.f_BH = f_BH
@@ -4525,6 +4577,7 @@ class CIModelVisualizer(_ClusterVisualizer):
             meta_grp = modelgrp.create_group('metadata')
 
             meta_grp.create_dataset('r', data=self.r)
+            meta_grp.create_dataset('t', data=self.t)
             meta_grp.create_dataset('star_bin', data=self.star_bin)
             meta_grp.create_dataset('mj', data=self.mj)
             meta_grp.attrs['rlims'] = self.rlims.to_value('pc')
@@ -4540,12 +4593,17 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             prof_grp = modelgrp.create_group('profiles')
 
-            profile_keys = (
+            profile_keys = (  # radial profiles
                 'rho_MS', 'rho_tot', 'rho_BH', 'rho_WD', 'rho_NS',
                 'pm_T', 'pm_R', 'pm_tot', 'pm_ratio', 'LOS', 'phi', 'vesc',
                 'Sigma_MS', 'Sigma_tot', 'Sigma_BH', 'Sigma_WD',
                 'Sigma_NS', 'cum_M_MS', 'cum_M_tot', 'cum_M_BH', 'cum_M_WD',
-                'cum_M_NS', 'frac_M_MS', 'frac_M_rem', 'numdens'
+                'cum_M_NS', 'frac_M_MS', 'frac_M_rem', 'numdens',
+            )
+
+            profile_keys += (  # time evolution profiles
+                'f_BH_t', 'M_BH_t', 'M_t', 'Ms_t', 'mmean_t',
+                'rt_t', 'rh_t', 'rv_t', 'psi_t', 'E_t'
             )
 
             for key in profile_keys:
@@ -4731,7 +4789,7 @@ class EvolvedVisualizer(ModelVisualizer):
                                       x_unit=x_unit, y_unit=y_unit, **kwargs)
 
         if 'BH' in kind:
-            ax = self._plot_evolution(ax, self.Mbh_t,
+            ax = self._plot_evolution(ax, self.M_BH_t,
                                       model_label="Black Holes", legend=legend,
                                       x_unit=x_unit, y_unit=y_unit, **kwargs)
 
@@ -4786,7 +4844,7 @@ class EvolvedVisualizer(ModelVisualizer):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        ax = self._plot_evolution(ax, self.fbh_t,
+        ax = self._plot_evolution(ax, self.f_BH_t,
                                   model_label=r"$f_{\mathrm{BH}}$",
                                   x_unit=x_unit, y_unit=y_unit,
                                   legend=legend, **kwargs)
@@ -4981,8 +5039,8 @@ class EvolvedVisualizer(ModelVisualizer):
 
         self.M_t = model._clusterbh.M[slc] << u.Msun
         self.Ms_t = model._clusterbh.Mst[slc] << u.Msun
-        self.Mbh_t = model._clusterbh.Mbh[slc] << u.Msun
-        self.fbh_t = model._clusterbh.fbh[slc] << u.dimensionless_unscaled
+        self.M_BH_t = model._clusterbh.Mbh[slc] << u.Msun
+        self.f_BH_t = model._clusterbh.fbh[slc] << u.dimensionless_unscaled
         self.mav_t = model._clusterbh.mav[slc] << u.Msun
 
         self.rh_t = model._clusterbh.rh[slc] << u.pc
@@ -4995,13 +5053,412 @@ class EvolvedVisualizer(ModelVisualizer):
         self.trh_t = model._clusterbh.trh[slc] << u.Myr
 
 
-class CIEvolvedVisualizer(CIModelVisualizer):
+class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
 
-    # TODO a copy of from_chains including the evolved quantities
     def __init__(self, observations):
         self.obs = observations
         self.name = observations.cluster
         self._model_getter = _get_ev_model
+
+    @classmethod
+    def from_chain(cls, chain, observations, N=100, *,
+                   verbose=False, pool=None):
+
+        import functools
+
+        viz = cls(observations)
+
+        # ------------------------------------------------------------------
+        # Get info about the chain and set of models
+        # ------------------------------------------------------------------
+
+        # Flatten walkers, if not already
+        chain = chain.reshape((-1, chain.shape[-1]))[-N:]
+
+        # Truncate if N is larger than the given chain size
+        N = chain.shape[0]
+
+        viz.N = N
+
+        median_chain = np.median(chain, axis=0)
+
+        params = list(viz.obs.ev_initials)
+
+        viz.F = median_chain[params.index('F')]
+        viz.s2 = median_chain[params.index('s2')]
+        viz.d = median_chain[params.index('d')] << u.kpc
+
+        # Setup the radial domain to interpolate everything onto
+        # We estimate the maximum radius needed will be given by the model with
+        # the largest value of the truncation parameter "g". This should be a
+        # valid enough assumption for our needs. While we have it, we'll also
+        # use this model to grab the other values we need, which shouldn't
+        # change much between models, so using this extreme model is okay.
+        # warning: in very large N samples, this g might be huge, and lead to a
+        # very large rt. I'm not really sure yet how that might affect the CIs
+        # or plots
+
+        huge_theta = chain[np.argmax(chain[:, params.index('g')])]
+        huge_model = viz._model_getter(huge_theta, viz.obs)
+
+        if huge_model is None:
+            raise ValueError(f"Base model did not converge with {huge_theta=}")
+
+        viz.r = np.r_[0, np.geomspace(1e-5, huge_model.rt.value, 99)] << u.pc
+
+        viz.rlims = (9e-3, viz.r.max().value + 5) << viz.r.unit
+
+        viz.t = huge_model._clusterbh.t << u.Gyr
+
+        # Assume that this example model has same nms bin as all models
+        # This approximation isn't exactly correct but close enough for plots
+        viz.star_bin = 0
+
+        # mj only contains nms and tracer bins (the only ones we plot anyways)
+        # TODO right now tracers only used for velocities, and not numdens
+        mj_MS = huge_model.mj[huge_model._star_bins][-1]
+        mj_tracer = huge_model.mj[huge_model._tracer_bins]
+
+        viz.mj = np.r_[mj_MS, mj_tracer]
+
+        # ------------------------------------------------------------------
+        # Setup the final full parameters arrays with dims of
+        # [mass bins, intervals (from percentile of models), radial bins] for
+        # all "profile" datasets
+        # ------------------------------------------------------------------
+
+        Nr = viz.r.size
+        Nt = viz.t.size
+
+        # velocities
+
+        vel_unit = np.sqrt(huge_model.v2Tj).unit
+
+        Nm = 1 + len(mj_tracer)
+
+        vpj = np.full((Nm, N, Nr), np.nan) << vel_unit
+        vTj, vRj, vtotj = vpj.copy(), vpj.copy(), vpj.copy()
+
+        vaj = np.full((Nm, N, Nr), np.nan) << u.dimensionless_unscaled
+
+        # Potential
+
+        phi = np.full((1, N, Nr), np.nan) << huge_model.phi.unit
+        vesc = np.full((1, N, Nr), np.nan) << vel_unit
+
+        # mass density
+
+        rho_unit = huge_model.rhoj.unit
+
+        rho_tot = np.full((1, N, Nr), np.nan) << rho_unit
+        rho_MS, rho_BH = rho_tot.copy(), rho_tot.copy()
+        rho_WD, rho_NS = rho_tot.copy(), rho_tot.copy()
+
+        # surface density
+
+        Sigma_unit = huge_model.Sigmaj.unit
+
+        Sigma_tot = np.full((1, N, Nr), np.nan) << Sigma_unit
+        Sigma_MS, Sigma_BH = Sigma_tot.copy(), Sigma_tot.copy()
+        Sigma_WD, Sigma_NS = Sigma_tot.copy(), Sigma_tot.copy()
+
+        # Cumulative mass
+
+        mass_unit = huge_model.M.unit
+
+        cum_M_tot = np.full((1, N, Nr), np.nan) << mass_unit
+        cum_M_MS, cum_M_BH = cum_M_tot.copy(), cum_M_tot.copy()
+        cum_M_WD, cum_M_NS = cum_M_tot.copy(), cum_M_tot.copy()
+
+        # Mass Fraction
+
+        frac_M_MS = np.full((1, N, Nr), np.nan) << u.dimensionless_unscaled
+        frac_M_rem = frac_M_MS.copy()
+
+        f_rem = np.full(N, np.nan) << u.pct
+        f_BH = np.full(N, np.nan) << u.pct
+        f_BH_t = np.full((1, N, Nt), np.nan) << u.pct
+
+        # number density
+
+        numdens = np.full((1, N, Nr), np.nan) << u.pc**-2
+        K_scale = np.full((1,), np.nan) << u.dimensionless_unscaled
+        # K_scale = np.full((Nm), np.nan) << u.Unit('pc2 / arcmin2')
+
+        # mass function
+
+        massfunc = viz._prep_massfunc(viz.obs)
+
+        # massfunc = np.empty((N, N_rbins, huge_model.nms))
+
+        mb0 = huge_model._mf.massbins.bins.MS.lower[0]
+        mb1 = huge_model._mf.compute_mto(huge_model.age.to_value('Myr'))
+        viz._mf_domain = np.linspace(mb0, mb1)
+
+        for rbins in massfunc.values():
+            for rslice in rbins:
+                rslice['mj'] = viz._mf_domain
+                rslice['dNdm'] = np.full((N, viz._mf_domain.size), np.nan)
+
+        # BH mass
+
+        # TODO change weird BH_mass to M_BH
+        BH_mass = np.full(N, np.nan) << u.Msun
+        BH_num = np.full(N, np.nan) << u.dimensionless_unscaled
+
+        M_BH_t = np.full((1, N, Nt), np.nan) << u.Msun
+
+        # Structural params
+
+        M_t = np.full((1, N, Nt), np.nan) << huge_model.M.unit
+        Ms_t = np.full((1, N, Nt), np.nan) << huge_model.M.unit
+        mmean_t = np.full((1, N, Nt), np.nan) << huge_model.mmean.unit
+
+        r0 = np.full(N, np.nan) << huge_model.r0.unit
+        rt = np.full(N, np.nan) << huge_model.rt.unit
+        rh = np.full(N, np.nan) << huge_model.rh.unit
+        rhp = np.full(N, np.nan) << huge_model.rhp.unit
+        ra = np.full(N, np.nan) << huge_model.ra.unit
+        rv = np.full(N, np.nan) << huge_model.rv.unit
+        mmean = np.full(N, np.nan) << huge_model.mmean.unit
+        volume = np.full(N, np.nan) << huge_model.volume.unit
+
+        rt_t = np.full((1, N, Nt), np.nan) << huge_model.rt.unit
+        rh_t = np.full((1, N, Nt), np.nan) << huge_model.rh.unit
+        rv_t = np.full((1, N, Nt), np.nan) << huge_model.rv.unit
+
+        psi_t = np.full((1, N, Nt), np.nan) << u.dimensionless_unscaled
+        E_t = np.full((1, N, Nt), np.nan) << u.dimensionless_unscaled
+
+        # BH derived quantities
+
+        BH_rh = np.full(N, np.nan) << huge_model.BH.rh.unit
+        spitz_chi = np.full(N, np.nan) << u.dimensionless_unscaled
+
+        # Relaxation times
+
+        trh = np.full(N, np.nan) << u.Gyr
+        N_relax = np.full(N, np.nan) << u.dimensionless_unscaled
+        trh_t = np.full((1, N, Nt), np.nan)
+
+        # Mass segregation
+
+        delta_r50 = np.full(N, np.nan) << u.dimensionless_unscaled
+        delta_A = np.full(N, np.nan) << u.dimensionless_unscaled
+
+        # ------------------------------------------------------------------
+        # Setup iteration and pooling
+        # ------------------------------------------------------------------
+
+        get_model = functools.partial(viz._model_getter, observations=viz.obs)
+
+        try:
+            _map = map if pool is None else pool.imap_unordered
+        except AttributeError:
+            mssg = ("Invalid pool, currently only support pools with an "
+                    "`imap_unordered` method")
+            raise ValueError(mssg)
+
+        if verbose:
+            import tqdm
+            loader = tqdm.tqdm(enumerate(_map(get_model, chain)), total=N)
+
+        else:
+            loader = enumerate(_map(get_model, chain))
+
+        # ------------------------------------------------------------------
+        # iterate over all models in the sample and compute/store their
+        # relevant parameters
+        # ------------------------------------------------------------------
+
+        for model_ind, model in loader:
+
+            if model is None:
+                # TODO would be better to extend chain so N are still computed
+                # for now this ind will be filled with nan
+                continue
+
+            equivs = util.angular_width(model.d)
+
+            cbh = model._clusterbh
+
+            # Velocities
+
+            # convoluted way of going from a slice to a list of indices
+            tracers = list(range(len(model.mj))[model._tracer_bins])
+
+            for i, mass_bin in enumerate([model.nms - 1] + tracers):
+
+                slc = (i, model_ind, slice(None))
+
+                vTj[slc], vRj[slc], vtotj[slc], \
+                    vaj[slc], vpj[slc] = viz._init_velocities(model, mass_bin)
+
+            slc = (0, model_ind, slice(None))
+
+            # Potential
+
+            phi[slc] = util.QuantitySpline(model.r, model.phi)(viz.r)
+            vesc[slc] = util.QuantitySpline(model.r, model.vesc)(viz.r)
+
+            # Mass Densities
+
+            rho_MS[slc], rho_tot[slc], rho_BH[slc], \
+                rho_WD[slc], rho_NS[slc] = viz._init_dens(model)
+
+            # Surface Densities
+
+            Sigma_MS[slc], Sigma_tot[slc], Sigma_BH[slc], \
+                Sigma_WD[slc], Sigma_NS[slc] = viz._init_surfdens(model)
+
+            # Cumulative Mass distribution
+
+            cum_M_MS[slc], cum_M_tot[slc], cum_M_BH[slc], \
+                cum_M_WD[slc], cum_M_NS[slc] = viz._init_cum_mass(model)
+
+            # Number Densities
+
+            numdens[slc] = viz._init_numdens(model, equivs=equivs)
+
+            # Mass Functions
+            for rbins in massfunc.values():
+                for rslice in rbins:
+
+                    mf = rslice['dNdm']
+                    mf[model_ind, ...] = viz._init_dNdm(model, rslice, equivs)
+
+            # Mass Fractions
+
+            frac_M_MS[slc], frac_M_rem[slc] = viz._init_mass_frac(model)
+
+            f_rem[model_ind] = model.rem.f
+            f_BH[model_ind] = model.BH.f
+
+            f_BH_t[slc] = (cbh.fbh * 100) << u.pct
+
+            # Black holes
+
+            BH_mass[model_ind] = np.sum(model.BH.Mj)
+            M_BH_t[slc] = cbh.Mbh << M_BH_t.unit
+            BH_num[model_ind] = np.sum(model.BH.Nj)
+
+            # Structural params
+
+            M_t[slc] = cbh.M << M_t.unit
+            Ms_t[slc] = cbh.Mst << Ms_t.unit
+            mmean_t[slc] = cbh.mav << mmean_t.unit
+
+            r0[model_ind] = model.r0
+            rt[model_ind] = model.rt
+            rt_t[slc] = cbh.rt << rt_t.unit
+            rh[model_ind] = model.rh
+            rh_t[slc] = cbh.rh << rh_t.unit
+            rhp[model_ind] = model.rhp
+            ra[model_ind] = model.ra
+            rv[model_ind] = model.rv
+            rv_t[slc] = cbh.rv << rv_t.unit
+            mmean[model_ind] = model.mmean
+            volume[model_ind] = model.volume
+
+            BH_rh[model_ind] = model.BH.rh
+            spitz_chi[model_ind] = model._spitzer_chi
+
+            trh[model_ind] = model.trh
+            trh_t[slc] = cbh.trh
+            N_relax[model_ind] = model.N_relax
+
+            psi_t[slc] = cbh.psi
+            E_t[slc] = cbh.E
+
+            delta_r50[model_ind] = model.delta_r50
+            delta_A[model_ind] = model.delta_A
+
+        # ------------------------------------------------------------------
+        # compute and store the percentiles and medians
+        # ------------------------------------------------------------------
+
+        q = [97.72, 84.13, 50., 15.87, 2.28]
+
+        axes = (1, 0, 2)  # `np.percentile` messes up the dimensions
+
+        perc = np.nanpercentile
+
+        viz.pm_T = np.transpose(perc(vTj, q, axis=1), axes)
+        viz.pm_R = np.transpose(perc(vRj, q, axis=1), axes)
+        viz.pm_tot = np.transpose(perc(vtotj, q, axis=1), axes)
+        viz.pm_ratio = np.transpose(perc(vaj, q, axis=1), axes)
+        viz.LOS = np.transpose(perc(vpj, q, axis=1), axes)
+
+        viz.phi = np.transpose(perc(phi, q, axis=1), axes)
+        viz.vesc = np.transpose(perc(vesc, q, axis=1), axes)
+
+        viz.rho_MS = np.transpose(perc(rho_MS, q, axis=1), axes)
+        viz.rho_tot = np.transpose(perc(rho_tot, q, axis=1), axes)
+        viz.rho_BH = np.transpose(perc(rho_BH, q, axis=1), axes)
+        viz.rho_WD = np.transpose(perc(rho_WD, q, axis=1), axes)
+        viz.rho_NS = np.transpose(perc(rho_NS, q, axis=1), axes)
+
+        viz.Sigma_MS = np.transpose(perc(Sigma_MS, q, axis=1), axes)
+        viz.Sigma_tot = np.transpose(perc(Sigma_tot, q, axis=1), axes)
+        viz.Sigma_BH = np.transpose(perc(Sigma_BH, q, axis=1), axes)
+        viz.Sigma_WD = np.transpose(perc(Sigma_WD, q, axis=1), axes)
+        viz.Sigma_NS = np.transpose(perc(Sigma_NS, q, axis=1), axes)
+
+        viz.cum_M_MS = np.transpose(perc(cum_M_MS, q, axis=1), axes)
+        viz.cum_M_tot = np.transpose(perc(cum_M_tot, q, axis=1), axes)
+        viz.cum_M_BH = np.transpose(perc(cum_M_BH, q, axis=1), axes)
+        viz.cum_M_WD = np.transpose(perc(cum_M_WD, q, axis=1), axes)
+        viz.cum_M_NS = np.transpose(perc(cum_M_NS, q, axis=1), axes)
+
+        viz.numdens = np.transpose(perc(numdens, q, axis=1), axes)
+        K_scale[:] = viz._init_K_scale(viz.numdens)
+        viz.K_scale = K_scale
+
+        viz.mass_func = massfunc
+
+        for rbins in viz.mass_func.values():
+            for rslice in rbins:
+                rslice['dNdm'] = perc(rslice['dNdm'], q, axis=0)
+
+        viz.frac_M_MS = perc(frac_M_MS, q, axis=1)
+        viz.frac_M_rem = perc(frac_M_rem, q, axis=1)
+
+        viz.f_BH_t = np.transpose(perc(f_BH_t, q, axis=1), axes)
+        viz.M_BH_t = np.transpose(perc(M_BH_t, q, axis=1), axes)
+        viz.M_t = np.transpose(perc(M_t, q, axis=1), axes)
+        viz.Ms_t = np.transpose(perc(Ms_t, q, axis=1), axes)
+        viz.mmean_t = np.transpose(perc(mmean_t, q, axis=1), axes)
+        viz.rt_t = np.transpose(perc(rt_t, q, axis=1), axes)
+        viz.rh_t = np.transpose(perc(rh_t, q, axis=1), axes)
+        viz.rv_t = np.transpose(perc(rv_t, q, axis=1), axes)
+        viz.psi_t = np.transpose(perc(psi_t, q, axis=1), axes)
+        viz.E_t = np.transpose(perc(E_t, q, axis=1), axes)
+
+        viz.f_rem = f_rem
+        viz.f_BH = f_BH
+
+        viz.BH_mass = BH_mass
+        viz.BH_num = BH_num
+
+        viz.r0 = r0
+        viz.rt = rt
+        viz.rh = rh
+        viz.rhp = rhp
+        viz.ra = ra
+        viz.rv = rv
+        viz.mmean = mmean
+        viz.volume = volume
+
+        viz.BH_rh = BH_rh
+        viz.spitzer_chi = spitz_chi
+
+        viz.trh = trh
+        viz.N_relax = N_relax
+
+        viz.delta_r50 = delta_r50
+        viz.delta_A = delta_A
+
+        return viz
 
 
 class ObservationsVisualizer(_ClusterVisualizer):
