@@ -157,7 +157,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
                     f"radius {model.rt}")
             logging.debug(mssg)
 
-            return np.NINF
+            return -np.inf
 
         P = pulsars['P'][i].to('s')
 
@@ -196,7 +196,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
             """
             logging.warning(mssg, exc_info=err)
 
-            return np.NINF
+            return -np.inf
 
         Pdot_domain = (P * PdotP_domain).decompose()
 
@@ -306,7 +306,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
     logprobs = np.log(probs)
 
     # Replace NaNs with -inf
-    logprobs[np.isnan(logprobs)] = np.NINF
+    logprobs[np.isnan(logprobs)] = -np.inf
 
     return np.sum(logprobs)
 
@@ -402,7 +402,7 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
                     f"radius {model.rt}")
             logging.debug(mssg)
 
-            return np.NINF
+            return -np.inf
 
         Pb = pulsars['Pb'][i].to('s')
 
@@ -441,7 +441,7 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
             """
             logging.warning(mssg, exc_info=err)
 
-            return np.NINF
+            return -np.inf
 
         Pdot_domain = (Pb * PdotP_domain).decompose()
 
@@ -510,7 +510,7 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
     logprobs = np.log(probs)
 
     # Replace NaNs with -inf
-    logprobs[np.isnan(logprobs)] = np.NINF
+    logprobs[np.isnan(logprobs)] = -np.inf
 
     return np.sum(logprobs)
 
