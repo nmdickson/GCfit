@@ -501,8 +501,10 @@ def field_Pdot_KDE(*, pulsar_db='field_msp.dat'):
     Pdot_int = Pdot_pm - galactic_component(*(lat, lon), D).value
 
     P = np.log10(P)
-    # TODO would be nice to get rid of the warning that happens here everytime
-    Pdot_int = np.log10(Pdot_int)
+
+    # catch the warning here for the log10
+    with np.errstate(invalid="ignore"):
+        Pdot_int = np.log10(Pdot_int)
 
     # TODO some Pdot_pm < Pdot_gal; this may or may not be physical, need check
     finite = np.isfinite(Pdot_int)
