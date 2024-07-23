@@ -316,7 +316,7 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *,
             # If the area is way less than 1, we should just throw an exception
             if norm < 0.9:
                 msg = (
-                    "Paz failed to integrate to 1.0, too small to"
+                    "Paz failed to integrate to 1.0, too small to "
                     f"continue. Area: {norm:.6f}"
                 )
                 raise ValueError(msg)
@@ -364,8 +364,8 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *,
             # If the area is way less than 1, we should just throw an exception
             if norm < 0.9:
                 msg = (
-                    "Paz failed to integrate to 1.0, too small to"
-                    f" continue. Area: {norm:.6f}"
+                    "Paz failed to integrate to 1.0, too small to "
+                    f"continue. Area: {norm:.6f}"
                 )
                 raise ValueError(msg)
 
