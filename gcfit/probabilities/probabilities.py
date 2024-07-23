@@ -151,7 +151,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
 
         R = pulsars['r'][i].to(u.pc)
 
-        if R >= model.rt:
+        if model.rt <= R:
 
             mssg = (f"Pulsar {pulsars['id'][i]} is outside cluster truncation "
                     f"radius {model.rt}")
@@ -396,7 +396,7 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
 
         R = pulsars['r'][i].to(u.pc)
 
-        if R >= model.rt:
+        if model.rt <= R:
 
             mssg = (f"Pulsar {pulsars['id'][i]} is outside cluster truncation "
                     f"radius {model.rt}")

@@ -134,8 +134,9 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *,
 
     R = R.to(model.rt.unit)
 
-    if R >= model.rt:
-        raise ValueError(f"Pulsar position outside cluster bound ({model.rt})")
+    if model.rt <= R:
+        msg = f"Pulsar position outside cluster bound ({model.rt})"
+        raise ValueError(msg)
 
     nz = model.nstep
 
@@ -183,10 +184,7 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *,
     # There are 2 possibilities depending on R:
     # (1) the maximum acceleration occurs within the cluster boundary, or
     # (2) max(a_z) = a_z,t (this happens when R ~ r_t)
-    if len(zmax) > 0:
-        azmax = az_spl(zmax[0])
-    else:
-        azmax = az_spl(z[-1])
+    azmax = az_spl(zmax[0]) if len(zmax) > 0 else az_spl(z[-1])
 
     # Old version here for future reference
     # increment density by 2 order of magnitude smaller than azmax
@@ -320,8 +318,11 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *,
 
             # If the area is way less than 1, we should just throw an exception
             if norm < 0.9:
-                raise ValueError("Paz failed to integrate to 1.0, too small to"
-                                 f"continue. Area: {norm:.6f}")
+                msg = (
+                    "Paz failed to integrate to 1.0, too small to"
+                    f"continue. Area: {norm:.6f}"
+                )
+                raise ValueError(msg)
 
             # Manual normalization
             Paz_dist /= norm
@@ -365,8 +366,11 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *,
 
             # If the area is way less than 1, we should just throw an exception
             if norm < 0.9:
-                raise ValueError("Paz failed to integrate to 1.0, too small to"
-                                 f" continue. Area: {norm:.6f}")
+                msg = (
+                    "Paz failed to integrate to 1.0, too small to"
+                    f" continue. Area: {norm:.6f}"
+                )
+                raise ValueError(msg)
 
             # Manual normalization
             Paz_dist /= norm
@@ -452,7 +456,7 @@ def shklovskii_component(pm, D):
 
 
 def field_Pdot_KDE(*, pulsar_db='field_msp.dat'):
-    '''Return a gaussian kde representing the galactic field pulsar P-Pdot.
+    """Return a gaussian kde representing the galactic field pulsar P-Pdot.
 
     Computes a 2D gaussian KDE based on the period and period derivative
     distribution of galactic field millisecond pulsars, which can then be used
@@ -465,7 +469,7 @@ def field_Pdot_KDE(*, pulsar_db='field_msp.dat'):
     This KDE should be pre-constructed (by `valid_likelihoods`), and it is
     unlikely users need to call this function directly.
 
-    Pulsar data is retrieved from the ANTF pulsar catalogue using the
+    Pulsar data is retrieved from the ATNF pulsar catalogue using the
     `psrcat` program. The data can be found in the package resources, and
     can be recreated using the command:
     `psrcat -db_file psrcat.db -c "p0 p1 p1_i GB GL Dist" -l "p0 < 0.1 &&
@@ -482,7 +486,7 @@ def field_Pdot_KDE(*, pulsar_db='field_msp.dat'):
     scipy.stats.gaussian_kde
         The 2D Gaussian KDE representing the intrinsic spin-down distributions
         of galactic field pulsars.
-    '''
+    """
     from ..util.data import _open_resources
 
     # Get field pulsars data
