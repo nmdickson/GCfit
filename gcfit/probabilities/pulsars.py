@@ -202,15 +202,15 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *,
 
     Δa = np.diff(az_domain)[1]
 
-    # TODO look at the old new_Paz to get the comments for this stuff
-
     if DM is None:
 
         Paz_dist = np.zeros_like(az_domain.value)
         for i, a in enumerate(az_domain):
-
+            # find every z value that has this line-of-sight acceleration
             z_values = find_intersections(az, z, a)
 
+            # probability distribution over acceleration then summed over each
+            # possible z value
             Paz_dist[i] = np.sum(
                 rhoz_spl(z_values).value / np.abs(az_der(z_values).value),
                 axis=0

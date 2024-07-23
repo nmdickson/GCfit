@@ -209,11 +209,11 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
         # Set up the equally-spaced linear convolution domain
         # ------------------------------------------------------------------
 
-        # TODO both 5000 and 1e-18 need to be computed dynamically
-        #   5000 to be enough steps to sample the gaussian and int peaks
-        #   1e-18 to be far enough for the int distribution to go to zero
-        #   Both balanced so as to use way too much memory unnecessarily
-        #   Must be symmetric, to avoid bound effects
+        # TODO this hard-coded domain is a bit brittle and would ideally be
+        # dynamically computed from the PdotP_domain returned by
+        # cluster_component. This current setup works for 47 Tuc and
+        # Terzan 5, but if we run into issues with other clusters, we should
+        # revisit this.
 
         # mirrored/starting at zero so very small gaussians become the δ-func
         lin_domain = np.linspace(0., 3e-18, 5_000 // 2)
@@ -225,11 +225,6 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
 
         # TODO if width << Pint width, maybe don't bother with first conv.
 
-        # NOTE: this now uses the lin_domain instead of the PdotP domain
-        # in order to accommodate pulsar X who's error spline was being cut
-        # too soon, giving zero probability to valid regions.
-        # if lin_domain gets dynamically computed in the future, make sure it's
-        # large enough to accommodate pulsar X.
         err = util.gaussian(x=lin_domain, sigma=ΔPdot_meas, mu=0)
 
         # ------------------------------------------------------------------
