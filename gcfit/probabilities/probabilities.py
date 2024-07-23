@@ -201,7 +201,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
         Pdot_domain = (P * PdotP_domain).decompose()
 
         # linear to avoid effects around asymptote
-        Pdot_c_spl = interp.UnivariateSpline(
+        Pdot_c_spl = util.QuantitySpline(
             Pdot_domain, PdotP_c_prob, k=1, s=0, ext=1
         )
 
@@ -248,7 +248,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
 
         Pdot_int_prob = Pdot_kde(np.vstack([P_grid, Pdot_int_domain]))
 
-        Pdot_int_spl = interp.UnivariateSpline(
+        Pdot_int_spl = util.QuantitySpline(
             Pdot_int_domain, Pdot_int_prob, k=1, s=0, ext=1
         )
 
@@ -257,7 +257,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
             h=np.log10, h_prime=lambda y: (1 / (np.log(10) * y))
         )
 
-        Pdot_int_spl = interp.UnivariateSpline(
+        Pdot_int_spl = util.QuantitySpline(
             10**Pdot_int_domain, Pdot_int_prob, k=1, s=0, ext=1
         )
 
@@ -270,7 +270,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
         conv2 = np.convolve(conv1, Pdot_int_spl(lin_domain), 'same')
 
         # Normalize
-        conv2 /= interp.UnivariateSpline(
+        conv2 /= util.QuantitySpline(
             lin_domain, conv2, k=1, s=0, ext=1
         ).integral(-np.inf, np.inf)
 
@@ -446,7 +446,7 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
         Pdot_domain = (Pb * PdotP_domain).decompose()
 
         # linear to avoid effects around asymptote
-        Pdot_c_spl = interp.UnivariateSpline(
+        Pdot_c_spl = util.QuantitySpline(
             Pdot_domain, PdotP_c_prob, k=1, s=0, ext=1
         )
 
@@ -464,8 +464,6 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
 
         err = util.gaussian(x=lin_domain, sigma=ΔPbdot_meas, mu=0)
 
-        # err_spl = interp.UnivariateSpline(Pdot_domain, err, k=1, s=0, ext=1)
-
         # ------------------------------------------------------------------
         # Convolve the different distributions
         # ------------------------------------------------------------------
@@ -474,9 +472,9 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
         conv = np.convolve(err, Pdot_c_spl(lin_domain), 'same')
 
         # Normalize
-        conv /= interp.UnivariateSpline(
-            lin_domain, conv, k=1, s=0, ext=1
-        ).integral(-np.inf, np.inf)
+        conv /= util.QuantitySpline(lin_domain, conv, k=1, s=0, ext=1).integral(
+            -np.inf, np.inf
+        )
 
         # ------------------------------------------------------------------
         # Compute the Shklovskii (proper motion) effect component

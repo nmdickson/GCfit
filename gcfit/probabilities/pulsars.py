@@ -253,9 +253,7 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *,
 
         # set up the LOS spline for the DM based Paz
         DM_gaussian = gaussian(x=z_domain, mu=DM_los, sigma=DM_los_err)
-        DM_los_spl = sp.interpolate.UnivariateSpline(
-            x=z_domain, y=DM_gaussian, s=0, k=3, ext=1
-        )
+        DM_los_spl = QuantitySpline(x=z_domain, y=DM_gaussian, s=0, k=3, ext=1)
 
         # We still only want positive values for the other splines
         az_domain = np.abs(az_domain)
