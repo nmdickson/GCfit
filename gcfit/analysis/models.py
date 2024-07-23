@@ -4039,7 +4039,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         mb0 = huge_model._mf.massbins.bins.MS.lower[0]
         mb1 = huge_model._mf.compute_mto(huge_model.age.to_value('Myr'))
-        viz._mf_domain = np.linspace(mb0, mb1)
+        viz._mf_domain = np.linspace(mb0, mb1) << u.Msun
 
         for rbins in massfunc.values():
             for rslice in rbins:
@@ -5193,7 +5193,7 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
 
         mb0 = huge_model._mf.massbins.bins.MS.lower[0]
         mb1 = huge_model._mf.compute_mto(huge_model.age.to_value('Myr'))
-        viz._mf_domain = np.linspace(mb0, mb1)
+        viz._mf_domain = np.linspace(mb0, mb1) << u.Msun
 
         for rbins in massfunc.values():
             for rslice in rbins:
