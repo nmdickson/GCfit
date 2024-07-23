@@ -287,7 +287,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
 
         # normalize conv2 to the PdotP_tot domain
         conv2 /= util.QuantitySpline(
-            lin_domain, conv2, k=1, s=0, ext=1
+            PdotP_tot, conv2, k=1, s=0, ext=1
         ).integral(-np.inf, np.inf)
 
         prob_dist = util.QuantitySpline(PdotP_tot, conv2, k=1, s=0, ext=1)
@@ -488,7 +488,7 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
         PdotP_tot = (lin_domain / Pb) + PdotP_pm + PdotP_gal
 
         # normalize conv to the PdotP_tot domain
-        conv /= util.QuantitySpline(lin_domain, conv, k=1, s=0, ext=1).integral(
+        conv /= util.QuantitySpline(PdotP_tot, conv, k=1, s=0, ext=1).integral(
             -np.inf, np.inf
         )
 
