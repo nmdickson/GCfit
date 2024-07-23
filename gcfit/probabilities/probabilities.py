@@ -5,7 +5,6 @@ from ..core.data import DEFAULT_THETA, FittableModel
 
 import numpy as np
 import astropy.units as u
-import scipy.interpolate as interp
 
 import logging
 

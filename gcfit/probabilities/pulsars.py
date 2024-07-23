@@ -2,7 +2,6 @@ from ..util import (QuantitySpline, gaussian, div_error, trim_peaks,
                     find_intersections)
 
 import scipy.stats
-import scipy as sp
 import numpy as np
 import astropy.units as u
 from astropy.constants import c
