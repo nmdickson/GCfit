@@ -264,10 +264,6 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
 
         conv2 = np.convolve(conv1, Pdot_int_spl(lin_domain), 'same')
 
-        # Normalize
-        conv2 /= util.QuantitySpline(
-            lin_domain, conv2, k=1, s=0, ext=1
-        ).integral(-np.inf, np.inf)
 
         # ------------------------------------------------------------------
         # Compute the Shklovskii (proper motion) effect component
@@ -287,10 +283,14 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
         # Interpolate the likelihood value from the overall distribution
         # ------------------------------------------------------------------
 
-        prob_dist = interp.interp1d(
-            (lin_domain / P) + PdotP_pm + PdotP_gal, conv2,
-            assume_sorted=True, bounds_error=False, fill_value=0.0
-        )
+        PdotP_tot = (lin_domain / P) + PdotP_pm + PdotP_gal
+
+        # normalize conv2 to the PdotP_tot domain
+        conv2 /= util.QuantitySpline(
+            lin_domain, conv2, k=1, s=0, ext=1
+        ).integral(-np.inf, np.inf)
+
+        prob_dist = util.QuantitySpline(PdotP_tot, conv2, k=1, s=0, ext=1)
 
         probs[i] = prob_dist((Pdot_meas / P).decompose())
 
@@ -466,10 +466,6 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
         # conv = np.convolve(err, PdotP_c_prob, 'same')
         conv = np.convolve(err, Pdot_c_spl(lin_domain), 'same')
 
-        # Normalize
-        conv /= util.QuantitySpline(lin_domain, conv, k=1, s=0, ext=1).integral(
-            -np.inf, np.inf
-        )
 
         # ------------------------------------------------------------------
         # Compute the Shklovskii (proper motion) effect component
@@ -489,10 +485,14 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
         # Interpolate the likelihood value from the overall distribution
         # ------------------------------------------------------------------
 
-        prob_dist = interp.interp1d(
-            (lin_domain / Pb) + PdotP_pm + PdotP_gal, conv,
-            assume_sorted=True, bounds_error=False, fill_value=0.0
+        PdotP_tot = (lin_domain / Pb) + PdotP_pm + PdotP_gal
+
+        # normalize conv to the PdotP_tot domain
+        conv /= util.QuantitySpline(lin_domain, conv, k=1, s=0, ext=1).integral(
+            -np.inf, np.inf
         )
+
+        prob_dist = util.QuantitySpline(PdotP_tot, conv, k=1, s=0, ext=1)
 
         probs[i] = prob_dist(Pbdot_meas / Pb)
 
