@@ -406,12 +406,13 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *,
 
 
 def galactic_component(lat, lon, D):
-    '''Compute the "galactic" component of pulsar Pdot-P (using `gala`)'''
+    """Compute the "galactic" component of pulsar Pdot-P, using the
+    `MilkyWayPotential2022` potential from `gala`."""
     import gala.potential as pot
     from astropy.coordinates import SkyCoord
 
     # Milky Way Potential
-    mw = pot.BovyMWPotential2014()
+    mw = pot.MilkyWayPotential2022()
 
     # Pulsar position in galactocentric coordinates
     crd = SkyCoord(b=lat, l=lon, distance=D, frame='galactic')
