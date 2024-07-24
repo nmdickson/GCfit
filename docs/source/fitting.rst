@@ -216,6 +216,11 @@ where the intrinsic spin-down of pulsars
 fields of the host cluster and galaxy, and the Shklovskii (proper motion) all
 combine in the observed spin-down of the pulsar timing solution. 
 
+We adopt the
+`MilkyWayPotential2022 <https://gala.adrian.pw/en/latest/api/gala.potential.potential.MilkyWayPotential2022.html>`_
+potential from `gala <https://gala.adrian.pw/en/latest/index.html>`_ to model
+the contribution of the galactic potential.
+
 The intrinsic spin-down of the observed pulsars is assumed to be identical to
 pulsars found in the galaxy, outside of clusters, and dependant only on their
 period. The field pulsars, as they are unaffected by the cluster potential,
