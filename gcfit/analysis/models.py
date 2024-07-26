@@ -4715,6 +4715,7 @@ class CIModelVisualizer(_ClusterVisualizer):
             viz.rlims = modelgrp['metadata'].attrs['rlims'] << u.pc
 
             viz.r = modelgrp['metadata']['r'][:] << u.pc
+            viz.t = modelgrp['metadata']['t'][:] << u.Gyr
             viz.star_bin = modelgrp['metadata']['star_bin'][()]
             viz.mj = modelgrp['metadata']['mj'][:] << u.Msun
 
