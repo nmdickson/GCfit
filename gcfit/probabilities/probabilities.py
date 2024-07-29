@@ -211,7 +211,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
         # Greater of 5σ or 250% past Pdot_c peak, to cover full convolution
         domain_max = np.max((5 * ΔPdot_meas, 2.5 * np.abs(Pdot_domain).max()))
 
-        lin_domain = np.linspace(0., domain_max, 10_000 // 2)
+        lin_domain = np.linspace(0., domain_max, 5_000 // 2)
 
         # mirrored/starting at zero so very small gaussians become the δ-func
         lin_domain = np.concatenate((np.flip(-lin_domain[1:]), lin_domain))
@@ -448,7 +448,7 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
         # Greater of 5σ or 250% past Pdot_c peak, to cover full convolution
         domain_max = np.max((5 * ΔPbdot_meas, 2.5 * np.abs(Pdot_domain).max()))
 
-        lin_domain = np.linspace(0., domain_max, 10_000 // 2)
+        lin_domain = np.linspace(0., domain_max, 5_000 // 2)
 
         # mirrored/starting at zero so very small gaussians become the δ-func
         lin_domain = np.concatenate((np.flip(-lin_domain[1:]), lin_domain))
