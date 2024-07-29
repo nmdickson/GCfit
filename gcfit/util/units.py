@@ -151,9 +151,9 @@ class QuantitySpline(scipy.interpolate.UnivariateSpline):
         return res
 
     def derivative(self, n=1):
-        from scipy.interpolate import fitpack
+        from scipy.interpolate import splder
 
-        tck = fitpack.splder(self._eval_args, n)
+        tck = splder(self._eval_args, n)
 
         # if self.ext is 'const', derivative.ext will be 'zeros'
         ext = 1 if self.ext == 3 else self.ext
