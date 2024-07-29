@@ -979,6 +979,12 @@ def likelihood_mass_func(model, mf, fields, *, hyperparams=False):
     #     cen = (obs.mdata['RA'], obs.mdata['DEC'])
     #     field = mass.Field(mf['fields'], cen)
 
+    if model.nms <= 1:
+        mssg = f"Model must have more than one stellar mass bin ({model.nms=})"
+        logging.debug(mssg)
+        return -np.inf
+        # raise ValueError(mssg)
+
     # ----------------------------------------------------------------------
     # Generate the mass splines before the loops, to save repetition
     # ----------------------------------------------------------------------
@@ -1022,6 +1028,7 @@ def likelihood_mass_func(model, mf, fields, *, hyperparams=False):
             widthj = (model.mj[j] * model.mbin_widths[j])
             binned_N_model[j] = Nj / widthj
 
+        # TODO if a mass bin is depleted it should be 0, not extrapolated!
         N_spline = util.QuantitySpline(model.mj[:model.nms],
                                        binned_N_model,
                                        ext=0, k=1)
