@@ -255,14 +255,12 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
 
         # Greater of 5σ, 250% past Pdot_c peak, and observed Pdot, accounting
         # for proper motion and galactic potential
+        max_observed = (Pdot_meas + PdotP_pm * P + PdotP_gal * P).to_value(
+            u.Unit("s/s")
+        )[0]
 
-        max_observed = (
-            1.5
-            * (Pdot_meas + PdotP_pm * P + PdotP_gal * P).to_value(1 / u.s)[0]
-        )
-
-        domain_max = np.max(
-            [5 * ΔPdot_meas, 2.5 * np.abs(Pdot_domain).max(), max_observed]
+        domain_max = 2.5 * np.max(
+            [5 * ΔPdot_meas, np.abs(Pdot_domain).max(), np.abs(max_observed)]
         )
 
         lin_domain = np.linspace(0., domain_max, 5_000 // 2)
@@ -472,14 +470,12 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
 
         # Greater of 5σ, 250% past Pdot_c peak and observed Pdot, accounting
         # for proper motion and galactic potential
+        max_observed = (Pbdot_meas + PdotP_pm * Pb + PdotP_gal * Pb).to_value(
+            u.Unit("s/s")
+        )[0]
 
-        max_observed = (
-            1.5
-            * (Pbdot_meas + PdotP_pm * Pb + PdotP_gal * Pb).to_value(1 / u.s)[0]
-        )
-
-        domain_max = np.max(
-            [5 * ΔPbdot_meas, 2.5 * np.abs(Pdot_domain).max(), max_observed]
+        domain_max = 2.5 * np.max(
+            [5 * ΔPbdot_meas, np.abs(Pdot_domain).max(), np.abs(max_observed)]
         )
 
         lin_domain = np.linspace(0., domain_max, 5_000 // 2)
