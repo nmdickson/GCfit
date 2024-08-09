@@ -600,7 +600,7 @@ class _SingleRunAnalysis(_RunAnalysis):
     def _get_labels(self, label_fixed=True, math_labels=False):
         '''Retrieve labels for all parameters.'''
 
-        labels = self._parameters
+        labels = self._parameters.copy()
 
         if math_labels:
             labels = [_get_latex_label(lbl, with_units=True) for lbl in labels]
@@ -761,7 +761,7 @@ class MCMCRun(_SingleRunAnalysis):
 
         with self._openfile() as file:
 
-            labels = self._parameters
+            labels = self._parameters.copy()
 
             chain = self._reduce(file[self._gname]['chain'])
 
@@ -1722,7 +1722,7 @@ class NestedRun(_SingleRunAnalysis):
             if apply_mask and self.mask is not None:
                 chain = chain[self.mask, :]
 
-            labels = self._parameters
+            labels = self._parameters.copy()
 
             fixed = sorted(
                 ((k, v, labels.index(k)) for k, v in
@@ -1762,7 +1762,7 @@ class NestedRun(_SingleRunAnalysis):
                 sim_wt = weight_function(sim_run, {'pfrac': 1.}, True)[1][2]
                 eq_chain = resample_equal(sim_run.samples, sim_wt)
 
-            labels = self._parameters
+            labels = self._parameters.copy()
 
             fixed = sorted(
                 ((k, v, labels.index(k)) for k, v in
