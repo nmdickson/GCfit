@@ -300,8 +300,8 @@ class NestedSamplingOutput(Output):
 def MCMC_fit(cluster, Niters, Nwalkers, evolved=False, Ncpu=2, *,
              mpi=False, initials=None, param_priors=None, moves=None,
              fixed_params=None, excluded_likelihoods=None, hyperparams=False,
-             cont_run=False, savedir=_here, backup=False, restrict_to=None,
-             compress=False, verbose=False, progress=False):
+             model_kwargs=None, cont_run=False, savedir=_here, backup=False,
+             restrict_to=None, compress=False, verbose=False, progress=False):
     '''Main MCMC fitting pipeline.
 
     Execute the full MCMC cluster fitting algorithm.
@@ -421,6 +421,9 @@ def MCMC_fit(cluster, Niters, Nwalkers, evolved=False, Ncpu=2, *,
 
         if excluded_likelihoods is None:
             excluded_likelihoods = []
+
+        if model_kwargs is None:
+            model_kwargs = {}
 
         if param_priors is None:
             param_priors = {}
@@ -543,6 +546,9 @@ def MCMC_fit(cluster, Niters, Nwalkers, evolved=False, Ncpu=2, *,
         backend.store_metadata('fixed_params', fixed_initials)
         backend.store_metadata('excluded_likelihoods', excluded_likelihoods)
 
+        if model_kwargs:
+            backend.store_metadata('model_kwargs', model_kwargs)
+
         # MCMC moves
         backend.store_metadata('moves', [(mv.__class__.__name__ for mv in moves)
                                          if moves is not None else 'None'])
@@ -561,7 +567,7 @@ def MCMC_fit(cluster, Niters, Nwalkers, evolved=False, Ncpu=2, *,
         logging.info("Initializing sampler")
 
         sampler_kwargs = {'hyperparams': hyperparams, 'evolved': evolved,
-                          'return_indiv': True}
+                          'return_indiv': True, 'model_kw': model_kwargs}
 
         sampler = emcee.EnsembleSampler(
             nwalkers=Nwalkers,
@@ -651,7 +657,7 @@ def MCMC_fit(cluster, Niters, Nwalkers, evolved=False, Ncpu=2, *,
 
 def nested_fit(cluster, evolved=False, *,
                bound_type='multi', sample_type='auto',
-               initial_kwargs=None, batch_kwargs=None,
+               initial_kwargs=None, batch_kwargs=None, model_kwargs=None,
                pfrac=1.0, maxfrac=0.8, eff_samples=5000, plat_wt_func=False,
                Ncpu=2, mpi=False, initials=None, param_priors=None,
                fixed_params=None, excluded_likelihoods=None, hyperparams=False,
@@ -799,6 +805,9 @@ def nested_fit(cluster, evolved=False, *,
         if excluded_likelihoods is None:
             excluded_likelihoods = []
 
+        if model_kwargs is None:
+            model_kwargs = {}
+
         if param_priors is None:
             param_priors = {}
 
@@ -929,6 +938,9 @@ def nested_fit(cluster, evolved=False, *,
         backend.store_metadata('fixed_params', fixed_initials)
         backend.store_metadata('excluded_likelihoods', excluded_likelihoods)
 
+        if model_kwargs:
+            backend.store_metadata('model_kwargs', model_kwargs)
+
         if initial_kwargs:
             backend.store_metadata('initial_kwargs', initial_kwargs)
 
@@ -951,7 +963,7 @@ def nested_fit(cluster, evolved=False, *,
         backend.ndim = ndim
 
         logl_kwargs = {'hyperparams': hyperparams, 'evolved': evolved,
-                       'return_indiv': False}
+                       'return_indiv': False, 'model_kw': model_kwargs}
 
         sampler = dynesty.DynamicNestedSampler(
             ndim=ndim,

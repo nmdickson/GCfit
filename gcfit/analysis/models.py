@@ -20,19 +20,19 @@ __all__ = ['ModelVisualizer', 'CIModelVisualizer', 'ObservationsVisualizer',
            'EvolvedVisualizer', 'SampledVisualizer', 'ModelCollection']
 
 
-def _get_model(theta, observations):
+def _get_model(theta, observations, **kwargs):
     '''Compute a model based on `theta` and fail quietly'''
     try:
-        return FittableModel(theta, observations=observations)
+        return FittableModel(theta, observations=observations, **kwargs)
     except ValueError:
         logging.warning(f"Model did not converge with {theta=}")
         return None
 
 
-def _get_ev_model(theta, observations):
+def _get_ev_model(theta, observations, **kwargs):
     '''Compute a model based on `theta` and fail quietly'''
     try:
-        return FittableEvolvedModel(theta, observations=observations)
+        return FittableEvolvedModel(theta, observations=observations, **kwargs)
     except ValueError:
         logging.warning(f"Evolved model did not converge with {theta=}")
         return None
@@ -3258,7 +3258,7 @@ class ModelVisualizer(_ClusterVisualizer):
     '''
 
     @classmethod
-    def from_chain(cls, chain, observations, method='median'):
+    def from_chain(cls, chain, observations, method='median', **kwargs):
         '''Initialize a visualizer based on a full chain of parameters.
 
         Classmethod which creates a single model visualizer object based on a
@@ -3301,10 +3301,10 @@ class ModelVisualizer(_ClusterVisualizer):
 
         theta = reduc_methods[method](chain, axis=0)
 
-        return cls(FittableModel(theta, observations), observations)
+        return cls(FittableModel(theta, observations, **kwargs), observations)
 
     @classmethod
-    def from_theta(cls, theta, observations):
+    def from_theta(cls, theta, observations, **kwargs):
         '''Initialize a visualizer based on a single set of parameters.
 
         Classmethod which creates a single model visualizer object based on a
@@ -3329,7 +3329,7 @@ class ModelVisualizer(_ClusterVisualizer):
         --------
         gcfit.FittableModel : Model subclass used to initialize the model.
         '''
-        return cls(FittableModel(theta, observations), observations)
+        return cls(FittableModel(theta, observations, **kwargs), observations)
 
     def __init__(self, model, observations=None):
         self.model = model
@@ -3858,7 +3858,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
     @classmethod
     def from_chain(cls, chain, observations, N=100, *,
-                   verbose=False, pool=None):
+                   verbose=False, pool=None, **kwargs):
         '''Initialize a CI visualizer based on a full chain of parameters.
 
         Classmethod which creates a model visualizer object based on a
@@ -3944,7 +3944,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         # or plots
 
         huge_theta = chain[np.argmax(chain[:, params.index('g')])]
-        huge_model = viz._model_getter(huge_theta, viz.obs)
+        huge_model = viz._model_getter(huge_theta, viz.obs, **kwargs)
 
         if huge_model is None:
             raise ValueError(f"Base model did not converge with {huge_theta=}")
@@ -4096,7 +4096,8 @@ class CIModelVisualizer(_ClusterVisualizer):
         # Setup iteration and pooling
         # ------------------------------------------------------------------
 
-        get_model = functools.partial(viz._model_getter, observations=viz.obs)
+        get_model = functools.partial(viz._model_getter, observations=viz.obs,
+                                      **kwargs)
 
         try:
             _map = map if pool is None else pool.imap_unordered
@@ -4956,7 +4957,7 @@ class EvolvedVisualizer(ModelVisualizer):
         return fig
 
     @classmethod
-    def from_chain(cls, chain, observations, method='median'):
+    def from_chain(cls, chain, observations, method='median', **kwargs):
         '''Initialize a visualizer based on a full chain of parameters.
 
         Classmethod which creates a single model visualizer object based on a
@@ -4999,10 +5000,11 @@ class EvolvedVisualizer(ModelVisualizer):
 
         theta = reduc_methods[method](chain, axis=0)
 
-        return cls(FittableEvolvedModel(theta, observations), observations)
+        return cls(FittableEvolvedModel(theta, observations, **kwargs),
+                   observations)
 
     @classmethod
-    def from_theta(cls, theta, observations):
+    def from_theta(cls, theta, observations, **kwargs):
         '''Initialize a visualizer based on a single set of parameters.
 
         Classmethod which creates a single model visualizer object based on a
@@ -5027,7 +5029,8 @@ class EvolvedVisualizer(ModelVisualizer):
         --------
         gcfit.FittableModel : Model subclass used to initialize the model.
         '''
-        return cls(FittableEvolvedModel(theta, observations), observations)
+        return cls(FittableEvolvedModel(theta, observations, **kwargs),
+                   observations)
 
     def __init__(self, model, observations=None):
 
@@ -5063,7 +5066,7 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
 
     @classmethod
     def from_chain(cls, chain, observations, N=100, *,
-                   verbose=False, pool=None):
+                   verbose=False, pool=None, **kwargs):
 
         import functools
 
@@ -5100,7 +5103,7 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
         # or plots
 
         huge_theta = chain[np.argmax(chain[:, params.index('g')])]
-        huge_model = viz._model_getter(huge_theta, viz.obs)
+        huge_model = viz._model_getter(huge_theta, viz.obs, **kwargs)
 
         if huge_model is None:
             raise ValueError(f"Base model did not converge with {huge_theta=}")
@@ -5251,7 +5254,8 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
         # Setup iteration and pooling
         # ------------------------------------------------------------------
 
-        get_model = functools.partial(viz._model_getter, observations=viz.obs)
+        get_model = functools.partial(viz._model_getter, observations=viz.obs,
+                                      **kwargs)
 
         try:
             _map = map if pool is None else pool.imap_unordered
@@ -5998,8 +6002,8 @@ class ModelCollection:
         return cls([model_cls(m, o) for m, o in zip(models, obs_list)])
 
     @classmethod
-    def from_chains(cls, chains, obs_list, ci=True,
-                    *args, evolved=False, **kwargs):
+    def from_chains(cls, chains, obs_list, ci=True, evolved=False,
+                    model_kws=None, **kwargs):
         '''Initialize from a collection of parameter chains.
 
         Initializes a `ModelCollection` instance of either `ModelVisualizer` or
@@ -6036,11 +6040,14 @@ class ModelCollection:
         if obs_list is None:
             obs_list = [None, ] * chains.shape[0]
 
+        if model_kws is None:
+            model_kws = [dict(), ] * chains.shape[0]
+
         if isinstance(evolved, bool):
             evolved = [evolved, ] * chains.shape[0]
 
         visualizers = []
-        for ch, obs, ev in zip(chains, obs_list, evolved):
+        for ch, obs, ev, mkw in zip(chains, obs_list, evolved, model_kws):
 
             if ev:
                 viz = CIEvolvedVisualizer if ci else EvolvedVisualizer
@@ -6051,7 +6058,7 @@ class ModelCollection:
 
             init = viz.from_chain if ch.ndim == 2 else viz.from_theta
 
-            visualizers.append(init(ch[...], obs, *args, **kwargs))
+            visualizers.append(init(ch[...], obs, **mkw, **kwargs))
 
         return cls(visualizers)
 

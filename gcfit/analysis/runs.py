@@ -619,6 +619,17 @@ class _SingleRunAnalysis(_RunAnalysis):
 
         return labels
 
+    def _get_model_kwargs(self):
+        '''Return the `model_kwargs` metadata (backwards compatible)'''
+
+        with self._openfile('metadata') as mdata:
+            try:
+                model_kw = dict(mdata['model_kwargs'].attrs)
+            except KeyError:
+                model_kw = {}
+
+        return model_kw
+
 
 class MCMCRun(_SingleRunAnalysis):
     '''Analysis and visualization of an MCMC cluster fitting run.
@@ -833,7 +844,9 @@ class MCMCRun(_SingleRunAnalysis):
 
         model_cls = ModelVisualizer if not self.evolved else EvolvedVisualizer
 
-        return model_cls.from_chain(chain, self.obs, method)
+        model_kw = self._get_model_kwargs()
+
+        return model_cls.from_chain(chain, self.obs, method, **model_kw)
 
     def get_CImodel(self, N=100, Nprocesses=1, load=False):
         '''Return a `CIModelVisualizer` instance corresponding to this run.
@@ -873,8 +886,11 @@ class MCMCRun(_SingleRunAnalysis):
 
             labels, chain = self._get_chains()
 
+            model_kw = self._get_model_kwargs()
+
             with multiprocessing.Pool(processes=Nprocesses) as pool:
-                return viz_cls.from_chain(chain, self.obs, N, pool=pool)
+                return viz_cls.from_chain(chain, self.obs, N,
+                                          pool=pool, **model_kw)
 
     # ----------------------------------------------------------------------
     # Plots
@@ -1835,13 +1851,15 @@ class NestedRun(_SingleRunAnalysis):
 
         model_cls = ModelVisualizer if not self._evolved else EvolvedVisualizer
 
+        model_kw = self._get_model_kwargs()
+
         if method == 'mean':
             theta = self.parameter_means()[0]
-            return model_cls.from_theta(theta, self.obs)
+            return model_cls.from_theta(theta, self.obs, **model_kw)
 
         else:
             labels, chain = self._get_equal_weight_chains(add_errors=add_errors)
-            return model_cls.from_chain(chain, self.obs, method)
+            return model_cls.from_chain(chain, self.obs, method, **model_kw)
 
     def get_CImodel(self, N=100, Nprocesses=1, add_errors=False, shuffle=True,
                     load=False):
@@ -1895,8 +1913,11 @@ class NestedRun(_SingleRunAnalysis):
             if shuffle:
                 np.random.default_rng().shuffle(chain, axis=0)
 
+            model_kw = self._get_model_kwargs()
+
             with multiprocessing.Pool(processes=Nprocesses) as pool:
-                return ci_cls.from_chain(chain, self.obs, N, pool=pool)
+                return ci_cls.from_chain(chain, self.obs, N,
+                                         pool=pool, **model_kw)
 
     # ----------------------------------------------------------------------
     # Plots
@@ -3923,9 +3944,11 @@ class RunCollection(_RunAnalysis):
 
         obs_list = [run.obs for run in self.runs]
         ev_list = [run._evolved for run in self.runs]
+        kw_list = [run._get_model_kwargs() for run in self.runs]
 
         mc = ModelCollection.from_chains(chains, obs_list, ci=False,
-                                         evolved=ev_list, **kwargs)
+                                         evolved=ev_list, model_kws=kw_list,
+                                         **kwargs)
 
         # save a copy of models here
         self.models = mc
@@ -3983,6 +4006,7 @@ class RunCollection(_RunAnalysis):
             chains = []
             obs_list = []
             ev_list = []
+            kw_list = []
 
             for run in self.runs:
                 _, ch = run._get_equal_weight_chains(add_errors=add_errors)
@@ -3993,11 +4017,13 @@ class RunCollection(_RunAnalysis):
                 chains.append(ch)
                 obs_list.append(run.obs)
                 ev_list.append(run._evolved)
+                kw_list.append(run._get_model_kwargs())
 
             with multiprocessing.Pool(processes=Nprocesses) as pool:
 
                 mc = ModelCollection.from_chains(chains, obs_list, ci=True, N=N,
-                                                 pool=pool, evolved=ev_list)
+                                                 pool=pool, evolved=ev_list,
+                                                 model_kws=kw_list)
 
         # save a copy of models here
         self.models = mc

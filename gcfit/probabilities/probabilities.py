@@ -1049,7 +1049,8 @@ def likelihood_mass_func(model, mf, fields, *, hyperparams=False):
 # --------------------------------------------------------------------------
 
 
-def log_likelihood(theta, observations, L_components, hyperparams, evolved):
+def log_likelihood(theta, observations, L_components, hyperparams, evolved,
+                   **model_kw):
     r'''Compute log likelihood of given `theta`, based on component likelihoods.
 
     Main likelihood function, which generates the relevant model based on
@@ -1076,6 +1077,9 @@ def log_likelihood(theta, observations, L_components, hyperparams, evolved):
 
     hyperparams : bool
         Whether to include bayesian hyperparameters in all likelihood functions.
+
+    **model_kw : dict, optional
+        All other arguments are passed to the model class
 
     Returns
     -------
@@ -1106,9 +1110,10 @@ def log_likelihood(theta, observations, L_components, hyperparams, evolved):
         model_cls = FittableModel
 
     try:
-        model = model_cls(theta, observations)
+        model = model_cls(theta, observations, **model_kw)
     except ValueError as err:
-        logging.debug(f"Model did not converge with {theta=} ({err})")
+        mssg = f"Model did not converge with {theta=} **{model_kw=}({err})"
+        logging.debug(mssg)
         return -np.inf, -np.inf * np.ones(len(L_components))
 
     # Calculate each log likelihood
@@ -1124,7 +1129,8 @@ def log_likelihood(theta, observations, L_components, hyperparams, evolved):
 
 def posterior(theta, observations, fixed_initials=None,
               L_components=None, prior_likelihood=None, *,
-              hyperparams=False, return_indiv=True, evolved=False):
+              hyperparams=False, return_indiv=True,
+              evolved=False, model_kw=None):
     '''Compute the full posterior probability given `theta` and `observations`.
 
     Combines the various likelihood functions (through `log_likelihood`)
@@ -1175,6 +1181,9 @@ def posterior(theta, observations, fixed_initials=None,
         alongside the posterior probability. Can be used by some sampler
         classes, such as the `blobs` functionality of `emcee`.
 
+    model_kw : dict, optional
+        Extra arguments to be passed to the initialization of all models.
+
     Returns
     -------
     float or tuple
@@ -1197,6 +1206,9 @@ def posterior(theta, observations, fixed_initials=None,
         default_θ = DEFAULT_EV_THETA
     else:
         default_θ = DEFAULT_THETA
+
+    if model_kw is None:
+        model_kw = {}
 
     # Check if any values of theta are not finite, probably caused by invalid
     # prior transforms, and indicating we should return -inf
@@ -1229,7 +1241,7 @@ def posterior(theta, observations, fixed_initials=None,
 
     log_L, individuals = log_likelihood(theta, observations, L_components,
                                         hyperparams=hyperparams,
-                                        evolved=evolved)
+                                        evolved=evolved, **model_kw)
 
     probability = log_L + log_Pθ
 
