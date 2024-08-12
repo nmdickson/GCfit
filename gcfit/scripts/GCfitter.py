@@ -115,6 +115,9 @@ def main():
     shared_parser.add_argument('-p', '--priors', dest='param_priors',
                                help='alternative JSON file '
                                     'with different priors')
+    shared_parser.add_argument('--model-kwargs',
+                               help='alternative JSON file '
+                                    'with different model kwargs')
 
     shared_parser.add_argument('--fix', dest='fixed_params', nargs='*',
                                help='Parameters to fix, '
@@ -238,11 +241,21 @@ def main():
 
         if (bnd_file := pathlib.Path(args.param_priors)).is_file():
 
-            with open(bnd_file, 'r') as init_of:
-                args.param_priors = json.load(init_of)
+            with open(bnd_file, 'r') as bnd_of:
+                args.param_priors = json.load(bnd_of)
 
         else:
             parser.error(f"Cannot access '{bnd_file}': No such file")
+
+    if args.model_kwargs:
+
+        if (kw_file := pathlib.Path(args.model_kwargs)).is_file():
+
+            with open(kw_file, 'r') as kw_of:
+                args.model_kwargs = json.load(kw_of)
+
+        else:
+            parser.error(f"Cannot access '{kw_file}': No such file")
 
     pathlib.Path(args.savedir).mkdir(exist_ok=True)
 
