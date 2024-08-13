@@ -1,6 +1,6 @@
 [project]
 name = "GCfit"
-version = "2.0"
+version = "2.1"
 description = "Fitting of multimass equilibrium models of globular clusters"
 authors = [
     {name = "Nolan Dickson", email = "nolan.dickson@smu.ca"},
