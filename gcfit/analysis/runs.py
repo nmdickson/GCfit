@@ -798,15 +798,15 @@ class MCMCRun(_SingleRunAnalysis):
 
         with self._openfile('metadata') as mdata:
 
-            stored_priors = dict(mdata['specified_priors'].attrs)
+            stored_priors = mdata['specified_priors']
             fixed = dict(mdata['fixed_params'].attrs)
 
         prior_params = {}
 
         for key in self._parameters:
             try:
-                type_ = stored_priors[f'{key}_type'].decode('utf-8')
-                args = stored_priors[f'{key}_args']
+                type_ = stored_priors[key].attrs['type']
+                args = stored_priors[key]['args']
 
                 if args.dtype.kind == 'S':
                     args = args.astype('U')
@@ -1497,9 +1497,9 @@ class MCMCRun(_SingleRunAnalysis):
                     mssg += '    None\n'
 
                 mssg += 'Excluded components:\n'
-                exc = mdata['excluded_likelihoods'].attrs
-                if exc:
-                    for i, v in exc.items():
+                exc = mdata['excluded_likelihoods']
+                if exc.size > 0:
+                    for i, v in enumerate(exc):
                         mssg += f'    ({i}) {v}\n'
                 else:
                     mssg += '    None\n'
@@ -1570,8 +1570,7 @@ class NestedRun(_SingleRunAnalysis):
 
         with self._openfile() as file:
 
-            exc = [L.decode() for L in
-                   file['metadata/excluded_likelihoods'].attrs.values()]
+            exc = [L.decode() for L in file['metadata/excluded_likelihoods']]
 
             N = sum([self.obs[comp[0]].size for comp in
                      self.obs.filter_likelihoods(exc, True)])
@@ -1589,8 +1588,7 @@ class NestedRun(_SingleRunAnalysis):
 
         with self._openfile() as file:
 
-            exc = [L.decode() for L in
-                   file['metadata/excluded_likelihoods'].attrs.values()]
+            exc = [L.decode() for L in file['metadata/excluded_likelihoods']]
 
             N = sum([self.obs[comp[0]].size for comp in
                      self.obs.filter_likelihoods(exc, True)])
@@ -1802,15 +1800,15 @@ class NestedRun(_SingleRunAnalysis):
 
         with self._openfile('metadata') as mdata:
 
-            stored_priors = dict(mdata['specified_priors'].attrs)
+            stored_priors = mdata['specified_priors']
             fixed = dict(mdata['fixed_params'].attrs)
 
         prior_params = {}
 
         for key in self._parameters:
             try:
-                type_ = stored_priors[f'{key}_type'].decode('utf-8')
-                args = stored_priors[f'{key}_args']
+                type_ = stored_priors[key].attrs['type']
+                args = stored_priors[key]['args']
 
                 if args.dtype.kind == 'S':
                     args = args.astype('U')
@@ -3090,9 +3088,9 @@ class NestedRun(_SingleRunAnalysis):
                     mssg += '    None\n'
 
                 mssg += 'Excluded components:\n'
-                exc = mdata['excluded_likelihoods'].attrs
-                if exc:
-                    for i, v in exc.items():
+                exc = mdata['excluded_likelihoods']
+                if exc.size > 0:
+                    for i, v in enumerate(exc):
                         mssg += f'    ({i}) {v}\n'
                 else:
                     mssg += '    None\n'

@@ -78,59 +78,50 @@ class Output:
         if not file:
             hdf.close()
 
-    def store_metadata(self, key, value, type_postfix='', *, file=None):
+    def store_metadata(self, key, value, type_postfix='', *,
+                       file=None, group='metadata'):
         '''Store given `key``type_postfix`=`value` within `metadata` group'''
 
         hdf = file or self.open('a')
 
-        meta_grp = hdf.require_group(name='metadata')
+        meta_grp = hdf.require_group(name=group)
 
         if isinstance(value, abc.Mapping):
 
-            dset = meta_grp.require_dataset(key, dtype="f", shape=None)
+            meta_grp.require_group(name=key)
 
             for k, v in value.items():
 
-                v = np.asanyarray(v)
-
-                if v.dtype.kind == 'U':
-                    v = v.astype('S')
-
-                try:
-                    dset.attrs[f'{k}{type_postfix}'] = v
-
-                except TypeError as err:
-                    mssg = f'Could not store metadata {key}:{k}={v} ({err})'
-                    logging.debug(mssg)
-                    continue
+                # Recursively store each of the values within this mapping
+                self.store_metadata(k, v, type_postfix=type_postfix, file=hdf,
+                                    group=f"{group}/{key}")
 
         elif isinstance(value, abc.Collection) \
                 and not isinstance(value, _str_types):
 
-            dset = meta_grp.require_dataset(key, dtype="f", shape=None)
+            value = np.asanyarray(value)
 
-            for i, v in enumerate(value):
+            if value.dtype.kind == 'U':
+                value = value.astype('S')
 
-                v = np.asanyarray(v)
+            try:
+                meta_grp.create_dataset(f'{key}{type_postfix}', data=value)
 
-                if v.dtype.kind == 'U':
-                    v = v.astype('S')
-
-                try:
-                    dset.attrs[f'{i}{type_postfix}'] = v
-
-                except TypeError as err:
-                    mssg = f'Could not store metadata {key}[{i}]={v} ({err})'
-                    logging.debug(mssg)
-                    continue
+            except TypeError as err:
+                mssg = f'Could not store metadata {group}:{key}={value} ({err})'
+                logging.debug(mssg)
+                pass
 
         else:
+
+            if hasattr(value, 'dtype') and value.dtype.kind == 'U':
+                value = value.astype('S')
 
             try:
                 meta_grp.attrs[f'{key}{type_postfix}'] = value
 
             except TypeError as err:
-                mssg = f'Could not store metadata {key}={value} ({err})'
+                mssg = f'Could not store metadata {group}:{key}={value} ({err})'
                 logging.debug(mssg)
                 pass
 
@@ -514,8 +505,8 @@ def MCMC_fit(cluster, Niters, Nwalkers, evolved=False, Ncpu=2, *,
         # Setup and check param_priors
         # ------------------------------------------------------------------
 
-        spec_prior_type = {k: v[0] for k, v in param_priors.items()}
-        spec_prior_args = {k: v[1:] for k, v in param_priors.items()}
+        spec_priors = {k: {'type': v[0], 'args': v[1:]}
+                       for k, v in param_priors.items()}
 
         prior_kwargs = {'fixed_initials': fixed_initials, 'evolved': evolved}
         prior_likelihood = priors.Priors(param_priors, **prior_kwargs)
@@ -556,9 +547,8 @@ def MCMC_fit(cluster, Niters, Nwalkers, evolved=False, Ncpu=2, *,
         if spec_initials is not None:
             backend.store_metadata('specified_initials', spec_initials)
 
-        if spec_prior_type:
-            backend.store_metadata('specified_priors', spec_prior_type, '_type')
-            backend.store_metadata('specified_priors', spec_prior_args, '_args')
+        if spec_priors:
+            backend.store_metadata('specified_priors', spec_priors)
 
         # ------------------------------------------------------------------
         # Initialize the MCMC sampler
@@ -901,8 +891,8 @@ def nested_fit(cluster, evolved=False, *,
         # ------------------------------------------------------------------
         # TODO shouldnt this function also accept Prior objects themselves?
 
-        spec_prior_type = {k: v[0] for k, v in param_priors.items()}
-        spec_prior_args = {k: v[1:] for k, v in param_priors.items()}
+        spec_priors = {k: {'type': v[0], 'args': v[1:]}
+                       for k, v in param_priors.items()}
 
         prior_kwargs = {'fixed_initials': fixed_initials, 'err_on_fail': False,
                         'evolved': evolved}
@@ -950,9 +940,8 @@ def nested_fit(cluster, evolved=False, *,
         if spec_initials is not None:
             backend.store_metadata('specified_initials', spec_initials)
 
-        if spec_prior_type:
-            backend.store_metadata('specified_priors', spec_prior_type, '_type')
-            backend.store_metadata('specified_priors', spec_prior_args, '_args')
+        if spec_priors:
+            backend.store_metadata('specified_priors', spec_priors)
 
         # ------------------------------------------------------------------
         # Initialize the Nested sampler
