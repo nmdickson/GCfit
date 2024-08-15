@@ -622,9 +622,13 @@ class _SingleRunAnalysis(_RunAnalysis):
     def _get_model_kwargs(self):
         '''Return the `model_kwargs` metadata (backwards compatible)'''
 
+        def _gather_attrs(key, grp):
+            model_kw[key] = dict(grp.attrs)
+
         with self._openfile('metadata') as mdata:
             try:
                 model_kw = dict(mdata['model_kwargs'].attrs)
+                mdata['model_kwargs'].visititems(_gather_attrs)
             except KeyError:
                 model_kw = {}
 
