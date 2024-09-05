@@ -550,6 +550,10 @@ class MCMCRun(_SingleRunAnalysis):
     # Dimensions
     # ----------------------------------------------------------------------
 
+    @property
+    def chains(self):
+        return self._get_chains(flatten=True)[1]
+
     def _reduce(self, array, *, only_iterations=False):
         '''apply the necesary iterations and walkers slicing to given array.'''
 
@@ -1470,6 +1474,10 @@ class NestedRun(_SingleRunAnalysis):
         return weight_function(self.results, stop_kw, return_weights=True)[1][2]
 
     @property
+    def chains(self):
+        return self._get_equal_weight_chains()[1]
+
+    @property
     def ESS(self):
         '''The effective sample size.'''
         from scipy.special import logsumexp
@@ -1679,7 +1687,6 @@ class NestedRun(_SingleRunAnalysis):
 
         return labels
 
-    # TODO some ways of handling and plotting initial_batch only clusters
     def _get_chains(self, include_fixed=True, *, apply_mask=True):
         '''Get the "chains" of all samples from this nested sampling run.'''
 
