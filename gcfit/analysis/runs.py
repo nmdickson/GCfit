@@ -673,6 +673,10 @@ class MCMCRun(_SingleRunAnalysis):
     # Dimensions
     # ----------------------------------------------------------------------
 
+    @property
+    def chains(self):
+        return self._get_chains(flatten=True)[1]
+
     def _reduce(self, array, *, only_iterations=False):
         '''apply the necesary iterations and walkers slicing to given array.'''
 
@@ -1559,6 +1563,10 @@ class NestedRun(_SingleRunAnalysis):
                 stop_kw = {}
 
         return weight_function(self.results, stop_kw, return_weights=True)[1][2]
+
+    @property
+    def chains(self):
+        return self._get_equal_weight_chains()[1]
 
     @property
     def ESS(self):

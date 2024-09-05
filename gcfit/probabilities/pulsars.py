@@ -2,7 +2,6 @@ from ..util import (QuantitySpline, gaussian, div_error, trim_peaks,
                     find_intersections)
 
 import scipy.stats
-import scipy as sp
 import numpy as np
 import astropy.units as u
 from astropy.constants import c
@@ -134,8 +133,9 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *,
 
     R = R.to(model.rt.unit)
 
-    if R >= model.rt:
-        raise ValueError(f"Pulsar position outside cluster bound ({model.rt})")
+    if model.rt <= R:
+        msg = f"Pulsar position outside cluster bound ({model.rt})"
+        raise ValueError(msg)
 
     nz = model.nstep
 
@@ -183,10 +183,7 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *,
     # There are 2 possibilities depending on R:
     # (1) the maximum acceleration occurs within the cluster boundary, or
     # (2) max(a_z) = a_z,t (this happens when R ~ r_t)
-    if len(zmax) > 0:
-        azmax = az_spl(zmax[0])
-    else:
-        azmax = az_spl(z[-1])
+    azmax = az_spl(zmax[0]) if len(zmax) > 0 else az_spl(z[-1])
 
     # Old version here for future reference
     # increment density by 2 order of magnitude smaller than azmax
@@ -204,15 +201,15 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *,
 
     Δa = np.diff(az_domain)[1]
 
-    # TODO look at the old new_Paz to get the comments for this stuff
-
     if DM is None:
 
         Paz_dist = np.zeros_like(az_domain.value)
         for i, a in enumerate(az_domain):
-
+            # find every z value that has this line-of-sight acceleration
             z_values = find_intersections(az, z, a)
 
+            # probability distribution over acceleration then summed over each
+            # possible z value
             Paz_dist[i] = np.sum(
                 rhoz_spl(z_values).value / np.abs(az_der(z_values).value),
                 axis=0
@@ -255,9 +252,7 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *,
 
         # set up the LOS spline for the DM based Paz
         DM_gaussian = gaussian(x=z_domain, mu=DM_los, sigma=DM_los_err)
-        DM_los_spl = sp.interpolate.UnivariateSpline(
-            x=z_domain, y=DM_gaussian, s=0, k=3, ext=1
-        )
+        DM_los_spl = QuantitySpline(x=z_domain, y=DM_gaussian, s=0, k=3, ext=1)
 
         # We still only want positive values for the other splines
         az_domain = np.abs(az_domain)
@@ -320,8 +315,11 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *,
 
             # If the area is way less than 1, we should just throw an exception
             if norm < 0.9:
-                raise ValueError("Paz failed to integrate to 1.0, too small to"
-                                 f"continue. Area: {norm:.6f}")
+                msg = (
+                    "Paz failed to integrate to 1.0, too small to "
+                    f"continue. Area: {norm:.6f}"
+                )
+                raise ValueError(msg)
 
             # Manual normalization
             Paz_dist /= norm
@@ -365,8 +363,11 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *,
 
             # If the area is way less than 1, we should just throw an exception
             if norm < 0.9:
-                raise ValueError("Paz failed to integrate to 1.0, too small to"
-                                 f" continue. Area: {norm:.6f}")
+                msg = (
+                    "Paz failed to integrate to 1.0, too small to "
+                    f"continue. Area: {norm:.6f}"
+                )
+                raise ValueError(msg)
 
             # Manual normalization
             Paz_dist /= norm
@@ -405,12 +406,13 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *,
 
 
 def galactic_component(lat, lon, D):
-    '''Compute the "galactic" component of pulsar Pdot-P (using `gala`)'''
+    """Compute the "galactic" component of pulsar Pdot-P, using the
+    `MilkyWayPotential2022` potential from `gala`."""
     import gala.potential as pot
     from astropy.coordinates import SkyCoord
 
     # Milky Way Potential
-    mw = pot.BovyMWPotential2014()
+    mw = pot.MilkyWayPotential2022()
 
     # Pulsar position in galactocentric coordinates
     crd = SkyCoord(b=lat, l=lon, distance=D, frame='galactic')
@@ -452,7 +454,7 @@ def shklovskii_component(pm, D):
 
 
 def field_Pdot_KDE(*, pulsar_db='field_msp.dat'):
-    '''Return a gaussian kde representing the galactic field pulsar P-Pdot.
+    """Return a gaussian kde representing the galactic field pulsar P-Pdot.
 
     Computes a 2D gaussian KDE based on the period and period derivative
     distribution of galactic field millisecond pulsars, which can then be used
@@ -465,7 +467,7 @@ def field_Pdot_KDE(*, pulsar_db='field_msp.dat'):
     This KDE should be pre-constructed (by `valid_likelihoods`), and it is
     unlikely users need to call this function directly.
 
-    Pulsar data is retrieved from the ANTF pulsar catalogue using the
+    Pulsar data is retrieved from the ATNF pulsar catalogue using the
     `psrcat` program. The data can be found in the package resources, and
     can be recreated using the command:
     `psrcat -db_file psrcat.db -c "p0 p1 p1_i GB GL Dist" -l "p0 < 0.1 &&
@@ -482,7 +484,7 @@ def field_Pdot_KDE(*, pulsar_db='field_msp.dat'):
     scipy.stats.gaussian_kde
         The 2D Gaussian KDE representing the intrinsic spin-down distributions
         of galactic field pulsars.
-    '''
+    """
     from ..util.data import _open_resources
 
     # Get field pulsars data
@@ -499,8 +501,10 @@ def field_Pdot_KDE(*, pulsar_db='field_msp.dat'):
     Pdot_int = Pdot_pm - galactic_component(*(lat, lon), D).value
 
     P = np.log10(P)
-    # TODO would be nice to get rid of the warning that happens here everytime
-    Pdot_int = np.log10(Pdot_int)
+
+    # catch the warning here for the log10
+    with np.errstate(invalid="ignore"):
+        Pdot_int = np.log10(Pdot_int)
 
     # TODO some Pdot_pm < Pdot_gal; this may or may not be physical, need check
     finite = np.isfinite(Pdot_int)

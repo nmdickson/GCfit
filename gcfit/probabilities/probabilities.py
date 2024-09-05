@@ -6,7 +6,6 @@ from ..core.data import (DEFAULT_THETA, DEFAULT_EV_THETA,
 
 import numpy as np
 import astropy.units as u
-import scipy.interpolate as interp
 
 import logging
 
@@ -152,18 +151,63 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
 
         R = pulsars['r'][i].to(u.pc)
 
-        if R >= model.rt:
+        if model.rt <= R:
 
             mssg = (f"Pulsar {pulsars['id'][i]} is outside cluster truncation "
                     f"radius {model.rt}")
             logging.debug(mssg)
 
-            return np.NINF
+            return -np.inf
 
         P = pulsars['P'][i].to('s')
 
         Pdot_meas = pulsars['Pdot'][i]
         ΔPdot_meas = np.abs(pulsars['ΔPdot'][i])
+
+        # ------------------------------------------------------------------
+        # Compute the Shklovskii (proper motion) effect component
+        # ------------------------------------------------------------------
+
+        cluster_μ <<= u.Unit("mas/yr")
+
+        PdotP_pm = shklovskii_component(cluster_μ, model.d)
+
+        # ------------------------------------------------------------------
+        # Compute the galactic potential component
+        # ------------------------------------------------------------------
+
+        PdotP_gal = galactic_component(*(coords * u.deg), D=model.d)
+
+        # ------------------------------------------------------------------
+        # Create a slice of the P-Pdot space, along this pulsars P
+        # ------------------------------------------------------------------
+
+        lg_P = np.log10(P / P.unit)
+
+        P_grid, Pdot_int_domain = np.mgrid[lg_P:lg_P:1j, Pdot_min:Pdot_max:200j]
+
+        P_grid, Pdot_int_domain = P_grid.ravel(), Pdot_int_domain.ravel()
+
+        # ------------------------------------------------------------------
+        # Compute the Pdot_int distribution from the KDE
+        # ------------------------------------------------------------------
+
+        Pdot_int_prob = Pdot_kde(np.vstack([P_grid, Pdot_int_domain]))
+
+        Pdot_int_spl = util.QuantitySpline(
+            Pdot_int_domain, Pdot_int_prob, k=1, s=0, ext=1
+        )
+
+        Pdot_int_prob = util.RV_transform(
+            domain=10**Pdot_int_domain,
+            f_X=Pdot_int_spl,
+            h=np.log10,
+            h_prime=lambda y: (1 / (np.log(10) * y)),
+        )
+
+        Pdot_int_spl = util.QuantitySpline(
+            10**Pdot_int_domain, Pdot_int_prob, k=1, s=0, ext=1
+        )
 
         # ------------------------------------------------------------------
         # Compute the cluster component distribution, from the model
@@ -197,12 +241,12 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
             """
             logging.warning(mssg, exc_info=err)
 
-            return np.NINF
+            return -np.inf
 
         Pdot_domain = (P * PdotP_domain).decompose()
 
         # linear to avoid effects around asymptote
-        Pdot_c_spl = interp.UnivariateSpline(
+        Pdot_c_spl = util.QuantitySpline(
             Pdot_domain, PdotP_c_prob, k=1, s=0, ext=1
         )
 
@@ -210,14 +254,19 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
         # Set up the equally-spaced linear convolution domain
         # ------------------------------------------------------------------
 
-        # TODO both 5000 and 1e-18 need to be computed dynamically
-        #   5000 to be enough steps to sample the gaussian and int peaks
-        #   1e-18 to be far enough for the int distribution to go to zero
-        #   Both balanced so as to use way too much memory unnecessarily
-        #   Must be symmetric, to avoid bound effects
+        # Greater of 5σ, 250% past Pdot_c peak, and observed Pdot, accounting
+        # for proper motion and galactic potential
+        max_observed = (Pdot_meas + PdotP_pm * P + PdotP_gal * P).to_value(
+            u.Unit("s/s")
+        )[0]
+
+        domain_max = 2.5 * np.max(
+            [5 * ΔPdot_meas, np.abs(Pdot_domain).max(), np.abs(max_observed)]
+        )
+
+        lin_domain = np.linspace(0., domain_max, 5_000 // 2)
 
         # mirrored/starting at zero so very small gaussians become the δ-func
-        lin_domain = np.linspace(0., 3e-18, 5_000 // 2)
         lin_domain = np.concatenate((np.flip(-lin_domain[1:]), lin_domain))
 
         # ------------------------------------------------------------------
@@ -226,77 +275,28 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
 
         # TODO if width << Pint width, maybe don't bother with first conv.
 
-        # NOTE: this now uses the lin_domain instead of the PdotP domain
-        # in order to accommodate pulsar X who's error spline was being cut
-        # too soon, giving zero probability to valid regions.
-        # if lin_domain gets dynamically computed in the future, make sure it's
-        # large enough to accommodate pulsar X.
         err = util.gaussian(x=lin_domain, sigma=ΔPdot_meas, mu=0)
-
-        # ------------------------------------------------------------------
-        # Create a slice of the P-Pdot space, along this pulsars P
-        # ------------------------------------------------------------------
-
-        lg_P = np.log10(P / P.unit)
-
-        P_grid, Pdot_int_domain = np.mgrid[lg_P:lg_P:1j, Pdot_min:Pdot_max:200j]
-
-        P_grid, Pdot_int_domain = P_grid.ravel(), Pdot_int_domain.ravel()
-
-        # ------------------------------------------------------------------
-        # Compute the Pdot_int distribution from the KDE
-        # ------------------------------------------------------------------
-
-        Pdot_int_prob = Pdot_kde(np.vstack([P_grid, Pdot_int_domain]))
-
-        Pdot_int_spl = interp.UnivariateSpline(
-            Pdot_int_domain, Pdot_int_prob, k=1, s=0, ext=1
-        )
-
-        Pdot_int_prob = util.RV_transform(
-            domain=10**Pdot_int_domain, f_X=Pdot_int_spl,
-            h=np.log10, h_prime=lambda y: (1 / (np.log(10) * y))
-        )
-
-        Pdot_int_spl = interp.UnivariateSpline(
-            10**Pdot_int_domain, Pdot_int_prob, k=1, s=0, ext=1
-        )
 
         # ------------------------------------------------------------------
         # Convolve the different distributions
         # ------------------------------------------------------------------
 
-        conv1 = np.convolve(err, Pdot_c_spl(lin_domain), 'same')
+        conv1 = np.convolve(err, Pdot_c_spl(lin_domain), "same")
 
-        conv2 = np.convolve(conv1, Pdot_int_spl(lin_domain), 'same')
-
-        # Normalize
-        conv2 /= interp.UnivariateSpline(
-            lin_domain, conv2, k=1, s=0, ext=1
-        ).integral(-np.inf, np.inf)
-
-        # ------------------------------------------------------------------
-        # Compute the Shklovskii (proper motion) effect component
-        # ------------------------------------------------------------------
-
-        cluster_μ <<= u.Unit("mas/yr")
-
-        PdotP_pm = shklovskii_component(cluster_μ, model.d)
-
-        # ------------------------------------------------------------------
-        # Compute the galactic potential component
-        # ------------------------------------------------------------------
-
-        PdotP_gal = galactic_component(*(coords * u.deg), D=model.d)
+        conv2 = np.convolve(conv1, Pdot_int_spl(lin_domain), "same")
 
         # ------------------------------------------------------------------
         # Interpolate the likelihood value from the overall distribution
         # ------------------------------------------------------------------
 
-        prob_dist = interp.interp1d(
-            (lin_domain / P) + PdotP_pm + PdotP_gal, conv2,
-            assume_sorted=True, bounds_error=False, fill_value=0.0
-        )
+        PdotP_tot = ((lin_domain / P) + PdotP_pm + PdotP_gal).to_value(1 / u.s)
+
+        # normalize conv2 to the PdotP_tot domain
+        conv2 /= util.QuantitySpline(
+            PdotP_tot, conv2, k=1, s=0, ext=1
+        ).integral(-np.inf, np.inf)
+
+        prob_dist = util.QuantitySpline(PdotP_tot, conv2, k=1, s=0, ext=1)
 
         probs[i] = prob_dist((Pdot_meas / P).decompose())
 
@@ -307,7 +307,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
     logprobs = np.log(probs)
 
     # Replace NaNs with -inf
-    logprobs[np.isnan(logprobs)] = np.NINF
+    logprobs[np.isnan(logprobs)] = -np.inf
 
     return np.sum(logprobs)
 
@@ -397,18 +397,32 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
 
         R = pulsars['r'][i].to(u.pc)
 
-        if R >= model.rt:
+        if model.rt <= R:
 
             mssg = (f"Pulsar {pulsars['id'][i]} is outside cluster truncation "
                     f"radius {model.rt}")
             logging.debug(mssg)
 
-            return np.NINF
+            return -np.inf
 
         Pb = pulsars['Pb'][i].to('s')
 
         Pbdot_meas = pulsars['Pbdot'][i]
         ΔPbdot_meas = pulsars['ΔPbdot'][i]
+
+        # ------------------------------------------------------------------
+        # Compute the Shklovskii (proper motion) effect component
+        # ------------------------------------------------------------------
+
+        cluster_μ <<= u.Unit("mas/yr")
+
+        PdotP_pm = shklovskii_component(cluster_μ, model.d)
+
+        # ------------------------------------------------------------------
+        # Compute the galactic potential component
+        # ------------------------------------------------------------------
+
+        PdotP_gal = galactic_component(*(coords * u.deg), D=model.d)
 
         # ------------------------------------------------------------------
         # Compute the cluster component distribution, from the model
@@ -442,12 +456,12 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
             """
             logging.warning(mssg, exc_info=err)
 
-            return np.NINF
+            return -np.inf
 
         Pdot_domain = (Pb * PdotP_domain).decompose()
 
         # linear to avoid effects around asymptote
-        Pdot_c_spl = interp.UnivariateSpline(
+        Pdot_c_spl = util.QuantitySpline(
             Pdot_domain, PdotP_c_prob, k=1, s=0, ext=1
         )
 
@@ -455,8 +469,19 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
         # Set up the equally-spaced linear convolution domain
         # ------------------------------------------------------------------
 
+        # Greater of 5σ, 250% past Pdot_c peak and observed Pdot, accounting
+        # for proper motion and galactic potential
+        max_observed = (Pbdot_meas + PdotP_pm * Pb + PdotP_gal * Pb).to_value(
+            u.Unit("s/s")
+        )[0]
+
+        domain_max = 2.5 * np.max(
+            [5 * ΔPbdot_meas, np.abs(Pdot_domain).max(), np.abs(max_observed)]
+        )
+
+        lin_domain = np.linspace(0., domain_max, 5_000 // 2)
+
         # mirrored/starting at zero so very small gaussians become the δ-func
-        lin_domain = np.linspace(0., 1e-9, 10_000 // 2)
         lin_domain = np.concatenate((np.flip(-lin_domain[1:]), lin_domain))
 
         # ------------------------------------------------------------------
@@ -465,8 +490,6 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
 
         err = util.gaussian(x=lin_domain, sigma=ΔPbdot_meas, mu=0)
 
-        # err_spl = interp.UnivariateSpline(Pdot_domain, err, k=1, s=0, ext=1)
-
         # ------------------------------------------------------------------
         # Convolve the different distributions
         # ------------------------------------------------------------------
@@ -474,33 +497,18 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
         # conv = np.convolve(err, PdotP_c_prob, 'same')
         conv = np.convolve(err, Pdot_c_spl(lin_domain), 'same')
 
-        # Normalize
-        conv /= interp.UnivariateSpline(
-            lin_domain, conv, k=1, s=0, ext=1
-        ).integral(-np.inf, np.inf)
-
-        # ------------------------------------------------------------------
-        # Compute the Shklovskii (proper motion) effect component
-        # ------------------------------------------------------------------
-
-        cluster_μ <<= u.Unit("mas/yr")
-
-        PdotP_pm = shklovskii_component(cluster_μ, model.d)
-
-        # ------------------------------------------------------------------
-        # Compute the galactic potential component
-        # ------------------------------------------------------------------
-
-        PdotP_gal = galactic_component(*(coords * u.deg), D=model.d)
-
         # ------------------------------------------------------------------
         # Interpolate the likelihood value from the overall distribution
         # ------------------------------------------------------------------
 
-        prob_dist = interp.interp1d(
-            (lin_domain / Pb) + PdotP_pm + PdotP_gal, conv,
-            assume_sorted=True, bounds_error=False, fill_value=0.0
+        PdotP_tot = ((lin_domain / Pb) + PdotP_pm + PdotP_gal).to_value(1 / u.s)
+
+        # normalize conv to the PdotP_tot domain
+        conv /= util.QuantitySpline(PdotP_tot, conv, k=1, s=0, ext=1).integral(
+            -np.inf, np.inf
         )
+
+        prob_dist = util.QuantitySpline(PdotP_tot, conv, k=1, s=0, ext=1)
 
         probs[i] = prob_dist(Pbdot_meas / Pb)
 
@@ -511,7 +519,7 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
     logprobs = np.log(probs)
 
     # Replace NaNs with -inf
-    logprobs[np.isnan(logprobs)] = np.NINF
+    logprobs[np.isnan(logprobs)] = -np.inf
 
     return np.sum(logprobs)
 
