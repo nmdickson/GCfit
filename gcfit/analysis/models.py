@@ -4840,13 +4840,13 @@ class EvolvedVisualizer(ModelVisualizer):
 
     @_ClusterVisualizer._support_units
     def plot_fbh_evolution(self, fig=None, ax=None, *,
-                           x_unit='Gyr', y_unit='', legend=False,
+                           x_unit='Gyr', y_unit='pct', legend=False,
                            label_position='left', verbose_label=True,
                            blank_xaxis=False, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        ax = self._plot_evolution(ax, self.f_BH_t,
+        ax = self._plot_evolution(ax, self.f_BH_t.to(y_unit),
                                   model_label=r"$f_{\mathrm{BH}}$",
                                   x_unit=x_unit, y_unit=y_unit,
                                   legend=legend, **kwargs)
