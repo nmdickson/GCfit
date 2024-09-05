@@ -2442,7 +2442,7 @@ class NestedRun(_SingleRunAnalysis):
         return fig
 
     def plot_posterior(self, param, fig=None, ax=None, chain=None,
-                       flipped=True, truth=None, truth_ci=None,
+                       flipped=True, kde=True, truth=None, truth_ci=None,
                        *args, **kwargs):
         '''Plot a smoothed posterior distribution of a single parameter.
 
@@ -2475,6 +2475,10 @@ class NestedRun(_SingleRunAnalysis):
             If True (default) the posterior will be flipped on it's side,
             attached to the left-axis.
 
+        kde : bool, optional
+            Whether to plot a gaussian-KDE smoothed posterior (default), or a
+            simple histogram.
+
         truth : float, optional
             Optionally indicate the "true" value as horizontal lines on the
             posterior.
@@ -2506,17 +2510,31 @@ class NestedRun(_SingleRunAnalysis):
             prm_ind = labels.index(param)
             chain = self._get_equal_weight_chains()[1][..., prm_ind]
 
-        try:
-            kde = gaussian_kde(chain)
-        except np.linalg.LinAlgError as err:
-            mssg = f"Cannot compute kde of {param}: {err}"
-            raise ValueError(mssg)
+        # ------------------------------------------------------------------
+        # Plot posterior
+        # ------------------------------------------------------------------
 
-        domain = np.linspace(chain.min(), chain.max(), 500)
+        if kde:
+            try:
+                gkde = gaussian_kde(chain)
+            except np.linalg.LinAlgError as err:
+                mssg = f"Cannot compute gkde of {param}: {err}"
+                raise ValueError(mssg)
+
+            domain = np.linspace(chain.min(), chain.max(), 500)
+
+            plot_func = ax.fill_betweenx if flipped else ax.fill_between
+            plot_func(domain, 0, gkde(domain), *args, **kwargs)
+
+        else:
+            orientation = "horizontal" if flipped else "vertical"
+            ax.hist(chain, orientation=orientation, *args, **kwargs)
+
+        # ------------------------------------------------------------------
+        # Plot truths
+        # ------------------------------------------------------------------
 
         if flipped:
-
-            ax.fill_betweenx(domain, 0, kde(domain), *args, **kwargs)
 
             if truth is not None:
                 ax.axhline(truth, c='tab:red')
@@ -2527,8 +2545,6 @@ class NestedRun(_SingleRunAnalysis):
             ax.set_xlim(left=0)
 
         else:
-
-            ax.fill_between(domain, 0, kde(domain), *args, **kwargs)
 
             if truth is not None:
                 ax.axvline(truth, c='tab:red')
