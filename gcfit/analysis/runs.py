@@ -3999,15 +3999,16 @@ class RunCollection(_RunAnalysis):
         '''
         import multiprocessing
 
-        # TODO also pass all the obs from the runs here too
+        obs_list = [run.obs for run in self.runs]
+        ev_list = [run._evolved for run in self.runs]
+
         if load:
             filenames = [run._filename for run in self.runs]
-            mc = ModelCollection.load(filenames)
+            mc = ModelCollection.load(filenames, observations=obs_list,
+                                      evolved=ev_list)
 
         else:
             chains = []
-            obs_list = []
-            ev_list = []
             kw_list = []
 
             for run in self.runs:
@@ -4017,8 +4018,6 @@ class RunCollection(_RunAnalysis):
                     np.random.default_rng().shuffle(ch, axis=0)
 
                 chains.append(ch)
-                obs_list.append(run.obs)
-                ev_list.append(run._evolved)
                 kw_list.append(run._get_model_kwargs())
 
             with multiprocessing.Pool(processes=Nprocesses) as pool:

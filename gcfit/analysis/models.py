@@ -5960,10 +5960,21 @@ class ModelCollection:
             raise TypeError(mssg)
 
     @classmethod
-    def load(cls, filenames, *, evolved=False):
+    def load(cls, filenames, *, observations=None, evolved=False):
         '''Load the model outputs previously saved in the a list of files.'''
-        viz_cls = CIModelVisualizer if not evolved else CIEvolvedVisualizer
-        return cls([viz_cls.load(fn) for fn in filenames])
+
+        if observations is None:
+            observations = [None, ] * len(filenames)
+
+        if isinstance(evolved, bool):
+            evolved = [evolved, ] * len(filenames)
+
+        visualizers = []
+        for fn, obs, ev in zip(filenames, observations, evolved):
+            viz_cls = CIModelVisualizer if not evolved else CIEvolvedVisualizer
+            visualizers.append(viz_cls.load(fn, observations=obs))
+
+        return cls(visualizers)
 
     def save(self, filenames, overwrite=False):
         '''Save the model outputs of all visualizers in the a list of files.'''
