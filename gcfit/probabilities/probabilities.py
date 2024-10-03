@@ -1,7 +1,7 @@
 from .pulsars import *
 from .priors import Priors
 from .. import util
-from ..core.data import (DEFAULT_THETA, DEFAULT_EV_THETA,
+from ..core.data import (DEFAULT_THETA, DEFAULT_EV_THETA, DEFAULT_BH_THETA,
                          FittableModel, FittableEvolvedModel)
 
 import numpy as np
@@ -1138,7 +1138,7 @@ def log_likelihood(theta, observations, L_components, hyperparams, evolved,
 def posterior(theta, observations, fixed_initials=None,
               L_components=None, prior_likelihood=None, *,
               hyperparams=False, return_indiv=True,
-              evolved=False, model_kw=None):
+              evolved=False, flexible_BHs=False, model_kw=None):
     '''Compute the full posterior probability given `theta` and `observations`.
 
     Combines the various likelihood functions (through `log_likelihood`)
@@ -1211,9 +1211,12 @@ def posterior(theta, observations, fixed_initials=None,
         prior_likelihood = Priors(dict(), evolved=evolved)
 
     if evolved:
-        default_θ = DEFAULT_EV_THETA
+        default_θ = DEFAULT_EV_THETA.copy()
     else:
-        default_θ = DEFAULT_THETA
+        default_θ = DEFAULT_THETA.copy()
+
+    if flexible_BHs:
+        default_θ |= DEFAULT_BH_THETA.copy()
 
     if model_kw is None:
         model_kw = {}
@@ -1246,6 +1249,22 @@ def posterior(theta, observations, fixed_initials=None,
 
     else:
         log_Pθ = 0
+
+    # Eat the BH params again
+    if flexible_BHs:
+        # TODO the methods chosen are obviously not very "flexible"
+        MF_kwargs = dict()
+
+        MF_kwargs['kick_method'] = 'sigmoid'
+        MF_kwargs['kick_slope'] = theta.pop('kick_slope')
+        MF_kwargs['kick_scale'] = theta.pop('kick_scale')
+
+        MF_kwargs['BH_IFMR_method'] = 'pl'
+        MF_kwargs['BH_IFMR_kwargs'] = dict(
+            slope=theta.pop('IFMR_slope'), scale=theta.pop('IFMR_scale')
+        )
+
+        model_kw['MF_kwargs'] = MF_kwargs
 
     log_L, individuals = log_likelihood(theta, observations, L_components,
                                         hyperparams=hyperparams,

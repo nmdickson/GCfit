@@ -128,12 +128,16 @@ class Priors:
         return L
 
     def __init__(self, priors, fixed_initials=None, *,
-                 logged=True, err_on_fail=False, evolved=False):
+                 logged=True, err_on_fail=False,
+                 evolved=False, flexible_BHs=False):
 
         self._log = logged
         self._strict = err_on_fail
 
         defaults = DEFAULT_PRIORS if not evolved else DEFAULT_EV_PRIORS
+
+        if flexible_BHs:
+            defaults |= DEFAULT_BH_PRIORS
 
         if extraneous_params := (priors.keys() - defaults.keys()):
             raise ValueError(f"Invalid parameters: {extraneous_params}")
@@ -316,11 +320,14 @@ class PriorTransforms(Priors):
         return theta
 
     def __init__(self, priors, fixed_initials=None, *, err_on_fail=False,
-                 evolved=False):
+                 evolved=False, flexible_BHs=False):
 
         self._strict = err_on_fail
 
         defaults = DEFAULT_PRIORS if not evolved else DEFAULT_EV_PRIORS
+
+        if flexible_BHs:
+            defaults |= DEFAULT_BH_PRIORS
 
         if extraneous_params := (priors.keys() - defaults.keys()):
             raise ValueError(f"Invalid parameters: {extraneous_params}")
@@ -686,6 +693,13 @@ DEFAULT_EV_PRIORS = {
     'a2': ('uniform', [(-1, 2.35), ('a1', np.inf)]),
     'a3': ('uniform', [(1.6, 4), ('a2', np.inf)]),
     'd': ('uniform', [(2, 18)])
+}
+
+DEFAULT_BH_PRIORS = {
+    'kick_slope': ('uniform', [(1e-5, 2)]),
+    'kick_scale': ('uniform', [(5, 100)]),
+    'IFMR_slope': ('uniform', [(1e-6, 1e-4)]),
+    'IFMR_scale': ('uniform', [(1, 20)])
 }
 
 _PRIORS_MAP = {

@@ -1,4 +1,4 @@
-from .data import Observations
+from .data import Observations, DEFAULT_BH_THETA
 from ..util.data import GCFIT_DIR
 from ..probabilities import posterior, priors
 
@@ -645,7 +645,7 @@ def MCMC_fit(cluster, Niters, Nwalkers, evolved=False, Ncpu=2, *,
     logging.info("FINISHED")
 
 
-def nested_fit(cluster, evolved=False, *,
+def nested_fit(cluster, evolved=False, *, flexible_BHs=False,
                bound_type='multi', sample_type='auto',
                initial_kwargs=None, batch_kwargs=None, model_kwargs=None,
                pfrac=1.0, maxfrac=0.8, eff_samples=5000, plat_wt_func=False,
@@ -868,6 +868,10 @@ def nested_fit(cluster, evolved=False, *,
             # fill manually supplied dict with defaults
             initials = obs_initials | initials
 
+        # TODO technically these initials also make sense within obs probably
+        if flexible_BHs:
+            initials |= DEFAULT_BH_THETA
+
         logging.debug(f"Inital initals: {initials}")
 
         if extraneous_params := (set(fixed_params) - initials.keys()):
@@ -895,7 +899,7 @@ def nested_fit(cluster, evolved=False, *,
                        for k, v in param_priors.items()}
 
         prior_kwargs = {'fixed_initials': fixed_initials, 'err_on_fail': False,
-                        'evolved': evolved}
+                        'evolved': evolved, 'flexible_BHs': flexible_BHs}
         prior_transform = priors.PriorTransforms(param_priors, **prior_kwargs)
 
         # ------------------------------------------------------------------
@@ -904,6 +908,7 @@ def nested_fit(cluster, evolved=False, *,
 
         backend.store_metadata('cluster', cluster)
         backend.store_metadata('evolved', evolved)
+        backend.store_metadata('flexible_BHs', flexible_BHs)
 
         # Only store if set. Will default read to None if not stored here
         if restrict_to is not None:
@@ -952,7 +957,8 @@ def nested_fit(cluster, evolved=False, *,
         backend.ndim = ndim
 
         logl_kwargs = {'hyperparams': hyperparams, 'evolved': evolved,
-                       'return_indiv': False, 'model_kw': model_kwargs}
+                       'return_indiv': False, 'model_kw': model_kwargs,
+                       'flexible_BHs': flexible_BHs}
 
         sampler = dynesty.DynamicNestedSampler(
             ndim=ndim,

@@ -136,6 +136,10 @@ def main():
                                action='store_true',
                                help="Use evolved models")
 
+    shared_parser.add_argument('--flexible-BHs', dest='flexible_BHs',
+                               action='store_true',
+                               help="Allow BH physics to vary freely.")
+
     shared_parser.add_argument('--verbose', action='store_true')
     shared_parser.add_argument('--debug', action='store_true')
 
