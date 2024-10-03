@@ -1002,7 +1002,7 @@ class Model(lp.limepy):
     '''
 
     def _evolve_mf(self, m_breaks, a1, a2, a3, nbins, FeH, age, esc_rate, tcc,
-                   NS_ret, BH_ret_int, BHret, natal_kicks, vesc):
+                   NS_ret, BH_ret_int, BHret, natal_kicks, vesc, **kwargs):
         '''Compute an evolved mass function using `ssptools.EvolvedMF`'''
 
         self._imf = masses.PowerLawIMF(
@@ -1020,7 +1020,8 @@ class Model(lp.limepy):
             BH_ret_int=BH_ret_int,
             BH_ret_dyn=BHret / 100.,
             natal_kicks=natal_kicks,
-            vesc=vesc.value
+            vesc=vesc.value,
+            **kwargs  # will error here if MF_kwargs included any of above args
         )
 
         return EvolvedMF(**self._mf_kwargs)
@@ -1104,7 +1105,7 @@ class Model(lp.limepy):
                  s2=0., F=1., *, observations=None, age=None, FeH=None,
                  m_breaks=[0.1, 0.5, 1.0, 100], nbins=[5, 5, 20],
                  tracer_masses=None, tcc=0.0, NS_ret=0.1, BH_ret_int=1.0,
-                 natal_kicks=True, esc_rate=0.0, vesc=90.,
+                 esc_rate=0.0, natal_kicks=True, vesc=90, MF_kwargs=None,
                  meanmassdef='global', ode_maxstep=1e10, ode_rtol=1e-7):
 
         # ------------------------------------------------------------------
@@ -1171,10 +1172,12 @@ class Model(lp.limepy):
         # Get mass function
         # ------------------------------------------------------------------
 
+        MF_kwargs = {} if MF_kwargs is None else MF_kwargs.copy()
+
         self._mf = self._evolve_mf(m_breaks, a1, a2, a3, nbins,
                                    FeH, age, esc_rate, tcc,
                                    NS_ret, BH_ret_int, BHret,
-                                   natal_kicks, self.vesc0)
+                                   natal_kicks, self.vesc0, **MF_kwargs)
 
         if not self._mf.converged:
             mssg = ("Mass function evolution ODE failed to converge"
@@ -1772,7 +1775,7 @@ class EvolvedModel(Model):
     '''
 
     def _evolve_mf(self, m_breaks, a1, a2, a3, nbins, FeH, age, esc_rate, tcc,
-                   NS_ret, BH_ret_int, BHret, natal_kicks, vesc):
+                   NS_ret, BH_ret_int, BHret, natal_kicks, vesc, **kwargs):
         '''Alternative MF init using prior-computed IMF and clusterBH outputs'''
         from ssptools import EvolvedMFWithBH
 
@@ -1790,7 +1793,8 @@ class EvolvedModel(Model):
             natal_kicks=natal_kicks,
             vesc=vesc.value,
             esc_norm='M',
-            md=self.md
+            md=self.md,
+            **kwargs  # will error here if MF_kwargs included any of above args
         )
 
         return EvolvedMFWithBH(**self._mf_kwargs)
