@@ -578,6 +578,7 @@ class Observations:
 
         self.initials = DEFAULT_THETA.copy()
         self.ev_initials = DEFAULT_EV_THETA.copy()
+        self.BH_initials = DEFAULT_BH_THETA.copy()
 
         filename = util.get_cluster_path(cluster, standardize_name, restrict_to)
 
@@ -614,6 +615,19 @@ class Observations:
 
             except KeyError:
                 logging.info("No (evolved) initial state stored, using default")
+                pass
+
+            try:
+                self.BH_initials = {**self.BH_initials,
+                                    **file['BH_initials'].attrs}
+
+                if extra := (self.BH_initials.keys() - DEFAULT_BH_THETA.keys()):
+                    mssg = (f"Stored (BH) initials do not match expected."
+                            f"Extra values found: {extra}")
+                    raise ValueError(mssg)
+
+            except KeyError:
+                logging.info("No (BH) initial state stored, using default")
                 pass
 
             # TODO need a way to read units for some mdata from file

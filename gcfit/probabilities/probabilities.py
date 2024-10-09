@@ -1252,19 +1252,8 @@ def posterior(theta, observations, fixed_initials=None,
 
     # Eat the BH params again
     if flexible_BHs:
-        # TODO the methods chosen are obviously not very "flexible"
-        MF_kwargs = dict()
-
-        MF_kwargs['kick_method'] = 'sigmoid'
-        MF_kwargs['kick_slope'] = theta.pop('kick_slope')
-        MF_kwargs['kick_scale'] = theta.pop('kick_scale')
-
-        MF_kwargs['BH_IFMR_method'] = 'pl'
-        MF_kwargs['BH_IFMR_kwargs'] = dict(
-            slope=theta.pop('IFMR_slope'), scale=theta.pop('IFMR_scale')
-        )
-
-        model_kw['MF_kwargs'] = MF_kwargs
+        theta, MF_kwargs = util.pop_flexible_BHs(theta)
+        model_kw['MF_kwargs'] = model_kw.get('MF_kwargs', dict()) | MF_kwargs
 
     log_L, individuals = log_likelihood(theta, observations, L_components,
                                         hyperparams=hyperparams,

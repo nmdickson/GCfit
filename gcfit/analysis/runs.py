@@ -43,6 +43,11 @@ _label_math_mapping = {
     # Evolved Model Parameters
     'M0': r'M_{0}',
     'rh0': r'r_{\mathrm{h},0}',
+    # Flexible BH Parameters  # TODO need symbols for these
+    'kick_slope': r'\mathrm{kick\ slope}',
+    'kick_scale': r'\mathrm{kick\ scale}',
+    'IFMR_slope': r'\mathrm{IFMR\ slope}',
+    'IFMR_scale': r'\mathrm{IFMR\ scale}',
     # Cluster Metadata
     'FeH': r'[\mathrm{Fe}/\mathrm{H}]',
     'Ndot': r'\dot{N}',
@@ -558,6 +563,9 @@ class _SingleRunAnalysis(_RunAnalysis):
             # Check if this is an evolved modelling fit or not
             self._evolved = file['metadata'].attrs.get('evolved', False)
 
+            # Check if this had extra flexible BH parameters
+            self._free_BHs = file['metadata'].attrs.get('flexible_BHs', False)
+
             # Check if this run seems to have used a local cluster data file
             restrict_to = file['metadata'].attrs.get('restrict_to', None)
 
@@ -581,6 +589,9 @@ class _SingleRunAnalysis(_RunAnalysis):
 
         self._parameters = list(self.obs.initials if not self._evolved
                                 else self.obs.ev_initials)
+
+        if self._free_BHs:
+            self._parameters += list(self.obs.BH_initials)
 
     @contextlib.contextmanager
     def _openfile(self, group=None, mode='r'):
@@ -619,7 +630,7 @@ class _SingleRunAnalysis(_RunAnalysis):
 
         return labels
 
-    def _get_model_kwargs(self):
+    def _get_model_kwargs(self, note_flexible_BHs=False):
         '''Return the `model_kwargs` metadata (backwards compatible)'''
 
         def _gather_attrs(key, grp):
@@ -631,6 +642,10 @@ class _SingleRunAnalysis(_RunAnalysis):
                 mdata['model_kwargs'].visititems(_gather_attrs)
             except KeyError:
                 model_kw = {}
+
+        # this is not for `Model`, but for some preliminary stuff (`_get_model`)
+        if note_flexible_BHs and self._free_BHs:
+            model_kw['flexible_BHs'] = True
 
         return model_kw
 
@@ -804,6 +819,7 @@ class MCMCRun(_SingleRunAnalysis):
     def _reconstruct_priors(self):
         '''Based on the stored "specified_priors" get a `Priors` object.'''
 
+        # TODO this seems broken with latest priors storage scheme
         with self._openfile('metadata') as mdata:
 
             stored_priors = mdata['specified_priors']
@@ -852,7 +868,7 @@ class MCMCRun(_SingleRunAnalysis):
 
         model_cls = ModelVisualizer if not self.evolved else EvolvedVisualizer
 
-        model_kw = self._get_model_kwargs()
+        model_kw = self._get_model_kwargs(note_flexible_BHs=True)
 
         return model_cls.from_chain(chain, self.obs, method, **model_kw)
 
@@ -894,7 +910,7 @@ class MCMCRun(_SingleRunAnalysis):
 
             labels, chain = self._get_chains()
 
-            model_kw = self._get_model_kwargs()
+            model_kw = self._get_model_kwargs(note_flexible_BHs=True)
 
             with multiprocessing.Pool(processes=Nprocesses) as pool:
                 return viz_cls.from_chain(chain, self.obs, N,
@@ -1861,7 +1877,7 @@ class NestedRun(_SingleRunAnalysis):
 
         model_cls = ModelVisualizer if not self._evolved else EvolvedVisualizer
 
-        model_kw = self._get_model_kwargs()
+        model_kw = self._get_model_kwargs(note_flexible_BHs=True)
 
         if method == 'mean':
             theta = self.parameter_means()[0]
@@ -1923,7 +1939,7 @@ class NestedRun(_SingleRunAnalysis):
             if shuffle:
                 np.random.default_rng().shuffle(chain, axis=0)
 
-            model_kw = self._get_model_kwargs()
+            model_kw = self._get_model_kwargs(note_flexible_BHs=True)
 
             with multiprocessing.Pool(processes=Nprocesses) as pool:
                 return ci_cls.from_chain(chain, self.obs, N,
@@ -3970,7 +3986,8 @@ class RunCollection(_RunAnalysis):
 
         obs_list = [run.obs for run in self.runs]
         ev_list = [run._evolved for run in self.runs]
-        kw_list = [run._get_model_kwargs() for run in self.runs]
+        kw_list = [run._get_model_kwargs(note_flexible_BHs=True)
+                   for run in self.runs]
 
         mc = ModelCollection.from_chains(chains, obs_list, ci=False,
                                          evolved=ev_list, model_kws=kw_list,
@@ -4042,7 +4059,7 @@ class RunCollection(_RunAnalysis):
                     np.random.default_rng().shuffle(ch, axis=0)
 
                 chains.append(ch)
-                kw_list.append(run._get_model_kwargs())
+                kw_list.append(run._get_model_kwargs(note_flexible_BHs=True))
 
             with multiprocessing.Pool(processes=Nprocesses) as pool:
 
