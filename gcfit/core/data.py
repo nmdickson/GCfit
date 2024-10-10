@@ -1825,13 +1825,27 @@ class EvolvedModel(Model):
                  a1=1.3, a2=2.3, a3=2.3, d=5,
                  s2=0., F=1., *, observations=None, age=None, FeH=None,
                  m_breaks=[0.1, 0.5, 1.0, 100], nbins=[5, 5, 20], md=1.2,
-                 cbh_kwargs=None, **kwargs):
+                 cbh_kwargs=None, MF_kwargs=None, **kwargs):
         import clusterbh
+
+        M0 <<= u.Msun
+        rh0 <<= u.pc
+        d <<= u.kpc
 
         self.M0 = M0
         self.rh0 = rh0
 
         cbh_kwargs = {} if cbh_kwargs is None else cbh_kwargs.copy()
+
+        if MF_kwargs is not None:
+
+            # Try to get some flexible BH params from MF_kwargs for the ibh
+            bhkws = {'kick_method', 'kick_slope', 'kick_scale',
+                     'BH_IFMR_method', 'BH_IFMR_kwargs'}
+            ibh_kwargs = {k: MF_kwargs[k] for k in (MF_kwargs.keys() & bhkws)}
+
+            # Don't overwrite if given explicitly
+            cbh_kwargs.setdefault('ibh_kwargs', ibh_kwargs)
 
         # Parameters fit to N-body models
         cbh_fit_prms = dict(
@@ -1850,14 +1864,14 @@ class EvolvedModel(Model):
 
         # TODO unfortunately repeating this imf init here and in clusterBH
         self._imf = masses.PowerLawIMF.from_M0(
-            m_break=m_breaks.value, a=a_slopes, ext='zeros', M0=M0
+            m_break=m_breaks.value, a=a_slopes, ext='zeros', M0=M0.value
         )
 
         m0 = self._imf.mmean
 
         # first convert the more useful M0, rh0 to the N0, rhoh0 required
-        N0 = M0 / m0
-        rhoh0 = (3 * M0) / (8 * np.pi * rh0**3)
+        N0 = M0.value / m0
+        rhoh0 = (3 * M0.value) / (8 * np.pi * rh0.value**3)
 
         # ------------------------------------------------------------------
         # Try to read some metadata from the observations
@@ -1941,8 +1955,14 @@ class EvolvedModel(Model):
         super().__init__(W0, M, rh, g=g, delta=delta, ra=ra,
                          a1=a1, a2=a2, a3=a3, BHret=BHret, d=d,
                          s2=s2, F=F, observations=observations, age=age,
-                         FeH=FeH, m_breaks=m_breaks, vesc=vesc,
-                         esc_rate=Mdot_t, tcc=tcc, **kwargs)
+                         FeH=FeH, m_breaks=m_breaks, vesc=vesc, esc_rate=Mdot_t,
+                         tcc=tcc, MF_kwargs=MF_kwargs, **kwargs)
+
+        # reset theta to use initial values
+        self.theta = dict(W0=W0, M0=M0.to_value('1e6 Msun'), rh0=rh0.value,
+                          ra=np.log10(ra), g=g, delta=delta,
+                          a1=a1, a2=a2, a3=a3, BHret=BHret,
+                          s2=s2, F=F, d=d.value)
 
     def get_visualizer(self):
         '''Return a `analysis.ModelVisualizer` instance based on this model.'''
