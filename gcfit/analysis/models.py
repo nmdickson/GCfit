@@ -3961,7 +3961,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         try:
             huge_model = viz._model_getter(huge_theta, viz.obs,
                                            strict=True, **kwargs)
-        except ValueError as err
+        except ValueError as err:
             mssg = f"Base model did not converge with {huge_theta=}"
             raise ValueError(mssg) from err
 

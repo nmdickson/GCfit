@@ -1206,6 +1206,11 @@ class Model(lp.limepy):
                     f" with kwargs={self._mf_kwargs}")
             raise ValueError(mssg)
 
+        if self._mf.M.size <= 1:
+            mssg = ("Mass function has only one non-empty mass bin. "
+                    "If this is truly desired, must use `SingleMassModel`.")
+            raise ValueError(mssg)
+
         mj, Mj = self._mf.m, self._mf.M
 
         self.mbin_widths = self._mf.bin_widths
