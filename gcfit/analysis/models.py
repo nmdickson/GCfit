@@ -25,10 +25,11 @@ def _get_model(theta, observations, *,
     '''Compute a model based on `theta` and optionally fail quietly.'''
 
     if flexible_BHs:
-        # TODO temporary, need a more robust method for this! (1)
-        theta_BH = dict(zip(observations.BH_initials, theta[-4:]))
-        theta = theta[:-4]
-        _, MF_kwargs = util.pop_flexible_BHs(theta_BH)
+        # Assume it's the last N elements in theta (not super robust tbh)
+        bh_lbls = observations.BH_initials.keys()
+        theta, theta_BH = theta[:-len(bh_lbls)], theta[-len(bh_lbls):]
+
+        _, MF_kwargs = util.pop_flexible_BHs(dict(zip(bh_lbls, theta_BH)))
         kwargs['MF_kwargs'] = kwargs.get('MF_kwargs', dict()) | MF_kwargs
 
     try:
