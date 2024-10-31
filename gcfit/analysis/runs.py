@@ -49,11 +49,9 @@ _label_math_mapping = {
     'IFMR_slope': r'\mathrm{IFMR\ slope}',
     'IFMR_slope1': r'\mathrm{IFMR\ slope 1}',
     'IFMR_slope2': r'\mathrm{IFMR\ slope 2}',
-    'IFMR_slope3': r'\mathrm{IFMR\ slope 3}',
     'IFMR_scale': r'\mathrm{IFMR\ scale}',
     'IFMR_scale1': r'\mathrm{IFMR\ scale 1}',
     'IFMR_scale2': r'\mathrm{IFMR\ scale 2}',
-    'IFMR_scale3': r'\mathrm{IFMR\ scale 3}',
     # Cluster Metadata
     'FeH': r'[\mathrm{Fe}/\mathrm{H}]',
     'Ndot': r'\dot{N}',

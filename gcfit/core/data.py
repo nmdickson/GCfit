@@ -57,12 +57,10 @@ DEFAULT_EV_THETA = {
 DEFAULT_BH_THETA = {
     'kick_slope': 1,
     'kick_scale': 20,
-    'IFMR_slope1': 1,  # between 20 - 22
-    'IFMR_slope2': 7e-4,  # between 22 - 38
-    'IFMR_slope3': 0.4,  # between 38 - 100
-    'IFMR_scale1': -2,
+    'IFMR_slope1': 7e-4,  # between 20 - 38
+    'IFMR_slope2': 0.4,  # between 38 - 100
+    'IFMR_scale1': -4,
     'IFMR_scale2': -4,
-    'IFMR_scale3': -4,
 }
 
 

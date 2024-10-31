@@ -107,14 +107,10 @@ def pop_flexible_BHs(theta):
     MF_kwargs['kick_scale'] = theta.pop('kick_scale')
 
     MF_kwargs['BH_IFMR_method'] = 'bpl'
-    Ncomp = 3
-
-    slopes = [theta.pop(f'IFMR_slope{i}') for i in range(1, Ncomp + 1)]
-    scales = [theta.pop(f'IFMR_scale{i}') for i in range(1, Ncomp + 1)]
-
     MF_kwargs['BH_IFMR_kwargs'] = dict(
-        slopes=slopes, scales=scales,
-        exponents=[1, 3, 1], m_breaks=[20, 22, 37, 100]
+        slopes=[theta.pop('IFMR_slope1'), theta.pop('IFMR_slope2')],
+        scales=[theta.pop('IFMR_scale1'), theta.pop('IFMR_scale2')],
+        exponents=[3, 1], m_breaks=[20, 37, 100]
     )
 
     return theta, MF_kwargs
