@@ -1831,8 +1831,8 @@ class EvolvedModel(Model):
     def __init__(self, W0, M0, rh0, g=1.5, delta=0.45, ra=1e8,
                  a1=1.3, a2=2.3, a3=2.3, d=5,
                  s2=0., F=1., *, observations=None, age=None, FeH=None,
-                 m_breaks=[0.1, 0.5, 1.0, 100], nbins=[5, 5, 20], md=1.2,
-                 cbh_kwargs=None, MF_kwargs=None, **kwargs):
+                 Zsun=0.02, m_breaks=[0.1, 0.5, 1.0, 100], nbins=[5, 5, 20],
+                 md=1.2, cbh_kwargs=None, MF_kwargs=None, **kwargs):
         import clusterbh
 
         M0 <<= u.Msun
@@ -1897,7 +1897,7 @@ class EvolvedModel(Model):
             cbh_kwargs.setdefault('tend', age.to_value('Myr'))
 
             # Get metallicity
-            cbh_kwargs.setdefault('Z', 0.014 * 10**observations.mdata['FeH'])
+            cbh_kwargs.setdefault('Z', Zsun * 10**observations.mdata['FeH'])
 
         # ------------------------------------------------------------------
         # Get age and metallicity, if given (TODO make this logic match others)
@@ -1907,7 +1907,7 @@ class EvolvedModel(Model):
             cbh_kwargs.setdefault('tend', age.to_value('Myr'))
 
         if FeH is not None:
-            cbh_kwargs.setdefault('Z', 0.014 * 10**FeH)
+            cbh_kwargs.setdefault('Z', Zsun * 10**FeH)
 
         # ------------------------------------------------------------------
         # Set some default clusterBH parameters
