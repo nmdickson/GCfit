@@ -1855,14 +1855,15 @@ class EvolvedModel(Model):
             cbh_kwargs.setdefault('ibh_kwargs', ibh_kwargs)
 
         # Parameters fit to N-body models
-        cbh_fit_prms = dict(
-            zeta=0.1,
-            n=1.5,
-            alpha_c=0.01,
-            Rht=0.5,
-        )
+        # (just use clusterbh defaults now)
+        # cbh_fit_prms = dict(
+        #     zeta=0.1,
+        #     n=1.5,
+        #     alpha_c=0.01,
+        #     Rht=0.5,
+        # )
 
-        cbh_kwargs = cbh_fit_prms | cbh_kwargs
+        # cbh_kwargs = cbh_fit_prms | cbh_kwargs
 
         m_breaks <<= u.Msun
         a_slopes = [-a1, -a2, -a3]
@@ -1914,9 +1915,8 @@ class EvolvedModel(Model):
         # ------------------------------------------------------------------
 
         cbh_kwargs.setdefault('kick', True)
-        cbh_kwargs.setdefault('escapers', True)  # ???
-        cbh_kwargs.setdefault('tsev', 2)  # Myr
-        cbh_kwargs.setdefault('Mval', 3)
+        cbh_kwargs.setdefault('escapers', False)
+        cbh_kwargs.setdefault('tsev', 1)  # Myr
 
         # ------------------------------------------------------------------
         # Make sure clusterBH IMF matches this one
@@ -1952,9 +1952,11 @@ class EvolvedModel(Model):
         tcc = self._clusterbh.tcc
 
         # Compute Mdot_esc based on the clusterBH formulation, for ssptools
-        xi = 0.6 * self._clusterbh.zeta * (self._clusterbh.rh / self._clusterbh.rt / self._clusterbh.Rht) ** self._clusterbh.n
-        xit = np.where(self._clusterbh.t>self._clusterbh.tcc, xi+self._clusterbh.alpha_c, xi)
-        Mst_dot = -xi * self._clusterbh.M / (self._clusterbh.trh*self._clusterbh.f*self._clusterbh._psi(self._clusterbh.fbh)) + (xit-xi)*self._clusterbh.M / self._clusterbh.trh
+        Mst_dot = (-self._clusterbh._xi(self._clusterbh.rh, self._clusterbh.rt)
+                   * self._clusterbh.Mst / self._clusterbh.trhstar
+                   + self._clusterbh.alpha_c * self._clusterbh.zeta
+                   * self._clusterbh.M / self._clusterbh.trh)
+
         Mdot_t = util.QuantitySpline(self._clusterbh.t * 1e3, Mst_dot)
 
         BHret = -1
