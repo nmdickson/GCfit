@@ -1957,9 +1957,15 @@ class EvolvedModel(Model):
                    + self._clusterbh.alpha_c * self._clusterbh.zeta
                    * self._clusterbh.M / self._clusterbh.trh)
 
-        Mdot_t = util.QuantitySpline(self._clusterbh.t * 1e3, Mst_dot)
+        if self._clusterbh.t.size > 3:  # Cubic Spline will fail otherwise
+            Mdot_t = util.QuantitySpline(self._clusterbh.t * 1e3, Mst_dot)
 
-        BHret = -1
+        else:
+            # If only 3 timesteps, something has gone terribly wrong.
+            mssg = 'Too few clusterBH timesteps created: t={self._clusterbh.t}'
+            raise ValueError(mssg)
+
+        BHret = -1  # Spoof unneeded BH retention fraction for `Model`
 
         super().__init__(W0, M, rh, g=g, delta=delta, ra=ra,
                          a1=a1, a2=a2, a3=a3, BHret=BHret, d=d,
