@@ -20,22 +20,34 @@ __all__ = ['ModelVisualizer', 'CIModelVisualizer', 'ObservationsVisualizer',
            'EvolvedVisualizer', 'SampledVisualizer', 'ModelCollection']
 
 
-def _get_model(theta, observations, **kwargs):
-    '''Compute a model based on `theta` and fail quietly'''
+def _get_model(theta, observations, *,
+               strict=False, cls=FittableModel, flexible_BHs=False, **kwargs):
+    '''Compute a model based on `theta` and optionally fail quietly.'''
+
+    if flexible_BHs:
+        # Assume it's the last N elements in theta (not super robust tbh)
+        bh_lbls = observations.BH_initials.keys()
+        theta, theta_BH = theta[:-len(bh_lbls)], theta[-len(bh_lbls):]
+
+        _, MF_kwargs = util.pop_flexible_BHs(dict(zip(bh_lbls, theta_BH)))
+        kwargs['MF_kwargs'] = kwargs.get('MF_kwargs', dict()) | MF_kwargs
+
     try:
-        return FittableModel(theta, observations=observations, **kwargs)
+        return cls(theta, observations=observations, **kwargs)
+
     except ValueError:
-        logging.warning(f"Model did not converge with {theta=}")
-        return None
+        mssg = f"{cls} did not converge with {theta=}"
+        if strict:
+            raise ValueError(mssg)
+        else:
+            logging.warning(mssg)
+            return None
 
 
-def _get_ev_model(theta, observations, **kwargs):
-    '''Compute a model based on `theta` and fail quietly'''
-    try:
-        return FittableEvolvedModel(theta, observations=observations, **kwargs)
-    except ValueError:
-        logging.warning(f"Evolved model did not converge with {theta=}")
-        return None
+def _get_ev_model(theta, observations, strict=False, **kwargs):
+    return _get_model(theta, observations,
+                      strict=strict, cls=FittableEvolvedModel, **kwargs)
+
 
 # --------------------------------------------------------------------------
 # Individual model visualizers
@@ -3301,7 +3313,8 @@ class ModelVisualizer(_ClusterVisualizer):
 
         theta = reduc_methods[method](chain, axis=0)
 
-        return cls(FittableModel(theta, observations, **kwargs), observations)
+        return cls(_get_model(theta, observations, strict=True, **kwargs),
+                   observations)
 
     @classmethod
     def from_theta(cls, theta, observations, **kwargs):
@@ -3329,7 +3342,8 @@ class ModelVisualizer(_ClusterVisualizer):
         --------
         gcfit.FittableModel : Model subclass used to initialize the model.
         '''
-        return cls(FittableModel(theta, observations, **kwargs), observations)
+        return cls(_get_model(theta, observations, strict=True, **kwargs),
+                   observations)
 
     def __init__(self, model, observations=None):
         self.model = model
@@ -3944,10 +3958,13 @@ class CIModelVisualizer(_ClusterVisualizer):
         # or plots
 
         huge_theta = chain[np.argmax(chain[:, params.index('g')])]
-        huge_model = viz._model_getter(huge_theta, viz.obs, **kwargs)
 
-        if huge_model is None:
-            raise ValueError(f"Base model did not converge with {huge_theta=}")
+        try:
+            huge_model = viz._model_getter(huge_theta, viz.obs,
+                                           strict=True, **kwargs)
+        except ValueError as err:
+            mssg = f"Base model did not converge with {huge_theta=}"
+            raise ValueError(mssg) from err
 
         viz.r = np.r_[0, np.geomspace(1e-5, huge_model.rt.value, 99)] << u.pc
 
@@ -4770,7 +4787,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 class EvolvedVisualizer(ModelVisualizer):
 
     @_ClusterVisualizer._support_units
-    def plot_mass_evolution(self, fig=None, ax=None, kind='all', *,
+    def plot_mass_evolution(self, fig=None, ax=None, kind='total', *,
                             x_unit='Gyr', y_unit='Msun', legend=True,
                             label_position='left', verbose_label=True,
                             blank_xaxis=False, **kwargs):
@@ -5000,7 +5017,7 @@ class EvolvedVisualizer(ModelVisualizer):
 
         theta = reduc_methods[method](chain, axis=0)
 
-        return cls(FittableEvolvedModel(theta, observations, **kwargs),
+        return cls(_get_ev_model(theta, observations, strict=True, **kwargs),
                    observations)
 
     @classmethod
@@ -5029,7 +5046,7 @@ class EvolvedVisualizer(ModelVisualizer):
         --------
         gcfit.FittableModel : Model subclass used to initialize the model.
         '''
-        return cls(FittableEvolvedModel(theta, observations, **kwargs),
+        return cls(_get_ev_model(theta, observations, strict=True, **kwargs),
                    observations)
 
     def __init__(self, model, observations=None):

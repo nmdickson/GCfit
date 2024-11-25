@@ -3,7 +3,7 @@ from .units import QuantitySpline
 
 __all__ = ['gaussian', 'RV_transform', 'gaussian_likelihood',
            'hyperparam_likelihood', 'hyperparam_effective', 'div_error',
-           'trim_peaks', 'find_intersections']
+           'pop_flexible_BHs', 'trim_peaks', 'find_intersections']
 
 # --------------------------------------------------------------------------
 # Generic Distribution Helpers
@@ -90,6 +90,30 @@ def hyperparam_effective(X_data, X_model, err):
 def div_error(a, a_err, b, b_err):
     '''Gaussian error propagation for division of two quantities with errors.'''
     return abs(a / b) * np.sqrt((a_err / a) ** 2 + (b_err / b) ** 2)
+
+
+# --------------------------------------------------------------------------
+# Theta handling helpers
+# --------------------------------------------------------------------------
+
+
+# TODO the methods chosen are obviously not very "flexible"
+def pop_flexible_BHs(theta):
+    '''Convert theta using `flexible-BHs` to a normal theta.'''
+    MF_kwargs = dict()
+
+    MF_kwargs['kick_method'] = 'sigmoid'
+    MF_kwargs['kick_slope'] = theta.pop('kick_slope')
+    MF_kwargs['kick_scale'] = theta.pop('kick_scale')
+
+    MF_kwargs['BH_IFMR_method'] = 'bpl'
+    MF_kwargs['BH_IFMR_kwargs'] = dict(
+        slopes=[theta.pop('IFMR_slope1'), theta.pop('IFMR_slope2')],
+        scales=[theta.pop('IFMR_scale1'), theta.pop('IFMR_scale2')],
+        exponents=[3, 1], m_breaks=[20, 37, 100]
+    )
+
+    return theta, MF_kwargs
 
 
 # --------------------------------------------------------------------------
