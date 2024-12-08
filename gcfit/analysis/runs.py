@@ -638,7 +638,10 @@ class _SingleRunAnalysis(_RunAnalysis):
         '''Return the `model_kwargs` metadata (backwards compatible)'''
 
         def _gather_attrs(key, grp):
-            model_kw[key] = dict(grp.attrs)
+            try:
+                model_kw[key] = grp[:]  # in case this is a dataset, not a group
+            except TypeError:
+                model_kw[key] = dict(grp.attrs)
 
         with self._openfile('metadata') as mdata:
             try:
