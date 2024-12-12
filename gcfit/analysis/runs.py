@@ -3111,7 +3111,11 @@ class NestedRun(_SingleRunAnalysis):
 
             mssg += f'{" " * 8}{"Mean":^14} | {"Std. Dev.":^14}\n'
 
+            logging.debug(f"printing summary of {labels} -> {mns}")
+
             for ind, param in enumerate(labels):
+
+                logging.debug(f"---> ({ind}) {param} {mns[ind]}")
 
                 if 'fixed' in param:
                     mssg += (f'{param[:-8]:>5} = {mns[ind]:.3f} '
