@@ -3172,6 +3172,55 @@ class NestedRun(_SingleRunAnalysis):
 # --------------------------------------------------------------------------
 
 
+def _check_for_operator(func):
+    '''Decorator which parses param str for math operations to apply.'''
+    import functools
+    import operator
+
+    opers = {'+': operator.add, '-': operator.sub,
+             '*': operator.mul, '/': operator.truediv}
+
+    # TODO also need to implement this for latex_label if want that to work
+
+    def _get_param_or_scalar(self, param, *args, **kwargs):
+        '''Check if this is a constant number instead of a parameter.'''
+        try:
+            return func(self, param.strip(), *args, **kwargs)
+        except ValueError as err:
+            try:
+                return [float(param.strip()),] * len(self)
+            except ValueError:
+                raise err
+
+    @functools.wraps(func)
+    def _operator_decorator(self, param, *args, **kwargs):
+
+        if found_op := (set(param) & opers.keys()):
+
+            if len(found_op) > 1:
+                mssg = "More than one operation not supported"
+                raise ValueError(mssg)
+
+            op_name = found_op.pop()
+
+            param1, param2 = param.split(op_name)
+
+            res1 = _get_param_or_scalar(self, param1, *args, **kwargs)
+            # res1 = func(self, param1.strip(), *args, **kwargs)
+
+            res2 = _get_param_or_scalar(self, param2, *args, **kwargs)
+            # res2 = func(self, param2.strip(), *args, **kwargs)
+
+            final = list(map(opers[op_name], res1, res2))
+
+        else:
+            final = func(self, param, *args, **kwargs)
+
+        return final
+
+    return _operator_decorator
+
+
 class _Annotator:
     '''Figure hook which annotates clicked points with the cluster names.
 
@@ -3707,40 +3756,6 @@ class RunCollection(_RunAnalysis):
         out[1:] = np.abs(out[1:] - out[0])
 
         return out
-
-    def _check_for_operator(func):
-        '''Decorator which parses param str for math operations to apply.'''
-        import functools
-        import operator
-
-        opers = {'+': operator.add, '-': operator.sub,
-                 '*': operator.mul, '/': operator.truediv}
-
-        # TODO also need to implement this for latex_label if want that to work
-
-        @functools.wraps(func)
-        def _operator_decorator(self, param, *args, **kwargs):
-
-            if found_op := (set(param) & opers.keys()):
-
-                if len(found_op) > 1:
-                    mssg = "More than one operation not supported"
-                    raise ValueError(mssg)
-
-                op_name = found_op.pop()
-
-                param1, param2 = param.split(op_name)
-                res1 = func(self, param1.strip(), *args, **kwargs)
-                res2 = func(self, param2.strip(), *args, **kwargs)
-
-                final = list(map(opers[op_name], res1, res2))
-
-            else:
-                final = func(self, param, *args, **kwargs)
-
-            return final
-
-        return _operator_decorator
 
     @_check_for_operator
     def _get_param_chains(self, param, *,
