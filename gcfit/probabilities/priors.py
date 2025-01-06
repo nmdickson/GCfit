@@ -702,7 +702,7 @@ DEFAULT_BH_PRIORS = {
     'IFMR_slope2': ('uniform', [(1e-6, 0.1)]),
     'IFMR_slope3': ('uniform', [(0.01, 2)]),
     'IFMR_scale1': ('uniform', [(-20, 20)]),
-    'IFMR_scale2': ('uniform', [(-10, 20)])
+    'IFMR_scale2': ('uniform', [(-10, 20)]),
     'IFMR_scale3': ('uniform', [(-10, 20)])
 }
 
