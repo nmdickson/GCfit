@@ -698,10 +698,12 @@ DEFAULT_EV_PRIORS = {
 DEFAULT_BH_PRIORS = {
     'kick_slope': ('uniform', [(1e-5, 2)]),
     'kick_scale': ('uniform', [(5, 100)]),
-    'IFMR_slope1': ('uniform', [(1e-6, 1e-3)]),
-    'IFMR_slope2': ('uniform', [(0.1, 0.8)]),
-    'IFMR_scale1': ('uniform', [(-10, 20)]),
+    'IFMR_slope1': ('uniform', [(0.1, 10)]),
+    'IFMR_slope2': ('uniform', [(1e-6, 0.1)]),
+    'IFMR_slope3': ('uniform', [(0.01, 2)]),
+    'IFMR_scale1': ('uniform', [(-20, 20)]),
     'IFMR_scale2': ('uniform', [(-10, 20)])
+    'IFMR_scale3': ('uniform', [(-10, 20)])
 }
 
 _PRIORS_MAP = {
