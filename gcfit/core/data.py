@@ -58,8 +58,8 @@ DEFAULT_BH_THETA = {
     'kick_slope': 1,
     'kick_scale': 20,
     'IFMR_slope1': 5.,  # between 20 - 22.6
-    'IFMR_slope2': 9e-4,  # between 22.6 - 36
-    'IFMR_slope3': 0.1,  # between 36 - 150
+    'IFMR_slope2': 7e-4,  # between 22.6 - 36
+    'IFMR_slope3': 0.03,  # between 36 - 150
     'IFMR_scale1': -10,
     'IFMR_scale2': -4,
     'IFMR_scale3': 4,
