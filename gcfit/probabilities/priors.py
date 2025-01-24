@@ -129,15 +129,19 @@ class Priors:
 
     def __init__(self, priors, fixed_initials=None, *,
                  logged=True, err_on_fail=False,
-                 evolved=False, flexible_BHs=False):
+                 evolved=False,
+                 flexible_natal_kicks=False, flexible_IFMR=False):
 
         self._log = logged
         self._strict = err_on_fail
 
         defaults = DEFAULT_PRIORS if not evolved else DEFAULT_EV_PRIORS
 
-        if flexible_BHs:
-            defaults |= DEFAULT_BH_PRIORS
+        if flexible_natal_kicks:
+            defaults |= DEFAULT_KICK_PRIORS
+
+        if flexible_IFMR:
+            defaults |= DEFAULT_IFMR_PRIORS
 
         if extraneous_params := (priors.keys() - defaults.keys()):
             raise ValueError(f"Invalid parameters: {extraneous_params}")
@@ -320,14 +324,18 @@ class PriorTransforms(Priors):
         return theta
 
     def __init__(self, priors, fixed_initials=None, *, err_on_fail=False,
-                 evolved=False, flexible_BHs=False):
+                 evolved=False,
+                 flexible_natal_kicks=False, flexible_IFMR=False):
 
         self._strict = err_on_fail
 
         defaults = DEFAULT_PRIORS if not evolved else DEFAULT_EV_PRIORS
 
-        if flexible_BHs:
-            defaults |= DEFAULT_BH_PRIORS
+        if flexible_natal_kicks:
+            defaults |= DEFAULT_KICK_PRIORS
+
+        if flexible_IFMR:
+            defaults |= DEFAULT_IFMR_PRIORS
 
         if extraneous_params := (priors.keys() - defaults.keys()):
             raise ValueError(f"Invalid parameters: {extraneous_params}")
@@ -695,9 +703,12 @@ DEFAULT_EV_PRIORS = {
     'd': ('uniform', [(2, 18)])
 }
 
-DEFAULT_BH_PRIORS = {
+DEFAULT_KICK_PRIORS = {
     'kick_slope': ('uniform', [(1e-5, 2)]),
     'kick_scale': ('uniform', [(5, 100)]),
+}
+
+DEFAULT_IFMR_PRIORS = {
     'IFMR_slope1': ('uniform', [(0.1, 10)]),
     'IFMR_slope2': ('uniform', [(1e-6, 0.1)]),
     'IFMR_slope3': ('uniform', [(0.01, 2)]),

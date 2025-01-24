@@ -1,7 +1,8 @@
 from .pulsars import *
 from .priors import Priors
 from .. import util
-from ..core.data import (DEFAULT_THETA, DEFAULT_EV_THETA, DEFAULT_BH_THETA,
+from ..core.data import (DEFAULT_THETA, DEFAULT_EV_THETA,
+                         DEFAULT_KICK_THETA, DEFAULT_IFMR_THETA,
                          FittableModel, FittableEvolvedModel)
 
 import numpy as np
@@ -1138,7 +1139,8 @@ def log_likelihood(theta, observations, L_components, hyperparams, evolved,
 def posterior(theta, observations, fixed_initials=None,
               L_components=None, prior_likelihood=None, *,
               hyperparams=False, return_indiv=True,
-              evolved=False, flexible_BHs=False, model_kw=None):
+              evolved=False, flexible_natal_kicks=False, flexible_IFMR=False,
+              model_kw=None):
     '''Compute the full posterior probability given `theta` and `observations`.
 
     Combines the various likelihood functions (through `log_likelihood`)
@@ -1215,8 +1217,11 @@ def posterior(theta, observations, fixed_initials=None,
     else:
         default_θ = DEFAULT_THETA.copy()
 
-    if flexible_BHs:
-        default_θ |= DEFAULT_BH_THETA.copy()
+    if flexible_natal_kicks:
+        default_θ |= DEFAULT_KICK_THETA.copy()
+
+    if flexible_IFMR:
+        default_θ |= DEFAULT_IFMR_THETA.copy()
 
     if model_kw is None:
         model_kw = {}
@@ -1251,8 +1256,10 @@ def posterior(theta, observations, fixed_initials=None,
         log_Pθ = 0
 
     # Eat the BH params again
-    if flexible_BHs:
-        theta, MF_kwargs = util.pop_flexible_BHs(theta)
+    if flexible_natal_kicks or flexible_IFMR:
+        theta, MF_kwargs = util.pop_flexible_BHs(theta, flexible_natal_kicks,
+                                                 flexible_IFMR)
+
         model_kw['MF_kwargs'] = model_kw.get('MF_kwargs', dict()) | MF_kwargs
 
     log_L, individuals = log_likelihood(theta, observations, L_components,

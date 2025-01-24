@@ -54,9 +54,13 @@ DEFAULT_EV_THETA = {
 }
 
 
-DEFAULT_BH_THETA = {
+# When kicks/IFMR are free, ordering kick params before IFMR params is important
+DEFAULT_KICK_THETA = {
     'kick_slope': 1,
     'kick_scale': 20,
+}
+
+DEFAULT_IFMR_THETA = {
     'IFMR_slope1': 5.,  # between 20 - 22.6
     'IFMR_slope2': 7e-4,  # between 22.6 - 36
     'IFMR_slope3': 0.03,  # between 36 - 150
@@ -64,6 +68,9 @@ DEFAULT_BH_THETA = {
     'IFMR_scale2': -4,
     'IFMR_scale3': 4,
 }
+
+# In some cases it is probably fine to have both (order is important)
+DEFAULT_BH_THETA = DEFAULT_KICK_THETA | DEFAULT_IFMR_THETA
 
 
 # --------------------------------------------------------------------------
@@ -582,7 +589,7 @@ class Observations:
 
         self.initials = DEFAULT_THETA.copy()
         self.ev_initials = DEFAULT_EV_THETA.copy()
-        self.BH_initials = DEFAULT_BH_THETA.copy()
+        self.BH_initials = DEFAULT_BH_THETA.copy()  # careful using this
 
         filename = util.get_cluster_path(cluster, standardize_name, restrict_to)
 
@@ -592,8 +599,16 @@ class Observations:
 
             logging.info(f"Observations read from {filename}")
 
+            # --------------------------------------------------------------
+            # Read in all observational data products
+            # --------------------------------------------------------------
+
             for group in self._find_groups(file):
                 self._dict_datasets[group] = Dataset(file[group])
+
+            # --------------------------------------------------------------
+            # Read in initial values of base free parameters
+            # --------------------------------------------------------------
 
             try:
                 # This updates defaults with data while keeping default sort
@@ -608,6 +623,10 @@ class Observations:
                 logging.info("No initial state stored, using defaults")
                 pass
 
+            # --------------------------------------------------------------
+            # Read in initial values of evolved free parameters
+            # --------------------------------------------------------------
+
             try:
                 self.ev_initials = {**self.ev_initials,
                                     **file['ev_initials'].attrs}
@@ -621,6 +640,10 @@ class Observations:
                 logging.info("No (evolved) initial state stored, using default")
                 pass
 
+            # --------------------------------------------------------------
+            # Read in initial values of BH-related free parameters
+            # --------------------------------------------------------------
+
             try:
                 self.BH_initials = {**self.BH_initials,
                                     **file['BH_initials'].attrs}
@@ -633,6 +656,16 @@ class Observations:
             except KeyError:
                 logging.info("No (BH) initial state stored, using default")
                 pass
+
+            # isolate the kick and IFMR initials
+            self._kick_initials = {k: self.BH_initials[k]
+                                   for k in DEFAULT_KICK_THETA}
+            self._IFMR_initials = {k: self.BH_initials[k]
+                                   for k in DEFAULT_IFMR_THETA}
+
+            # --------------------------------------------------------------
+            # Read in all other metadata
+            # --------------------------------------------------------------
 
             # TODO need a way to read units for some mdata from file
             self.mdata = dict(file.attrs)

@@ -21,15 +21,24 @@ __all__ = ['ModelVisualizer', 'CIModelVisualizer', 'ObservationsVisualizer',
 
 
 def _get_model(theta, observations, *,
-               strict=False, cls=FittableModel, flexible_BHs=False, **kwargs):
+               strict=False, cls=FittableModel,
+               flexible_natal_kicks=False, flexible_IFMR=False, **kwargs):
     '''Compute a model based on `theta` and optionally fail quietly.'''
 
-    if flexible_BHs:
+    if flexible_natal_kicks or flexible_IFMR:
         # Assume it's the last N elements in theta (not super robust tbh)
-        bh_lbls = observations.BH_initials.keys()
+
+        # bh_lbls = observations.BH_initials.keys()
+        bh_lbls = (
+            (list(observations._kick_initials) if flexible_natal_kicks else [])
+            + (list(observations._IFMR_initials) if flexible_IFMR else [])
+        )
+
         theta, theta_BH = theta[:-len(bh_lbls)], theta[-len(bh_lbls):]
 
-        _, MF_kwargs = util.pop_flexible_BHs(dict(zip(bh_lbls, theta_BH)))
+        _, MF_kwargs = util.pop_flexible_BHs(dict(zip(bh_lbls, theta_BH)),
+                                             flexible_natal_kicks,
+                                             flexible_IFMR)
         kwargs['MF_kwargs'] = kwargs.get('MF_kwargs', dict()) | MF_kwargs
 
     try:
