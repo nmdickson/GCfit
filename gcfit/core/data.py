@@ -1955,7 +1955,7 @@ class EvolvedModel(Model):
              * (self._clusterbh.mbh / self._clusterbh.mst)**(3 / 2 * b2))
 
         S = np.where(S < self._clusterbh.S_crit, self._clusterbh.Sf, S)
-        beta_f = self._clusterbh._beta_factor(S)
+        beta_f = self._clusterbh.beta_function(S)
 
         alpha_c = self._clusterbh.alpha_ci
         if self._clusterbh.running_bh_ejection_rate_2:
@@ -1966,7 +1966,7 @@ class EvolvedModel(Model):
         xi = self._clusterbh.tidal_models[self._clusterbh.tidal_model](crh, crt)
 
         Mst_dot = (-xi * self._clusterbh.Mst / self._clusterbh.trhstar
-                   + self._clusterbh.alpha_c * self._clusterbh.zeta
+                   + alpha_c * self._clusterbh.zeta
                    * self._clusterbh.M / self._clusterbh.trh)
 
         if self._clusterbh.t.size > 3:  # Cubic Spline will fail otherwise
