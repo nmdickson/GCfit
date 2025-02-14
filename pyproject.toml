@@ -27,7 +27,8 @@ dependencies = [
     "corner",
     "shapely",
     "sphinx-toggleprompt",
-    "ads"
+    "ads",
+    "multiprocess"
 ]
 
 classifiers = [
