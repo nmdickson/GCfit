@@ -1850,7 +1850,7 @@ class EvolvedModel(Model):
             tout=np.array([age.to_value('Myr')]),
             esc_rate=esc_rate,
             f_BH=self._clusterbh.fbh[-1],
-            N0=self._clusterbh.N0,
+            N0=self._clusterbh.N,  # N is N0
             tcc=tcc,
             NS_ret=NS_ret,
             BH_ret_int=BH_ret_int,
@@ -1888,17 +1888,6 @@ class EvolvedModel(Model):
 
             # Don't overwrite if given explicitly
             cbh_kwargs.setdefault('ibh_kwargs', ibh_kwargs)
-
-        # Parameters fit to N-body models
-        # (just use clusterbh defaults now)
-        # cbh_fit_prms = dict(
-        #     zeta=0.1,
-        #     n=1.5,
-        #     alpha_c=0.01,
-        #     Rht=0.5,
-        # )
-
-        # cbh_kwargs = cbh_fit_prms | cbh_kwargs
 
         m_breaks <<= u.Msun
         a_slopes = [-a1, -a2, -a3]
@@ -1945,11 +1934,16 @@ class EvolvedModel(Model):
         if FeH is not None:
             cbh_kwargs.setdefault('Z', Zsun * 10**FeH)
 
+        cbh_kwargs.setdefault('Zsolar', Zsun)
+
         # ------------------------------------------------------------------
         # Set some default clusterBH parameters
+        # clusterBH fit parameters should use defaults, or given in cbh_kwargs
         # ------------------------------------------------------------------
 
+        cbh_kwargs.setdefault('ssp', True)
         cbh_kwargs.setdefault('kick', True)
+        cbh_kwargs.setdefault('tidal', True)
         cbh_kwargs.setdefault('escapers', False)
         cbh_kwargs.setdefault('tsev', 1)  # Myr
 
@@ -1987,9 +1981,25 @@ class EvolvedModel(Model):
         tcc = self._clusterbh.tcc
 
         # Compute Mdot_esc based on the clusterBH formulation, for ssptools
-        Mst_dot = (-self._clusterbh._xi(self._clusterbh.rh, self._clusterbh.rt)
-                   * self._clusterbh.Mst / self._clusterbh.trhstar
-                   + self._clusterbh.alpha_c * self._clusterbh.zeta
+
+        b1, b2 = self._clusterbh.b1, self._clusterbh.b2
+        S = (self._clusterbh.a11 * self._clusterbh.a12**(3 / 2)
+             * (self._clusterbh.Mbh / self._clusterbh.Mst)**b1
+             * (self._clusterbh.mbh / self._clusterbh.mst)**(3 / 2 * b2))
+
+        S = np.where(S < self._clusterbh.S_crit, self._clusterbh.Sf, S)
+        beta_f = self._clusterbh.beta_function(S)
+
+        alpha_c = self._clusterbh.alpha_ci
+        if self._clusterbh.running_bh_ejection_rate_2:
+            alpha_c += (self._clusterbh.alpha_cf - alpha_c) * (1 - beta_f)
+
+        # _xi(rh, rt) function is not vectorized, coerces to min float
+        crh, crt = self._clusterbh.rh, self._clusterbh.rt
+        xi = self._clusterbh.tidal_models[self._clusterbh.tidal_model](crh, crt)
+
+        Mst_dot = (-xi * self._clusterbh.Mst / self._clusterbh.trhstar
+                   + alpha_c * self._clusterbh.zeta
                    * self._clusterbh.M / self._clusterbh.trh)
 
         if self._clusterbh.t.size > 3:  # Cubic Spline will fail otherwise
@@ -1997,7 +2007,7 @@ class EvolvedModel(Model):
 
         else:
             # If only 3 timesteps, something has gone terribly wrong.
-            mssg = 'Too few clusterBH timesteps created: t={self._clusterbh.t}'
+            mssg = f'Too few clusterBH timesteps created: t={self._clusterbh.t}'
             raise ValueError(mssg)
 
         BHret = -1  # Spoof unneeded BH retention fraction for `Model`

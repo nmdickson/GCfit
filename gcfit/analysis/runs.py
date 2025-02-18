@@ -921,7 +921,7 @@ class MCMCRun(_SingleRunAnalysis):
         CIModelVisualizer
             The created model visualization (with confidence intervals) object.
         '''
-        import multiprocessing
+        import multiprocess
 
         viz_cls = CIModelVisualizer if not self.evolved else CIEvolvedVisualizer
 
@@ -934,7 +934,7 @@ class MCMCRun(_SingleRunAnalysis):
 
             model_kw = self._get_model_kwargs(note_flexible_BHs=True)
 
-            with multiprocessing.Pool(processes=Nprocesses) as pool:
+            with multiprocess.Pool(processes=Nprocesses) as pool:
                 return viz_cls.from_chain(chain, self.obs, N,
                                           pool=pool, **model_kw)
 
@@ -1948,7 +1948,7 @@ class NestedRun(_SingleRunAnalysis):
         CIModelVisualizer
             The created model visualization (with confidence intervals) object.
         '''
-        import multiprocessing
+        import multiprocess
 
         ci_cls = CIModelVisualizer if not self._evolved else CIEvolvedVisualizer
 
@@ -1963,7 +1963,7 @@ class NestedRun(_SingleRunAnalysis):
 
             model_kw = self._get_model_kwargs(note_flexible_BHs=True)
 
-            with multiprocessing.Pool(processes=Nprocesses) as pool:
+            with multiprocess.Pool(processes=Nprocesses) as pool:
                 return ci_cls.from_chain(chain, self.obs, N,
                                          pool=pool, **model_kw)
 
@@ -4079,7 +4079,7 @@ class RunCollection(_RunAnalysis):
         CIModelVisualizer
             The created model visualization (with confidence intervals) object.
         '''
-        import multiprocessing
+        import multiprocess
 
         obs_list = [run.obs for run in self.runs]
         ev_list = [run._evolved for run in self.runs]
@@ -4102,7 +4102,7 @@ class RunCollection(_RunAnalysis):
                 chains.append(ch)
                 kw_list.append(run._get_model_kwargs(note_flexible_BHs=True))
 
-            with multiprocessing.Pool(processes=Nprocesses) as pool:
+            with multiprocess.Pool(processes=Nprocesses) as pool:
 
                 mc = ModelCollection.from_chains(chains, obs_list, ci=True, N=N,
                                                  pool=pool, evolved=ev_list,
