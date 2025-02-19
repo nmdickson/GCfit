@@ -6,7 +6,7 @@ import limepy as lp
 from scipy import integrate
 from astropy import units as u
 from astropy import constants as const
-from ssptools import EvolvedMF
+from ssptools import EvolvedMF, masses
 
 import fnmatch
 import logging
@@ -864,11 +864,12 @@ class Model(lp.limepy):
         Whether to account for natal kicks in the BH dynamical retention.
         Defaults to True.
 
-    Ndot : float, optional
-        Represents rate of change of the number of stars N over time, in stars
-        per Myr. Regulates low-mass object depletion (ejection) due to dynamical
-        evolution. Do not use unless you know what you're doing.
-        Defaults to 0.
+    esc_rate : float or callable, optional
+        Represents rate of change of stars over time due to tidal
+        ejections (and other escape mechanisms). Regulates low-mass object
+        depletion (ejection) due to dynamical evolution. See
+        `ssptools.EvolvedMF` for more information. Likely should not be used
+        unless you know what you're doing. Defaults to 0.
 
     vesc : float or astropy.Quantity, optional
         Initial cluster escape velocity, in km/s, for use in the computation of
@@ -1046,7 +1047,7 @@ class Model(lp.limepy):
                  s2=0., F=1., *, observations=None, age=None, FeH=None,
                  m_breaks=[0.1, 0.5, 1.0, 100], nbins=[5, 5, 20],
                  tracer_masses=None, tcc=0.0, NS_ret=0.1, BH_ret_int=1.0,
-                 natal_kicks=True, Ndot=0.0, vesc=90.,
+                 natal_kicks=True, esc_rate=0.0, vesc=90.,
                  meanmassdef='global', ode_maxstep=1e10, ode_rtol=1e-7):
 
         # ------------------------------------------------------------------
@@ -1089,8 +1090,8 @@ class Model(lp.limepy):
 
             # These are maybe required, but have actual defaults from the start;
             # if you explicitly set None and its not in obs, then that's on you
-            if Ndot is None:
-                Ndot = observations.mdata['Ndot']
+            if esc_rate is None:
+                esc_rate = observations.mdata['esc_rate']
 
             if vesc is None:
                 vesc = observations.mdata['vesc'] << u.km / u.s
@@ -1113,14 +1114,16 @@ class Model(lp.limepy):
         # Get mass function
         # ------------------------------------------------------------------
 
+        self._imf = masses.PowerLawIMF(
+            m_break=m_breaks.value, a=[-a1, -a2, -a3], ext='zeros', N0=5e5
+        )
+
         self._mf_kwargs = dict(
-            m_breaks=m_breaks.value,
-            a_slopes=[-a1, -a2, -a3],
+            IMF=self._imf,
             nbins=nbins,
             FeH=self.FeH,
             tout=np.array([self.age.to_value('Myr')]),
-            Ndot=Ndot,
-            N0=5e5,
+            esc_rate=esc_rate,
             tcc=tcc,
             NS_ret=NS_ret,
             BH_ret_int=BH_ret_int,
@@ -1702,8 +1705,8 @@ class FittableModel(Model):
         if ('vesc' not in kwargs) and ('vesc' in observations.mdata):
             kwargs['vesc'] = observations.mdata['vesc'] << u.km / u.s
 
-        if ('Ndot' not in kwargs) and ('Ndot' in observations.mdata):
-            kwargs['Ndot'] = observations.mdata['Ndot']
+        if ('esc_rate' not in kwargs) and ('esc_rate' in observations.mdata):
+            kwargs['esc_rate'] = observations.mdata['esc_rate']
 
         super().__init__(observations=observations, **theta, **kwargs)
 
