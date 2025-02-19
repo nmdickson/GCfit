@@ -540,7 +540,8 @@ def MCMC_fit(cluster, Niters, Nwalkers, Ncpu=2, *,
         backend.store_metadata('excluded_likelihoods', excluded_likelihoods)
 
         # MCMC moves
-        backend.store_metadata('moves', [mv.__class__.__name__ for mv in moves])
+        backend.store_metadata('moves', [(mv.__class__.__name__ for mv in moves)
+                                         if moves is not None else 'None'])
 
         if spec_initials is not None:
             backend.store_metadata('specified_initials', spec_initials)

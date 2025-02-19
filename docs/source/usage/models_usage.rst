@@ -28,13 +28,13 @@ version of the LIMEPY DF.
 
     >>> # Mean masses per bin
     >>> model.mj
-    <Quantity [ 0.11766481,  0.16234563,  0.22399308, ...,  7.11333146,
-                8.94500201, 11.60259068] solMass>
+    <Quantity [ 0.11766481,  0.16234563,  0.22399308, ...,  7.10114089,
+                8.94490091, 11.4071349] solMass>
 
     >>> # Total mass per bin
     >>> model.Mj
     <Quantity [2.97895583e+04, 3.73135159e+04, 4.67358943e+04, ...,
-               3.16648907e+01, 6.09462856e+01, 4.72391331e+01] solMass>
+               2.98231834e+01, 5.58230429e+01, 5.05028550e+01] solMass>
 
     >>> # Stellar object types (MS, NS, WD, BH)
     >>> model.star_types
@@ -43,9 +43,9 @@ version of the LIMEPY DF.
 
     >>> # Total mass and number of black holes, in their repective bins
     >>> model.BH.Mj
-    <Quantity [12.09032806, 31.66489069, 60.94628557, 47.23913309] solMass>
+    <Quantity [12.26536265, 29.82318344, 55.82304292, 50.50285502] solMass>
     >>> model.BH.Nj
-    <Quantity [2.04506045, 4.45148534, 6.81344571, 4.07142977]>
+    <Quantity [2.07936342, 4.19977352, 6.24076705, 4.42730409]>
 
 Notice that the majority of interesting quantities in :class:`gcfit.core.Model`
 are stored as :class:`astropy.Quantity` objects, with their respective units.
@@ -58,18 +58,18 @@ number of useful radii.
 
     >>> # Radial profile domain
     >>> model.r
-    <Quantity [0.00000000e+00, 1.87338537e-07, 2.06072391e-06, ...,
-               6.01602811e+01, 6.01602836e+01, 6.01602872e+01] pc>
+    <Quantity [0.00000000e+00, 2.08887713e-07, 2.29776485e-06, ...,
+               6.00907685e+01, 6.00908280e+01, 6.00908306e+01] pc>
 
     >>> # Density profile of the most massive main-sequence stars
     >>> model.rhoj[model.nms - 1]
-    <Quantity [1.22558007e+05, 1.22558004e+05, 1.22557541e+05, ...,
-               2.28136910e-24, 3.06566189e-25, 0.00000000e+00] solMass / pc3>
+    <Quantity [1.22615737e+05, 1.22615733e+05, 1.22615270e+05, ...,
+               4.10890596e-21, 1.21353818e-25, 0.00000000e+0] solMass / pc3>
 
     >>> # Half-mass radius of each mass bin
     >>> model.rhj
-    <Quantity [9.17577916, 8.97214788, 8.67214036, ..., 0.03528696, 0.02549436,
-               0.01402568] pc>
+    <Quantity [9.16723465, 8.96575389, 8.66929104, ..., 0.0351056, 0.0252477,
+               0.01440394] pc>
 
 See :class:`gcfit.core.Model` for further description of all available properties.
 
@@ -100,25 +100,25 @@ distribution of stars matching the phase-space distribution of the models.
 
     >>> # Total number of stars in the system
     >>> sampled.Nstars
-    <Quantity 1244835>
+    <Quantity 1244880>
 
     >>> # Cartesian coordinates of all stars, centred on the cluster centre
     >>> sampled.pos.x
-    <Quantity [ 2.22175514e+01,  9.32170721e-01, -2.69610089e-01, ...,
-                2.50494632e-03, -3.79114439e-03, -1.48577896e-02] pc>
+    <Quantity [ 1.70500994e+01,  2.86122226e+00, -1.16756636e+00, ...,
+                5.24831562e-03, -1.45917202e-03, -9.13248353e-03] pc>
     >>> sampled.pos.z
-    <Quantity [-1.44490672e+01, -2.08278389e+01, -2.43389757e+00, ...,
-                1.17980765e-02,  5.97614136e-03, -1.18399874e-04] pc>
+    <Quantity [-9.56794358e+00, -2.53661084e+00, -6.16515774e+00, ...,
+                6.71300176e-03,  2.06363703e-03,  1.76499660e-03] pc>
     >>> sampled.pos._fields
     ('x', 'y', 'z', 'r', 'theta', 'phi')
 
     >>> # Radial and tangential velocities of each star
     >>> sampled.vel.r
-    <Quantity [ 0.20798123,  6.36224581, -9.7605177 , ...,  1.81204356,
-                1.86281209,  2.67130275] km / s>
+    <Quantity [-0.71188986, -6.86505168,  3.51273965, ..., -3.84003514,
+                3.12497992,  2.09300044] km / s>
     >>> sampled.vel.t
-    <Quantity [ 7.30988878,  6.18068915, 12.31156676, ...,  3.81179933,
-                1.77385682,  4.47794275] km / s>
+    <Quantity [6.83229216, 4.14966349, 4.9182554 , ..., 3.80989784, 4.72867768,
+               1.41100603] km / s>
     >>> sampled.vel._fields
     ('x', 'y', 'z', 'r', 't', 'theta', 'phi')
 
@@ -139,11 +139,11 @@ the projected positions and velocities on the sky can also be computed.
     >>> p_sampled = model.sample(centre=cen)
 
     >>> p_sampled.galactic.lon
-    <Quantity [45.05209111, 45.07594013, 44.9869397 , ..., 44.99989859,
-               45.00023154, 45.00003136] deg>
+    <Quantity [44.99073051, 45.27478485, 44.95426386, ..., 45.0009292 ,
+               44.99996491, 45.00047616] deg>
     >>> p_sampled.galactic.pm_b
-    <Quantity [3.09281663, 2.9219263 , 3.46475291, ..., 2.93432464, 3.00739841,
-               3.10851683] mas / yr>
+    <Quantity [2.59835011, 3.18921132, 3.36723663, ..., 3.06262506, 3.0400891 ,
+               2.96432599] mas / yr>
     >>> p_sampled.galactic._fields
     ('lat', 'lon', 'distance', 'pm_l_cosb', 'pm_b', 'v_los')
 
