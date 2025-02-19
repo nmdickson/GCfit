@@ -27,19 +27,11 @@ Prior Likelihood Functions
 .. autosummary::
     :nosignatures:
     :toctree: generated/
+    :template: class_template.rst
 
     priors.Priors
     priors.UniformPrior
     priors.GaussianPrior
-    
-
-Mass Function Utilities
------------------------
-.. autosummary::
-    :nosignatures:
-    :toctree: generated/
-
-    mass.Field
 
 
 Pulsar Likelihood Utilities

@@ -3,8 +3,10 @@ from .. import util
 import h5py
 import numpy as np
 import limepy as lp
+from scipy import integrate
 from astropy import units as u
-from ssptools import EvolvedMF
+from astropy import constants as const
+from ssptools import EvolvedMF, masses
 
 import fnmatch
 import logging
@@ -13,7 +15,7 @@ from collections import namedtuple
 
 
 __all__ = ['DEFAULT_THETA', 'Model', 'FittableModel', 'SingleMassModel',
-           'Observations']
+           'SampledModel', 'Observations']
 
 
 # The order of this is important!
@@ -42,7 +44,7 @@ DEFAULT_THETA = {
 
 
 class Variable(u.Quantity):
-    '''Read-only `astropy.Quantity` subclass with metadata support'''
+    '''Read-only `astropy.Quantity` subclass with metadata support.'''
 
     def __repr__(self):
         prefix = f'<{self.__class__.__name__} '
@@ -92,7 +94,8 @@ class Variable(u.Quantity):
         if not is_str:
             quant = super().__new__(cls, value, unit, *args, **kwargs)
         else:
-            quant = np.asarray(value, *args, **kwargs).view(cls)
+            # Coerce string to dtype "U" here, hdf5 cannot store that natively
+            quant = np.asarray(value, dtype='U', *args, **kwargs).view(cls)
 
         # Store the metadata
         if isinstance(mdata, dict):
@@ -140,7 +143,7 @@ class Variable(u.Quantity):
 
 
 class Dataset:
-    '''Read-only container for all variables associated with a single dataset
+    '''Read-only container for all variables associated with a single dataset.
 
     Contains all data representing a single observational dataset,
     i.e. all `Variable`s associated to a single physical process, from a single
@@ -149,13 +152,17 @@ class Dataset:
     Should not be initialized directly, but from an `Observations` instance,
     using the base data file's relevant group.
 
+    Parameters
+    ----------
+    group : h5py.Group
+        HDF5 group object corresponding to this dataset.
+
     Attributes
     ----------
     variables
 
     mdata : dict
-        Dictionary of all "cluster-level" metadata
-
+        Dictionary of all "cluster-level" metadata.
     '''
 
     def __repr__(self):
@@ -174,9 +181,9 @@ class Dataset:
                 bibcodes = self.mdata['source'].split(';')
 
                 try:
-                    self._citation = util.bibcode2cite(bibcodes)
+                    self._citation = util.bibcode2cite(bibcodes, strict=True)
 
-                except RuntimeError:
+                except (ValueError, RuntimeError, ModuleNotFoundError):
                     # Failed to get citation, just return raw source
                     self._citation = '; '.join(bibcodes)
 
@@ -216,7 +223,7 @@ class Dataset:
 
     @property
     def size(self):
-        '''Number of datapoints in this dataset'''
+        '''Number of datapoints in this dataset.'''
         try:
             return list(self._dict_variables.values())[0].size
         except IndexError:
@@ -226,15 +233,15 @@ class Dataset:
 
     @property
     def variables(self):
-        '''Dictionary of all `Variables`s contained in this class'''
+        '''Dictionary of all `Variables`s contained in this class.'''
         return self._dict_variables
 
     def cite(self):
-        '''Return the literature source (citation) of this `Dataset`'''
+        '''Return the literature source (citation) of this `Dataset`.'''
         return self.__citation__()
 
     def build_err(self, varname, model_r, model_val):
-        '''Return the most relevant uncertainties associated with a variable
+        '''Return the most relevant uncertainties associated with a variable.
 
         Determines and returns the uncertainty (error) variables corresponding
         to the `varname` variable, which must also exist within this dataset.
@@ -246,10 +253,10 @@ class Dataset:
         this dataset's radial `r` profile, and for each point the closest
         error bar to each `model_val` is chosen.
 
-        parameters
+        Parameters
         ----------
         varname : str
-            Name of the variable to retrieve the errors for
+            Name of the variable to retrieve the errors for.
 
         model_r : astropy.Quantity
             Quantity representing the desired radial profile to interpolate on.
@@ -260,6 +267,11 @@ class Dataset:
             Quantity representing the desired values to interpolate on.
             Only used for assymetric errors. Must have equivalent units to
             the given `varname`.
+
+        Returns
+        -------
+        astropy.Quantity
+            The error variable corresponding to this `varname`.
         '''
 
         quantity = self[varname]
@@ -307,7 +319,7 @@ class Dataset:
 
 
 class Observations:
-    '''Read-only interface for all observational cluster data
+    '''Read-only interface for all observational cluster data.
 
     The main interface for reading and interacting with (reading) all
     observational data for the specified globular cluster.
@@ -343,15 +355,16 @@ class Observations:
     datasets
 
     mdata : dict
-        Dictionary of all "cluster-level" metadata
+        Dictionary of all "cluster-level" metadata.
 
     See Also
     --------
-    gcfit.util.get_cluster_path : Locating of data file based on `cluster` name
-    gcfit.util.data.ClusterFile : Handling of data file creation and editing
+    gcfit.util.get_cluster_path : Locating of data file based on `cluster` name.
+    gcfit.util.data.ClusterFile : Handling of data file creation and editing.
     '''
 
     _valid_likelihoods = None
+    _MF_M_samples = 50_000
 
     def __repr__(self):
         return f'Observations(cluster="{self.cluster}")'
@@ -418,7 +431,7 @@ class Observations:
                 # relies on visititems moving top-down
                 # this should theoretically remove all parent groups of groups
                 try:
-                    parent, name = key.rsplit('/', maxsplit=1)
+                    parent, _ = key.rsplit('/', maxsplit=1)
                     groups.remove(parent)
 
                 except ValueError:
@@ -431,17 +444,23 @@ class Observations:
 
         return groups
 
-    def filter_datasets(self, pattern, valid_only=True):
-        '''Return a subset of `Observations.datasets` based on given `pattern`
+    def filter_datasets(self, pattern, valid_only=False):
+        '''Return a subset of `Observations.datasets` based on given `pattern`.
 
         Parameters
         ----------
         pattern : str
-            A pattern string to filter all dataset names on, using `fnmatch`
+            A pattern string to filter all dataset names on, using `fnmatch`.
 
         valid_only : bool, optional
             Whether to filter on all datasets or only those considered "valid"
-            by `Observations.valid_likelihoods`
+            by `Observations.valid_likelihoods`.
+
+        Returns
+        -------
+        dict
+            Dictionary of name:dataset pairs for all datasets which match the
+            given `pattern`.
         '''
 
         if valid_only:
@@ -452,7 +471,7 @@ class Observations:
         return {key: self[key] for key in fnmatch.filter(datasets, pattern)}
 
     def filter_likelihoods(self, patterns, exclude=False, keys_only=False):
-        '''Return subset of `Observations.valid_likelihoods` based on `patterns`
+        '''Return subset of `valid_likelihoods` based on `patterns`.
 
         Filters the results of `Observations.valid_likelihoods` based on a
         *list* of `patterns`. The pattern matching (for each pattern in the
@@ -462,11 +481,12 @@ class Observations:
         Parameters
         ----------
         patterns : list of str
-            List of pattern strings to filter all likelihoods on using `fnmatch`
+            List of pattern strings to filter all likelihoods on using
+            `fnmatch`.
 
         exclude : bool, optional
             Whether to return all likelihoods which match the filters (False,
-            default) or to exclude them, and return all others (True)
+            default) or to exclude them, and return all others (True).
 
         keys_only : bool, optional
             Whether to return only the filtered dataset names (True) or the
@@ -474,6 +494,12 @@ class Observations:
             `Observations.valid_likelihoods` (False, default). Filtering will
             still be done on both dataset and likelihood names, no matter this
             parameter.
+
+        Returns
+        -------
+        list
+            A list of lists, in the same format as `valid_likelihoods`, which
+            has been filtered.
         '''
 
         matches, no_matches = [], []
@@ -494,7 +520,6 @@ class Observations:
 
     def get_sources(self, fmt='bibtex'):
         '''Return a dict of formatted citations for each contained dataset'''
-        # TODO make this use dataset __citation__'s so it doesnt pull each time
 
         res = {}
 
@@ -510,11 +535,13 @@ class Observations:
                 res[key] = bibcode
 
             elif fmt == 'bibtex' or fmt is None:
-                res[key] = util.bibcode2bibtex(bibcode)
+                try:
+                    res[key] = util.bibcode2bibtex(bibcode)
+                except ValueError:
+                    res[key] = f'ERROR: INVALID BIBCODE {bibcode}'
 
-            elif fmt == 'citep':
-                # TODO allow some formats which we parse the bibtex into
-                raise NotImplementedError
+            elif fmt in ('cite', 'citep'):
+                res[key] = self[key].cite()
 
         return res
 
@@ -655,12 +682,20 @@ class Observations:
 
                 func = probabilities.likelihood_mass_func
 
-                # Field
+                # Field slices
                 cen = (self.mdata['RA'], self.mdata['DEC'])
 
-                field = probabilities.mass.Field.from_dataset(self[key], cen)
+                field = util.mass.Field.from_dataset(self[key], cen)
 
-                comps.append((key, func, field))
+                rbins = np.c_[self[key]['r1'], self[key]['r2']]
+
+                fld_slices = []
+                for r_in, r_out in np.unique(rbins, axis=0):
+                    field_slice = field.slice_radially(r_in, r_out)
+                    field_slice.MC_sample(M=self._MF_M_samples)
+                    fld_slices.append(field_slice)
+
+                comps.append((key, func, fld_slices))
 
         return comps
 
@@ -672,13 +707,20 @@ class Observations:
 # TODO The units are *quite* incomplete in Model (10)
 # TODO what attributes should be documented?
 
+# Attributes namespace for storing various attrs for individual stellar types
+_attributes = namedtuple(
+    '_attributes',
+    ['mj', 'Mj', 'Nj', 'mavg', 'rhoj', 'Sigmaj', 'f', 'rh'],
+    defaults=[None, ] * 8
+)
+
 # --------------------------------------------------------------------------
 # Base model
 # --------------------------------------------------------------------------
 
 
 class Model(lp.limepy):
-    r'''Wrapper class around a LIMEPY model, including mass function evolution
+    r'''Wrapper class around a LIMEPY model, including mass function evolution.
 
     Multimass globular cluster model implemented as a subclass around a
     `limepy.limepy` model, as defined by the input parameters,
@@ -691,8 +733,8 @@ class Model(lp.limepy):
     velocity and mass-loss rates and fractions, either as given during
     initilization or as defined in the metadata of a given `Observations`.
     The resulting mass bins are arranged correctly, and have any possibly
-    required (by the `Observations`) tracer masses added, before being used
-    to solve the Limepy distribution function.
+    required (by the `Observations`) or desired tracer masses added, before
+    being used to solve the Limepy distribution function.
 
     The first 13 arguments are the main model parameters, which are used by
     the `FittableModel` as well. Most other arguments provide more fine control
@@ -803,6 +845,15 @@ class Model(lp.limepy):
         This number of bins will be log-spaced between each of the break masses.
         Defaults to [5, 5, 20].
 
+    tracer_masses : list of float, optional
+        A list of tracer (individual) masses to add to the model, each with a
+        negligible total mass. These will be added on top of any tracer masses
+        possibly required by the observations. Defaults to adding no tracer
+        mass bins, except those in a given observations.
+
+    tcc : float, optional
+        Core collapse time, in years. Defaults to 0, effectively being ignored.
+
     NS_ret : float, optional
         Neutron star retention fraction (0 to 1). Defaults to 0.1 (10%).
 
@@ -813,15 +864,16 @@ class Model(lp.limepy):
         Whether to account for natal kicks in the BH dynamical retention.
         Defaults to True.
 
-    Ndot : float, optional
-        Represents rate of change of the number of stars N over time, in stars
-        per Myr. Regulates low-mass object depletion (ejection) due to dynamical
-        evolution. Do not use unless you know what you're doing.
-        Defaults to 0.
+    esc_rate : float or callable, optional
+        Represents rate of change of stars over time due to tidal
+        ejections (and other escape mechanisms). Regulates low-mass object
+        depletion (ejection) due to dynamical evolution. See
+        `ssptools.EvolvedMF` for more information. Likely should not be used
+        unless you know what you're doing. Defaults to 0.
 
     vesc : float or astropy.Quantity, optional
         Initial cluster escape velocity, in km/s, for use in the computation of
-        the effects of BH natal kick. Defaults to 90 km/s.
+        the effects of BH natal kick. Defaults to 90 km/s. Stored as `vesc0`.
 
     meanmassdef : {'global', 'central'}, optional
         Definition of the mean mass :math:`\bar{m}` used to define the
@@ -867,17 +919,15 @@ class Model(lp.limepy):
     star_types : numpy.ndarray
         Array of 2-character strings representing the type of object in each
         mass bin (MS, WD, NS, BH).
-        Note that this is not 100% accurate, as some remnants of different
-        types may have final masses which fall into the same mass bin.
 
-    {BH,NS,WD}_mj : astropy.Quantity
-        Black hole, neutron star or white dwarf component mass bin size
-
-    {BH,NS,WD}_Mj : astropy.Quantity
-        Black hole, neutron star or white dwarf total bin mass
-
-    {BH,NS,WD}_Nj : astropy.Quantity
-        Black hole, neutron star or white dwarf total bin number (Mj / mj)
+    {MS,BH,NS,WD} : collections.namedtuple
+        Named tuple (`_attributes`) containing the mean bin mass (mj), total bin
+        mass (Mj), total bin number (Nj), average mass (mavg), system and
+        surface density profiles (rhoj, Sigmaj), mass fraction (f) and
+        half-mass radius (rh), for all main sequence (MS), black hole (BH),
+        neutron star (NS) and white dwarf (WD) object types. Essentially
+        provides easy access to these quantities for each of the different
+        object types as defined by the `star_types` array.
 
     r : astropy.Quantity
         The projected radial distances, in pc, from the centre of the cluster,
@@ -890,6 +940,11 @@ class Model(lp.limepy):
     rho, rhoj : astropy.Quantity
         System (total, per mass bin) density as a function of distance from
         the centre of the cluster.
+
+    vesc : astropy.Quantity
+        Escape velocity of the system (at the present day) as a function of
+        distance from the centre of the cluster, as given by
+        :math:`\sqrt{2 |\phi(r)|}`.
 
     v2, v2j : astropy.Quantity
         System (total, per mass bin) mean-square velocity as a function of
@@ -908,23 +963,9 @@ class Model(lp.limepy):
         The per mass bin (King, half-mass, anisotropy, projected half-mass)
         radius of the cluster.
 
-    Notes
-    -----
-    The IMF of the model is defined using a three-component broken power law,
-    of the familiar form:
-
-    .. math::
-        \xi(m) \propto \begin{cases}
-            m^{-a_1} & 0.1 M_{\odot} < m \leq 0.5 M_{\odot}, \\
-            m^{-a_2} & 0.5 M_{\odot} < m \leq 1.0 M_{\odot}, \\
-            m^{-a_3} & 1.0 M_{\odot} < m \leq 100 M_{\odot}, \\
-        \end{cases}
-
-    where the `a` exponents are given as input parameters.
-
     See Also
     --------
-    limepy : Distribution-function model base of this class
+    limepy : Distribution-function model base of this class.
     '''
 
     def _assign_units(self):
@@ -976,17 +1017,37 @@ class Model(lp.limepy):
         self.s2 <<= V2_units
         self.s2j <<= V2_units
 
+        self.phi <<= V2_units
         self.rho <<= (M_units / R_units**3)
         self.rhoj <<= (M_units / R_units**3)
         self.Sigma <<= (M_units / R_units**2)
         self.Sigmaj <<= (M_units / R_units**2)
 
+    def _extract_indiv_attrs(self, mask):
+        '''Extract a number of quantities from the model with a given mask'''
+        mj = self.mj[mask]
+        Mj = self.Mj[mask]
+        Nj = self.Nj[mask]
+
+        rhoj = self.rhoj[mask]
+        Sigmaj = self.Sigmaj[mask]
+
+        f = (Mj.sum() / self.M).to(u.pct)
+
+        mavg = Mj.sum() / Nj.sum()  # average of mj weighted by Nj
+
+        mc = self.mcj[mask].sum(axis=0)
+        rh = np.interp(0.5 * Mj.sum(), mc, self.r)
+
+        return _attributes(mj=mj, Mj=Mj, Nj=Nj, mavg=mavg,
+                           rhoj=rhoj, Sigmaj=Sigmaj, f=f, rh=rh)
+
     def __init__(self, W0, M, rh, g=1.5, delta=0.45, ra=1e8,
                  a1=1.3, a2=2.3, a3=2.3, BHret=1.0, d=5,
                  s2=0., F=1., *, observations=None, age=None, FeH=None,
                  m_breaks=[0.1, 0.5, 1.0, 100], nbins=[5, 5, 20],
-                 tcc=0.0, NS_ret=0.1, BH_ret_int=1.0,
-                 natal_kicks=True, Ndot=0.0, vesc=90.,
+                 tracer_masses=None, tcc=0.0, NS_ret=0.1, BH_ret_int=1.0,
+                 natal_kicks=True, esc_rate=0.0, vesc=90.,
                  meanmassdef='global', ode_maxstep=1e10, ode_rtol=1e-7):
 
         # ------------------------------------------------------------------
@@ -1029,8 +1090,8 @@ class Model(lp.limepy):
 
             # These are maybe required, but have actual defaults from the start;
             # if you explicitly set None and its not in obs, then that's on you
-            if Ndot is None:
-                Ndot = observations.mdata['Ndot']
+            if esc_rate is None:
+                esc_rate = observations.mdata['esc_rate']
 
             if vesc is None:
                 vesc = observations.mdata['vesc'] << u.km / u.s
@@ -1039,12 +1100,13 @@ class Model(lp.limepy):
             if age is None or FeH is None:
                 # Error here if age, FeH can't be found
                 # for Ndot, vesc, let them be, if necessary they'll fail later
-                mssg = {"Must supply either `age` and `FeH` or "
-                        "an `observations`, to read them from"}
+                mssg = ("Must supply either `age` and `FeH` or "
+                        "an `observations`, to read them from")
                 raise ValueError(mssg)
 
-        age <<= u.Gyr
-        vesc <<= (u.km / u.s)
+        self.age = age << u.Gyr
+        self.FeH = FeH
+        self.vesc0 = vesc << (u.km / u.s)
 
         self.observations = observations
 
@@ -1052,21 +1114,25 @@ class Model(lp.limepy):
         # Get mass function
         # ------------------------------------------------------------------
 
-        self._mf = EvolvedMF(
-            m_breaks=m_breaks.value,
-            a_slopes=[-a1, -a2, -a3],
+        self._imf = masses.PowerLawIMF(
+            m_break=m_breaks.value, a=[-a1, -a2, -a3], ext='zeros', N0=5e5
+        )
+
+        self._mf_kwargs = dict(
+            IMF=self._imf,
             nbins=nbins,
-            FeH=FeH,
-            tout=np.array([age.to_value('Myr')]),
-            Ndot=Ndot,
-            N0=5e5,
+            FeH=self.FeH,
+            tout=np.array([self.age.to_value('Myr')]),
+            esc_rate=esc_rate,
             tcc=tcc,
             NS_ret=NS_ret,
             BH_ret_int=BH_ret_int,
             BH_ret_dyn=BHret / 100.,
             natal_kicks=natal_kicks,
-            vesc=vesc.value
+            vesc=self.vesc0.value
         )
+
+        self._mf = EvolvedMF(**self._mf_kwargs)
 
         mj, Mj = self._mf.m, self._mf.M
 
@@ -1078,13 +1144,21 @@ class Model(lp.limepy):
         self.star_types = self._mf.types
 
         # append tracer mass bins (must be appended to end to not affect nms)
-        if observations is not None:
+        if tracer_masses is not None or observations is not None:
+
+            tracer_mj = tracer_masses or []
 
             # TODO should only append tracer masses for valid likelihood dsets?
-            tracer_mj = np.unique([
-                dataset.mdata['m'] for dataset in observations.datasets.values()
-                if 'm' in dataset.mdata
-            ])
+            if observations is not None:
+
+                obs_tracers = [
+                    dataset.mdata['m']
+                    for dataset in observations.datasets.values()
+                    if 'm' in dataset.mdata
+                ]
+                tracer_mj = np.concatenate((tracer_mj, obs_tracers))
+
+            tracer_mj = np.unique(tracer_mj)  # sort and remove any duplicates
 
             mj = np.concatenate((mj, tracer_mj))
             Mj = np.concatenate((Mj, 0.1 * np.ones_like(tracer_mj)))
@@ -1093,9 +1167,6 @@ class Model(lp.limepy):
                                               ['TR'] * tracer_mj.size))
 
             self._tracer_bins = slice(self.nms + self.nmr, None)
-
-        else:
-            logging.warning("No `Observations` given, no tracer masses added")
 
         # ------------------------------------------------------------------
         # Create the limepy model base
@@ -1152,47 +1223,81 @@ class Model(lp.limepy):
         # Recompute to account for physical scaling applied by limepy
         self.Nj = self.Mj / self.mj
 
-        # TODO these kind of slices would prob be more useful than nms elsewhere
+        # TODO these kind of masks would prob be more useful than nms elsewhere
+        # TODO slices vs masks?
         self._star_bins = slice(0, self.nms)
         self._remnant_bins = slice(self.nms, self.nms + self.nmr)
 
-        # Masked only within `remnant bins` regime to avoid issues with tracers
-        self._BH_bins = self._mf.types[self.nms:] == 'BH'
-        self._NS_bins = self._mf.types[self.nms:] == 'NS'
-        self._WD_bins = self._mf.types[self.nms:] == 'WD'
+        self._BH_bins = self.star_types == 'BH'
+        self._NS_bins = self.star_types == 'NS'
+        self._WD_bins = self.star_types == 'WD'
+
+        self._nonBH_bins = ~self._BH_bins
 
         # ------------------------------------------------------------------
-        # Get Black Holes
+        # Get various attributes for some individual stellar classes
         # ------------------------------------------------------------------
 
-        self.BH_mj = self.mj[self._remnant_bins][self._BH_bins]
-        self.BH_Mj = self.Mj[self._remnant_bins][self._BH_bins]
-        self.BH_Nj = self.Nj[self._remnant_bins][self._BH_bins]
+        self.MS = self._extract_indiv_attrs(self._star_bins)
+        self.rem = self._extract_indiv_attrs(self._remnant_bins)
 
-        self.BH_rhoj = self.rhoj[self._remnant_bins][self._BH_bins]
-        self.BH_Sigmaj = self.Sigmaj[self._remnant_bins][self._BH_bins]
+        self.BH = self._extract_indiv_attrs(self._BH_bins)
+        self.WD = self._extract_indiv_attrs(self._WD_bins)
+        self.NS = self._extract_indiv_attrs(self._NS_bins)
 
-        # ------------------------------------------------------------------
-        # Get White Dwarfs
-        # ------------------------------------------------------------------
+        self.nonBH = self._extract_indiv_attrs(self._nonBH_bins)
 
-        self.WD_mj = self.mj[self._remnant_bins][self._WD_bins]
-        self.WD_Mj = self.Mj[self._remnant_bins][self._WD_bins]
-        self.WD_Nj = self.Nj[self._remnant_bins][self._WD_bins]
-
-        self.WD_rhoj = self.rhoj[self._remnant_bins][self._WD_bins]
-        self.WD_Sigmaj = self.Sigmaj[self._remnant_bins][self._WD_bins]
+        self.f_BH = self.BH.f  # For backwards compatibility
+        self.f_rem = self.rem.f
 
         # ------------------------------------------------------------------
-        # Get Neutron Stars
+        # Get some derived quantities
         # ------------------------------------------------------------------
 
-        self.NS_mj = self.mj[self._remnant_bins][self._NS_bins]
-        self.NS_Mj = self.Mj[self._remnant_bins][self._NS_bins]
-        self.NS_Nj = self.Nj[self._remnant_bins][self._NS_bins]
+        # Escape Velocity
 
-        self.NS_rhoj = self.rhoj[self._remnant_bins][self._NS_bins]
-        self.NS_Sigmaj = self.Sigmaj[self._remnant_bins][self._NS_bins]
+        self.vesc = np.sqrt(2 * self.phi)
+
+        # Relaxation Time
+
+        # Binney and Tremaine, eq 7.108
+        N = self.Nj.sum()
+        G = const.G.to("pc3 Msun-1 Gyr-2")
+        self.trh = ((0.17 * N) / (np.log(0.1 * N)) * np.sqrt(rh**3 / (G * M)))
+
+        # Spitzer, 1987
+        A = (1.7e5 << u.Unit("yr pc(-3/2) Msun(1/2)"))
+        mm = self.mmean
+        self.trh_spitzer = (A * rh**1.5 * (N**0.5 * mm**(-0.5))).to('Gyr')
+
+        # Elapsed relaxations
+
+        self.N_relax = self.age.to('Gyr') / self.trh
+
+        # Spitzer instability
+
+        # TODO if Nbh is ~0 this could be nan, but shouldn't allow that
+        self._spitzer_chi = ((self.BH.Mj.sum() / self.nonBH.Mj.sum())
+                             * (self.BH.mavg / self.nonBH.mavg)**(1.5))
+
+        self.spitzer_stable = (self._spitzer_chi < 0.16)
+
+        # Mass segregation (see Weatherford et al. 2018, projected quantities)
+        # 0.8, 0.4 Msun taken from Weatherford et al. 2020, but are arbitrary
+
+        pop_1 = (np.abs(self.mj - (0.8 << u.Msun))).argmin()
+        pop_2 = (np.abs(self.mj - (0.4 << u.Msun))).argmin()
+
+        mc = self.mcpj / np.repeat(self.mcpj[:, -1, None], self.r.size, axis=1)
+
+        self._r50_1 = np.interp(0.5, mc[pop_1], self.r)
+        self._r50_2 = np.interp(0.5, mc[pop_2], self.r)
+
+        self.delta_r50 = (self._r50_2 - self._r50_1) / self.rhp
+
+        A = integrate.simpson(x=self.r, y=mc)
+
+        self.delta_A = (A[pop_1] - A[pop_2]) / self.rhp.value  # TODO units?
 
     # ----------------------------------------------------------------------
     # Alternative generators
@@ -1200,13 +1305,34 @@ class Model(lp.limepy):
 
     @classmethod
     def isotropic(cls, W0, M, rh, **kw):
-        '''Initialize the model with max `ra`, leading to an isotropic model'''
+        '''Initialize the model with max `ra`, leading to an isotropic model.'''
         ra = 1e8
         return cls(W0, M, rh, ra=ra, **kw)
 
     @classmethod
     def canonical(cls, W0, M, rh, imf='kroupa', **kw):
-        '''Initialize with an IMF defined by a canonical IMF formulation'''
+        '''Initialize with an IMF defined by a canonical IMF formulation.
+
+        Initializes a base `Model` with specific IMF break masses and power
+        law slopes, corresponding to a given IMF choice.
+
+        The available IMFs are Kroupa (2002), Salpeter (1955) and
+        Baumgardt et al. (2023).
+
+        Parameters
+        ----------
+        W0 : float or astropy.Quantity
+            The (dimensionless) central potential.
+
+        M : float or astropy.Quantity
+            The total mass of the system, in all mass components, in Msun.
+
+        rh : float or astropy.Quantity
+            The system half-mass radius, in parsecs.
+
+        imf : {"kroupa", "salpeter", "baumgardt"}, optional
+            The canonical IMF to use.
+        '''
 
         if imf.lower() == 'kroupa':
             a1, a2, a3 = 1.3, 2.3, 2.3
@@ -1215,6 +1341,7 @@ class Model(lp.limepy):
         elif imf.lower() == 'salpeter':
             # TODO once evolve_mf supports any number of exponents, use 1 here
             a1 = a2 = a3 = 2.35
+            m_breaks = [0.08, 0.5, 1.0, 100]  # doesn't really matter
 
         elif imf.lower() == 'baumgardt':
             a1, a2, a3 = 0.3, 1.65, 2.35
@@ -1229,25 +1356,25 @@ class Model(lp.limepy):
 
     @classmethod
     def woolley(cls, W0, M, rh, **kw):
-        '''Initialize a Woolley (1954) Model (g=0 and isotropic)'''
+        '''Initialize a Woolley (1954) Model (g=0 and isotropic).'''
         g = 0
         return cls.isotropic(W0, M, rh, g=g, **kw)
 
     @classmethod
     def king(cls, W0, M, rh, **kw):
-        '''Initialize a King (1966) Model (g=1 and isotropic)'''
+        '''Initialize a King (1966) Model (g=1 and isotropic).'''
         g = 1
         return cls.isotropic(W0, M, rh, g=g, **kw)
 
     @classmethod
     def wilson(cls, W0, M, rh, **kw):
-        '''Initialize a Wilson (1975) Model (g=2 and isotropic)'''
+        '''Initialize a Wilson (1975) Model (g=2 and isotropic).'''
         g = 2
         return cls.isotropic(W0, M, rh, g=g, **kw)
 
     @classmethod
     def michieking(cls, W0, M, rh, **kw):
-        '''Initialize a Michie-King (1963) Model (g=1 and anisotropic)'''
+        '''Initialize a Michie-King (1963) Model (g=1 and anisotropic).'''
         g = 1
         return cls(W0, M, rh, g=g, **kw)
 
@@ -1256,7 +1383,7 @@ class Model(lp.limepy):
     # ----------------------------------------------------------------------
 
     def sample(self, *args, **kwargs):
-        '''Return a `SampledModel` instance based on this model'''
+        '''Return a `SampledModel` instance based on this model.'''
         return SampledModel(self, *args, **kwargs)
 
     # ----------------------------------------------------------------------
@@ -1264,7 +1391,7 @@ class Model(lp.limepy):
     # ----------------------------------------------------------------------
 
     def get_visualizer(self):
-        '''Return a `analysis.ModelVisualizer` instance based on this model'''
+        '''Return a `analysis.ModelVisualizer` instance based on this model.'''
         from ..analysis import ModelVisualizer
         return ModelVisualizer(self, observations=self.observations)
 
@@ -1274,7 +1401,7 @@ class Model(lp.limepy):
 
 
 class SingleMassModel(lp.limepy):
-    '''Wrapper class around a single-mass LIMEPY model
+    '''Wrapper class around a single-mass LIMEPY model.
 
     Single-mass globular cluster model implemented as a subclass around a
     `limepy.limepy` model.
@@ -1389,10 +1516,11 @@ class SingleMassModel(lp.limepy):
         self.v2p <<= V2_units
         self.s2 <<= V2_units
 
+        self.phi <<= V2_units
         self.rho <<= (M_units / R_units**3)
         self.Sigma <<= (M_units / R_units**2)
 
-    def __init__(self, W0, M, rh, ra=1e8, g=1.5, d=5, *,
+    def __init__(self, W0, M, rh, g=1.5, ra=1e8, d=5, *,
                  ode_maxstep=1e10, ode_rtol=1e-7):
 
         # ------------------------------------------------------------------
@@ -1456,31 +1584,31 @@ class SingleMassModel(lp.limepy):
 
     @classmethod
     def isotropic(cls, W0, M, rh, **kw):
-        '''initialize with no anisotropy'''
+        '''initialize with no anisotropy.'''
         ra = 1e8
         return cls(W0, M, rh, ra=ra, **kw)
 
     @classmethod
     def woolley(cls, W0, M, rh, **kw):
-        '''g=0, isotropic'''
+        '''Initialize a Woolley (1954) Model (g=0 and isotropic).'''
         g = 0
         return cls.isotropic(W0, M, rh, g=g, **kw)
 
     @classmethod
     def king(cls, W0, M, rh, **kw):
-        '''g=1, isotropic'''
+        '''Initialize a King (1966) Model (g=1 and isotropic).'''
         g = 1
         return cls.isotropic(W0, M, rh, g=g, **kw)
 
     @classmethod
     def wilson(cls, W0, M, rh, **kw):
-        '''g=2, isotropic'''
+        '''Initialize a Wilson (1975) Model (g=2 and isotropic).'''
         g = 2
         return cls.isotropic(W0, M, rh, g=g, **kw)
 
     @classmethod
     def michieking(cls, W0, M, rh, **kw):
-        '''g=1, anisotropic'''
+        '''Initialize a Michie-King (1963) Model (g=1 and anisotropic).'''
         g = 1
         return cls(W0, M, rh, g=g, **kw)
 
@@ -1491,14 +1619,14 @@ class SingleMassModel(lp.limepy):
 
 
 class FittableModel(Model):
-    '''Model subclass for use in all fitting functions
+    '''Model subclass for use in all fitting functions.
 
     A subclass of the base `Model`, with a simplified and specific
     initilization signature based on a single `theta` input containing the main
     13 model parameters, in a specific order, and `observations` which the
     model should be compared to.
 
-    Unless you have a set of paramters `theta` taken directly from the fitting
+    Unless you have a set of parameters `theta` taken directly from the fitting
     results, you most likely do not want to use this class directly.
 
     Parameters
@@ -1511,10 +1639,13 @@ class FittableModel(Model):
         evolution algorithm and fitting parameters.
         See `Model` for further explanation of all possible input parameters.
 
-    observations : Observations, optional
+    observations : Observations
         The `Observations` instance corresponding to this cluster. Required at
         initilization so that the models can be compared to these observations
         in the most consistent way possible.
+
+    **kwargs : dict
+        All other arguments are passed to `Model`.
 
     Attributes
     ----------
@@ -1533,7 +1664,6 @@ class FittableModel(Model):
 
     All cluster metadata parameters (such as age, vesc, etc.) will be read from
     the observations, and should not be provided as arguments here.
-
     '''
 
     def __init__(self, theta, observations, **kwargs):
@@ -1569,8 +1699,14 @@ class FittableModel(Model):
         # ------------------------------------------------------------------
 
         kwargs = kwargs.copy()
-        kwargs.setdefault('vesc', None)
-        kwargs.setdefault('Ndot', None)
+
+        # Extra check if vesc/Ndot exist in obs first, otherwise use default
+        #   Necessary because checks in Model aren't sufficient
+        if ('vesc' not in kwargs) and ('vesc' in observations.mdata):
+            kwargs['vesc'] = observations.mdata['vesc'] << u.km / u.s
+
+        if ('esc_rate' not in kwargs) and ('esc_rate' in observations.mdata):
+            kwargs['esc_rate'] = observations.mdata['esc_rate']
 
         super().__init__(observations=observations, **theta, **kwargs)
 
@@ -1591,7 +1727,7 @@ _projection = namedtuple('projection', ['lat', 'lon', 'distance',
 
 
 class SampledModel:
-    '''Representation of a cluster based on sampling a Model
+    '''Representation of a cluster based on sampling a Model.
 
     Based on a solved `Model`, this class gives access to the phase-space
     coordinates of N stars and remnants, as sampled from the smooth model
@@ -1630,9 +1766,17 @@ class SampledModel:
         will simply assign each star the mean mass (`Model.mj`) for each bin.
         Defaults to True.
 
+    use_model_distance : bool, optional
+        If a centre SkyCoord is given, whether or not to force the distance
+        coordinate to the match the model distance. Defaults to True.
+
     seed : int, optional
         A random seed to define the random generator used in all sampling.
         Passed to `numpy.random.default_rng`. Defaults to None.
+
+    pool : multiprocessing.Pool, optional
+        A pooling object with a `map` method, used to generate some samples
+        in parallel.
 
     Attributes
     ----------
@@ -1673,8 +1817,6 @@ class SampledModel:
         galactic frame) of each star (lon, lat, distance, pm_l_cosb, pm_b,
         v_los), based on the given cluster centre.
     '''
-
-    # TODO get initial masses as well, so can add stuff like photometry
 
     centre = None
     galactic = None
@@ -2019,21 +2161,7 @@ class SampledModel:
                            pm_b=db.to('mas/yr'), v_los=dd)
 
     def __init__(self, model, centre=None, *, distribute_masses=True,
-                 use_model_distance=True, seed=None, pool=None, verbose=False):
-        '''Sample N stars with positions and velocities from this model
-
-        if centre is given, will determine projected/observed
-            coordinates/velocities for each star based on this centre.
-            Centre should be a SkyCoord, and also contain velocities
-            The model "distance" `d` will set the distance of the exact centre
-            of the cluster, overriding the distance in the given centre
-            skycoord, unless `use_model_distance` is False.
-        if use_model_distance is False and the distance is not very close to
-            the model distance, this will obvisouly give very weird results
-
-        if distribute_masses, masses will be uniformally sampled between all
-            the mass bins, otherwise will all have the mean value (mj)
-        '''
+                 use_model_distance=True, seed=None, pool=None):
 
         # store ref to base model, just in case
         self._basemodel = model
@@ -2077,11 +2205,8 @@ class SampledModel:
         self.s2j = np.repeat(model.s2j, self.Nj)
         self.σ2_factor = model.s2 / self.s2j
 
-        try:
-            self.age = model.observations.mdata['age'] << u.Gyr
-            self.feh = model.observations.mdata['FeH']
-        except (AttributeError, KeyError):
-            pass
+        self.age = model.age
+        self.FeH = model.FeH
 
         # ------------------------------------------------------------------
         # "Sample" the masses, assuming all stars are exactly mean bin mass
@@ -2159,3 +2284,189 @@ class SampledModel:
             self.centre = centre
 
             self.galactic = self._project(centre)
+
+    # ----------------------------------------------------------------------
+    # artpop tests
+    # ----------------------------------------------------------------------
+
+    def to_artpop(self, phot_system, pixel_scale, *,
+                  a_lam=0., projected=False, cutoff_radius=None,
+                  return_rem=False, iso_class=None, thin=False, **kwargs):
+        '''Construct an `artpop.Source` for use in simulated photometry.
+
+        Computes, based on the masses and MIST Isochrones for the given
+        `phot_system`, positions and magnitudes for all stars which are used to
+        create an artificial `Source` object from `artpop`, to be used within
+        `artpop` to simulate artificial imagery of this (sampled) cluster.
+
+        Parameters
+        ----------
+        phot_system : str
+            Name of the photometric system to simulate stellar magnitudes
+            within. Must be supported by the given `iso_class` (therefore,
+            likely part of the MIST isochrone catalogue).
+
+        pixel_scale : float or astropy.Quantity
+            The pixel scale of the mock image. If a float is given,
+            the units will be assumed to be `arcsec / pixels`.
+
+        a_lam : float or dict, optional
+            Magnitude of extinction. If float, the same extinction will be
+            applied to all bands. If dict, keys must match filters for this
+            `phot_system` and will be applied individually, defaulting to 0 for
+            missing filters.
+
+        projected : bool, optional
+            If False (default) will use unprojected x-y star positions,
+            otherwise will use the galactic longitude/latitude. A centre must
+            have been provided at initilization.
+
+        cutoff_radius : astropy.Quantity, optional
+            A maximum radius to apply to the sampled stars. Only stars sampled
+            within this radius will be used.
+
+        return_rem : bool, optional
+            If True, will also return the x and y positions (and types) of all
+            remnants alongside the `Source`, which can be used to show the
+            presence of dark remnants alongside simulated imagery.
+            By default, only the `Source` is returned.
+
+        iso_class : artpop.Isochrone, optional
+            Optionally use a custom subclass of the typical `artpop` isochrone
+            objects. This may be required for use with custom isochrones from
+            sources other than the MIST catalogue. By default, the
+            `artpop.MISTIsochrone` class is used.
+
+        thin : int, optional
+            If given, will "thin" out the stars used in the final tables by
+            this factor. Not typically recommended unless absolutely necessary.
+
+        Returns
+        -------
+        artpop.Source
+            `artpop` artificial source object corresponding to this sampled
+            cluster.
+        '''
+
+        import artpop
+        from astropy.table import Table
+
+        if iso_class is None:
+            iso_class = artpop.MISTIsochrone
+
+        def abs2app(band, absmag, dist):
+            '''Convert absolute magnitude to apparent at distance `dist`.'''
+            return absmag + (5 * np.log10(100 * dist / u.kpc)) + a_lam[band]
+
+        # ------------------------------------------------------------------
+        # Setup isochrone and mask any invalid mass ranges
+        # ------------------------------------------------------------------
+
+        log_age = np.log10(self.age.to_value('yr'))
+        iso = iso_class(log_age, self.FeH, phot_system=phot_system)
+
+        # Mask all remnants and any stars outside isochrone mass bounds
+        #   (should only be a few with mass~0.099)
+        isolim_mask = self.star_mask.copy()
+        isolim_mask &= ((self.m.value > iso.m_min) & (self.m.value < iso.m_max))
+
+        masses = self.m[isolim_mask]
+
+        # ------------------------------------------------------------------
+        # Setup extinction
+        # ------------------------------------------------------------------
+
+        if isinstance(a_lam, dict):
+            a_lam = {band: a_lam.get(band, 0.) for band in iso.filters}
+
+        else:
+            a_lam = {band: a_lam for band in iso.filters}
+
+        # ------------------------------------------------------------------
+        # Get positions
+        # ------------------------------------------------------------------
+
+        with u.set_enabled_equivalencies(util.angular_width(self.d)):
+
+            if projected:
+                try:
+                    dist = self.galactic.distance[isolim_mask].to('kpc')
+
+                    x = self.galactic.lon[isolim_mask].to('arcsec')
+                    y = self.galactic.lat[isolim_mask].to('arcsec')
+
+                    rem_x = self.galactic.lon[~self.star_mask].to('arcsec')
+                    rem_y = self.galactic.lat[~self.star_mask].to('arcsec')
+                    rem_t = self.star_types[~self.star_mask]
+
+                except AttributeError:
+                    mssg = ("Model has not been projected. Supply a "
+                            "'centre' at init or set 'projected=False' here")
+                    raise ValueError(mssg)
+
+            else:
+                dist = (self.d + self.pos.z[isolim_mask]).to('kpc')
+                x = self.pos.x[isolim_mask].to('arcsec')
+                y = self.pos.y[isolim_mask].to('arcsec')
+
+                rem_x = self.pos.x[~self.star_mask].to('arcsec')
+                rem_y = self.pos.y[~self.star_mask].to('arcsec')
+                rem_t = self.star_types[~self.star_mask]
+
+        if cutoff_radius is not None:
+            cutmask = (x**2 + y**2)**0.5 < cutoff_radius
+
+            x = x[cutmask]
+            y = y[cutmask]
+            dist = dist[cutmask]
+            masses = masses[cutmask]
+
+            remcutmask = (rem_x**2 + rem_y**2)**0.5 < cutoff_radius
+            rem_x = rem_x[remcutmask]
+            rem_y = rem_y[remcutmask]
+            rem_t = rem_t[remcutmask]
+
+        if thin:
+            x = x[::thin]
+            y = y[::thin]
+            dist = dist[::thin]
+            masses = masses[::thin]
+
+        # Put on the required positive grid for artpop
+        xm, ym = x.min(), y.min()
+
+        pixel_scale <<= u.arcsec / u.pixel
+
+        dpi = u.pixel_scale(pixel_scale)
+
+        x = (x - xm).to(u.pix, dpi)
+        y = (y - ym).to(u.pix, dpi)
+
+        rem_x = (rem_x - xm).to(u.pix, dpi)
+        rem_y = (rem_y - ym).to(u.pix, dpi)
+
+        xy_dim = max(np.ceil(x.max()).astype(int).value,
+                     np.ceil(y.max()).astype(int).value)
+
+        if not (xy_dim % 2):
+            xy_dim += 1
+
+        # ------------------------------------------------------------------
+        # Compute (apparent) magnitude table
+        # ------------------------------------------------------------------
+
+        # TODO this should in theory use `x_name='mact'` but that produces
+        #   nonsensical images, despite this mag table being almost identical
+        appmags = {band: abs2app(band, iso.interpolate(band, masses), dist)
+                   for band in iso.filters}
+
+        mag_table = Table(appmags)
+
+        # ------------------------------------------------------------------
+        # Get artpop sources
+        # ------------------------------------------------------------------
+
+        src = artpop.Source(np.c_[x, y], mag_table, xy_dim=xy_dim,
+                            pixel_scale=pixel_scale, **kwargs)
+
+        return (src, (rem_x, rem_y, rem_t)) if return_rem else src

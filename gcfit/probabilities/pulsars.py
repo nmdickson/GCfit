@@ -1,7 +1,7 @@
-from ..util import QuantitySpline, gaussian, div_error, trim_peaks, find_intersections
+from ..util import (QuantitySpline, gaussian, div_error, trim_peaks,
+                    find_intersections)
 
 import scipy.stats
-import scipy as sp
 import numpy as np
 import astropy.units as u
 from astropy.constants import c
@@ -24,15 +24,16 @@ __all__ = [
 
 
 def los_dm(dm, dm_err, DM_mdata):
-    """
-    Compute line-of-sight position and uncertainty based on pulsar DM data.
+    '''Compute line-of-sight position and uncertainty based on pulsar DM data.
 
     Parameters
     ----------
     dm : float
         Dispersion measure of pulsar. Must be in pc/cm^3.
+
     dm_err : float
         Error associated with DM measurement. Must be in pc/cm^3.
+
     DM_mdata : dict
         Cluster-specific DM data, includes mean cluster-DM as well as
         cluster gas-density and uncertainty. Cluster-DM must be in pc/cm^3
@@ -40,15 +41,14 @@ def los_dm(dm, dm_err, DM_mdata):
 
     Returns
     -------
-    position : tuple
+    tuple
         A tuple of floats corresponding to the mean LOS position and
         its uncertainty.
 
     Notes
     -----
     Assumes a uniform gas density within the cluster.
-
-    """
+    '''
 
     ng = DM_mdata["ng"] << u.Unit("1/cm3")
     delta_ng = DM_mdata["Δng"] << u.Unit("1/cm3")
@@ -70,19 +70,72 @@ def los_dm(dm, dm_err, DM_mdata):
 # --------------------------------------------------------------------------
 
 
-def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, eps=1e-3):
-    """
-    Computes probability distribution for a range of line of sight
-    accelerations at projected R : P(az|R)
-    Returns the an array containing the probability distribution and the Pdot/P
-    domain of said distribution
+def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *,
+                      eps=1e-3):
+    r'''Compute the "cluster" component over LOS accelerations at a radius R.
 
-    """
+    Given a model, computes the probability distribution of (line-of-sight)
+    accelerations in the cluster at a projected distance `R` from the cluster
+    centre (representing a pulsar's position), which provides the key
+    component in computing the pulsar likelihoods.
+
+    The cluster acceleration component is complicated by the fact that the
+    3D position of the pulsar cannot be easily determined,
+    and the line-of-sight position of the pulsar within the cluster potential
+    well is unknown, and therefore an entire probability distribution is
+    required, in contrast to the Shklovskii and galactic components.
+
+    Parameters
+    ----------
+    model : gcfit.Model
+        Cluster model used to compute the acceleration probability distribution.
+
+    R : u.Quantity
+        The projected radius from the cluster centre of a given pulsar.
+        Cannot be outside of the cluster tidal radius `model.rt`.
+
+    mass_bin : int
+        The mass bin index to use for this given pulsar. Likely to be that of
+        a tracer mass bin.
+
+    DM, ΔDM : float, optional
+        If DM measurements are known for a given pulsar, can attempt to
+        discern it's line-of-sight position in the cluster using them.
+        See `los_dm` for more details.
+
+    DM_mdata : dict, optional
+        If `DM` is given, a dictionary of corresponding metadata must also be
+        supplied. See `los_dm` for more details.
+
+    eps : float, optional
+        Optionally change the normalization epsilon stop condition. Defaults
+        to 1e-3.
+
+    Returns
+    -------
+    PdotP_domain : u.Quantity
+        Array containing the Pdot-P domain of the probability distribution
+        computed.
+
+    P_PdotP_dist : u.Quantity
+        Array containing the P-Pdot probability distribution of this model at
+        the given `R`.
+
+    Notes
+    -----
+    The probability distribution of the cluster component of acceleration
+    (or Pdot-P) is given by the simple relation:
+
+    .. math::
+        P(a_{\hat{z}}|z) = \frac{dm}{da(z)} = \frac{dm}{dz} \frac{dz}{da(z)}
+                         = \frac{\rho(z)}{\left| \frac{da(z)}{dz} \right|}
+    '''
 
     R = R.to(model.rt.unit)
 
-    if R >= model.rt:
-        raise ValueError(f"Pulsar position outside cluster bound ({model.rt})")
+    if model.rt <= R:
+        msg = f"Pulsar position outside cluster bound ({model.rt})"
+        raise ValueError(msg)
 
     nz = model.nstep
 
@@ -130,10 +183,7 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
     # There are 2 possibilities depending on R:
     # (1) the maximum acceleration occurs within the cluster boundary, or
     # (2) max(a_z) = a_z,t (this happens when R ~ r_t)
-    if len(zmax) > 0:
-        azmax = az_spl(zmax[0])
-    else:
-        azmax = az_spl(z[-1])
+    azmax = az_spl(zmax[0]) if len(zmax) > 0 else az_spl(z[-1])
 
     # Old version here for future reference
     # increment density by 2 order of magnitude smaller than azmax
@@ -151,17 +201,18 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
 
     Δa = np.diff(az_domain)[1]
 
-    # TODO look at the old new_Paz to get the comments for this stuff
-
     if DM is None:
 
         Paz_dist = np.zeros_like(az_domain.value)
         for i, a in enumerate(az_domain):
-
+            # find every z value that has this line-of-sight acceleration
             z_values = find_intersections(az, z, a)
 
+            # probability distribution over acceleration then summed over each
+            # possible z value
             Paz_dist[i] = np.sum(
-                rhoz_spl(z_values).value / np.abs(az_der(z_values).value), axis=0
+                rhoz_spl(z_values).value / np.abs(az_der(z_values).value),
+                axis=0
             )
 
         Paz_dist <<= u.dimensionless_unscaled
@@ -189,7 +240,7 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
 
         # get los pos, err using cluster DM data
         DM_los, DM_los_err = los_dm(DM, ΔDM, DM_mdata)
-        
+
         # Pulsars should alway be within the half-light radius, if not the
         # spline will just return probability of zero anyway so we should be
         # fine. We should log here anyway so that we can make sure this isn't
@@ -201,9 +252,7 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
 
         # set up the LOS spline for the DM based Paz
         DM_gaussian = gaussian(x=z_domain, mu=DM_los, sigma=DM_los_err)
-        DM_los_spl = sp.interpolate.UnivariateSpline(
-            x=z_domain, y=DM_gaussian, s=0, k=3, ext=1
-        )
+        DM_los_spl = QuantitySpline(x=z_domain, y=DM_gaussian, s=0, k=3, ext=1)
 
         # We still only want positive values for the other splines
         az_domain = np.abs(az_domain)
@@ -214,7 +263,8 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
             z_values = find_intersections(az, z, a)
 
             Paz_dist[i] = np.sum(
-                (DM_los_spl(-az_signs[i] * z_values) / abs(az_der(z_values))).value,
+                (DM_los_spl(-az_signs[i] * z_values)
+                 / abs(az_der(z_values))).value,
                 axis=0,
             )
 
@@ -228,7 +278,7 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
             # get the index
             arg_zero = np.argmin(Paz_dist)
             # dont overflow the array
-            if 0 < arg_zero < len(Paz_dist)-1:
+            if 0 < arg_zero < len(Paz_dist) - 1:
                 # interpolate between the two neighbouring points
                 Paz_dist[arg_zero] = (
                     Paz_dist[arg_zero - 1] + Paz_dist[arg_zero + 1]
@@ -265,8 +315,11 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
 
             # If the area is way less than 1, we should just throw an exception
             if norm < 0.9:
-                raise ValueError("Paz failed to integrate to 1.0, too small to"
-                                f"continue. Area: {norm:.6f}")
+                msg = (
+                    "Paz failed to integrate to 1.0, too small to "
+                    f"continue. Area: {norm:.6f}"
+                )
+                raise ValueError(msg)
 
             # Manual normalization
             Paz_dist /= norm
@@ -310,8 +363,11 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
 
             # If the area is way less than 1, we should just throw an exception
             if norm < 0.9:
-                raise ValueError("Paz failed to integrate to 1.0, too small to"
-                                f" continue. Area: {norm:.6f}")
+                msg = (
+                    "Paz failed to integrate to 1.0, too small to "
+                    f"continue. Area: {norm:.6f}"
+                )
+                raise ValueError(msg)
 
             # Manual normalization
             Paz_dist /= norm
@@ -350,13 +406,13 @@ def cluster_component(model, R, mass_bin, DM=None, ΔDM=None, DM_mdata=None, *, 
 
 
 def galactic_component(lat, lon, D):
-    '''b, l, d'''
+    """Compute the "galactic" component of pulsar Pdot-P, using the
+    `MilkyWayPotential2022` potential from `gala`."""
     import gala.potential as pot
-
     from astropy.coordinates import SkyCoord
 
     # Milky Way Potential
-    mw = pot.BovyMWPotential2014()
+    mw = pot.MilkyWayPotential2022()
 
     # Pulsar position in galactocentric coordinates
     crd = SkyCoord(b=lat, l=lon, distance=D, frame='galactic')
@@ -382,9 +438,7 @@ def galactic_component(lat, lon, D):
 
 
 def shklovskii_component(pm, D):
-    '''
-    pm in angular speed (mas/yr)
-    '''
+    '''Compute the "Shklovskii" (proper motion) component of pulsar Pdot-P.'''
     pm = pm.to("1/s", u.dimensionless_angles())
 
     D = D.to('m')
@@ -399,19 +453,45 @@ def shklovskii_component(pm, D):
 # --------------------------------------------------------------------------
 
 
-def field_Pdot_KDE(*, pulsar_db='field_msp.dat', corrected=True):
-    '''Return a gaussian kde
-    psrcat -db_file psrcat.db -c "p0 p1 p1_i GB GL Dist" -l "p0 < 0.1 &&
-        p1 > 0 && p1_i > 0 && ! assoc(GC)" -x > field_msp.dat
-    '''
+def field_Pdot_KDE(*, pulsar_db='field_msp.dat'):
+    """Return a gaussian kde representing the galactic field pulsar P-Pdot.
+
+    Computes a 2D gaussian KDE based on the period and period derivative
+    distribution of galactic field millisecond pulsars, which can then be used
+    to slice out a probability distribution of the intrinsic spin-down
+    Pdot given a period P.
+
+    This is a required component for all pulsar likelihoods, under the
+    assumption that the field and cluster pulsars share a similar intrinsic
+    distribution.
+    This KDE should be pre-constructed (by `valid_likelihoods`), and it is
+    unlikely users need to call this function directly.
+
+    Pulsar data is retrieved from the ATNF pulsar catalogue using the
+    `psrcat` program. The data can be found in the package resources, and
+    can be recreated using the command:
+    `psrcat -db_file psrcat.db -c "p0 p1 p1_i GB GL Dist" -l "p0 < 0.1 &&
+    p1 > 0 && p1_i > 0 && ! assoc(GC)" -x > field_msp.dat`
+
+    Parameters
+    ----------
+    pulsar_db : str, optional
+        Name of the pulsar data file. Do not change unless you know what you
+        are doing and have supplied your own data file.
+
+    Returns
+    -------
+    scipy.stats.gaussian_kde
+        The 2D Gaussian KDE representing the intrinsic spin-down distributions
+        of galactic field pulsars.
+    """
     from ..util.data import _open_resources
 
     # Get field pulsars data
 
-    with _open_resources() as datadir:
-        pulsar_db = pathlib.Path(f"{datadir}/{pulsar_db}")
-        cols = (0, 3, 6, 7, 8, 9)
-        P, Pdot, Pdot_pm, lat, lon, D = np.genfromtxt(pulsar_db, usecols=cols).T
+    pulsar_db = pathlib.Path(f"{_open_resources()}/{pulsar_db}")
+    cols = (0, 3, 6, 7, 8, 9)
+    P, Pdot, Pdot_pm, lat, lon, D = np.genfromtxt(pulsar_db, usecols=cols).T
 
     lat <<= u.deg
     lon <<= u.deg
@@ -421,8 +501,10 @@ def field_Pdot_KDE(*, pulsar_db='field_msp.dat', corrected=True):
     Pdot_int = Pdot_pm - galactic_component(*(lat, lon), D).value
 
     P = np.log10(P)
-    # TODO would be nice to get rid of the warning that happens here everytime
-    Pdot_int = np.log10(Pdot_int)
+
+    # catch the warning here for the log10
+    with np.errstate(invalid="ignore"):
+        Pdot_int = np.log10(Pdot_int)
 
     # TODO some Pdot_pm < Pdot_gal; this may or may not be physical, need check
     finite = np.isfinite(Pdot_int)

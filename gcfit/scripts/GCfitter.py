@@ -95,8 +95,6 @@ def main():
     # Common arguments to all samplers
     # ----------------------------------------------------------------------
 
-    # TODO make all defaults here match defaults in main functions
-
     shared_parser = argparse.ArgumentParser(add_help=False)
 
     parallel_group = shared_parser.add_mutually_exclusive_group()
@@ -149,9 +147,9 @@ def main():
 
     parser_MCMC = subparsers.add_parser('MCMC', parents=[shared_parser])
 
-    parser_MCMC.add_argument('-N', '--Niters', default=2000, type=pos_int,
+    parser_MCMC.add_argument('-N', '--Niters', required=True, type=pos_int,
                              help='Number of sampling iterations')
-    parser_MCMC.add_argument('--Nwalkers', default=150, type=pos_int,
+    parser_MCMC.add_argument('--Nwalkers', required=True, type=pos_int,
                              help='Number of walkers for MCMC sampler')
 
     parser_MCMC.add_argument('--moves', type=str.lower, nargs='*',
@@ -195,17 +193,20 @@ def main():
                                   'are met')
     parser_nest.add_argument('--init-maxiter', default=None, type=pos_int,
                              help='Maximum number of iterations allowed in the '
-                                  'baseline run')
+                                  'baseline run. Default is no limit')
     parser_nest.add_argument('--N-per-batch', default=100, type=pos_int,
                              dest='Nlive_per_batch',
-                             help='Number of live points to add each batch')
-    parser_nest.add_argument('--bound-type', default='balls',
+                             help='Number of live points to add each batch. '
+                                  'See dynesty for info on defaults')
+    parser_nest.add_argument('--bound-type', default='multi',
                              choices=bound_choices,
                              help='Method used to bound sampling on the prior')
     parser_nest.add_argument('--sample-type', default='auto',
                              choices=sample_choices,
                              help='Method used to sample uniformly within the '
                                   'likelihood, based on the provided bounds')
+    parser_nest.add_argument('--plat-wt-func', action='store_true',
+                             help="Use custom `util.plateau_weight_function`")
 
     parser_nest.set_defaults(fit_func=gcfit.nested_fit)
 

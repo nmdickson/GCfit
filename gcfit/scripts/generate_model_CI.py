@@ -42,6 +42,21 @@ def main():
     parser.add_argument('--overwrite', action='store_true',
                         help='Overwrite saved CIs if already exist. Be careful')
 
+    parser.add_argument('--mask', nargs=3, default=False,
+                        metavar=('PARAM', 'LOWER_LIM', 'UPPER_LIM'),
+                        help='Apply a mask to each run based on a param')
+
+    parser.add_argument('-o', '--output', nargs='+', default=None,
+                        help='Alternative files only for saving CI outputs')
+
+    parser.add_argument('--sampler', default='nested',
+                        choices=['nested', 'mcmc'],
+                        help='Which sampler was used for the run(s)')
+
+    parser.add_argument('--MF-samples', default=5000, type=pos_int,
+                        help='Number of samples to use when integrating mass '
+                             'functions')
+
     parser.add_argument('--debug', action='store_true')
 
     args = parser.parse_args()
@@ -62,8 +77,21 @@ def main():
     # Generate Models
     # ----------------------------------------------------------------------
 
-    rc = analysis.RunCollection.from_files(args.filenames)
+    rc = analysis.RunCollection.from_files(args.filenames, sampler=args.sampler)
+
+    for run in rc:
+        run.obs._MF_M_samples = args.MF_samples
+
+    if args.mask:
+        mask_prm = args.mask[0]
+        mask_dnlim, mask_uplim = float(args.mask[1]), float(args.mask[2])
+
+        for run in rc:
+            run.slice_on_param(mask_prm, mask_dnlim, mask_uplim)
 
     mc = rc.get_CImodels(N=args.N, Nprocesses=args.Ncpu, load=False)
 
-    mc.save(args.filenames, overwrite=args.overwrite)
+    if args.output is None:
+        args.output = [rv._filename for rv in rc]
+
+    mc.save(args.output, overwrite=args.overwrite)

@@ -5,7 +5,6 @@ from ..core.data import DEFAULT_THETA, FittableModel
 
 import numpy as np
 import astropy.units as u
-import scipy.interpolate as interp
 
 import logging
 
@@ -29,9 +28,9 @@ __all__ = [
 
 # TODO this messes up the error messages sometimes (when .get(model) fails)
 def _angular_units(func):
-    '''decorator for supporting all angular unit equivalencies,
-    for likelihoods
-    assumes 'model' will be first arg, or in kwargs
+    '''Decorator for supporting all angular unit equivalencies.
+    For use in wrapping likelihood functions, therefore assumes 'model'
+    will be first arg, or in kwargs.
     '''
     import functools
 
@@ -54,7 +53,7 @@ def _angular_units(func):
 @_angular_units
 def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
                            use_DM=False, *, mass_bin=None, hyperparams=False):
-    '''Compute the log likelihood of pulsar spin period derivatives
+    r'''Compute the loglikelihood of pulsar spin period derivatives.
 
     Computes the log likelihood component of a cluster's pulsar's spin
     period derivatives, evaluating the observed pulsar timing solutions
@@ -62,14 +61,14 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
     field, the pulsars intrinsic spin-down, the proper-motion contribution and
     the galactic potential.
 
-    parameters
+    Parameters
     ----------
     model : gcfit.FittableModel
-        Cluster model use to compute probability distribution
+        Cluster model used to compute probability distribution.
 
     pulsars : gcfit.core.data.Dataset
         Pulsars dataset used to compute probability distribution and evaluate
-        log likelihood
+        log likelihood.
 
     Pdot_kde : scipy.stats.gaussian_kde
         Gaussian KDE of the galactic field pulsars Pdot-P distribution, from
@@ -77,31 +76,43 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
         None, will generate at runtime.
 
     cluster_μ : float
-        Total cluster proper motion, in mas/yr
+        Total cluster proper motion, in mas/yr.
 
     coords : 2-tuple of float
-        Cluster Galactic (Latitude, Longitude), in degrees
+        Cluster Galactic (Latitude, Longitude), in degrees.
 
     use_DM : bool, optional
-        Whether to use dispersion measure data in pulsar likelihoods
+        Whether to use dispersion measure data in pulsar likelihoods.
 
     mass_bin : int, optional
         Index of `model.mj` mass bin to use in all calculations.
-        If None (default), attempts to read 'm' from `pulsars.mdata`, else -1
+        If None (default), attempts to read 'm' from `pulsars.mdata`, else -1.
 
     hyperparams : bool, optional
-        Not implemented
+        Not implemented.
 
     Returns
     -------
     float
-        Log likelihood value
+        Log likelihood value.
 
     See Also
     --------
-    likelihood_pulsar_orbital : Binary pulsar orbital period likelihood
-    gcfit.probabilities.pulsars : Module containing all pulsar prob. components
+    likelihood_pulsar_orbital : Binary pulsar orbital period likelihood.
+    gcfit.probabilities.pulsars : Module containing all pulsar prob. components.
 
+    Notes
+    -----
+    The combined timing solutions for pulsars embedded in clusters, which
+    is used alongside the model acceleration field to compute this likelihood,
+    is given by the combination of components:
+
+    .. math::
+
+        \left(\frac{\dot{P}}{P}\right)_{\rm{obs}}
+            = \left(\frac{\dot{P}}{P}\right)_{\rm{int}}
+            + \frac{a_{\rm{clust}}}{c}
+            + \frac{a_{\rm{gal}}}{c} + \frac{\mu^2 D}{c}
     '''
 
     # ----------------------------------------------------------------------
@@ -139,18 +150,63 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
 
         R = pulsars['r'][i].to(u.pc)
 
-        if R >= model.rt:
+        if model.rt <= R:
 
             mssg = (f"Pulsar {pulsars['id'][i]} is outside cluster truncation "
                     f"radius {model.rt}")
             logging.debug(mssg)
 
-            return np.NINF
+            return -np.inf
 
         P = pulsars['P'][i].to('s')
 
         Pdot_meas = pulsars['Pdot'][i]
         ΔPdot_meas = np.abs(pulsars['ΔPdot'][i])
+
+        # ------------------------------------------------------------------
+        # Compute the Shklovskii (proper motion) effect component
+        # ------------------------------------------------------------------
+
+        cluster_μ <<= u.Unit("mas/yr")
+
+        PdotP_pm = shklovskii_component(cluster_μ, model.d)
+
+        # ------------------------------------------------------------------
+        # Compute the galactic potential component
+        # ------------------------------------------------------------------
+
+        PdotP_gal = galactic_component(*(coords * u.deg), D=model.d)
+
+        # ------------------------------------------------------------------
+        # Create a slice of the P-Pdot space, along this pulsars P
+        # ------------------------------------------------------------------
+
+        lg_P = np.log10(P / P.unit)
+
+        P_grid, Pdot_int_domain = np.mgrid[lg_P:lg_P:1j, Pdot_min:Pdot_max:200j]
+
+        P_grid, Pdot_int_domain = P_grid.ravel(), Pdot_int_domain.ravel()
+
+        # ------------------------------------------------------------------
+        # Compute the Pdot_int distribution from the KDE
+        # ------------------------------------------------------------------
+
+        Pdot_int_prob = Pdot_kde(np.vstack([P_grid, Pdot_int_domain]))
+
+        Pdot_int_spl = util.QuantitySpline(
+            Pdot_int_domain, Pdot_int_prob, k=1, s=0, ext=1
+        )
+
+        Pdot_int_prob = util.RV_transform(
+            domain=10**Pdot_int_domain,
+            f_X=Pdot_int_spl,
+            h=np.log10,
+            h_prime=lambda y: (1 / (np.log(10) * y)),
+        )
+
+        Pdot_int_spl = util.QuantitySpline(
+            10**Pdot_int_domain, Pdot_int_prob, k=1, s=0, ext=1
+        )
 
         # ------------------------------------------------------------------
         # Compute the cluster component distribution, from the model
@@ -178,17 +234,18 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
             # The cluster component shouldn't be crashing nearly as often now,
             # should only happen when Paz fails to integrate to 1.0
             mssg = f"""
-            Pulsar `cluster_component` failed with params: "
-            {model.theta=}, {R=}, {mass_bin=}, {DM=}, with error:
+            Pulsar `cluster_component` failed with params:
+            {model.theta=}, {R=}, {mass_bin=}, DM={DM if use_DM else None},
+            with error:
             """
             logging.warning(mssg, exc_info=err)
 
-            return np.NINF
+            return -np.inf
 
         Pdot_domain = (P * PdotP_domain).decompose()
 
         # linear to avoid effects around asymptote
-        Pdot_c_spl = interp.UnivariateSpline(
+        Pdot_c_spl = util.QuantitySpline(
             Pdot_domain, PdotP_c_prob, k=1, s=0, ext=1
         )
 
@@ -196,14 +253,19 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
         # Set up the equally-spaced linear convolution domain
         # ------------------------------------------------------------------
 
-        # TODO both 5000 and 1e-18 need to be computed dynamically
-        #   5000 to be enough steps to sample the gaussian and int peaks
-        #   1e-18 to be far enough for the int distribution to go to zero
-        #   Both balanced so as to use way too much memory unnecessarily
-        #   Must be symmetric, to avoid bound effects
+        # Greater of 5σ, 250% past Pdot_c peak, and observed Pdot, accounting
+        # for proper motion and galactic potential
+        max_observed = (Pdot_meas + PdotP_pm * P + PdotP_gal * P).to_value(
+            u.Unit("s/s")
+        )[0]
+
+        domain_max = 2.5 * np.max(
+            [5 * ΔPdot_meas, np.abs(Pdot_domain).max(), np.abs(max_observed)]
+        )
+
+        lin_domain = np.linspace(0., domain_max, 5_000 // 2)
 
         # mirrored/starting at zero so very small gaussians become the δ-func
-        lin_domain = np.linspace(0., 1e-18, 5_000 // 2)
         lin_domain = np.concatenate((np.flip(-lin_domain[1:]), lin_domain))
 
         # ------------------------------------------------------------------
@@ -212,77 +274,28 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
 
         # TODO if width << Pint width, maybe don't bother with first conv.
 
-        # NOTE: this now uses the lin_domain instead of the PdotP domain
-        # in order to accommodate pulsar X who's error spline was being cut
-        # too soon, giving zero probability to valid regions.
-        # if lin_domain gets dynamically computed in the future, make sure it's
-        # large enough to accommodate pulsar X.
         err = util.gaussian(x=lin_domain, sigma=ΔPdot_meas, mu=0)
-
-        # ------------------------------------------------------------------
-        # Create a slice of the P-Pdot space, along this pulsars P
-        # ------------------------------------------------------------------
-
-        lg_P = np.log10(P / P.unit)
-
-        P_grid, Pdot_int_domain = np.mgrid[lg_P:lg_P:1j, Pdot_min:Pdot_max:200j]
-
-        P_grid, Pdot_int_domain = P_grid.ravel(), Pdot_int_domain.ravel()
-
-        # ------------------------------------------------------------------
-        # Compute the Pdot_int distribution from the KDE
-        # ------------------------------------------------------------------
-
-        Pdot_int_prob = Pdot_kde(np.vstack([P_grid, Pdot_int_domain]))
-
-        Pdot_int_spl = interp.UnivariateSpline(
-            Pdot_int_domain, Pdot_int_prob, k=1, s=0, ext=1
-        )
-
-        Pdot_int_prob = util.RV_transform(
-            domain=10**Pdot_int_domain, f_X=Pdot_int_spl,
-            h=np.log10, h_prime=lambda y: (1 / (np.log(10) * y))
-        )
-
-        Pdot_int_spl = interp.UnivariateSpline(
-            10**Pdot_int_domain, Pdot_int_prob, k=1, s=0, ext=1
-        )
 
         # ------------------------------------------------------------------
         # Convolve the different distributions
         # ------------------------------------------------------------------
 
-        conv1 = np.convolve(err, Pdot_c_spl(lin_domain), 'same')
+        conv1 = np.convolve(err, Pdot_c_spl(lin_domain), "same")
 
-        conv2 = np.convolve(conv1, Pdot_int_spl(lin_domain), 'same')
-
-        # Normalize
-        conv2 /= interp.UnivariateSpline(
-            lin_domain, conv2, k=1, s=0, ext=1
-        ).integral(-np.inf, np.inf)
-
-        # ------------------------------------------------------------------
-        # Compute the Shklovskii (proper motion) effect component
-        # ------------------------------------------------------------------
-
-        cluster_μ <<= u.Unit("mas/yr")
-
-        PdotP_pm = shklovskii_component(cluster_μ, model.d)
-
-        # ------------------------------------------------------------------
-        # Compute the galactic potential component
-        # ------------------------------------------------------------------
-
-        PdotP_gal = galactic_component(*(coords * u.deg), D=model.d)
+        conv2 = np.convolve(conv1, Pdot_int_spl(lin_domain), "same")
 
         # ------------------------------------------------------------------
         # Interpolate the likelihood value from the overall distribution
         # ------------------------------------------------------------------
 
-        prob_dist = interp.interp1d(
-            (lin_domain / P) + PdotP_pm + PdotP_gal, conv2,
-            assume_sorted=True, bounds_error=False, fill_value=0.0
-        )
+        PdotP_tot = ((lin_domain / P) + PdotP_pm + PdotP_gal).to_value(1 / u.s)
+
+        # normalize conv2 to the PdotP_tot domain
+        conv2 /= util.QuantitySpline(
+            PdotP_tot, conv2, k=1, s=0, ext=1
+        ).integral(-np.inf, np.inf)
+
+        prob_dist = util.QuantitySpline(PdotP_tot, conv2, k=1, s=0, ext=1)
 
         probs[i] = prob_dist((Pdot_meas / P).decompose())
 
@@ -293,7 +306,7 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
     logprobs = np.log(probs)
 
     # Replace NaNs with -inf
-    logprobs[np.isnan(logprobs)] = np.NINF
+    logprobs[np.isnan(logprobs)] = -np.inf
 
     return np.sum(logprobs)
 
@@ -301,48 +314,60 @@ def likelihood_pulsar_spin(model, pulsars, Pdot_kde, cluster_μ, coords,
 @_angular_units
 def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
                               *, mass_bin=None, hyperparams=False):
-    '''Compute the log likelihood of binary pulsar orbital period derivatives
+    r'''Compute the loglikelihood of binary pulsar orbital period derivatives.
 
     Computes the log likelihood component of a cluster's binary pulsar's orbital
     period derivatives, evaluating the observed orbital timing solutions
     against the combined probability distributions of the clusters acceleration
     field, the proper-motion contribution and the galactic potential.
 
-    parameters
+    Parameters
     ----------
     model : gcfit.FittableModel
-        Cluster model use to compute probability distribution
+        Cluster model used to compute probability distribution.
 
     pulsars : gcfit.core.data.Dataset
         Pulsars dataset used to compute probability distribution and evaluate
-        log likelihood
+        log likelihood.
 
     cluster_μ : float
-        Total cluster proper motion, in mas/yr
+        Total cluster proper motion, in mas/yr.
 
     coords : 2-tuple of float
-        Cluster Galactic (Latitude, Longitude), in degrees
+        Cluster Galactic (Latitude, Longitude), in degrees.
 
     use_DM : bool, optional
-        Whether to use dispersion measure data in pulsar likelihoods
+        Whether to use dispersion measure data in pulsar likelihoods.
 
     mass_bin : int, optional
         Index of `model.mj` mass bin to use in all calculations.
-        If None (default), attempts to read 'm' from `pulsars.mdata`, else -1
+        If None (default), attempts to read 'm' from `pulsars.mdata`, else -1.
 
     hyperparams : bool, optional
-        Not implemented
+        Not implemented.
 
     Returns
     -------
     float
-        Log likelihood value
+        Log likelihood value.
 
     See Also
     --------
-    likelihood_pulsar_spin : Pulsar spin period likelihood
-    gcfit.probabilities.pulsars : Module containing all pulsar prob. components
+    likelihood_pulsar_spin : Pulsar spin period likelihood.
+    gcfit.probabilities.pulsars : Module containing all pulsar prob. components.
 
+    Notes
+    -----
+    The combined timing solutions for pulsars embedded in clusters, which
+    is used alongside the model acceleration field to compute this likelihood,
+    is given by the combination of components:
+
+    .. math::
+
+        \left(\frac{\dot{P}}{P}\right)_{\rm{obs}}
+            = \left(\frac{\dot{P}}{P}\right)_{\rm{int}}
+            + \frac{a_{\rm{clust}}}{c}
+            + \frac{a_{\rm{gal}}}{c} + \frac{\mu^2 D}{c}
     '''
 
     # ----------------------------------------------------------------------
@@ -371,18 +396,32 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
 
         R = pulsars['r'][i].to(u.pc)
 
-        if R >= model.rt:
+        if model.rt <= R:
 
             mssg = (f"Pulsar {pulsars['id'][i]} is outside cluster truncation "
                     f"radius {model.rt}")
             logging.debug(mssg)
 
-            return np.NINF
+            return -np.inf
 
         Pb = pulsars['Pb'][i].to('s')
 
         Pbdot_meas = pulsars['Pbdot'][i]
         ΔPbdot_meas = pulsars['ΔPbdot'][i]
+
+        # ------------------------------------------------------------------
+        # Compute the Shklovskii (proper motion) effect component
+        # ------------------------------------------------------------------
+
+        cluster_μ <<= u.Unit("mas/yr")
+
+        PdotP_pm = shklovskii_component(cluster_μ, model.d)
+
+        # ------------------------------------------------------------------
+        # Compute the galactic potential component
+        # ------------------------------------------------------------------
+
+        PdotP_gal = galactic_component(*(coords * u.deg), D=model.d)
 
         # ------------------------------------------------------------------
         # Compute the cluster component distribution, from the model
@@ -411,16 +450,17 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
             # should only happen when Paz fails to integrate to 1.0
             mssg = f"""
             Pulsar `cluster_component` failed with params: "
-            {model.theta=}, {R=}, {mass_bin=}, {DM=}, with error:
+            {model.theta=}, {R=}, {mass_bin=}, DM={DM if use_DM else None},
+            with error:
             """
             logging.warning(mssg, exc_info=err)
 
-            return np.NINF
+            return -np.inf
 
         Pdot_domain = (Pb * PdotP_domain).decompose()
 
         # linear to avoid effects around asymptote
-        Pdot_c_spl = interp.UnivariateSpline(
+        Pdot_c_spl = util.QuantitySpline(
             Pdot_domain, PdotP_c_prob, k=1, s=0, ext=1
         )
 
@@ -428,8 +468,19 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
         # Set up the equally-spaced linear convolution domain
         # ------------------------------------------------------------------
 
+        # Greater of 5σ, 250% past Pdot_c peak and observed Pdot, accounting
+        # for proper motion and galactic potential
+        max_observed = (Pbdot_meas + PdotP_pm * Pb + PdotP_gal * Pb).to_value(
+            u.Unit("s/s")
+        )[0]
+
+        domain_max = 2.5 * np.max(
+            [5 * ΔPbdot_meas, np.abs(Pdot_domain).max(), np.abs(max_observed)]
+        )
+
+        lin_domain = np.linspace(0., domain_max, 5_000 // 2)
+
         # mirrored/starting at zero so very small gaussians become the δ-func
-        lin_domain = np.linspace(0., 1e-11, 5_000 // 2)
         lin_domain = np.concatenate((np.flip(-lin_domain[1:]), lin_domain))
 
         # ------------------------------------------------------------------
@@ -438,8 +489,6 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
 
         err = util.gaussian(x=lin_domain, sigma=ΔPbdot_meas, mu=0)
 
-        # err_spl = interp.UnivariateSpline(Pdot_domain, err, k=1, s=0, ext=1)
-
         # ------------------------------------------------------------------
         # Convolve the different distributions
         # ------------------------------------------------------------------
@@ -447,33 +496,18 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
         # conv = np.convolve(err, PdotP_c_prob, 'same')
         conv = np.convolve(err, Pdot_c_spl(lin_domain), 'same')
 
-        # Normalize
-        conv /= interp.UnivariateSpline(
-            lin_domain, conv, k=1, s=0, ext=1
-        ).integral(-np.inf, np.inf)
-
-        # ------------------------------------------------------------------
-        # Compute the Shklovskii (proper motion) effect component
-        # ------------------------------------------------------------------
-
-        cluster_μ <<= u.Unit("mas/yr")
-
-        PdotP_pm = shklovskii_component(cluster_μ, model.d)
-
-        # ------------------------------------------------------------------
-        # Compute the galactic potential component
-        # ------------------------------------------------------------------
-
-        PdotP_gal = galactic_component(*(coords * u.deg), D=model.d)
-
         # ------------------------------------------------------------------
         # Interpolate the likelihood value from the overall distribution
         # ------------------------------------------------------------------
 
-        prob_dist = interp.interp1d(
-            (lin_domain / Pb) + PdotP_pm + PdotP_gal, conv,
-            assume_sorted=True, bounds_error=False, fill_value=0.0
+        PdotP_tot = ((lin_domain / Pb) + PdotP_pm + PdotP_gal).to_value(1 / u.s)
+
+        # normalize conv to the PdotP_tot domain
+        conv /= util.QuantitySpline(PdotP_tot, conv, k=1, s=0, ext=1).integral(
+            -np.inf, np.inf
         )
+
+        prob_dist = util.QuantitySpline(PdotP_tot, conv, k=1, s=0, ext=1)
 
         probs[i] = prob_dist(Pbdot_meas / Pb)
 
@@ -484,7 +518,7 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
     logprobs = np.log(probs)
 
     # Replace NaNs with -inf
-    logprobs[np.isnan(logprobs)] = np.NINF
+    logprobs[np.isnan(logprobs)] = -np.inf
 
     return np.sum(logprobs)
 
@@ -492,7 +526,7 @@ def likelihood_pulsar_orbital(model, pulsars, cluster_μ, coords, use_DM=False,
 @_angular_units
 def likelihood_number_density(model, ndensity, *,
                               mass_bin=None, hyperparams=False):
-    r'''Compute the log likelihood of the cluster number density profile
+    r'''Compute the loglikelihood of the cluster number density profile.
 
     Computes the log likelihood component of a cluster's number density profile,
     assuming a Gaussian likelihood. The model profile is scaled to fit the shape
@@ -505,27 +539,27 @@ def likelihood_number_density(model, ndensity, *,
     observations before calculation of the likelihood. By default, will be
     assumed to have same units as Σ.
 
-    parameters
+    Parameters
     ----------
     model : gcfit.FittableModel
-        Cluster model use to compute probability distribution
+        Cluster model used to compute probability distribution.
 
     ndensity : gcfit.core.data.Dataset
         Number density profile dataset used to compute probability distribution
-        and evaluate log likelihood
+        and evaluate log likelihood.
 
     mass_bin : int, optional
         Index of `model.mj` mass bin to use in all calculations.
         If None (default), attempts to read 'm' from `pulsars.mdata`, else
-        assumes
+        assumes.
 
     hyperparams : bool, optional
-        Whether to include bayesian hyperparameters
+        Whether to include bayesian hyperparameters.
 
     Returns
     -------
     float
-        Log likelihood value
+        Log likelihood value.
 
     Notes
     -----
@@ -545,7 +579,6 @@ def likelihood_number_density(model, ndensity, *,
         and Douglas, K. E. K., “On the black hole content and initial mass
         function of 47 Tuc”, Monthly Notices of the Royal Astronomical Society,
         vol. 491, no. 1, pp. 113–128, 2020.
-
     '''
 
     if mass_bin is None:
@@ -589,40 +622,39 @@ def likelihood_number_density(model, ndensity, *,
 
 @_angular_units
 def likelihood_pm_tot(model, pm, *, mass_bin=None, hyperparams=False):
-    r'''Compute the log likelihood of the cluster total proper motion dispersion
+    r'''Compute the loglikelihood of the cluster total proper motion dispersion.
 
     Computes the log likelihood component of a cluster's proper motion
     dispersion profile for the total proper motion, that is, the combined radial
     and tangential components, assuming a gaussian likelihood.
 
-    parameters
+    Parameters
     ----------
     model : gcfit.FittableModel
-        Cluster model use to compute probability distribution
+        Cluster model used to compute probability distribution.
 
     pm : gcfit.core.data.Dataset
         Proper motion dispersions profile dataset used to compute probability
-        distribution and evaluate log likelihood
+        distribution and evaluate log likelihood.
 
     mass_bin : int, optional
         Index of `model.mj` mass bin to use in all calculations.
         If None (default), attempts to read 'm' from `pulsars.mdata`, else
-        uses largest of the main sequence bins, given by `model.nms`
+        uses largest of the main sequence bins, given by `model.nms`.
 
     hyperparams : bool, optional
-        Whether to include bayesian hyperparameters
+        Whether to include bayesian hyperparameters.
 
     Returns
     -------
     float
-        Log likelihood value
+        Log likelihood value.
 
     Notes
     -----
     The "total" combined proper motion is given by the averaged vector:
 
     .. math:: PM_{tot} = \sqrt{\frac{(PM_{T}^2 + PM_{R}^2)}{2}}
-
     '''
 
     if mass_bin is None:
@@ -655,40 +687,39 @@ def likelihood_pm_tot(model, pm, *, mass_bin=None, hyperparams=False):
 
 @_angular_units
 def likelihood_pm_ratio(model, pm, *, mass_bin=None, hyperparams=False):
-    r'''Compute the log likelihood of the cluster proper motion dispersion ratio
+    r'''Compute the loglikelihood of the cluster proper motion dispersion ratio.
 
     Computes the log likelihood component of a cluster's proper motion
     dispersion anisotropy profile as the ratio of the tangential to radial
     dispersions, assuming a gaussian likelihood.
 
-    parameters
+    Parameters
     ----------
     model : gcfit.FittableModel
-        Cluster model use to compute probability distribution
+        Cluster model used to compute probability distribution.
 
     pm : gcfit.core.data.Dataset
         Proper motion dispersions profile dataset used to compute probability
-        distribution and evaluate log likelihood
+        distribution and evaluate log likelihood.
 
     mass_bin : int, optional
         Index of `model.mj` mass bin to use in all calculations.
         If None (default), attempts to read 'm' from `pulsars.mdata`, else
-        uses largest of the main sequence bins, given by `model.nms`
+        uses largest of the main sequence bins, given by `model.nms`.
 
     hyperparams : bool, optional
-        Whether to include bayesian hyperparameters
+        Whether to include bayesian hyperparameters.
 
     Returns
     -------
     float
-        Log likelihood value
+        Log likelihood value.
 
     Notes
     -----
     The proper motion ratio, or anisotropy measure, is given by the fraction:
 
     .. math:: PM_{ratio} = \sqrt{\frac{PM_{T}^2}{PM_{R}^2}}
-
     '''
     # TODO is there some way we could be using model.betaj instead of this frac
 
@@ -723,34 +754,33 @@ def likelihood_pm_ratio(model, pm, *, mass_bin=None, hyperparams=False):
 
 @_angular_units
 def likelihood_pm_T(model, pm, *, mass_bin=None, hyperparams=False):
-    '''Compute the log likelihood of the cluster tangential proper motion
+    '''Compute the loglikelihood of the cluster tangential proper motion.
 
     Computes the log likelihood component of a cluster's proper motion
     dispersion profile for the tangential proper motion, in relation to the
     cluster centre, assuming a gaussian likelihood.
 
-    parameters
+    Parameters
     ----------
     model : gcfit.FittableModel
-        Cluster model use to compute probability distribution
+        Cluster model used to compute probability distribution.
 
     pm : gcfit.core.data.Dataset
         Proper motion dispersions profile dataset used to compute probability
-        distribution and evaluate log likelihood
+        distribution and evaluate log likelihood.
 
     mass_bin : int, optional
         Index of `model.mj` mass bin to use in all calculations.
         If None (default), attempts to read 'm' from `pulsars.mdata`, else
-        uses largest of the main sequence bins, given by `model.nms`
+        uses largest of the main sequence bins, given by `model.nms`.
 
     hyperparams : bool, optional
-        Whether to include bayesian hyperparameters
+        Whether to include bayesian hyperparameters.
 
     Returns
     -------
     float
-        Log likelihood value
-
+        Log likelihood value.
     '''
 
     if mass_bin is None:
@@ -782,34 +812,33 @@ def likelihood_pm_T(model, pm, *, mass_bin=None, hyperparams=False):
 
 @_angular_units
 def likelihood_pm_R(model, pm, *, mass_bin=None, hyperparams=False):
-    '''Compute the log likelihood of the cluster radial proper motion
+    '''Compute the loglikelihood of the cluster radial proper motion.
 
     Computes the log likelihood component of a cluster's proper motion
     dispersion profile for the radial proper motion, in relation to the
     cluster centre, assuming a gaussian likelihood.
 
-    parameters
+    Parameters
     ----------
     model : gcfit.FittableModel
-        Cluster model use to compute probability distribution
+        Cluster model used to compute probability distribution.
 
     pm : gcfit.core.data.Dataset
         Proper motion dispersions profile dataset used to compute probability
-        distribution and evaluate log likelihood
+        distribution and evaluate log likelihood.
 
     mass_bin : int, optional
         Index of `model.mj` mass bin to use in all calculations.
         If None (default), attempts to read 'm' from `pulsars.mdata`, else
-        uses largest of the main sequence bins, given by `model.nms`
+        uses largest of the main sequence bins, given by `model.nms`.
 
     hyperparams : bool, optional
-        Whether to include bayesian hyperparameters
+        Whether to include bayesian hyperparameters.
 
     Returns
     -------
     float
-        Log likelihood value
-
+        Log likelihood value.
     '''
 
     if mass_bin is None:
@@ -841,34 +870,33 @@ def likelihood_pm_R(model, pm, *, mass_bin=None, hyperparams=False):
 
 @_angular_units
 def likelihood_LOS(model, vlos, *, mass_bin=None, hyperparams=False):
-    '''Compute the log likelihood of the cluster LOS velocity dispersion
+    '''Compute the loglikelihood of the cluster LOS velocity dispersion.
 
     Computes the log likelihood component of a cluster's velocity
     dispersion profile for the line-of-sight velocities, assuming a gaussian
     likelihood.
 
-    parameters
+    Parameters
     ----------
     model : gcfit.FittableModel
-        Cluster model use to compute probability distribution
+        Cluster model used to compute probability distribution.
 
     vlos : gcfit.core.data.Dataset
         Velocity dispersions profile dataset used to compute probability
-        distribution and evaluate log likelihood
+        distribution and evaluate log likelihood.
 
     mass_bin : int, optional
         Index of `model.mj` mass bin to use in all calculations.
         If None (default), attempts to read 'm' from `pulsars.mdata`, else
-        uses largest of the main sequence bins, given by `model.nms`
+        uses largest of the main sequence bins, given by `model.nms`.
 
     hyperparams : bool, optional
-        Whether to include bayesian hyperparameters
+        Whether to include bayesian hyperparameters.
 
     Returns
     -------
     float
-        Log likelihood value
-
+        Log likelihood value.
     '''
 
     if mass_bin is None:
@@ -899,8 +927,8 @@ def likelihood_LOS(model, vlos, *, mass_bin=None, hyperparams=False):
 
 
 @_angular_units
-def likelihood_mass_func(model, mf, field, *, hyperparams=False):
-    r'''Compute the log likelihood of the cluster's PDMF
+def likelihood_mass_func(model, mf, fields, *, hyperparams=False):
+    r'''Compute the loglikelihood of the cluster's PDMF.
 
     Computes the log likelihood component of a cluster's present day mass
     function (PDMF) distribution of visible stars. Radial profiles of the
@@ -912,26 +940,32 @@ def likelihood_mass_func(model, mf, field, *, hyperparams=False):
     A Gaussian likelihood is assumed, with a δN Poisson error accompanying the
     mass function nuisance parameter `F`.
 
-    parameters
+    Parameters
     ----------
     model : gcfit.FittableModel
-        Cluster model use to compute probability distribution
+        Cluster model used to compute probability distribution.
 
     mf : gcfit.core.data.Dataset
         Mass function profile dataset used to compute probability distribution
-        and evaluate log likelihood
+        and evaluate log likelihood.
 
-    field : dict
-        Dictionary of `gcfit.probability.mass.Field` field, as given by
-        `gcfit.probability.mass.initialize_fields`
+    fields : dict
+        Dictionary of `gcfit.util.mass.Field` field, as given by
+        `gcfit.util.mass.initialize_fields`.
 
     hyperparams : bool, optional
-        Whether to include bayesian hyperparameters
+        Whether to include bayesian hyperparameters.
 
     Returns
     -------
     float
-        Log likelihood value
+        Log likelihood value.
+
+    See Also
+    --------
+    util.mass.Field.MC_integrate :
+        Monte Carlo integration method used to integrate the surface density
+        profile.
 
     Notes
     -----
@@ -940,16 +974,7 @@ def likelihood_mass_func(model, mf, field, *, hyperparams=False):
     relevant field boundaries:
 
     .. math:: N = \int_{r_0}^{r_1} \Sigma(r) dr
-
-    See Also
-    --------
-    probability.mass.Field.MC_integrate :
-        Monte Carlo integration method used to integrate the surface density
-        profile
     '''
-    # TODO same as numdens, the units are ignored cause 1/pc^2 != 1/arcmin^2
-
-    M = 1000
 
     if hyperparams:
         likelihood = util.hyperparam_likelihood
@@ -989,16 +1014,14 @@ def likelihood_mass_func(model, mf, field, *, hyperparams=False):
     N_model = np.empty_like(N)
     err = np.empty_like(N)
 
-    for r_in, r_out in np.unique(rbins, axis=0):
+    for field_slice, (r_in, r_out) in zip(fields, np.unique(rbins, axis=0)):
         r_mask = (mf['r1'] == r_in) & (mf['r2'] == r_out)
-
-        field_slice = field.slice_radially(r_in, r_out)
 
         # --------------------------------------------------------------
         # Sample this slice of the field M times, and integrate to get N
         # --------------------------------------------------------------
 
-        sample_radii = field_slice.MC_sample(M).to(u.pc)
+        sample_radii = field_slice._prev_sample.to(u.pc)
 
         binned_N_model = np.empty(model.nms) << N_data.unit
         for j in range(model.nms):
@@ -1027,9 +1050,54 @@ def likelihood_mass_func(model, mf, field, *, hyperparams=False):
 
 
 def log_likelihood(theta, observations, L_components, hyperparams):
-    '''
-    Main likelihood function, generates the model(theta) passes it to the
-    individual likelihood functions and collects their results.
+    r'''Compute log likelihood of given `theta`, based on component likelihoods.
+
+    Main likelihood function, which generates the relevant model based on
+    the given set of parameters (`theta`) and passes it to the
+    various individual likelihood functions (as given in `L_components`)
+    and collects and sums their results.
+
+    Parameters
+    ----------
+    theta : dict
+        The model input parameters (W0, M, rh, ra, g, delta, a1, a2, a3,
+        BHret, s2, F and d). Passed directly to `gcfit.FittableModel` to
+        generate the model used in all likelihood functions.
+
+    observations : Observations
+        The `Observations` instance corresponding to this cluster, used to
+        initialize the model and to read in all datasets specified by
+        `L_components`.
+
+    L_components : list of lists
+        List of likelihood components to compute. Must be a list of lists
+        in the same format as `Observations.valid_likelihoods` (dataset name,
+        likelihood function, *function params).
+
+    hyperparams : bool
+        Whether to include bayesian hyperparameters in all likelihood functions.
+
+    Returns
+    -------
+    lnL : float
+        The total log likelihood.
+
+    lnL_i : np.ndarray
+        An array of individual log likelihoods for each component, sorted to
+        match `L_components`.
+
+    See Also
+    --------
+    gcfit.FittableModel : Model class initialized using `theta`.
+
+    Notes
+    -----
+    The total likelihood is computed as the product of all individual
+    likelihoods:
+
+    .. math:: \ln(\mathcal{L})
+                 = \sum_i^{\rm{datasets}} \ln(P(\mathcal{D_i} \mid \Theta))
+                 = \sum_i \ln(\mathcal{L}_i(\Theta)))
     '''
 
     try:
@@ -1052,15 +1120,63 @@ def log_likelihood(theta, observations, L_components, hyperparams):
 def posterior(theta, observations, fixed_initials=None,
               L_components=None, prior_likelihood=None, *,
               hyperparams=False, return_indiv=True):
-    '''
-    Combines the likelihood with the prior
+    '''Compute the full posterior probability given `theta` and `observations`.
 
-    theta : array of theta values
-    observations : data.Observations
-    fixed_initials : dict of any theta values to fix
-    L_components : output from determine_components
-    prior_likelihood : Priors()
-    hyperparams : use hyperparam_likelihood or gaussian_likelihood
+    Combines the various likelihood functions (through `log_likelihood`)
+    and the priors on the given `theta` parameters to compute and return
+    the full posterior probability.
+
+    This function is designed for use by a bayesian sampler class, like
+    `emcee.EnsembleSampler` or `dynesty.DynamicNestedSampler`. The accepted
+    arguments are therefore slightly different than what might be expected in
+    other parts of the package (e.g. `theta` must be an array).
+
+    Parameters
+    ----------
+    theta : np.ndarray
+        An array of model input parameters, which must be in the expected order
+        (W0, M, rh, ra, g, delta, a1, a2, a3, BHret, s2, F and d).
+        Only parameters which are specified in `fixed_initials` may be excluded
+        here. A dictionary of parameters is not allowed.
+
+    observations : Observations
+        The `Observations` instance corresponding to this cluster, to provide
+        the "data" for this posterior calculation.
+
+    fixed_initials : dict, optional
+        An optional dictionary of parameters which provides fixed values for
+        specific parameters used to fill out the `theta` array. This is useful
+        for allowing samplers to explore a smaller set of parameters by fixing
+        certain usually free ones.
+
+    L_components : list of lists, optional
+        List of likelihood components to compute. Must be a list of lists
+        in the same format as `observations.valid_likelihoods` (dataset name,
+        likelihood function, *function params). Will default to using those
+        given by `observations.valid_likelihoods`.
+
+    prior_likelihood : Priors or "ignore", optional
+        The Priors object corresponding to the desired sets of priors for this
+        given parameter set. If None (the default), will use the default priors
+        defined in `priors.DEFAULT_PRIORS`. If "ignore", will assume the priors
+        have already been dealt with (e.g. as done in `dynesty`) and will
+        ignore them.
+
+    hyperparams : bool, optional
+        Whether to include bayesian hyperparameters in all likelihood functions.
+
+    return_indiv : bool, optional
+        If True (default) will also return all individual likelihood values
+        alongside the posterior probability. Can be used by some sampler
+        classes, such as the `blobs` functionality of `emcee`.
+
+    Returns
+    -------
+    float or tuple
+        The total posterior probability.
+        If `return_indiv` is True, will return a tuple where the first element
+        is the posterior probability and the remaining elements are the
+        individual log likelihood values for each likelihood function.
     '''
 
     if fixed_initials is None:

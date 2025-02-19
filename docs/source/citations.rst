@@ -2,10 +2,13 @@
 Citations
 =========
 
-``GCfit`` was first introduced in Dickson et al. (2023; submitted).
+``GCfit`` was first introduced in
+`Dickson et al. (2023) <https://ui.adsabs.harvard.edu/abs/2023MNRAS.522.5320D>`_
+and updated in
+`Dickson et al. (2024) <https://ui.adsabs.harvard.edu/abs/2024MNRAS.529..331D>`_.
 
 If you find this package useful in your research, please consider citing the
-relevant papers below:
+above, and any relevant papers below:
 
 Observational Data
 ==================
@@ -34,7 +37,7 @@ formats directly:
 .. code-block:: python
 
     >>> sources = obs.get_sources()
-    >>> print(sources['number_density'])
+    >>> print(sources['number_density'][0])
     @ARTICLE{2019MNRAS.485.4906D,
            author = {{de Boer}, T.~J.~L. and {Gieles}, M. and {Balbinot}, E. and {H{\'e}nault-Brunet}, V. and {Sollima}, A. and {Watkins}, L.~L. and {Claydon}, I.},
             title = "{Globular cluster number density profiles using Gaia DR2}",
@@ -48,7 +51,7 @@ Or the utility methods can be used directly:
 
 .. code-block:: python
 
-    >>> print(gcfit.util.bibcode2bibtex(dset.mdata['source']))
+    >>> print(gcfit.util.bibcode2bibtex(dset.mdata['source'])[0])
     @ARTICLE{2019MNRAS.485.4906D,
            author = {{de Boer}, T.~J.~L. and {Gieles}, M. and {Balbinot}, E. and {H{\'e}nault-Brunet}, V. and {Sollima}, A. and {Watkins}, L.~L. and {Claydon}, I.},
             title = "{Globular cluster number density profiles using Gaia DR2}",
@@ -67,8 +70,9 @@ The equilibrium models used should be cited from the ``limepy`` paper:
 
 The mass evolution algorithm (`ssptools <https://github.com/SMU-clusters/ssptools>`_)
 is based off of the algorithm first introduced in
-`2018MNRAS.474.2479B <https://ui.adsabs.harvard.edu/abs/2018MNRAS.474.2479B>`_.
-
+`2018MNRAS.474.2479B <https://ui.adsabs.harvard.edu/abs/2018MNRAS.474.2479B>`_
+(and updated in
+`Dickson et al., 2023 <https://ui.adsabs.harvard.edu/abs/2023MNRAS.522.5320D>`_).
 
 
 Samplers
@@ -87,6 +91,9 @@ For specific bound and sampler algorithm sources, see the
 Other
 =====
 
+Fitting on pulsar timing data was introduced in
+`Smith et al. (2024) <https://ui.adsabs.harvard.edu/abs/2024ApJ...975..268S>`_.
+
 If Bayesian hyperparameters are used (``hyperparams=True`` in any fitting),
 the source paper
 `2002MNRAS.335..377H <https://adsabs.harvard.edu/abs/2002MNRAS.335..377H>`_
@@ -94,9 +101,11 @@ can be cited.
 
 ``GCfit`` makes extensive use of the
 `numpy <https://adsabs.harvard.edu/abs/2020Natur.585..357H>`_,
-`scipy <https://adsabs.harvard.edu/abs/2020NatMe..17..261V>`_ and
-`astropy <https://adsabs.harvard.edu/abs/2018AJ....156..123A>`_
+`scipy <https://adsabs.harvard.edu/abs/2020NatMe..17..261V>`_,
+`astropy <https://adsabs.harvard.edu/abs/2018AJ....156..123A>`_,
+`h5py <https://doi.org/10.5281/zenodo.594310>`_ and
+`shapely <https://doi.org/10.5281/zenodo.5597138>`_
 libraries. All plotting functionality is enabled by the
 `matplotlib <https://adsabs.harvard.edu/abs/2007CSE.....9...90H>`_ library.
 Parallelization pools are handled by the
-`schwimmbad <https://adsabs.harvard.edu/abs/2017JOSS....2..357P>`_ library
+`schwimmbad <https://adsabs.harvard.edu/abs/2017JOSS....2..357P>`_ library.

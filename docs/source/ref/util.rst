@@ -9,8 +9,14 @@ Units Utility Functions
 .. autosummary::
     :nosignatures:
     :toctree: generated/
+    :template: class_template.rst
 
     QuantitySpline
+
+.. autosummary::
+    :nosignatures:
+    :toctree: generated/
+
     angular_width
 
 
@@ -42,3 +48,13 @@ Probability Utility Functions
     hyperparam_effective
     div_error
     trim_peaks
+
+
+Mass Function Utilities
+-----------------------
+.. autosummary::
+    :nosignatures:
+    :toctree: generated/
+    :template: class_template.rst
+
+    Field

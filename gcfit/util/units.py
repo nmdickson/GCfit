@@ -1,6 +1,6 @@
 import warnings
 
-import scipy.stats
+import scipy
 import numpy as np
 import astropy.units as u
 from astropy.units.equivalencies import Equivalency
@@ -19,38 +19,38 @@ def angular_width(D):
 
     # Angular width
     def pc_to_rad(r):
-        '''Parsecs to radians'''
+        '''Parsecs to radians.'''
         return 2 * np.arctan(r / (2 * D.value))
 
     def rad_to_pc(θ):
-        '''Radians to parsecs'''
+        '''Radians to parsecs.'''
         return np.tan(θ / 2) * (2 * D.value)
 
     # Angular area
     def pcsq_to_radsq(r):
-        '''Parsecs squared to radians squared'''
+        '''Parsecs squared to radians squared.'''
         return (1. / rad_to_pc(1)**2) * r
 
     def radsq_to_radsq(θ):
-        '''Radians squared to parsec squared'''
+        '''Radians squared to parsec squared.'''
         return (1. / pc_to_rad(1)**2) * θ
 
     # Inverse Angular area
     def inv_pcsq_to_radsq(r):
-        '''Parsecs squared reciprocal to radians squared reciprocal'''
+        '''Parsecs squared reciprocal to radians squared reciprocal.'''
         return (rad_to_pc(1)**2) * r
 
     def inv_radsq_to_radsq(θ):
-        '''Radians squared reciprocal to parsecs squared reciprocal'''
+        '''Radians squared reciprocal to parsecs squared reciprocal.'''
         return (pc_to_rad(1)**2) * θ
 
     # Angular Speed
     def kms_to_asyr(vt):
-        '''Kilometres per second to arcseconds per year'''
+        '''Kilometres per second to arcseconds per year.'''
         return vt / (4.74 * D.value)
 
     def asyr_to_kms(μ):
-        '''Arcseconds per year to kilometres per second'''
+        '''Arcseconds per year to kilometres per second.'''
         return 4.74 * D.value * μ
 
     return Equivalency([
@@ -151,9 +151,9 @@ class QuantitySpline(scipy.interpolate.UnivariateSpline):
         return res
 
     def derivative(self, n=1):
-        from scipy.interpolate import fitpack
+        from scipy.interpolate import splder
 
-        tck = fitpack.splder(self._eval_args, n)
+        tck = splder(self._eval_args, n)
 
         # if self.ext is 'const', derivative.ext will be 'zeros'
         ext = 1 if self.ext == 3 else self.ext
