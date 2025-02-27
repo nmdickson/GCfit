@@ -828,27 +828,30 @@ class MCMCRun(_SingleRunAnalysis):
     def _reconstruct_priors(self):
         '''Based on the stored "specified_priors" get a `Priors` object.'''
 
-        # TODO this seems broken with latest priors storage scheme
         with self._openfile('metadata') as mdata:
 
             stored_priors = mdata['specified_priors']
             fixed = dict(mdata['fixed_params'].attrs)
 
-        prior_params = {}
+            prior_params = {}
 
-        for key in self._parameters:
-            try:
-                type_ = stored_priors[key].attrs['type']
-                args = stored_priors[key]['args']
+            for key in self._parameters:
+                try:
+                    type_ = stored_priors[key].attrs['type']
+                    args = stored_priors[key]['args']
 
-                if args.dtype.kind == 'S':
-                    args = args.astype('U')
+                    if args.dtype.kind == 'S':
+                        args = args.astype('U')
 
-                prior_params[key] = (type_, *args)
-            except KeyError:
-                continue
+                    prior_params[key] = (type_, *args)
+                except KeyError:
+                    continue
 
-        prior_kwargs = {'fixed_initials': fixed, 'err_on_fail': False}
+        prior_kwargs = {
+            'fixed_initials': fixed, 'err_on_fail': False,
+            'evolved': self._evolved, 'flexible_BHs': self._free_BHs
+        }
+
         return priors.Priors(prior_params, **prior_kwargs)
 
     # ----------------------------------------------------------------------
@@ -1840,21 +1843,25 @@ class NestedRun(_SingleRunAnalysis):
             stored_priors = mdata['specified_priors']
             fixed = dict(mdata['fixed_params'].attrs)
 
-        prior_params = {}
+            prior_params = {}
 
-        for key in self._parameters:
-            try:
-                type_ = stored_priors[key].attrs['type']
-                args = stored_priors[key]['args']
+            for key in self._parameters:
+                try:
+                    type_ = stored_priors[key].attrs['type']
+                    args = stored_priors[key]['args']
 
-                if args.dtype.kind == 'S':
-                    args = args.astype('U')
+                    if args.dtype.kind == 'S':
+                        args = args.astype('U')
 
-                prior_params[key] = (type_, *args)
-            except KeyError:
-                continue
+                    prior_params[key] = (type_, *args)
+                except KeyError:
+                    continue
 
-        prior_kwargs = {'fixed_initials': fixed, 'err_on_fail': False}
+        prior_kwargs = {
+            'fixed_initials': fixed, 'err_on_fail': False,
+            'evolved': self._evolved, 'flexible_BHs': self._free_BHs
+        }
+
         return priors.PriorTransforms(prior_params, **prior_kwargs)
 
     # ----------------------------------------------------------------------
