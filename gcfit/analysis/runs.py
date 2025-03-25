@@ -3527,7 +3527,8 @@ class RunCollection(_RunAnalysis):
 
     @classmethod
     def from_dir(cls, directory, pattern='**/*hdf', strict=False,
-                 *args, sampler='nested', run_kwargs=None, **kwargs):
+                 *args, sampler='nested', name_from_file=False, run_kwargs=None,
+                 **kwargs):
         '''Initialize a run collection based on run files found in a directory.
 
         Search for run output files (as created by the relevant fitting
@@ -3555,6 +3556,11 @@ class RunCollection(_RunAnalysis):
 
         sampler : {'nested', 'mcmc'}, optional
             Whether to initialize each run as either a `NestedRun` or `MCMCRun`.
+
+        name_from_file : bool, optional
+            If True, sets the `name` of each run to the stem of the
+            corresponding file name. By default will instead use the name of
+            the cluster found in `run.obs.cluster`.
 
         run_kwargs : dict, optional
             Optional arguments passed to all individual run initialization.
@@ -3584,7 +3590,10 @@ class RunCollection(_RunAnalysis):
 
             try:
                 run = run_cls(fn, **run_kwargs)
-                run.name = run.obs.cluster
+                if name_from_file:
+                    run.name = run._filename.stem
+                else:
+                    run.name = run.obs.cluster
 
             except KeyError as err:
 
@@ -3606,7 +3615,8 @@ class RunCollection(_RunAnalysis):
 
     @classmethod
     def from_files(cls, file_list, strict=False,
-                   *args, sampler='nested', run_kwargs=None, **kwargs):
+                   *args, sampler='nested', name_from_file=False,
+                   run_kwargs=None, **kwargs):
         '''Initialize a run collection based on a list of run files.
 
         Given a list of paths to a number of run output files (as created by
@@ -3628,6 +3638,11 @@ class RunCollection(_RunAnalysis):
 
         sampler : {'nested', 'mcmc'}, optional
             Whether to initialize each run as either a `NestedRun` or `MCMCRun`.
+
+        name_from_file : bool, optional
+            If True, sets the `name` of each run to the stem of the
+            corresponding file name. By default will instead use the name of
+            the cluster found in `run.obs.cluster`.
 
         run_kwargs : dict, optional
             Optional arguments passed to all individual run initialization.
@@ -3663,7 +3678,10 @@ class RunCollection(_RunAnalysis):
 
             try:
                 run = run_cls(file, **run_kwargs)
-                run.name = run.obs.cluster
+                if name_from_file:
+                    run.name = run._filename.stem
+                else:
+                    run.name = run.obs.cluster
 
             except KeyError as err:
 
