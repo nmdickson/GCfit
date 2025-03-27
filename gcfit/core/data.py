@@ -1982,25 +1982,18 @@ class EvolvedModel(Model):
 
         # Compute Mdot_esc based on the clusterBH formulation, for ssptools
 
-        b1, b2 = self._clusterbh.b1, self._clusterbh.b2
-        S = (self._clusterbh.a11 * self._clusterbh.a12**(3 / 2)
-             * (self._clusterbh.Mbh / self._clusterbh.Mst)**b1
-             * (self._clusterbh.mbh / self._clusterbh.mst)**(3 / 2 * b2))
+        # Evaporation
+        Mst_dot = (-self._clusterbh.xi * self._clusterbh.Mst
+                   / self._clusterbh.tev)
 
-        S = np.where(S < self._clusterbh.S_crit, self._clusterbh.Sf, S)
-        beta_f = self._clusterbh.beta_function(S)
+        # Ejection
+        F = self._clusterbh.balance_function(self._clusterbh.t)
+        alpha_c = (self._clusterbh.alpha_ci * F)
+        alpha_c += ((self._clusterbh.alpha_cf * F - alpha_c)
+                    * (1 - self.clusterbh.beta_function(self._clusterbh.S)))
 
-        alpha_c = self._clusterbh.alpha_ci
-        if self._clusterbh.running_bh_ejection_rate_2:
-            alpha_c += (self._clusterbh.alpha_cf - alpha_c) * (1 - beta_f)
-
-        # _xi(rh, rt) function is not vectorized, coerces to min float
-        crh, crt = self._clusterbh.rh, self._clusterbh.rt
-        xi = self._clusterbh.tidal_models[self._clusterbh.tidal_model](crh, crt)
-
-        Mst_dot = (-xi * self._clusterbh.Mst / self._clusterbh.trhstar
-                   + alpha_c * self._clusterbh.zeta
-                   * self._clusterbh.M / self._clusterbh.trh)
+        Mst_dot -= (alpha_c * self._clusterbh.zeta
+                    * self._clusterbh.M / self._clusterbh.trh)
 
         if self._clusterbh.t.size > 3:  # Cubic Spline will fail otherwise
             Mdot_t = util.QuantitySpline(self._clusterbh.t * 1e3, Mst_dot)
