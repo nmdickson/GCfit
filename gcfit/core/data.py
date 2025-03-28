@@ -1987,9 +1987,9 @@ class EvolvedModel(Model):
                    / self._clusterbh.tev)
 
         # Ejection
-        F = self._clusterbh.balance_function(self._clusterbh.t)
-        alpha_c = (self._clusterbh.alpha_ci * F)
-        alpha_c += ((self._clusterbh.alpha_cf * F - alpha_c)
+        bf = self._clusterbh.balance_function(self._clusterbh.t)
+        alpha_c = (self._clusterbh.alpha_ci * bf)
+        alpha_c += ((self._clusterbh.alpha_cf * bf - alpha_c)
                     * (1 - self._clusterbh.beta_function(self._clusterbh.S)))
 
         Mst_dot -= (alpha_c * self._clusterbh.zeta
