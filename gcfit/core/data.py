@@ -1990,7 +1990,7 @@ class EvolvedModel(Model):
         F = self._clusterbh.balance_function(self._clusterbh.t)
         alpha_c = (self._clusterbh.alpha_ci * F)
         alpha_c += ((self._clusterbh.alpha_cf * F - alpha_c)
-                    * (1 - self.clusterbh.beta_function(self._clusterbh.S)))
+                    * (1 - self._clusterbh.beta_function(self._clusterbh.S)))
 
         Mst_dot -= (alpha_c * self._clusterbh.zeta
                     * self._clusterbh.M / self._clusterbh.trh)
