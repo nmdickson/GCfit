@@ -1317,6 +1317,15 @@ class Model(lp.limepy):
             else:
                 raise err
 
+        except IndexError as err:
+            # Can sometimes occur in not converged models
+
+            if not self.converged:
+                mssg = "Model solver failed to converge to a finite extent"
+                raise ValueError(mssg) from err
+            else:
+                raise err
+
         if not self.converged:
             mssg = "Model solver failed to converge to a finite extent"
             raise ValueError(mssg)
@@ -1677,6 +1686,15 @@ class SingleMassModel(lp.limepy):
                         "Model parameters must be adjusted")
                 raise ValueError(mssg) from err
 
+            else:
+                raise err
+
+        except IndexError as err:
+            # Can sometimes occur in not converged models
+
+            if not self.converged:
+                mssg = "Model solver failed to converge to a finite extent"
+                raise ValueError(mssg) from err
             else:
                 raise err
 
