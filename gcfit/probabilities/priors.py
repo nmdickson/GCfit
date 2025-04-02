@@ -717,6 +717,8 @@ DEFAULT_IFMR_PRIORS = {
     'IFMR_scale3': ('uniform', [(-10, 20)])
 }
 
+DEFAULT_BH_PRIORS = DEFAULT_KICK_PRIORS | DEFAULT_IFMR_PRIORS
+
 _PRIORS_MAP = {
     "uniform": UniformPrior,
     "gaussian": GaussianPrior,
