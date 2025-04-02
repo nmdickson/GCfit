@@ -566,14 +566,21 @@ class _SingleRunAnalysis(_RunAnalysis):
                         "sampling may not be fully converged.")
                 warnings.warn(mssg)
 
+            mdata = file['metadata'].attrs
+
             # Check if this is an evolved modelling fit or not
-            self._evolved = file['metadata'].attrs.get('evolved', False)
+            self._evolved = mdata.get('evolved', False)
 
             # Check if this had extra flexible BH parameters
-            self._free_BHs = file['metadata'].attrs.get('flexible_BHs', False)
+            self._free_kicks = mdata.get('flexible_natal_kicks', False)
+            self._free_IFMR = mdata.get('flexible_IFMR', False)
+
+            # Check for backwards compatibility with old, free BHs
+            if mdata.get('flexible_BHs', False):
+                self._free_kicks = self._free_IFMR = True
 
             # Check if this run seems to have used a local cluster data file
-            restrict_to = file['metadata'].attrs.get('restrict_to', None)
+            restrict_to = mdata.get('restrict_to', None)
 
         # Determine and init cluster observations if necessary
         if name is not None:
@@ -596,8 +603,11 @@ class _SingleRunAnalysis(_RunAnalysis):
         self._parameters = list(self.obs.initials if not self._evolved
                                 else self.obs.ev_initials)
 
-        if self._free_BHs:
-            self._parameters += list(self.obs.BH_initials)
+        if self._free_kicks:
+            self._parameters += list(self.obs._kick_initials)
+
+        if self._free_IFMR:
+            self._parameters += list(self.obs._IFMR_initials)
 
     @contextlib.contextmanager
     def _openfile(self, group=None, mode='r'):
@@ -653,8 +663,11 @@ class _SingleRunAnalysis(_RunAnalysis):
                 model_kw = {}
 
         # this is not for `Model`, but for some preliminary stuff (`_get_model`)
-        if note_flexible_BHs and self._free_BHs:
-            model_kw['flexible_BHs'] = True
+        if note_flexible_BHs:
+            if self._free_kicks:
+                model_kw['flexible_natal_kicks'] = True
+            if self._free_IFMR:
+                model_kw['flexible_IFMR'] = True
 
         return model_kw
 

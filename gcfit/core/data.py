@@ -54,9 +54,13 @@ DEFAULT_EV_THETA = {
 }
 
 
-DEFAULT_BH_THETA = {
+# When kicks/IFMR are free, ordering kick params before IFMR params is important
+DEFAULT_KICK_THETA = {
     'kick_slope': 1,
     'kick_scale': 20,
+}
+
+DEFAULT_IFMR_THETA = {
     'IFMR_slope1': 5.,  # between 20 - 22.6
     'IFMR_slope2': 7e-4,  # between 22.6 - 36
     'IFMR_slope3': 0.03,  # between 36 - 150
@@ -64,6 +68,9 @@ DEFAULT_BH_THETA = {
     'IFMR_scale2': -4,
     'IFMR_scale3': 4,
 }
+
+# In some cases it is probably fine to have both (order is important)
+DEFAULT_BH_THETA = DEFAULT_KICK_THETA | DEFAULT_IFMR_THETA
 
 
 # --------------------------------------------------------------------------
@@ -582,7 +589,7 @@ class Observations:
 
         self.initials = DEFAULT_THETA.copy()
         self.ev_initials = DEFAULT_EV_THETA.copy()
-        self.BH_initials = DEFAULT_BH_THETA.copy()
+        self.BH_initials = DEFAULT_BH_THETA.copy()  # careful using this
 
         filename = util.get_cluster_path(cluster, standardize_name, restrict_to)
 
@@ -592,8 +599,16 @@ class Observations:
 
             logging.info(f"Observations read from {filename}")
 
+            # --------------------------------------------------------------
+            # Read in all observational data products
+            # --------------------------------------------------------------
+
             for group in self._find_groups(file):
                 self._dict_datasets[group] = Dataset(file[group])
+
+            # --------------------------------------------------------------
+            # Read in initial values of base free parameters
+            # --------------------------------------------------------------
 
             try:
                 # This updates defaults with data while keeping default sort
@@ -608,6 +623,10 @@ class Observations:
                 logging.info("No initial state stored, using defaults")
                 pass
 
+            # --------------------------------------------------------------
+            # Read in initial values of evolved free parameters
+            # --------------------------------------------------------------
+
             try:
                 self.ev_initials = {**self.ev_initials,
                                     **file['ev_initials'].attrs}
@@ -621,6 +640,10 @@ class Observations:
                 logging.info("No (evolved) initial state stored, using default")
                 pass
 
+            # --------------------------------------------------------------
+            # Read in initial values of BH-related free parameters
+            # --------------------------------------------------------------
+
             try:
                 self.BH_initials = {**self.BH_initials,
                                     **file['BH_initials'].attrs}
@@ -633,6 +656,16 @@ class Observations:
             except KeyError:
                 logging.info("No (BH) initial state stored, using default")
                 pass
+
+            # isolate the kick and IFMR initials
+            self._kick_initials = {k: self.BH_initials[k]
+                                   for k in DEFAULT_KICK_THETA}
+            self._IFMR_initials = {k: self.BH_initials[k]
+                                   for k in DEFAULT_IFMR_THETA}
+
+            # --------------------------------------------------------------
+            # Read in all other metadata
+            # --------------------------------------------------------------
 
             # TODO need a way to read units for some mdata from file
             self.mdata = dict(file.attrs)
@@ -1284,6 +1317,15 @@ class Model(lp.limepy):
             else:
                 raise err
 
+        except IndexError as err:
+            # Can sometimes occur in not converged models
+
+            if not self.converged:
+                mssg = "Model solver failed to converge to a finite extent"
+                raise ValueError(mssg) from err
+            else:
+                raise err
+
         if not self.converged:
             mssg = "Model solver failed to converge to a finite extent"
             raise ValueError(mssg)
@@ -1647,6 +1689,15 @@ class SingleMassModel(lp.limepy):
             else:
                 raise err
 
+        except IndexError as err:
+            # Can sometimes occur in not converged models
+
+            if not self.converged:
+                mssg = "Model solver failed to converge to a finite extent"
+                raise ValueError(mssg) from err
+            else:
+                raise err
+
         if not self.converged:
             mssg = "Model solver failed to converge to a finite extent"
             raise ValueError(mssg)
@@ -1949,25 +2000,18 @@ class EvolvedModel(Model):
 
         # Compute Mdot_esc based on the clusterBH formulation, for ssptools
 
-        b1, b2 = self._clusterbh.b1, self._clusterbh.b2
-        S = (self._clusterbh.a11 * self._clusterbh.a12**(3 / 2)
-             * (self._clusterbh.Mbh / self._clusterbh.Mst)**b1
-             * (self._clusterbh.mbh / self._clusterbh.mst)**(3 / 2 * b2))
+        # Evaporation
+        Mst_dot = (-self._clusterbh.xi * self._clusterbh.Mst
+                   / self._clusterbh.tev)
 
-        S = np.where(S < self._clusterbh.S_crit, self._clusterbh.Sf, S)
-        beta_f = self._clusterbh.beta_function(S)
+        # Ejection
+        bf = self._clusterbh.balance_function(self._clusterbh.t)
+        alpha_c = (self._clusterbh.alpha_ci * bf)
+        alpha_c += ((self._clusterbh.alpha_cf * bf - alpha_c)
+                    * (1 - self._clusterbh.beta_function(self._clusterbh.S)))
 
-        alpha_c = self._clusterbh.alpha_ci
-        if self._clusterbh.running_bh_ejection_rate_2:
-            alpha_c += (self._clusterbh.alpha_cf - alpha_c) * (1 - beta_f)
-
-        # _xi(rh, rt) function is not vectorized, coerces to min float
-        crh, crt = self._clusterbh.rh, self._clusterbh.rt
-        xi = self._clusterbh.tidal_models[self._clusterbh.tidal_model](crh, crt)
-
-        Mst_dot = (-xi * self._clusterbh.Mst / self._clusterbh.trhstar
-                   + alpha_c * self._clusterbh.zeta
-                   * self._clusterbh.M / self._clusterbh.trh)
+        Mst_dot -= (alpha_c * self._clusterbh.zeta
+                    * self._clusterbh.M / self._clusterbh.trh)
 
         if self._clusterbh.t.size > 3:  # Cubic Spline will fail otherwise
             Mdot_t = util.QuantitySpline(self._clusterbh.t * 1e3, Mst_dot)

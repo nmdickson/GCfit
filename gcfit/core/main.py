@@ -1,4 +1,4 @@
-from .data import Observations, DEFAULT_BH_THETA
+from .data import Observations, DEFAULT_KICK_THETA, DEFAULT_IFMR_THETA
 from ..util.data import GCFIT_DIR
 from ..probabilities import posterior, priors
 
@@ -645,7 +645,8 @@ def MCMC_fit(cluster, Niters, Nwalkers, evolved=False, Ncpu=2, *,
     logging.info("FINISHED")
 
 
-def nested_fit(cluster, evolved=False, *, flexible_BHs=False,
+def nested_fit(cluster, evolved=False, *,
+               flexible_IFMR=False, flexible_natal_kicks=False,
                bound_type='multi', sample_type='auto',
                initial_kwargs=None, batch_kwargs=None, model_kwargs=None,
                pfrac=1.0, maxfrac=0.8, eff_samples=5000, plat_wt_func=False,
@@ -869,8 +870,11 @@ def nested_fit(cluster, evolved=False, *, flexible_BHs=False,
             initials = obs_initials | initials
 
         # TODO technically these initials also make sense within obs probably
-        if flexible_BHs:
-            initials |= DEFAULT_BH_THETA
+        if flexible_natal_kicks:
+            initials |= DEFAULT_KICK_THETA
+
+        if flexible_IFMR:
+            initials |= DEFAULT_IFMR_THETA
 
         logging.debug(f"Inital initals: {initials}")
 
@@ -879,7 +883,7 @@ def nested_fit(cluster, evolved=False, *, flexible_BHs=False,
 
         variable_params = (initials.keys() - set(fixed_params))
         if not variable_params:
-            mssg = f"No non-fixed parameters left, fix less parameters"
+            mssg = "No non-fixed parameters left, fix less parameters"
             raise ValueError(mssg)
 
         # variable params sorting matters for setup of theta, but fixed does not
@@ -899,7 +903,8 @@ def nested_fit(cluster, evolved=False, *, flexible_BHs=False,
                        for k, v in param_priors.items()}
 
         prior_kwargs = {'fixed_initials': fixed_initials, 'err_on_fail': False,
-                        'evolved': evolved, 'flexible_BHs': flexible_BHs}
+                        'evolved': evolved, 'flexible_IFMR': flexible_IFMR,
+                        'flexible_natal_kicks': flexible_natal_kicks}
         prior_transform = priors.PriorTransforms(param_priors, **prior_kwargs)
 
         # ------------------------------------------------------------------
@@ -908,7 +913,8 @@ def nested_fit(cluster, evolved=False, *, flexible_BHs=False,
 
         backend.store_metadata('cluster', cluster)
         backend.store_metadata('evolved', evolved)
-        backend.store_metadata('flexible_BHs', flexible_BHs)
+        backend.store_metadata('flexible_natal_kicks', flexible_natal_kicks)
+        backend.store_metadata('flexible_IFMR', flexible_IFMR)
 
         # Only store if set. Will default read to None if not stored here
         if restrict_to is not None:
@@ -958,7 +964,8 @@ def nested_fit(cluster, evolved=False, *, flexible_BHs=False,
 
         logl_kwargs = {'hyperparams': hyperparams, 'evolved': evolved,
                        'return_indiv': False, 'model_kw': model_kwargs,
-                       'flexible_BHs': flexible_BHs}
+                       'flexible_IFMR': flexible_IFMR,
+                       'flexible_natal_kicks': flexible_natal_kicks}
 
         sampler = dynesty.DynamicNestedSampler(
             ndim=ndim,

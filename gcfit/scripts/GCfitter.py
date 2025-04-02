@@ -138,7 +138,18 @@ def main():
 
     shared_parser.add_argument('--flexible-BHs', dest='flexible_BHs',
                                action='store_true',
-                               help="Allow BH physics to vary freely.")
+                               help="Allow all BH physics to vary freely."
+                                    "Identical to providing both "
+                                    "--flexible-IFMR and "
+                                    "--flexible-natal-kicks")
+
+    shared_parser.add_argument('--flexible-IFMR', dest='flexible_IFMR',
+                               action='store_true',
+                               help="Allow BH IFMR to vary freely.")
+
+    shared_parser.add_argument('--flexible-natal-kicks', dest='flexible_natal_kicks',
+                               action='store_true',
+                               help="Allow BH natal kicks to vary freely.")
 
     shared_parser.add_argument('--verbose', action='store_true')
     shared_parser.add_argument('--debug', action='store_true')
@@ -262,6 +273,11 @@ def main():
             parser.error(f"Cannot access '{kw_file}': No such file")
 
     pathlib.Path(args.savedir).mkdir(exist_ok=True)
+
+    if args.flexible_BHs:
+        args.flexible_IFMR = args.flexible_natal_kicks = True
+
+    del args.flexible_BHs
 
     # ----------------------------------------------------------------------
     # MCMC specific arguments

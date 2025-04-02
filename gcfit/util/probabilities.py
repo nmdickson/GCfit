@@ -98,24 +98,28 @@ def div_error(a, a_err, b, b_err):
 
 
 # TODO the methods chosen are obviously not very "flexible"
-def pop_flexible_BHs(theta):
+def pop_flexible_BHs(theta, flexible_natal_kicks=True, flexible_IFMR=True):
     '''Convert theta using `flexible-BHs` to a normal theta.'''
     MF_kwargs = dict()
 
-    MF_kwargs['kick_method'] = 'sigmoid'
-    MF_kwargs['kick_slope'] = theta.pop('kick_slope')
-    MF_kwargs['kick_scale'] = theta.pop('kick_scale')
+    if flexible_natal_kicks:
 
-    MF_kwargs['BH_IFMR_method'] = 'bpl'
-    Ncomp = 3
+        MF_kwargs['kick_method'] = 'sigmoid'
+        MF_kwargs['kick_slope'] = theta.pop('kick_slope')
+        MF_kwargs['kick_scale'] = theta.pop('kick_scale')
 
-    slopes = [theta.pop(f'IFMR_slope{i}') for i in range(1, Ncomp + 1)]
-    scales = [theta.pop(f'IFMR_scale{i}') for i in range(1, Ncomp + 1)]
+    if flexible_IFMR:
 
-    MF_kwargs['BH_IFMR_kwargs'] = dict(
-        slopes=slopes, scales=scales,
-        exponents=[0.5, 3, 1.5], m_breaks=[20, 22.7, 36, 150.1]
-    )
+        MF_kwargs['BH_IFMR_method'] = 'bpl'
+        Ncomp = 3
+
+        slopes = [theta.pop(f'IFMR_slope{i}') for i in range(1, Ncomp + 1)]
+        scales = [theta.pop(f'IFMR_scale{i}') for i in range(1, Ncomp + 1)]
+
+        MF_kwargs['BH_IFMR_kwargs'] = dict(
+            slopes=slopes, scales=scales,
+            exponents=[0.5, 3, 1.5], m_breaks=[20, 22.7, 36, 150.1]
+        )
 
     return theta, MF_kwargs
 
