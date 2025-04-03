@@ -862,7 +862,8 @@ class MCMCRun(_SingleRunAnalysis):
 
         prior_kwargs = {
             'fixed_initials': fixed, 'err_on_fail': False,
-            'evolved': self._evolved, 'flexible_BHs': self._free_BHs
+            'evolved': self._evolved, 'flexible_natal_kicks': self._free_kicks,
+            'flexible_IFMR': self._free_IFMR
         }
 
         return priors.Priors(prior_params, **prior_kwargs)
@@ -1872,7 +1873,8 @@ class NestedRun(_SingleRunAnalysis):
 
         prior_kwargs = {
             'fixed_initials': fixed, 'err_on_fail': False,
-            'evolved': self._evolved, 'flexible_BHs': self._free_BHs
+            'evolved': self._evolved, 'flexible_natal_kicks': self._free_kicks,
+            'flexible_IFMR': self._free_IFMR
         }
 
         return priors.PriorTransforms(prior_params, **prior_kwargs)
