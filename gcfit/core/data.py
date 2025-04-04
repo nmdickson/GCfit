@@ -1929,11 +1929,17 @@ class EvolvedModel(Model):
 
         if observations is not None:
 
-            # Get cluster galactocentric radius
-            Rgal = util.Rhel2Rgal(observations.mdata['l'] << u.deg,
-                                  observations.mdata['b'] << u.deg, d << u.kpc)
+            # Try to use the effective radius (circularized orbit)
+            try:
+                cbh_kwargs.setdefault('rg', observations.mdata['RG_eff'])
 
-            cbh_kwargs.setdefault('rg', Rgal.to_value('kpc'))
+            # Get cluster galactocentric radius based on current position
+            except KeyError:
+                Rgal = util.Rhel2Rgal(observations.mdata['l'] << u.deg,
+                                      observations.mdata['b'] << u.deg,
+                                      d << u.kpc)
+
+                cbh_kwargs.setdefault('rg', Rgal.to_value('kpc'))
 
             # Get age to evolve to
             age = (observations.mdata['age'] << u.Gyr)
