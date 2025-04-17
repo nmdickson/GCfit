@@ -61,7 +61,9 @@ _label_math_mapping = {
     'DEC': r'\mathrm{DEC}',
     'chi2': r'\chi^{2}',
     # Derived Model Quantities
+    'M_BH': r'\mathrm{M}_{\mathrm{BH}}',
     'BH_mass': r'\mathrm{M}_{\mathrm{BH}}',
+    'N_BH': r'\mathrm{N}_{\mathrm{BH}}',
     'BH_num': r'\mathrm{N}_{\mathrm{BH}}',
     'f_rem': r'f_{\mathrm{remn}}',
     'f_BH': r'f_{\mathrm{BH}}',
@@ -1698,13 +1700,13 @@ class NestedRun(_SingleRunAnalysis):
                     continue
 
                 if d.shape and (d.shape[0] == Niter):
-                    d = np.array(d)[inds]
+                    d = np.asarray(d)[inds]
 
                     if apply_mask and self.mask is not None:
                         d = d[self.mask]
 
                 else:
-                    d = np.array(d)
+                    d = np.asarray(d)
 
                 r[k] = d
 
@@ -5173,7 +5175,7 @@ class RunCollection(_RunAnalysis):
             If True, the metallicity `FeH` is included in the default params.
 
         include_BH : bool, optional
-            If True, the black hole mass `BH_mass` is included in the
+            If True, the black hole mass `M_BH` is included in the
             default params.
 
         include_rt : bool, optional
@@ -5203,7 +5205,7 @@ class RunCollection(_RunAnalysis):
                 params += ['FeH']
 
             if include_BH:
-                params += ['BH_mass']
+                params += ['M_BH']
 
             if include_rt:
                 params += ['log_rt' if log_radii else 'rt']
@@ -5292,7 +5294,7 @@ class RunCollection(_RunAnalysis):
             If True, the metallicity `FeH` is included in the default params.
 
         include_BH : bool, optional
-            If True, the black hole related parameters (`BH_mass`, `BH_num`,
+            If True, the black hole related parameters (`M_BH`, `N_BH`,
             `f_BH`, `f_rem`) are included in the default params.
 
         math_labels : bool, optional
@@ -5319,7 +5321,7 @@ class RunCollection(_RunAnalysis):
             labels = ['FeH'] + labels
 
         if include_BH:
-            labels += ['BH_mass', 'BH_num', 'f_BH', 'f_rem']
+            labels += ['M_BH', 'N_BH', 'f_BH', 'f_rem']
 
         # Fill in a dictionary of column data
 
@@ -5368,7 +5370,7 @@ class RunCollection(_RunAnalysis):
             If True, the metallicity `FeH` is included in the default params.
 
         include_BH : bool, optional
-            If True, the black hole related parameters (`BH_mass`, `BH_num`,
+            If True, the black hole related parameters (`M_BH`, `N_BH`,
             `f_BH`, `f_rem`) are included in the default params.
 
         math_labels : bool, optional

@@ -13,6 +13,7 @@ import astropy.visualization as astroviz
 
 import logging
 import pathlib
+import warnings
 from collections import abc
 
 
@@ -3421,8 +3422,11 @@ class ModelVisualizer(_ClusterVisualizer):
         t_slc = (np.newaxis, np.newaxis, np.newaxis)
 
         self.f_BH_t = self.f_BH[t_slc]
+        self.f_BH0 = self.f_BH
         self.M_BH_t = model.BH.Mj.sum()[t_slc]
         self.M_t = model.M[t_slc]
+        self.M_BH = self.M_BH0 = model.BH.Mj.sum()
+        self.N_BH = self.N_BH0 = model.BH.Nj.sum()
         self.Ms_t = model.nonBH.Mj.sum()[t_slc]
         self.mmean_t = model.mmean[t_slc]
         self.rt_t = model.rt[t_slc]
@@ -3789,8 +3793,8 @@ class CIModelVisualizer(_ClusterVisualizer):
                                    xlabel=label, **kwargs)
 
     @_ClusterVisualizer._support_units
-    def plot_BH_mass(self, fig=None, ax=None, color='tab:blue',
-                     verbose_label=True, **kwargs):
+    def plot_M_BH(self, fig=None, ax=None, color='tab:blue',
+                  verbose_label=True, **kwargs):
         r'''Plot the BH mass of this model.
 
         Plots a histogram of the values of the total black hole mass in the
@@ -3828,12 +3832,16 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         label = "BH Mass" if verbose_label else r'$\mathrm{M}_{\mathrm{BH}}$'
 
-        return self._plot_quantity('BH_mass', fig=fig, ax=ax, color=color,
+        return self._plot_quantity('M_BH', fig=fig, ax=ax, color=color,
                                    xlabel=label, **kwargs)
 
+    def plot_BH_mass(self, **kwargs):
+        warnings.warn("Deprecated in favour of plot_M_BH", DeprecationWarning)
+        return self.plot_M_BH(**kwargs)
+
     @_ClusterVisualizer._support_units
-    def plot_BH_num(self, fig=None, ax=None, color='tab:blue',
-                    verbose_label=True, **kwargs):
+    def plot_N_BH(self, fig=None, ax=None, color='tab:blue',
+                  verbose_label=True, **kwargs):
         r'''Plot the number of BHs in this model.
 
         Plots a histogram of the values of the total amount of black holes
@@ -3871,8 +3879,12 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         label = "BH Amount" if verbose_label else r'$\mathrm{N}_{\mathrm{BH}}$'
 
-        return self._plot_quantity('BH_num', fig=fig, ax=ax, color=color,
+        return self._plot_quantity('N_BH', fig=fig, ax=ax, color=color,
                                    xlabel=label, **kwargs)
+
+    def plot_BH_num(self, **kwargs):
+        warnings.warn("Deprecated in favour of plot_N_BH", DeprecationWarning)
+        return self.plot_N_BH(**kwargs)
 
     def __init__(self, observations):
         self.obs = observations
@@ -4050,6 +4062,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         f_rem = np.full(N, np.nan) << u.pct
         f_BH = np.full(N, np.nan) << u.pct
         f_BH_t = np.full((1, N, Nt), np.nan) << u.pct
+        f_BH0 = np.full(N, np.nan) << u.pct
 
         # number density
 
@@ -4074,11 +4087,12 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         # BH mass
 
-        # TODO change weird BH_mass to M_BH
-        BH_mass = np.full(N, np.nan) << u.Msun
-        BH_num = np.full(N, np.nan) << u.dimensionless_unscaled
+        M_BH = np.full(N, np.nan) << u.Msun
+        N_BH = np.full(N, np.nan) << u.dimensionless_unscaled
+        N_BH0 = np.full(N, np.nan) << u.dimensionless_unscaled
 
         M_BH_t = np.full((1, N, Nt), np.nan) << u.Msun
+        M_BH0 = np.full(N, np.nan) << u.Msun
 
         # Structural params
 
@@ -4203,12 +4217,14 @@ class CIModelVisualizer(_ClusterVisualizer):
             frac_M_MS[slc], frac_M_rem[slc] = viz._init_mass_frac(model)
 
             f_rem[model_ind] = model.rem.f
-            f_BH[model_ind] = f_BH_t[slc] = model.BH.f
+            f_BH[model_ind] = f_BH0[model_ind] = f_BH_t[slc] = model.BH.f
 
             # Black holes
 
-            BH_mass[model_ind] = M_BH_t[slc] = np.sum(model.BH.Mj)
-            BH_num[model_ind] = np.sum(model.BH.Nj)
+            M_BH[model_ind] = M_BH_t[slc] = np.sum(model.BH.Mj)
+            N_BH[model_ind] = np.sum(model.BH.Nj)
+            M_BH0[model_ind] = M_BH[model_ind]
+            N_BH0[model_ind] = N_BH[model_ind]
 
             # Structural params
 
@@ -4297,9 +4313,12 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         viz.f_rem = f_rem
         viz.f_BH = f_BH
+        viz.f_BH0 = f_BH0
 
-        viz.BH_mass = BH_mass
-        viz.BH_num = BH_num
+        viz.M_BH = viz.BH_mass = M_BH
+        viz.N_BH = viz.BH_num = N_BH
+        viz.M_BH0 = M_BH0
+        viz.N_BH0 = N_BH0
 
         viz.r0 = r0
         viz.rt = rt
@@ -4646,7 +4665,7 @@ class CIModelVisualizer(_ClusterVisualizer):
             quant_grp = modelgrp.create_group('quantities')
 
             quant_keys = (
-                'f_rem', 'f_BH', 'BH_mass', 'BH_num',
+                'f_rem', 'f_BH', 'M_BH', 'N_BH', 'f_BH0', 'M_BH0', 'N_BH0',
                 'r0', 'rt', 'rh', 'rhp', 'ra', 'rv', 'mmean', 'volume',
                 'BH_rh', 'spitzer_chi', 'trh', 'N_relax', 'K_scale',
                 'delta_r50', 'delta_A'
@@ -4759,6 +4778,16 @@ class CIModelVisualizer(_ClusterVisualizer):
                         pass
 
                     setattr(viz, key, value)
+
+                    # load BH mass and num in backwards compatible way
+                    if key == 'BH_mass':
+                        viz.M_BH = value
+
+                    if key == 'BH_num':
+                        viz.N_BH = value
+
+            viz.BH_mass = viz.M_BH
+            viz.BH_num = viz.N_BH
 
             # get mass func percentiles and generate the fields
 
@@ -5070,7 +5099,10 @@ class EvolvedVisualizer(ModelVisualizer):
         self.M_t = model._clusterbh.M[slc] << u.Msun
         self.Ms_t = model._clusterbh.Mst[slc] << u.Msun
         self.M_BH_t = model._clusterbh.Mbh[slc] << u.Msun
+        self.M_BH0 = model._clusterbh.Mbh0 << u.Msun
         self.f_BH_t = model._clusterbh.fbh[slc] << u.dimensionless_unscaled
+        self.f_BH0 = model._clusterbh.fbh[0] << u.Msun
+        self.N_BH0 = model._clusterbh.Nbh0 << u.dimensionless_unscaled
         self.mav_t = model._clusterbh.mav[slc] << u.Msun
 
         self.rh_t = model._clusterbh.rh[slc] << u.pc
@@ -5084,6 +5116,145 @@ class EvolvedVisualizer(ModelVisualizer):
 
 
 class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
+
+    @_ClusterVisualizer._support_units
+    def plot_f_BH0(self, fig=None, ax=None, color='tab:blue',
+                   verbose_label=True, **kwargs):
+        r'''Plot the initial BH fraction of this model.
+
+        Plots a histogram of the values of the total black hole mass fraction
+        (i.e. mass fraction in BH over total mass) initially created (and
+        retained) in the given chain of models.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_ClusterVisualizer._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this quantity. Should be a
+            part of the given `fig`.
+
+        color : color, optional
+            The colour of the plotted histogram. This colour will be applied to
+            the edge (border) of the histogram as is, and to the face at 33%
+            transparency.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "BH Mass Fraction",
+            otherwise "$f_{\mathrm{BH}}$".
+
+        **kwargs : dict, optional
+            All other arguments are passed to `plt.hist`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
+
+        if verbose_label:
+            label = "Initial BH Mass Fraction"
+        else:
+            label = r'$f_{\mathrm{BH},0}$'
+
+        return self._plot_quantity('f_BH0', fig=fig, ax=ax, color=color,
+                                   xlabel=label, **kwargs)
+
+    @_ClusterVisualizer._support_units
+    def plot_M_BH0(self, fig=None, ax=None, color='tab:blue',
+                   verbose_label=True, **kwargs):
+        r'''Plot the initial BH mass of this model.
+
+        Plots a histogram of the values of the total black hole mass initially
+        created (and retained) in the given chain of models.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_ClusterVisualizer._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this quantity. Should be a
+            part of the given `fig`.
+
+        color : color, optional
+            The colour of the plotted histogram. This colour will be applied to
+            the edge (border) of the histogram as is, and to the face at 33%
+            transparency.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "BH Mass",
+            otherwise "$\mathrm{M}_{\mathrm{BH}}$".
+
+        **kwargs : dict, optional
+        All other arguments are passed to `plt.hist`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
+        
+        if verbose_label:
+            label = "Initial BH Mass"
+        else:
+            label = r'$\mathrm{M}_{\mathrm{BH},0}$'
+
+        return self._plot_quantity('M_BH0', fig=fig, ax=ax, color=color,
+                                   xlabel=label, **kwargs)
+
+    @_ClusterVisualizer._support_units
+    def plot_N_BH0(self, fig=None, ax=None, color='tab:blue',
+                   verbose_label=True, **kwargs):
+        r'''Plot the initial number of BHs in this model.
+
+        Plots a histogram of the values of the total amount of black holes
+        initially created (and retained) in the given chain of models.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_ClusterVisualizer._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this quantity. Should be a
+            part of the given `fig`.
+
+        color : color, optional
+            The colour of the plotted histogram. This colour will be applied to
+            the edge (border) of the histogram as is, and to the face at 33%
+            transparency.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "BH Amount",
+            otherwise "$\mathrm{N}_{\mathrm{BH}}$".
+
+        **kwargs : dict, optional
+            All other arguments are passed to `plt.hist`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
+
+        if verbose_label:
+            label = "Initial BH Amount"
+        else:
+            label = r'$\mathrm{N}_{\mathrm{BH},0}$'
+
+        return self._plot_quantity('N_BH0', fig=fig, ax=ax, color=color,
+                                   xlabel=label, **kwargs)
 
     def __init__(self, observations):
         self.obs = observations
@@ -5208,6 +5379,7 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
         f_rem = np.full(N, np.nan) << u.pct
         f_BH = np.full(N, np.nan) << u.pct
         f_BH_t = np.full((1, N, Nt), np.nan) << u.pct
+        f_BH0 = np.full(N, np.nan) << u.pct
 
         # number density
 
@@ -5232,11 +5404,12 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
 
         # BH mass
 
-        # TODO change weird BH_mass to M_BH
-        BH_mass = np.full(N, np.nan) << u.Msun
-        BH_num = np.full(N, np.nan) << u.dimensionless_unscaled
+        M_BH = np.full(N, np.nan) << u.Msun
+        N_BH = np.full(N, np.nan) << u.dimensionless_unscaled
 
         M_BH_t = np.full((1, N, Nt), np.nan) << u.Msun
+        M_BH0 = np.full(N, np.nan) << u.Msun
+        N_BH0 = np.full(N, np.nan) << u.dimensionless_unscaled
 
         # Structural params
 
@@ -5366,12 +5539,15 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
             f_BH[model_ind] = model.BH.f
 
             f_BH_t[slc] = (cbh.fbh * 100) << u.pct
+            f_BH0[model_ind] = (cbh.fbh[0] * 100) << u.pct
 
             # Black holes
 
-            BH_mass[model_ind] = np.sum(model.BH.Mj)
+            M_BH[model_ind] = np.sum(model.BH.Mj)
+            N_BH[model_ind] = np.sum(model.BH.Nj)
+            N_BH0[model_ind] = cbh.Nbh0 << N_BH.unit
             M_BH_t[slc] = cbh.Mbh << M_BH_t.unit
-            BH_num[model_ind] = np.sum(model.BH.Nj)
+            M_BH0[model_ind] = cbh.Mbh0 << M_BH_t.unit
 
             # Structural params
 
@@ -5467,9 +5643,12 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
 
         viz.f_rem = f_rem
         viz.f_BH = f_BH
+        viz.f_BH0 = f_BH0
 
-        viz.BH_mass = BH_mass
-        viz.BH_num = BH_num
+        viz.M_BH = viz.BH_mass = M_BH
+        viz.N_BH = viz.BH_num = N_BH
+        viz.M_BH0 = M_BH0
+        viz.N_BH0 = N_BH0
 
         viz.r0 = r0
         viz.rt = rt
