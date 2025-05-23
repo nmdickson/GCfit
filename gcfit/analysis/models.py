@@ -3681,7 +3681,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
     @_ClusterVisualizer._support_units
     def _plot_quantity(self, quant_name, fig=None, ax=None,
-                       color='tab:blue', xlabel=None, **kwargs):
+                       color='tab:blue', xlabel=None, alpha=0.33, **kwargs):
         '''Helper function for plotting histograms of singular quantities.'''
 
         fig, ax = self._setup_artist(fig, ax)
@@ -3694,7 +3694,7 @@ class CIModelVisualizer(_ClusterVisualizer):
             raise ValueError(mssg)
 
         color = mpl_clr.to_rgb(color)
-        facecolor = color + (0.33, )
+        facecolor = color + (alpha, )
 
         ax.hist(quant, histtype='stepfilled',
                 ec=color, fc=facecolor, lw=2, **kwargs)
@@ -5092,27 +5092,30 @@ class EvolvedVisualizer(ModelVisualizer):
         super().__init__(model, observations=observations)
 
         # clusterBH quantities
-        self.t = model._clusterbh.t << u.Gyr
+        cbh = model._clusterbh
+
+        self.t = cbh.t << u.Gyr
 
         slc = (np.newaxis, np.newaxis, ...)
 
-        self.M_t = model._clusterbh.M[slc] << u.Msun
-        self.Ms_t = model._clusterbh.Mst[slc] << u.Msun
-        self.M_BH_t = model._clusterbh.Mbh[slc] << u.Msun
-        self.M_BH0 = model._clusterbh.Mbh0 << u.Msun
-        self.f_BH_t = model._clusterbh.fbh[slc] << u.dimensionless_unscaled
-        self.f_BH0 = model._clusterbh.fbh[0] << u.Msun
-        self.N_BH0 = model._clusterbh.Nbh0 << u.dimensionless_unscaled
-        self.mav_t = model._clusterbh.mav[slc] << u.Msun
+        self.M_t = cbh.M[slc] << u.Msun
+        self.Ms_t = cbh.Mst[slc] << u.Msun
+        self.M_BH_t = cbh.Mbh[slc] << u.Msun
+        self.M_BH0 = cbh.Mbh0 << u.Msun
+        self.f_BH_t = cbh.fbh[slc] << u.dimensionless_unscaled
+        actual_M0 = cbh.M0 + cbh.Mbh0 - cbh.ibh.Ms_lost
+        self.f_BH0 = (100 * cbh.Mbh0 / actual_M0) << u.pct
+        self.N_BH0 = cbh.Nbh0 << u.dimensionless_unscaled
+        self.mav_t = cbh.mav[slc] << u.Msun
 
-        self.rh_t = model._clusterbh.rh[slc] << u.pc
-        self.rt_t = model._clusterbh.rt[slc] << u.pc
-        self.rv_t = model._clusterbh.rv[slc] << u.pc
+        self.rh_t = cbh.rh[slc] << u.pc
+        self.rt_t = cbh.rt[slc] << u.pc
+        self.rv_t = cbh.rv[slc] << u.pc
 
         # TODO units on these?
-        self.psi_t = model._clusterbh.psi[slc] << u.dimensionless_unscaled
-        self.E_t = model._clusterbh.E[slc] << u.dimensionless_unscaled
-        self.trh_t = model._clusterbh.trh[slc] << u.Myr
+        self.psi_t = cbh.psi[slc] << u.dimensionless_unscaled
+        self.E_t = cbh.E[slc] << u.dimensionless_unscaled
+        self.trh_t = cbh.trh[slc] << u.Myr
 
 
 class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
@@ -5125,6 +5128,14 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
         Plots a histogram of the values of the total black hole mass fraction
         (i.e. mass fraction in BH over total mass) initially created (and
         retained) in the given chain of models.
+
+        Note that this fraction will not match exactly with the initial value
+        of `f_BH_t`. This is because the initial total `M_t` in clusterBH
+        includes the BH mass from the start, and thus computing f_BH is not
+        technically valid. This quantity is based on `clusterBH.M0` and the
+        stellar mass lost to make all of the BHs, and thus avoids any
+        double-counting and is agnostic to the evolution in clusterBH.
+        Be careful when making comparisons with mass fractions.
 
         Parameters
         ----------
@@ -5539,7 +5550,8 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
             f_BH[model_ind] = model.BH.f
 
             f_BH_t[slc] = (cbh.fbh * 100) << u.pct
-            f_BH0[model_ind] = (cbh.fbh[0] * 100) << u.pct
+            actual_M0 = cbh.M0 + cbh.Mbh0 - cbh.ibh.Ms_lost
+            f_BH0[model_ind] = (100 * cbh.Mbh0 / actual_M0) << u.pct
 
             # Black holes
 
