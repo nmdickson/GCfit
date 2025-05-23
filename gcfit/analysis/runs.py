@@ -5245,8 +5245,13 @@ class RunCollection(_RunAnalysis):
         '''
 
         if params is None:
-            params = ['W0', 'M', 'log_rh' if log_radii else 'rh', 'ra', 'g',
-                      'delta', 's2', 'F', 'a1', 'a2', 'a3', 'BHret', 'd']
+
+            # assume runs are all of same flavour
+            params = self.runs[0]._get_labels(label_fixed=False)
+
+            if log_radii:
+                params = [f'log_{p}' if p.startswith('rh') else p
+                          for p in params]
 
             if include_FeH:
                 params += ['FeH']
