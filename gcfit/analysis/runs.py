@@ -4241,6 +4241,7 @@ class RunCollection(_RunAnalysis):
 
     def plot_relation(self, param1, param2, fig=None, ax=None, *,
                       show_pearsonr=False, force_model=False,
+                      show_histograms=False, histogram_kwargs=None,
                       annotate=False, annotate_kwargs=None,
                       clr_param=None, clr_kwargs=None, label=None, marker='o',
                       **kwargs):
@@ -4274,6 +4275,14 @@ class RunCollection(_RunAnalysis):
         force_model : bool, optional
             Force these parameter values to be taken from model quantities.
             Can be useful when some parameter names overlap (e.g. "ra").
+
+        show_histograms : bool, optional
+            Optionally plot histograms, using `_plot_param_hist`, for each
+            of the parameters, and append them to the top and right of the
+            plot.
+
+        histogram_kwargs : dict, optional
+            Optional arguments passed to the `_plot_param_hist` function.
 
         annotate : bool, optional
             Optionally create a hook to this figure allowing the interactive
@@ -4348,6 +4357,23 @@ class RunCollection(_RunAnalysis):
             r, p = pearsonr(x, y)
             text = '\n'.join((fr'$\rho={r:.2f}$', fr'$p={p:.2%}$%'))
             ax.add_artist(mpl_obx.AnchoredText(text, loc='lower right'))
+
+        if show_histograms:
+
+            if histogram_kwargs is None:
+                histogram_kwargs = {}
+
+            divider = make_axes_locatable(ax)
+
+            ax_x = divider.append_axes("top", '20%', pad=0.1, sharex=ax)
+            ax_y = divider.append_axes("right", '20%', pad=0.1, sharey=ax)
+
+            self.plot_param_hist(param1, fig=fig, ax=ax_x, **histogram_kwargs)
+            self.plot_param_hist(param2, fig=fig, ax=ax_y,
+                                 flipped=True, **histogram_kwargs)
+
+            ax_x.set_xlabel(None)
+            ax_y.set_ylabel(None)
 
         return fig
 
@@ -5091,7 +5117,7 @@ class RunCollection(_RunAnalysis):
         return fig
 
     def plot_param_hist(self, param, fig=None, ax=None, kde=False,
-                        force_model=False, **kwargs):
+                        force_model=False, flipped=False, **kwargs):
         '''Plot a histogram representing the sum of all distributions of param.
 
         Plots a histogram (or smoothed Gaussian KDE) representing the sum
@@ -5118,6 +5144,10 @@ class RunCollection(_RunAnalysis):
         force_model : bool, optional
             Force these parameter values to be taken from model quantities.
             Can be useful when some parameter names overlap (e.g. "ra").
+
+        flipped : bool, optional
+            If True the posterior will be flipped on it's side, attached to the
+            left-axis.
 
         **kwargs : dict
             All other arguments are passed to `ax.fill_between` or `ax.hist`.
@@ -5149,16 +5179,21 @@ class RunCollection(_RunAnalysis):
                 domain, distribution, k=1, s=0, ext=1
             ).integral(-np.inf, np.inf)
 
-            ax.fill_between(domain, 0, distribution, **kwargs)
-
-            ax.set_ylim(bottom=0)
+            if flipped:
+                ax.fill_betweenx(domain, 0, distribution, **kwargs)
+                ax.set_xlim(left=0)
+            else:
+                ax.fill_between(domain, 0, distribution, **kwargs)
+                ax.set_ylim(bottom=0)
 
         # plot a simple histogram
         else:
 
-            ax.hist(chains, **kwargs)
+            orientation = "horizontal" if flipped else "vertical"
+            ax.hist(chains, orientation=orientation, **kwargs)
 
-        ax.set_ylabel(self._get_latex_labels(param, force_model=force_model))
+        lbl_func = ax.set_ylabel if flipped else ax.set_xlabel
+        lbl_func(self._get_latex_labels(param, force_model=force_model))
 
         return fig
 
