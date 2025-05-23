@@ -956,7 +956,7 @@ class Model(lp.limepy):
         Whether to account for natal kicks in the BH dynamical retention.
         Defaults to True.
 
-    esc_rate : float or callable
+    esc_rate : float or callable, optional
         Represents rate of change of stars over time due to tidal
         ejections (and other escape mechanisms). Regulates low-mass object
         depletion (ejection) due to dynamical evolution. See

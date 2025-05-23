@@ -1254,7 +1254,7 @@ class MCMCRun(_SingleRunAnalysis):
 
         return fig
 
-    def plot_marginals(self, fig=None, **corner_kw):
+    def plot_marginals(self, fig=None, params=None, **corner_kw):
         '''Plot a "corner plot" showcasing the relationships between parameters.
 
         Plots a Nparam-Nparam lower-triangular "corner" marginal plot showing
@@ -1268,6 +1268,12 @@ class MCMCRun(_SingleRunAnalysis):
             be created, otherwise the given figure should be empty, or already
             have the correct number of axes.
             See `_RunAnalysis._setup_multi_artist` for more details.
+
+        params : None or list of str, optional
+            The parameters to show on this figure. If None (default) all
+            parameters (including fixed params) will be shown.
+            Note that margins may need to be adjusted to show labels when
+            plotting many fewer parameters.
 
         **corner_kw : dict
             All other arguments are passed to `corner.corner`.
@@ -1284,6 +1290,14 @@ class MCMCRun(_SingleRunAnalysis):
 
         labels = self._get_labels(math_labels=True, label_fixed=False)
         _, chain = self._get_chains()
+
+        # params is None or a list of string labels
+        if params is not None:
+            raw_labels = self._get_labels(math_labels=False, label_fixed=False)
+            prm_inds = [raw_labels.index(p) for p in params]
+
+            labels = [labels[i] for i in prm_inds]
+            chain = chain[..., prm_inds]
 
         chain = chain.reshape((-1, chain.shape[-1]))
 
@@ -1994,7 +2008,8 @@ class NestedRun(_SingleRunAnalysis):
     # Plots
     # ----------------------------------------------------------------------
 
-    def plot_marginals(self, fig=None, full_volume=False, **corner_kw):
+    def plot_marginals(self, fig=None, full_volume=False, params=None,
+                       **corner_kw):
         '''Plot a "corner plot" showcasing the relationships between parameters.
 
         Plots a Nparam-Nparam lower-triangular "corner" marginal plot showing
@@ -2012,6 +2027,12 @@ class NestedRun(_SingleRunAnalysis):
         full_volume : bool, optional
             Use the entire raw chains, not resampled based on the weights.
             This will not show correct posteriors.
+
+        params : None or list of str, optional
+            The parameters to show on this figure. If None (default) all
+            parameters (including fixed params) will be shown.
+            Note that margins may need to be adjusted to show labels when
+            plotting many fewer parameters.
 
         **corner_kw : dict
             All other arguments are passed to `corner.corner`.
@@ -2032,6 +2053,14 @@ class NestedRun(_SingleRunAnalysis):
             _, chain = self._get_chains()
         else:
             _, chain = self._get_equal_weight_chains()
+
+        # params is None or a list of string labels
+        if params is not None:
+            raw_labels = self._get_labels(math_labels=False, label_fixed=False)
+            prm_inds = [raw_labels.index(p) for p in params]
+
+            labels = [labels[i] for i in prm_inds]
+            chain = chain[..., prm_inds]
 
         chain = chain.reshape((-1, chain.shape[-1]))
 
