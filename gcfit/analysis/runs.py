@@ -1898,7 +1898,7 @@ class NestedRun(_SingleRunAnalysis):
                     args = stored_priors[key]['args']
 
                     if args.dtype.kind == 'S':
-                        args = args.astype('U')
+                        args = args[:].astype('U')
 
                     prior_params[key] = (type_, *args)
                 except KeyError:
