@@ -1919,9 +1919,8 @@ class EvolvedModel(Model):
 
         m0 = self._imf.mmean
 
-        # first convert the more useful M0, rh0 to the N0, rhoh0 required
         N0 = M0.value / m0
-        rhoh0 = (3 * M0.value) / (8 * np.pi * rh0.value**3)
+        self.rhoh0 = (3 * M0) / (8 * np.pi * rh0**3)
 
         # ------------------------------------------------------------------
         # Try to read some metadata from the observations
@@ -1985,7 +1984,8 @@ class EvolvedModel(Model):
 
         self.cbh_kwargs = cbh_kwargs
 
-        self._clusterbh = clusterbh.clusterBH(N0, rhoh0, **self.cbh_kwargs)
+        self._clusterbh = clusterbh.clusterBH(N0, self.rhoh0.value,
+                                              **self.cbh_kwargs)
 
         # Make sure no negative f_BH values are allowed
         self._clusterbh.fbh[self._clusterbh.fbh < 0] = 0.

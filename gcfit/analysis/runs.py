@@ -43,15 +43,18 @@ _label_math_mapping = {
     # Evolved Model Parameters
     'M0': r'M_{0}',
     'rh0': r'r_{\mathrm{h},0}',
+    'rhoh0': r'\rho_{\mathrm{h},0}',
     'M_BH0': r'\mathrm{M}_{\mathrm{BH},0}',
     'N_BH0': r'\mathrm{N}_{\mathrm{BH},0}',
     'f_BH0': r'\mathrm{f}_{\mathrm{BH},0}',
+    'vesc0': r'v_{\mathrm{esc},0}',
     'M_t': r'M(t)',
     'M_BH_t': r'\mathrm{M}_{\mathrm{BH}}(t)',
     'f_BH_t': r'\mathrm{f}_{\mathrm{BH}}(t)',
     'rh_t': r'r_{\mathrm{h}}(t)',
     'rt_t': r'r_{\mathrm{t}}(t)',
     'rv_t': r'r_{\mathrm{v}}(t)',
+    'vesc_t': r'v_{\mathrm{esc}}(t)',
     # Flexible BH Parameters  # TODO need symbols for these
     'kick_slope': r'\mathrm{kick\ slope}',
     'kick_scale': r'\mathrm{kick\ scale}',
@@ -93,6 +96,7 @@ _label_unit_mapping = {
     'M0': r'10^6\ M_\odot',
     'rh': r'\mathrm{pc}',
     'rh0': r'\mathrm{pc}',
+    'rhoh0': r'M_\odot\ \mathrm{pc^{-3}}',
     's2': r'\mathrm{arcmin^{-4}}',
     'BHret': r'\%',
     'd': r'\mathrm{kpc}',
@@ -111,6 +115,7 @@ _label_unit_mapping = {
     'rt': r'\mathrm{pc}',
     'rv': r'\mathrm{pc}',
     'rhp': r'\mathrm{pc}',
+    'vesc0': r'\mathrm{km}\ \mathrm{s^{-1}}',
     'mmean': r'M_\odot',
 }
 

@@ -3060,6 +3060,14 @@ class _ClusterVisualizer:
         -------
         matplotlib.figure.Figure
             The corresponding figure, containing all axes and plot artists.
+
+        Notes
+        -----
+        This quantity is the *radial* profile of escape velocity in the model.
+        It is not the same quantity as *central* escape velocity `vesc0`
+        (or `vesc_t` in evolutionary models). The central value of `vesc[0]`
+        may be similar to the final values of `vesc_t[-1]`, but they are
+        computed differently and likely won't match exactly.
         '''
 
         fig, ax = self._setup_artist(fig, ax)
@@ -3432,6 +3440,9 @@ class ModelVisualizer(_ClusterVisualizer):
         self.rt_t = model.rt[t_slc]
         self.rh_t = model.rh[t_slc]
         self.rv_t = model.rv[t_slc]
+        self.rhoh0 = (3 * model.M) / (8 * np.pi * model.rh**3)
+        self.vesc0 = model.vesc0
+        self.vesc_t = model.vesc0[t_slc]
         self.psi_t = np.full((1, 1, 1), np.nan) << u.dimensionless_unscaled
         self.E_t = np.full((1, 1, 1), np.nan) << u.dimensionless_unscaled
 
@@ -4109,6 +4120,11 @@ class CIModelVisualizer(_ClusterVisualizer):
         mmean = np.full(N, np.nan) << huge_model.mmean.unit
         volume = np.full(N, np.nan) << huge_model.volume.unit
 
+        rhoh0 = np.full(N, np.nan) << rho_unit
+
+        vesc0 = np.full(N, np.nan) << vel_unit
+        vesc_t = np.full((1, N, Nt), np.nan) << vel_unit
+
         rt_t = np.full((1, N, Nt), np.nan) << huge_model.rt.unit
         rh_t = np.full((1, N, Nt), np.nan) << huge_model.rh.unit
         rv_t = np.full((1, N, Nt), np.nan) << huge_model.rv.unit
@@ -4241,6 +4257,10 @@ class CIModelVisualizer(_ClusterVisualizer):
             mmean[model_ind] = model.mmean
             volume[model_ind] = model.volume
 
+            rhoh0[model_ind] = (3 * model.M) / (8 * np.pi * model.rh**3)
+
+            vesc0[model_ind] = vesc_t[slc] = model.vesc0
+
             BH_rh[model_ind] = model.BH.rh
             spitz_chi[model_ind] = model._spitzer_chi
 
@@ -4311,6 +4331,8 @@ class CIModelVisualizer(_ClusterVisualizer):
         viz.psi_t = np.transpose(perc(psi_t, q, axis=1), axes)
         viz.E_t = np.transpose(perc(E_t, q, axis=1), axes)
 
+        viz.vesc_t = np.transpose(perc(vesc_t, q, axis=1), axes)
+
         viz.f_rem = f_rem
         viz.f_BH = f_BH
         viz.f_BH0 = f_BH0
@@ -4328,6 +4350,9 @@ class CIModelVisualizer(_ClusterVisualizer):
         viz.rv = rv
         viz.mmean = mmean
         viz.volume = volume
+
+        viz.rhoh0 = rhoh0
+        viz.vesc0 = vesc0
 
         viz.BH_rh = BH_rh
         viz.spitzer_chi = spitz_chi
@@ -4649,7 +4674,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             profile_keys += (  # time evolution profiles
                 'f_BH_t', 'M_BH_t', 'M_t', 'Ms_t', 'mmean_t',
-                'rt_t', 'rh_t', 'rv_t', 'psi_t', 'E_t'
+                'rt_t', 'rh_t', 'rv_t', 'psi_t', 'E_t', 'vesc_t'
             )
 
             for key in profile_keys:
@@ -4666,8 +4691,8 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             quant_keys = (
                 'f_rem', 'f_BH', 'M_BH', 'N_BH', 'f_BH0', 'M_BH0', 'N_BH0',
-                'r0', 'rt', 'rh', 'rhp', 'ra', 'rv', 'mmean', 'volume',
-                'BH_rh', 'spitzer_chi', 'trh', 'N_relax', 'K_scale',
+                'r0', 'rt', 'rh', 'rhp', 'ra', 'rv', 'mmean', 'volume', 'vesc0',
+                'rhoh0', 'BH_rh', 'spitzer_chi', 'trh', 'N_relax', 'K_scale',
                 'delta_r50', 'delta_A'
             )
 
@@ -4935,6 +4960,27 @@ class EvolvedVisualizer(ModelVisualizer):
         return fig
 
     @_ClusterVisualizer._support_units
+    def plot_vesc_evolution(self, fig=None, ax=None, *,
+                            x_unit='Gyr', y_unit='km/s', legend=True,
+                            label_position='left', verbose_label=True,
+                            blank_xaxis=False, **kwargs):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        ax = self._plot_evolution(ax, self.vesc_t, legend=legend,
+                                  x_unit=x_unit, y_unit=y_unit, **kwargs)
+
+        if verbose_label:
+            label = "Central Escape Velocity"
+        else:
+            label = r'$v_{\mathrm{esc}}\,(t)$'
+
+        self._set_ylabel(ax, label, y_unit, label_position)
+        self._set_xlabel(ax, 'Time', unit=x_unit, remove_all=blank_xaxis)
+
+        return fig
+
+    @_ClusterVisualizer._support_units
     def plot_psi_evolution(self, fig=None, ax=None, *,
                            x_unit='Gyr', y_unit='', legend=True,
                            label_position='left', verbose_label=True,
@@ -5112,6 +5158,11 @@ class EvolvedVisualizer(ModelVisualizer):
         self.rt_t = cbh.rt[slc] << u.pc
         self.rv_t = cbh.rv[slc] << u.pc
 
+        self.rhoh0 = model.rhoh0
+
+        self.vesc0 = model.vesc0
+        self.vesc_t = cbh.vesc[slc] << (u.km / u.s)
+
         # TODO units on these?
         self.psi_t = cbh.psi[slc] << u.dimensionless_unscaled
         self.E_t = cbh.E[slc] << u.dimensionless_unscaled
@@ -5265,6 +5316,100 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
             label = r'$\mathrm{N}_{\mathrm{BH},0}$'
 
         return self._plot_quantity('N_BH0', fig=fig, ax=ax, color=color,
+                                   xlabel=label, **kwargs)
+
+    @_ClusterVisualizer._support_units
+    def plot_rhoh0(self, fig=None, ax=None, color='tab:blue',
+                   verbose_label=True, **kwargs):
+        r'''Plot the initial half-mass density of this model.
+
+        Plots a histogram of the values of the initial half-mass density
+        in the given chain of models. This is computed based on the initial mass
+        and half-mass radius values for each model.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_ClusterVisualizer._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this quantity. Should be a
+            part of the given `fig`.
+
+        color : color, optional
+            The colour of the plotted histogram. This colour will be applied to
+            the edge (border) of the histogram as is, and to the face at 33%
+            transparency.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "Initial Half-Mass
+            Density", otherwise "$\rho_{\mathrm{h},0}$".
+
+        **kwargs : dict, optional
+            All other arguments are passed to `plt.hist`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
+
+        if verbose_label:
+            label = "Initial Half-Mass Density"
+        else:
+            label = r'\rho_{\mathrm{h},0}'
+
+        return self._plot_quantity('rhoh0', fig=fig, ax=ax, color=color,
+                                   xlabel=label, **kwargs)
+
+    @_ClusterVisualizer._support_units
+    def plot_vesc0(self, fig=None, ax=None, color='tab:blue',
+                   verbose_label=True, **kwargs):
+        r'''Plot the initial central escape velocity of this model.
+
+        Plots a histogram of the values of the initial central escape velocity
+        in the given chain of models. This is computed based on the initial mass
+        and half-mass radius (density) values for each model.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_ClusterVisualizer._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this quantity. Should be a
+            part of the given `fig`.
+
+        color : color, optional
+            The colour of the plotted histogram. This colour will be applied to
+            the edge (border) of the histogram as is, and to the face at 33%
+            transparency.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "Initial Central Escape
+            Velocity", otherwise "$v_{\mathrm{esc},0}$".
+
+        **kwargs : dict, optional
+            All other arguments are passed to `plt.hist`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
+
+        if verbose_label:
+            label = "Initial Central Escape Velocity"
+        else:
+            label = r'$v_{\mathrm{esc},0}$'
+
+        return self._plot_quantity('vesc0', fig=fig, ax=ax, color=color,
                                    xlabel=label, **kwargs)
 
     def __init__(self, observations):
@@ -5437,6 +5582,11 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
         mmean = np.full(N, np.nan) << huge_model.mmean.unit
         volume = np.full(N, np.nan) << huge_model.volume.unit
 
+        rhoh0 = np.full(N, np.nan) << rho_unit
+
+        vesc0 = np.full(N, np.nan) << vel_unit
+        vesc_t = np.full((1, N, Nt), np.nan) << vel_unit
+
         rt_t = np.full((1, N, Nt), np.nan) << huge_model.rt.unit
         rh_t = np.full((1, N, Nt), np.nan) << huge_model.rh.unit
         rv_t = np.full((1, N, Nt), np.nan) << huge_model.rv.unit
@@ -5579,6 +5729,11 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
             mmean[model_ind] = model.mmean
             volume[model_ind] = model.volume
 
+            rhoh0[model_ind] = model.rhoh0
+
+            vesc0[model_ind] = model.vesc0
+            vesc_t[slc] = cbh.vesc << vel_unit
+
             BH_rh[model_ind] = model.BH.rh
             spitz_chi[model_ind] = model._spitzer_chi
 
@@ -5653,6 +5808,8 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
         viz.psi_t = np.transpose(perc(psi_t, q, axis=1), axes)
         viz.E_t = np.transpose(perc(E_t, q, axis=1), axes)
 
+        viz.vesc_t = np.transpose(perc(vesc_t, q, axis=1), axes)
+
         viz.f_rem = f_rem
         viz.f_BH = f_BH
         viz.f_BH0 = f_BH0
@@ -5670,6 +5827,9 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
         viz.rv = rv
         viz.mmean = mmean
         viz.volume = volume
+
+        viz.rhoh0 = rhoh0
+        viz.vesc0 = vesc0
 
         viz.BH_rh = BH_rh
         viz.spitzer_chi = spitz_chi
