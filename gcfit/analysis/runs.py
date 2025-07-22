@@ -1,6 +1,7 @@
-from .. import Observations
+from .. import Observations, DEFAULT_FREE_PARAMS, DEFAULT_FREE_EV_PARAMS
 from ..probabilities import priors
 from ..core.main import MCMCFittingState, NestedFittingState
+from ..util.probabilities import ModelParameters
 from .models import CIModelVisualizer, ModelVisualizer
 from .models import EvolvedVisualizer, CIEvolvedVisualizer
 from .models import ModelCollection
@@ -450,6 +451,7 @@ class _RunAnalysis:
 
 
 # TODO a way to plot our priors, probably for both vizs
+# TODO some things in this shared base class are only valid for NestedRun
 class _SingleRunAnalysis(_RunAnalysis):
     '''Base class for all visualizers of single runs, of all types.
 
@@ -489,7 +491,7 @@ class _SingleRunAnalysis(_RunAnalysis):
 
         if value is not None:
 
-            _, ch = self._get_chains(include_fixed=False, apply_mask=False)
+            _, ch = self._get_chains(apply_mask=False)
 
             # flatten chain if necessary (to work with MCMC, mask must be flat)
             if ch.ndim > 2:
@@ -590,13 +592,38 @@ class _SingleRunAnalysis(_RunAnalysis):
             # Check if this is an evolved modelling fit or not
             self._evolved = mdata.get('evolved', False)
 
-            # Check if this had extra flexible BH parameters
-            self._free_kicks = mdata.get('flexible_natal_kicks', False)
-            self._free_IFMR = mdata.get('flexible_IFMR', False)
+            # Load free parameters in a backwards compatible way
+            try:
+                free_params = tuple(fp.decode() for fp in mdata['free_params'])
 
-            # Check for backwards compatibility with old, free BHs
-            if mdata.get('flexible_BHs', False):
-                self._free_kicks = self._free_IFMR = True
+                # If any transforms stored, use those (and assume nothing else)
+                # TODO currently can only support sympy-style transforms
+                if 'param_transforms' in mdata:
+                    transforms = dict(mdata['param_transforms'].attrs)
+                    compatibility_transforms = False
+                else:
+                    transforms = None
+                    compatibility_transforms = True
+
+            except KeyError:
+                free_params = (DEFAULT_FREE_EV_PARAMS if self._evolved
+                               else DEFAULT_FREE_PARAMS)
+
+                if 'fixed_params' in file['metadata']:
+                    free_params = tuple(
+                        fp for fp in free_params
+                        if fp not in file['metadata']['fixed_params'].attrs
+                    )
+
+                # This is an old run, can assume these typical transforms
+                transforms = None
+                compatibility_transforms = True
+
+            # backwards compatibility with old --free-kicks
+            if mdata.get('flexible_natal_kicks', False):
+                free_params += ('kick_slope', 'kick_scale')
+
+            self._parameters = free_params
 
             # Check if this run seems to have used a local cluster data file
             restrict_to = mdata.get('restrict_to', None)
@@ -619,14 +646,11 @@ class _SingleRunAnalysis(_RunAnalysis):
                 mssg = "No cluster name in metadata, must supply observations"
                 raise ValueError(mssg) from err
 
-        self._parameters = list(self.obs.initials if not self._evolved
-                                else self.obs.ev_initials)
-
-        if self._free_kicks:
-            self._parameters += list(self.obs._kick_initials)
-
-        if self._free_IFMR:
-            self._parameters += list(self.obs._IFMR_initials)
+        self._modelparams = ModelParameters(
+            self._parameters, self._get_model_kwargs(),
+            self.obs, self._evolved, transforms=transforms,
+            compatibility_transforms=compatibility_transforms
+        )
 
     @contextlib.contextmanager
     def _openfile(self, group=None, mode='r'):
@@ -643,29 +667,17 @@ class _SingleRunAnalysis(_RunAnalysis):
         finally:
             file.close()
 
-    def _get_labels(self, label_fixed=True, math_labels=False):
+    def _get_labels(self, math_labels=False):
         '''Retrieve labels for all parameters.'''
 
-        labels = self._parameters.copy()
+        labels = self._parameters
 
         if math_labels:
             labels = [_get_latex_label(lbl, with_units=True) for lbl in labels]
 
-        if label_fixed:
-
-            with self._openfile('metadata') as mdata:
-
-                fixed = sorted(
-                    ((k, labels.index(k)) for k in mdata['fixed_params'].attrs),
-                    key=lambda item: labels.index(item[0])
-                )
-
-            for k, i in fixed:
-                labels[i] += ' (fixed)'
-
         return labels
 
-    def _get_model_kwargs(self, note_flexible_BHs=False):
+    def _get_model_kwargs(self):
         '''Return the `model_kwargs` metadata (backwards compatible)'''
 
         def _gather_attrs(key, grp):
@@ -680,13 +692,6 @@ class _SingleRunAnalysis(_RunAnalysis):
                 mdata['model_kwargs'].visititems(_gather_attrs)
             except KeyError:
                 model_kw = {}
-
-        # this is not for `Model`, but for some preliminary stuff (`_get_model`)
-        if note_flexible_BHs:
-            if self._free_kicks:
-                model_kw['flexible_natal_kicks'] = True
-            if self._free_IFMR:
-                model_kw['flexible_IFMR'] = True
 
         return model_kw
 
@@ -836,21 +841,9 @@ class MCMCRun(_SingleRunAnalysis):
 
         with self._openfile() as file:
 
-            labels = self._parameters.copy()
+            labels = self._parameters
 
             chain = self._reduce(file[self._gname]['chain'])
-
-            # Handle fixed parameters
-
-            fixed = sorted(
-                ((k, v, labels.index(k)) for k, v in
-                 file['metadata']['fixed_params'].attrs.items()),
-                key=lambda item: labels.index(item[0])
-            )
-
-            for k, v, i in fixed:
-                labels[i] += ' (fixed)'
-                chain = np.insert(chain, i, v, axis=-1)
 
         if flatten:
             chain = chain.reshape((-1, chain.shape[-1]))
@@ -863,7 +856,6 @@ class MCMCRun(_SingleRunAnalysis):
         with self._openfile('metadata') as mdata:
 
             stored_priors = mdata['specified_priors']
-            fixed = dict(mdata['fixed_params'].attrs)
 
             prior_params = {}
 
@@ -879,11 +871,8 @@ class MCMCRun(_SingleRunAnalysis):
                 except KeyError:
                     continue
 
-        prior_kwargs = {
-            'fixed_initials': fixed, 'err_on_fail': False,
-            'evolved': self._evolved, 'flexible_natal_kicks': self._free_kicks,
-            'flexible_IFMR': self._free_IFMR
-        }
+        prior_kwargs = {'model_params': self._modelparams, 'err_on_fail': False,
+                        'evolved': self._evolved}
 
         return priors.Priors(prior_params, **prior_kwargs)
 
@@ -909,13 +898,12 @@ class MCMCRun(_SingleRunAnalysis):
             The created model visualization object.
         '''
 
-        labels, chain = self._get_chains()
+        _, chain = self._get_chains()
 
-        model_cls = ModelVisualizer if not self.evolved else EvolvedVisualizer
+        model_cls = ModelVisualizer if not self._evolved else EvolvedVisualizer
 
-        model_kw = self._get_model_kwargs(note_flexible_BHs=True)
-
-        return model_cls.from_chain(chain, self.obs, method, **model_kw)
+        return model_cls.from_chain(chain, self.obs, self._modelparams,
+                                    method=method)
 
     def get_CImodel(self, N=100, Nprocesses=1, load=False):
         '''Return a `CIModelVisualizer` instance corresponding to this run.
@@ -946,20 +934,18 @@ class MCMCRun(_SingleRunAnalysis):
         '''
         import multiprocess
 
-        viz_cls = CIModelVisualizer if not self.evolved else CIEvolvedVisualizer
+        viz_cls = CIEvolvedVisualizer if self._evolved else CIModelVisualizer
 
         if load:
             return viz_cls.load(self._filename, observations=self.obs)
 
         else:
 
-            labels, chain = self._get_chains()
-
-            model_kw = self._get_model_kwargs(note_flexible_BHs=True)
+            _, chain = self._get_chains()
 
             with multiprocess.Pool(processes=Nprocesses) as pool:
-                return viz_cls.from_chain(chain, self.obs, N,
-                                          pool=pool, **model_kw)
+                return viz_cls.from_chain(chain, self.obs, self._modelparams,
+                                          N, pool=pool)
 
     # ----------------------------------------------------------------------
     # Plots
@@ -1293,12 +1279,12 @@ class MCMCRun(_SingleRunAnalysis):
         fig, ax = self._setup_multi_artist(fig, shape=None,
                                            constrained_layout=False)
 
-        labels = self._get_labels(math_labels=True, label_fixed=False)
+        labels = self._get_labels(math_labels=True)
         _, chain = self._get_chains()
 
         # params is None or a list of string labels
         if params is not None:
-            raw_labels = self._get_labels(math_labels=False, label_fixed=False)
+            raw_labels = self._get_labels(math_labels=False)
             prm_inds = [raw_labels.index(p) for p in params]
 
             labels = [labels[i] for i in prm_inds]
@@ -1306,16 +1292,10 @@ class MCMCRun(_SingleRunAnalysis):
 
         chain = chain.reshape((-1, chain.shape[-1]))
 
-        # ugly
-        ranges = [1. if 'fixed' not in lbl
-                  else (chain[0, i] - 1, chain[0, i] + 1)
-                  for i, lbl in enumerate(labels)]
-
         corner_kw.setdefault('plot_datapoints', False)
         corner_kw.setdefault('labelpad', 0.25)
 
-        fig = corner.corner(chain, labels=labels, fig=fig,
-                            range=ranges, **corner_kw)
+        fig = corner.corner(chain, labels=labels, fig=fig, **corner_kw)
 
         fig.subplots_adjust(left=0.05, bottom=0.06)
 
@@ -1544,13 +1524,9 @@ class MCMCRun(_SingleRunAnalysis):
 
             for ind, param in enumerate(labels):
 
-                if 'fixed' in param:
-                    mssg += (f'{param[:-8]:>5} = {p50[ind]:.3f} '
-                             f'({"fixed":^14})\n')
-                else:
-                    mssg += (f'{param:>5} = {p50[ind]:.3f} '
-                             f'(+{uncert_plus[ind]:.3f}, '
-                             f'-{uncert_minus[ind]:.3f})\n')
+                mssg += (f'{param:>5} = {p50[ind]:.3f} '
+                         f'(+{uncert_plus[ind]:.3f}, '
+                         f'-{uncert_minus[ind]:.3f})\n')
 
         if content == 'all' or content == 'metadata':
 
@@ -1570,14 +1546,6 @@ class MCMCRun(_SingleRunAnalysis):
                 mssg += f'Dimensions = ({Nwalkers}, {Ndim})\n'
 
                 mdata = file['metadata']
-
-                mssg += 'Fixed parameters:\n'
-                fixed = mdata['fixed_params'].attrs
-                if fixed:
-                    for k, v in fixed.items():
-                        mssg += f'    {k} = {v}\n'
-                else:
-                    mssg += '    None\n'
 
                 mssg += 'Excluded components:\n'
                 exc = mdata['excluded_likelihoods']
@@ -1662,7 +1630,7 @@ class NestedRun(_SingleRunAnalysis):
             N = sum([self.obs[comp[0]].size for comp in
                      self.obs.filter_likelihoods(exc, True)])
 
-            k = len(self._get_chains(include_fixed=False)[1])
+            k = len(self._get_chains()[1])
             lnL0 = np.max(file[self._gname]['logl'][:])
 
         AIC = -2 * lnL0 + (2 * k) + ((2 * k * (k + 1)) / (N - k - 1))
@@ -1680,7 +1648,7 @@ class NestedRun(_SingleRunAnalysis):
             N = sum([self.obs[comp[0]].size for comp in
                      self.obs.filter_likelihoods(exc, True)])
 
-            k = len(self._get_chains(include_fixed=False)[1])
+            k = len(self._get_chains()[1])
             lnL0 = np.max(file[self._gname]['logl'][:])
 
         BIC = -2 * lnL0 + (k * np.log(N))
@@ -1741,20 +1709,6 @@ class NestedRun(_SingleRunAnalysis):
 
                 r[k] = d
 
-            # add in any fixed params, if they exist
-
-            labels = self._get_labels(False, False)
-
-            fixed = sorted(
-                ((k, v, labels.index(k)) for k, v in
-                 file['metadata']['fixed_params'].attrs.items()),
-                key=lambda item: labels.index(item[0])
-            )
-
-            for k, v, i in fixed:
-                r['samples'] = np.insert(r['samples'], i, v, axis=-1)
-                r['samples_u'] = np.insert(r['samples_u'], i, v, axis=-1)
-
         if finite_only:
             # remove the amount of non-finite values we removed from niter
             r['niter'] -= (r['niter'] - r['logl'].size)
@@ -1813,7 +1767,7 @@ class NestedRun(_SingleRunAnalysis):
         return bnds
 
     # TODO some ways of handling and plotting initial_batch only clusters
-    def _get_chains(self, include_fixed=True, *, apply_mask=True):
+    def _get_chains(self, *, apply_mask=True):
         '''Get the "chains" of all samples from this nested sampling run.'''
 
         with self._openfile() as file:
@@ -1823,25 +1777,11 @@ class NestedRun(_SingleRunAnalysis):
             if apply_mask and self.mask is not None:
                 chain = chain[self.mask, :]
 
-            labels = self._parameters.copy()
-
-            fixed = sorted(
-                ((k, v, labels.index(k)) for k, v in
-                 file['metadata']['fixed_params'].attrs.items()),
-                key=lambda item: labels.index(item[0])
-            )
-
-            if include_fixed:
-                for k, v, i in fixed:
-                    labels[i] += ' (fixed)'
-                    chain = np.insert(chain, i, v, axis=-1)
-            else:
-                for *_, i in reversed(fixed):
-                    del labels[i]
+            labels = self._parameters
 
         return labels, chain
 
-    def _get_equal_weight_chains(self, include_fixed=True, add_errors=False, *,
+    def _get_equal_weight_chains(self, add_errors=False, *,
                                  apply_mask=True):
         '''Get the "chains" of samples resampled to be equally weighted.'''
 
@@ -1863,22 +1803,7 @@ class NestedRun(_SingleRunAnalysis):
                 sim_wt = weight_function(sim_run, {'pfrac': 1.}, True)[1][2]
                 eq_chain = resample_equal(sim_run.samples, sim_wt)
 
-            labels = self._parameters.copy()
-
-            fixed = sorted(
-                ((k, v, labels.index(k)) for k, v in
-                 file['metadata']['fixed_params'].attrs.items()),
-                key=lambda item: labels.index(item[0])
-            )
-
-            # TODO allow including fixed without labelling as fixed
-            if include_fixed:
-                for k, v, i in fixed:
-                    labels[i] += ' (fixed)'
-                    eq_chain = np.insert(eq_chain, i, v, axis=-1)
-            else:
-                for *_, i in reversed(fixed):
-                    del labels[i]
+            labels = self._parameters
 
         return labels, eq_chain
 
@@ -1888,7 +1813,6 @@ class NestedRun(_SingleRunAnalysis):
         with self._openfile('metadata') as mdata:
 
             stored_priors = mdata['specified_priors']
-            fixed = dict(mdata['fixed_params'].attrs)
 
             prior_params = {}
 
@@ -1904,11 +1828,8 @@ class NestedRun(_SingleRunAnalysis):
                 except KeyError:
                     continue
 
-        prior_kwargs = {
-            'fixed_initials': fixed, 'err_on_fail': False,
-            'evolved': self._evolved, 'flexible_natal_kicks': self._free_kicks,
-            'flexible_IFMR': self._free_IFMR
-        }
+        prior_kwargs = {'model_params': self._modelparams, 'err_on_fail': False,
+                        'evolved': self._evolved}
 
         return priors.PriorTransforms(prior_params, **prior_kwargs)
 
@@ -1941,15 +1862,14 @@ class NestedRun(_SingleRunAnalysis):
 
         model_cls = ModelVisualizer if not self._evolved else EvolvedVisualizer
 
-        model_kw = self._get_model_kwargs(note_flexible_BHs=True)
-
         if method == 'mean':
             theta = self.parameter_means()[0]
-            return model_cls.from_theta(theta, self.obs, **model_kw)
+            return model_cls.from_theta(theta, self.obs, self._modelparams)
 
         else:
-            labels, chain = self._get_equal_weight_chains(add_errors=add_errors)
-            return model_cls.from_chain(chain, self.obs, method, **model_kw)
+            _, chain = self._get_equal_weight_chains(add_errors=add_errors)
+            return model_cls.from_chain(chain, self.obs, self._modelparams,
+                                        method=method)
 
     def get_CImodel(self, N=100, Nprocesses=1, add_errors=False, shuffle=True,
                     load=False):
@@ -1998,16 +1918,14 @@ class NestedRun(_SingleRunAnalysis):
             return ci_cls.load(self._filename, observations=self.obs)
 
         else:
-            labels, chain = self._get_equal_weight_chains(add_errors=add_errors)
+            _, chain = self._get_equal_weight_chains(add_errors=add_errors)
 
             if shuffle:
                 np.random.default_rng().shuffle(chain, axis=0)
 
-            model_kw = self._get_model_kwargs(note_flexible_BHs=True)
-
             with multiprocess.Pool(processes=Nprocesses) as pool:
-                return ci_cls.from_chain(chain, self.obs, N,
-                                         pool=pool, **model_kw)
+                return ci_cls.from_chain(chain, self.obs, self._modelparams,
+                                         N, pool=pool)
 
     # ----------------------------------------------------------------------
     # Plots
@@ -2052,7 +1970,7 @@ class NestedRun(_SingleRunAnalysis):
         fig, ax = self._setup_multi_artist(fig, shape=None,
                                            constrained_layout=False)
 
-        labels = self._get_labels(math_labels=True, label_fixed=False)
+        labels = self._get_labels(math_labels=True)
 
         if full_volume:
             _, chain = self._get_chains()
@@ -2061,7 +1979,7 @@ class NestedRun(_SingleRunAnalysis):
 
         # params is None or a list of string labels
         if params is not None:
-            raw_labels = self._get_labels(math_labels=False, label_fixed=False)
+            raw_labels = self._get_labels(math_labels=False)
             prm_inds = [raw_labels.index(p) for p in params]
 
             labels = [labels[i] for i in prm_inds]
@@ -2069,16 +1987,10 @@ class NestedRun(_SingleRunAnalysis):
 
         chain = chain.reshape((-1, chain.shape[-1]))
 
-        # ugly
-        ranges = [1. if 'fixed' not in lbl
-                  else (chain[0, i] - 1, chain[0, i] + 1)
-                  for i, lbl in enumerate(labels)]
-
         corner_kw.setdefault('plot_datapoints', False)
         corner_kw.setdefault('labelpad', 0.25)
 
-        fig = corner.corner(chain, labels=labels, fig=fig,
-                            range=ranges, **corner_kw)
+        fig = corner.corner(chain, labels=labels, fig=fig, **corner_kw)
 
         fig.subplots_adjust(left=0.05, bottom=0.06)
 
@@ -2140,7 +2052,7 @@ class NestedRun(_SingleRunAnalysis):
 
         clr = kw.pop('color', None)
 
-        labels, _ = self._get_chains(include_fixed=False)
+        labels, _ = self._get_chains()
 
         try:
             N = len(iteration)
@@ -2916,7 +2828,7 @@ class NestedRun(_SingleRunAnalysis):
             imf[m < 0.08] = m[m < 0.08]**-0.3
             return imf
 
-        def this_imf(m, perc=50):
+        def this_imf(m, perc=50.):
             '''perc is percentile of alpha chain to use'''
 
             ch = self._get_equal_weight_chains()[1]
@@ -3103,7 +3015,7 @@ class NestedRun(_SingleRunAnalysis):
     # Summaries
     # ----------------------------------------------------------------------
 
-    def parameter_summary(self, *, N_simruns=100, label_fixed=False):
+    def parameter_summary(self, *, N_simruns=100):
         '''Compute the mean and std.dev. on each parameter.
 
         Computes and returns a dictionary with the mean and standard deviation
@@ -3127,7 +3039,7 @@ class NestedRun(_SingleRunAnalysis):
             deviations.
         '''
 
-        labels = self._get_labels(label_fixed=label_fixed)
+        labels = self._get_labels()
 
         sr = self._sim_errors(N_simruns)
         mns, _ = self.parameter_means(sim_runs=sr, return_samples=False)
@@ -3189,14 +3101,9 @@ class NestedRun(_SingleRunAnalysis):
 
                 logging.debug(f"---> ({ind}) {param} {mns[ind]}")
 
-                if 'fixed' in param:
-                    mssg += (f'{param[:-8]:>5} = {mns[ind]:.3f} '
-                             f'({"fixed":^14}) | ')
-                    mssg += f'{"-" * 14}\n'
-                else:
-                    mssg += (f'{param:>5} = {mns[ind]:.3f} '
-                             f'(±{σ_mns[ind]:.3f}) | ')
-                    mssg += (f'{std[ind]:.3f} (±{σ_std[ind]:.3f})\n')
+                mssg += (f'{param:>5} = {mns[ind]:.3f} '
+                         f'(±{σ_mns[ind]:.3f}) | ')
+                mssg += (f'{std[ind]:.3f} (±{σ_std[ind]:.3f})\n')
 
         if content == 'all' or content == 'setup':
 
@@ -3205,14 +3112,6 @@ class NestedRun(_SingleRunAnalysis):
             mssg += f'\n{"=" * 9}\n'
 
             with self._openfile('metadata') as mdata:
-
-                mssg += 'Fixed parameters:\n'
-                fixed = mdata['fixed_params'].attrs
-                if fixed:
-                    for k, v in fixed.items():
-                        mssg += f'    {k} = {v}\n'
-                else:
-                    mssg += '    None\n'
 
                 mssg += 'Excluded components:\n'
                 exc = mdata['excluded_likelihoods']
@@ -3579,7 +3478,8 @@ class RunCollection(_RunAnalysis):
 
         self.runs = runs
 
-        labels = runs[0]._get_labels(label_fixed=False)
+        # TODO assumes all runs have same free params, obviously not foolproof
+        labels = runs[0]._get_labels()
 
         # TODO this `equal_weights...` breaks when using MCMCRun's
         self._params = [dict(zip(labels, r._get_equal_weight_chains()[1].T))
@@ -3766,7 +3666,7 @@ class RunCollection(_RunAnalysis):
 
     def _update(self):
         '''Quickly update all run params, in case something has changed.'''
-        labels = self.runs[0]._get_labels(label_fixed=False)
+        labels = self.runs[0]._get_labels()
         self._params = [dict(zip(labels, r._get_equal_weight_chains()[1].T))
                         for r in self.runs]
 
@@ -3814,6 +3714,7 @@ class RunCollection(_RunAnalysis):
                     self.get_CImodels(load=True, **kwargs)
 
                 except RuntimeError:
+                    logging.debug('No saved CI models found, getting models')
                     self.get_models(**kwargs)
 
         data = getattr(self.models, param)
@@ -4102,12 +4003,10 @@ class RunCollection(_RunAnalysis):
 
         obs_list = [run.obs for run in self.runs]
         ev_list = [run._evolved for run in self.runs]
-        kw_list = [run._get_model_kwargs(note_flexible_BHs=True)
-                   for run in self.runs]
+        prm_list = [run._modelparams for run in self.runs]
 
-        mc = ModelCollection.from_chains(chains, obs_list, ci=False,
-                                         evolved=ev_list, model_kws=kw_list,
-                                         **kwargs)
+        mc = ModelCollection.from_chains(chains, obs_list, prm_list, ci=False,
+                                         evolved=ev_list)
 
         # save a copy of models here
         self.models = mc
@@ -4166,7 +4065,7 @@ class RunCollection(_RunAnalysis):
 
         else:
             chains = []
-            kw_list = []
+            prm_list = []
 
             for run in self.runs:
                 _, ch = run._get_equal_weight_chains(add_errors=add_errors)
@@ -4175,13 +4074,13 @@ class RunCollection(_RunAnalysis):
                     np.random.default_rng().shuffle(ch, axis=0)
 
                 chains.append(ch)
-                kw_list.append(run._get_model_kwargs(note_flexible_BHs=True))
+                prm_list.append(run._modelparams)
 
             with multiprocess.Pool(processes=Nprocesses) as pool:
 
-                mc = ModelCollection.from_chains(chains, obs_list, ci=True, N=N,
-                                                 pool=pool, evolved=ev_list,
-                                                 model_kws=kw_list)
+                mc = ModelCollection.from_chains(chains, obs_list, prm_list,
+                                                 ci=True, N=N, pool=pool,
+                                                 evolved=ev_list)
 
         # save a copy of models here
         self.models = mc
@@ -5398,7 +5297,7 @@ class RunCollection(_RunAnalysis):
         # Get name of all desired parameters
 
         if params == 'all':
-            labels = self.runs[0]._get_labels(label_fixed=False)
+            labels = self.runs[0]._get_labels()
 
         else:
             labels = params
