@@ -981,7 +981,8 @@ class Model(lp.limepy):
     '''
 
     def _evolve_mf(self, m_breaks, a1, a2, a3, nbins, FeH, age, esc_rate, tcc,
-                   NS_ret, BH_ret_int, BHret, natal_kicks, vesc, **kwargs):
+                   NS_ret, BH_ret_int, BHret, natal_kicks, vesc,
+                   kick_method, kick_vdisp,  kick_slope,  kick_scale, **kwargs):
         '''Compute an evolved mass function using `ssptools.EvolvedMF`'''
 
         self._imf = masses.PowerLawIMF(
@@ -1000,6 +1001,10 @@ class Model(lp.limepy):
             BH_ret_dyn=BHret / 100.,
             natal_kicks=natal_kicks,
             vesc=vesc.value,
+            kick_method=kick_method,
+            kick_vdisp=kick_vdisp,
+            kick_slope=kick_slope,
+            kick_scale=kick_scale,
             **kwargs  # will error here if MF_kwargs included any of above args
         )
 
@@ -1084,8 +1089,10 @@ class Model(lp.limepy):
                  s2=0., F=1., *, observations=None, age=None, FeH=None,
                  m_breaks=[0.1, 0.5, 1.0, 100], nbins=[5, 5, 20],
                  tracer_masses=None, tcc=0.0, NS_ret=0.1, BH_ret_int=1.0,
-                 esc_rate=0.0, natal_kicks=True, vesc=90, MF_kwargs=None,
-                 meanmassdef='global', ode_maxstep=1e10, ode_rtol=1e-7):
+                 esc_rate=0.0, natal_kicks=True, kick_method='maxwellian',
+                 vesc=90, kick_vdisp=265., kick_slope=1, kick_scale=20,
+                 MF_kwargs=None, meanmassdef='global',
+                 ode_maxstep=1e10, ode_rtol=1e-7):
 
         # ------------------------------------------------------------------
         # Add/convert units of some quantities. Supports quantities as inputs
@@ -1156,7 +1163,9 @@ class Model(lp.limepy):
         self._mf = self._evolve_mf(m_breaks, a1, a2, a3, nbins,
                                    FeH, age, esc_rate, tcc,
                                    NS_ret, BH_ret_int, BHret,
-                                   natal_kicks, self.vesc0, **MF_kwargs)
+                                   natal_kicks, self.vesc0,
+                                   kick_method, kick_vdisp,
+                                   kick_slope,  kick_scale, **MF_kwargs)
 
         if not self._mf.converged:
             mssg = ("Mass function evolution ODE failed to converge"
@@ -1679,7 +1688,8 @@ class EvolvedModel(Model):
     '''
 
     def _evolve_mf(self, m_breaks, a1, a2, a3, nbins, FeH, age, esc_rate, tcc,
-                   NS_ret, BH_ret_int, BHret, natal_kicks, vesc, **kwargs):
+                   NS_ret, BH_ret_int, BHret, natal_kicks, vesc,
+                   kick_method, kick_vdisp,  kick_slope,  kick_scale, **kwargs):
         '''Alternative MF init using prior-computed IMF and clusterBH outputs'''
         from ssptools import EvolvedMFWithBH
 
@@ -1698,6 +1708,10 @@ class EvolvedModel(Model):
             vesc=vesc.value,
             esc_norm='M',
             md=self.md,
+            kick_method=kick_method,
+            kick_vdisp=kick_vdisp,
+            kick_slope=kick_slope,
+            kick_scale=kick_scale,
             **kwargs  # will error here if MF_kwargs included any of above args
         )
 
@@ -1707,7 +1721,11 @@ class EvolvedModel(Model):
                  a1=1.3, a2=2.3, a3=2.3, d=5,
                  s2=0., F=1., *, observations=None, age=None, FeH=None,
                  Zsun=0.02, m_breaks=[0.1, 0.5, 1.0, 100], nbins=[5, 5, 20],
-                 md=1.2, cbh_kwargs=None, MF_kwargs=None, **kwargs):
+                 tracer_masses=None, tcc=0.0, NS_ret=0.1, BH_ret_int=1.0,
+                 md=1.2, natal_kicks=True, kick_method='maxwellian',
+                 kick_vdisp=265., kick_slope=1, kick_scale=20,
+                 cbh_kwargs=None, MF_kwargs=None, meanmassdef='global',
+                 ode_maxstep=1e10, ode_rtol=1e-7):
         import clusterbh
 
         M0 <<= u.Msun
@@ -1763,21 +1781,32 @@ class EvolvedModel(Model):
                 cbh_kwargs.setdefault('rg', Rgal.to_value('kpc'))
 
             # Get age to evolve to
-            age = (observations.mdata['age'] << u.Gyr)
-            cbh_kwargs.setdefault('tend', age.to_value('Myr'))
+            if age is None:
+                age = observations.mdata['age'] << u.Gyr
+
+            if FeH is None:
+                FeH = observations.mdata['FeH']
+
+            # cbh_kwargs.setdefault('tend', age.to_value('Myr'))
 
             # Get metallicity
-            cbh_kwargs.setdefault('Z', Zsun * 10**observations.mdata['FeH'])
+            # cbh_kwargs.setdefault('Z', Zsun * 10**observations.mdata['FeH'])
+
+        else:
+            if age is None or FeH is None:
+                # Error here if age, FeH can't be found
+                mssg = ("Must supply either `age` and `FeH` or "
+                        "an `observations`, to read them from")
+                raise ValueError(mssg)
 
         # ------------------------------------------------------------------
         # Get age and metallicity, if given (TODO make this logic match others)
         # ------------------------------------------------------------------
 
-        if age is not None:
-            cbh_kwargs.setdefault('tend', age.to_value('Myr'))
+        age = age << u.Gyr
 
-        if FeH is not None:
-            cbh_kwargs.setdefault('Z', Zsun * 10**FeH)
+        cbh_kwargs.setdefault('tend', age.to_value('Myr'))
+        cbh_kwargs.setdefault('Z', Zsun * 10**FeH)
 
         cbh_kwargs.setdefault('Zsolar', Zsun)
 
@@ -1851,11 +1880,18 @@ class EvolvedModel(Model):
 
         BHret = -1  # Spoof unneeded BH retention fraction for `Model`
 
+        # Explicitly specify everything so we can get the correct Signature
         super().__init__(W0, M, rh, g=g, delta=delta, ra=ra,
                          a1=a1, a2=a2, a3=a3, BHret=BHret, d=d,
                          s2=s2, F=F, observations=observations, age=age,
                          FeH=FeH, m_breaks=m_breaks, vesc=vesc, esc_rate=Mdot_t,
-                         tcc=tcc, MF_kwargs=MF_kwargs, **kwargs)
+                         tcc=tcc, tracer_masses=tracer_masses,
+                         NS_ret=NS_ret, BH_ret_int=BH_ret_int,
+                         natal_kicks=natal_kicks, kick_method=kick_method,
+                         kick_vdisp=kick_vdisp, kick_slope=kick_slope,
+                         kick_scale=kick_scale, meanmassdef=meanmassdef,
+                         ode_maxstep=ode_maxstep, ode_rtol=ode_rtol,
+                         MF_kwargs=MF_kwargs)
 
         # reset theta to use initial values
         self.theta = dict(W0=W0, M0=M0.to_value('1e6 Msun'), rh0=rh0.value,
