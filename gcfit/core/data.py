@@ -14,63 +14,20 @@ import itertools
 from collections import namedtuple
 
 
-__all__ = ['DEFAULT_THETA', 'DEFAULT_EV_THETA',
-           'Model', 'FittableModel', 'SingleMassModel',
-           'EvolvedModel', 'FittableEvolvedModel',
-           'SampledModel', 'Observations']
+__all__ = ['DEFAULT_FREE_PARAMS', 'DEFAULT_FREE_EV_PARAMS',
+           'Model', 'SingleMassModel', 'EvolvedModel', 'SampledModel',
+           'Observations']
 
 
-# The order of these is important!
-DEFAULT_THETA = {
-    'W0': 6.0,
-    'M': 0.69,
-    'rh': 2.88,
-    'ra': 1.23,
-    'g': 0.75,
-    'delta': 0.45,
-    's2': 0.1,
-    'F': 1.1,
-    'a1': 0.5,
-    'a2': 1.3,
-    'a3': 2.5,
-    'BHret': 0.5,
-    'd': 6.405,
-}
+DEFAULT_FREE_PARAMS = (
+    'W0', 'M', 'rh', 'ra', 'g', 'delta',
+    's2', 'F', 'a1', 'a2', 'a3', 'BHret', 'd',
+)
 
-
-DEFAULT_EV_THETA = {
-    'W0': 5.0,
-    'M0': 1.0,
-    'rh0': 3.0,
-    'ra': 1.23,
-    'g': 0.75,
-    'delta': 0.45,
-    's2': 0.1,
-    'F': 1.1,
-    'a1': 0.5,
-    'a2': 1.3,
-    'a3': 2.5,
-    'd': 6.405,
-}
-
-
-# When kicks/IFMR are free, ordering kick params before IFMR params is important
-DEFAULT_KICK_THETA = {
-    'kick_slope': 1,
-    'kick_scale': 20,
-}
-
-DEFAULT_IFMR_THETA = {
-    'IFMR_slope1': 5.,  # between 20 - 22.6
-    'IFMR_slope2': 7e-4,  # between 22.6 - 36
-    'IFMR_slope3': 0.03,  # between 36 - 150
-    'IFMR_scale1': -10,
-    'IFMR_scale2': -4,
-    'IFMR_scale3': 4,
-}
-
-# In some cases it is probably fine to have both (order is important)
-DEFAULT_BH_THETA = DEFAULT_KICK_THETA | DEFAULT_IFMR_THETA
+DEFAULT_FREE_EV_PARAMS = (
+    'W0', 'M0', 'rh0', 'ra', 'g', 'delta',
+    's2', 'F', 'a1', 'a2', 'a3', 'd',
+)
 
 
 # --------------------------------------------------------------------------
@@ -587,10 +544,6 @@ class Observations:
         self.mdata = {}
         self._dict_datasets = {}
 
-        self.initials = DEFAULT_THETA.copy()
-        self.ev_initials = DEFAULT_EV_THETA.copy()
-        self.BH_initials = DEFAULT_BH_THETA.copy()  # careful using this
-
         filename = util.get_cluster_path(cluster, standardize_name, restrict_to)
 
         self.cluster = filename.stem
@@ -610,17 +563,13 @@ class Observations:
             # Read in initial values of base free parameters
             # --------------------------------------------------------------
 
+            # I'm only gonna keep whats on file. You want more initials?
+            # Specify them to MCMC_fit yourself
             try:
-                # This updates defaults with data while keeping default sort
-                self.initials = {**self.initials, **file['initials'].attrs}
-
-                if extra := (self.initials.keys() - DEFAULT_THETA.keys()):
-                    mssg = (f"Stored initials do not match expected."
-                            f"Extra values found: {extra}")
-                    raise ValueError(mssg)
-
+                self.initials = dict(file['initials'].attrs)
             except KeyError:
-                logging.info("No initial state stored, using defaults")
+                self.initials = dict()
+                logging.debug("No initial state stored")
                 pass
 
             # --------------------------------------------------------------
@@ -628,40 +577,11 @@ class Observations:
             # --------------------------------------------------------------
 
             try:
-                self.ev_initials = {**self.ev_initials,
-                                    **file['ev_initials'].attrs}
-
-                if extra := (self.ev_initials.keys() - DEFAULT_EV_THETA.keys()):
-                    mssg = (f"Stored (evolved) initials do not match expected."
-                            f"Extra values found: {extra}")
-                    raise ValueError(mssg)
-
+                self.ev_initials = dict(file['ev_initials'].attrs)
             except KeyError:
-                logging.info("No (evolved) initial state stored, using default")
+                self.ev_initials = dict()
+                logging.debug("No (evolved) initial state stored")
                 pass
-
-            # --------------------------------------------------------------
-            # Read in initial values of BH-related free parameters
-            # --------------------------------------------------------------
-
-            try:
-                self.BH_initials = {**self.BH_initials,
-                                    **file['BH_initials'].attrs}
-
-                if extra := (self.BH_initials.keys() - DEFAULT_BH_THETA.keys()):
-                    mssg = (f"Stored (BH) initials do not match expected."
-                            f"Extra values found: {extra}")
-                    raise ValueError(mssg)
-
-            except KeyError:
-                logging.info("No (BH) initial state stored, using default")
-                pass
-
-            # isolate the kick and IFMR initials
-            self._kick_initials = {k: self.BH_initials[k]
-                                   for k in DEFAULT_KICK_THETA}
-            self._IFMR_initials = {k: self.BH_initials[k]
-                                   for k in DEFAULT_IFMR_THETA}
 
             # --------------------------------------------------------------
             # Read in all other metadata
@@ -1746,104 +1666,6 @@ class SingleMassModel(lp.limepy):
 
 
 # --------------------------------------------------------------------------
-# Model to be used in fitting to observations
-# --------------------------------------------------------------------------
-
-
-class FittableModel(Model):
-    '''Model subclass for use in all fitting functions.
-
-    A subclass of the base `Model`, with a simplified and specific
-    initilization signature based on a single `theta` input containing the main
-    13 model parameters, in a specific order, and `observations` which the
-    model should be compared to.
-
-    Unless you have a set of parameters `theta` taken directly from the fitting
-    results, you most likely do not want to use this class directly.
-
-    Parameters
-    ----------
-    theta : dict or list
-        The model input parameters. Must either be a dict, or a full list of
-        all parameters, in the exact same order as `DEFAULT_THETA`.
-        The 13 free parameters used here (W0, M, rh, ra, g, delta, a1, a2, a3,
-        BHret, s2, F and d) are key for defining the model structure, mass
-        evolution algorithm and fitting parameters.
-        See `Model` for further explanation of all possible input parameters.
-
-    observations : Observations
-        The `Observations` instance corresponding to this cluster. Required at
-        initilization so that the models can be compared to these observations
-        in the most consistent way possible.
-
-    **kwargs : dict
-        All other arguments are passed to `Model`.
-
-    Attributes
-    ----------
-    theta : dict
-        Dictionary of input parameters.
-        Some parameters may technically also be accessible directly as
-        attributes, but that interface should not be considered stable.
-        This dictionary should be used as the only direct access to any input
-        parameters that make up theta.
-
-    Notes
-    -----
-    The units of the inputs in `theta` here do not match those in `Model`
-    directly. `M` should be in units of [1e6 Msun] and ra should actually be
-    log10(ra).
-
-    All cluster metadata parameters (such as age, vesc, etc.) will be read from
-    the observations, and should not be provided as arguments here.
-    '''
-
-    def __init__(self, theta, observations, **kwargs):
-
-        self.observations = observations
-
-        # ------------------------------------------------------------------
-        # Unpack theta
-        # ------------------------------------------------------------------
-
-        if not isinstance(theta, dict):
-            theta = dict(zip(DEFAULT_THETA, theta))
-
-        else:
-            theta = theta.copy()
-
-        if missing_params := (DEFAULT_THETA.keys() - theta.keys()):
-            mssg = f"Missing required params: {missing_params}"
-            raise KeyError(mssg)
-
-        self.theta = theta
-
-        # ------------------------------------------------------------------
-        # Convert a few quantities
-        # ------------------------------------------------------------------
-
-        theta['M'] = theta['M'] * 1e6
-
-        theta['ra'] = 10**theta['ra']
-
-        # ------------------------------------------------------------------
-        # Create the base model
-        # ------------------------------------------------------------------
-
-        kwargs = kwargs.copy()
-
-        # Extra check if vesc/Ndot exist in obs first, otherwise use default
-        #   Necessary because checks in Model aren't sufficient
-        if ('vesc' not in kwargs) and ('vesc' in observations.mdata):
-            kwargs['vesc'] = observations.mdata['vesc'] << u.km / u.s
-
-        if ('esc_rate' not in kwargs) and ('esc_rate' in observations.mdata):
-            kwargs['esc_rate'] = observations.mdata['esc_rate']
-
-        super().__init__(observations=observations, **theta, **kwargs)
-
-
-# --------------------------------------------------------------------------
 # Model evolved from initial conditions using evolutionary model `clusterBH`
 # --------------------------------------------------------------------------
 
@@ -2046,51 +1868,6 @@ class EvolvedModel(Model):
         from ..analysis import EvolvedVisualizer
         return EvolvedVisualizer(self, observations=self.observations)
 
-
-class FittableEvolvedModel(EvolvedModel):
-    '''Evolved Model subclass for use in all fitting functions.'''
-
-    def __init__(self, theta, observations, **kwargs):
-
-        self.observations = observations
-
-        # ------------------------------------------------------------------
-        # Unpack theta
-        # ------------------------------------------------------------------
-
-        if not isinstance(theta, dict):
-            theta = dict(zip(DEFAULT_EV_THETA, theta))
-
-        else:
-            theta = theta.copy()
-
-        if missing_params := (DEFAULT_EV_THETA.keys() - theta.keys()):
-            mssg = f"Missing required params: {missing_params}"
-            raise KeyError(mssg)
-
-        self.theta = theta
-
-        # ------------------------------------------------------------------
-        # Convert a few quantities
-        # ------------------------------------------------------------------
-
-        theta['M0'] = theta['M0'] * 1e6
-
-        theta['ra'] = 10**theta['ra']
-
-        # ------------------------------------------------------------------
-        # Create the base model
-        # ------------------------------------------------------------------
-
-        kwargs = kwargs.copy()
-
-        # Extra check if esc_rate exist in obs first, otherwise use default
-        #   Necessary because checks in Model aren't sufficient
-
-        if ('esc_rate' not in kwargs) and ('esc_rate' in observations.mdata):
-            kwargs['esc_rate'] = observations.mdata['esc_rate']
-
-        super().__init__(observations=observations, **theta, **kwargs)
 
 # --------------------------------------------------------------------------
 # Sampled model

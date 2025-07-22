@@ -1,4 +1,3 @@
-from ..core.data import DEFAULT_THETA
 
 import numpy as np
 from scipy import stats
@@ -7,8 +6,7 @@ import logging
 import operator
 
 
-__all__ = ["DEFAULT_PRIORS", "DEFAULT_EV_PRIORS",
-           "Priors", "UniformPrior", "GaussianPrior",
+__all__ = ["DEFAULT_PRIORS", "Priors", "UniformPrior", "GaussianPrior",
            "BoundedGaussianPrior", "CromwellUniformPrior", "ArbitraryPrior"]
 
 
@@ -87,19 +85,24 @@ class Priors:
         '''
 
         if not isinstance(theta, dict):
-            theta = dict(zip(self.var_params, theta), **self.fixed_initials)
+            theta = self._model_params.label_theta(theta)
+
+        full_args = self._model_params.build_args(theta, return_dict=True)
 
         L = {p: 0. for p in theta}
         inv = []
 
-        for param, prior in self.priors.items():
+        # for param, prior in self.priors.items():
+        for param, value in theta.items():
+
+            prior = self.priors[param]
 
             if prior.dependants:
-                deps = {d: theta[d] for d in prior.dependants}
-                P = prior(theta[param], **deps)
+                deps = {d: full_args[d] for d in prior.dependants}
+                P = prior(value, **deps)
 
             else:
-                P = prior(theta[param])
+                P = prior(value)
 
             # if invalid (ie 0, outside of bounds / real bad) record it's reason
             if P <= 0. or np.isnan(P):
@@ -127,46 +130,24 @@ class Priors:
 
         return L
 
-    def __init__(self, priors, fixed_initials=None, *,
-                 logged=True, err_on_fail=False,
-                 evolved=False,
-                 flexible_natal_kicks=False, flexible_IFMR=False):
+    def __init__(self, priors, model_params, *, logged=True, err_on_fail=False):
 
         self._log = logged
         self._strict = err_on_fail
 
-        defaults = DEFAULT_PRIORS if not evolved else DEFAULT_EV_PRIORS
-
-        if flexible_natal_kicks:
-            defaults |= DEFAULT_KICK_PRIORS
-
-        if flexible_IFMR:
-            defaults |= DEFAULT_IFMR_PRIORS
-
-        if extraneous_params := (priors.keys() - defaults.keys()):
-            raise ValueError(f"Invalid parameters: {extraneous_params}")
-
-        # ------------------------------------------------------------------
-        # Prep for any fixed parameters
-        # ------------------------------------------------------------------
-
-        # In normal prior likelihoods, the fixed values will also be evaled
-
-        if fixed_initials is None:
-            fixed_initials = {}
-
-        self.fixed_initials = fixed_initials
-
-        # get list of variable params, sorted for the later unpacking of theta
-        var_params = defaults.keys() - fixed_initials.keys()
-        self.var_params = sorted(var_params, key=list(defaults).index)
+        self._model_params = model_params
 
         # ------------------------------------------------------------------
         # Initialize all Prior objects
         # ------------------------------------------------------------------
 
         # Fill in unspecified parameters with default priors
-        self.priors = {**defaults, **priors}
+        # TODO this now carries around extra priors but thats probably fine
+        self.priors = {**DEFAULT_PRIORS, **priors}
+
+        if extra_params := (set(model_params.free_params) - self.priors.keys()):
+            mssg = f"No priors found for the free parameters {extra_params}"
+            raise ValueError(mssg)
 
         # Fill the dict with actual priors objects
         for param in self.priors:
@@ -226,7 +207,7 @@ class PriorTransforms(Priors):
         failure and continue.
     '''
 
-    def _compile_dependants(self, prior, U, theta=None):
+    def _compile_dependants(self, prior, U, theta):
         '''Transform a passed U to theta recursively, so can use dependants'''
 
         # TODO potentially repeating a lot of prior calls by not saving to theta
@@ -250,8 +231,7 @@ class PriorTransforms(Priors):
 
             # assume it's fixed, use its fixed value
             else:
-                # TODO might get hard to understand keyerror here if not fixed?
-                deps[dep_param] = self.fixed_initials[dep_param]
+                deps[dep_param] = self._model_params.fixed_params[dep_param]
 
         return deps
 
@@ -287,23 +267,20 @@ class PriorTransforms(Priors):
             flag was set on initialization.
         '''
 
-        if len(U) != len(self.var_params):
-            mssg = (f"Incorrect number of parameters passed: "
-                    f"expected {len(self.var_params)}, got {len(U)}")
-
-            raise ValueError(mssg)
-
         if not isinstance(U, dict):
-            U = dict(zip(self.var_params, U))
+            U = self._model_params.label_theta(U)
 
         theta = {}
         inv = []
 
-        for param, prior in self.priors.items():
+        for param, value in U.items():
+        # for param, prior in self.priors.items():
+
+            prior = self.priors[param]
 
             deps = self._compile_dependants(prior, U, theta)
 
-            theta[param] = prior(U[param], **deps)
+            theta[param] = prior(value, **deps)
 
             # if invalid, record it's reason
             if np.isnan(theta[param]):
@@ -323,47 +300,22 @@ class PriorTransforms(Priors):
 
         return theta
 
-    def __init__(self, priors, fixed_initials=None, *, err_on_fail=False,
-                 evolved=False,
-                 flexible_natal_kicks=False, flexible_IFMR=False):
+    def __init__(self, priors, model_params, *, err_on_fail=False):
 
         self._strict = err_on_fail
 
-        defaults = DEFAULT_PRIORS if not evolved else DEFAULT_EV_PRIORS
-
-        if flexible_natal_kicks:
-            defaults |= DEFAULT_KICK_PRIORS
-
-        if flexible_IFMR:
-            defaults |= DEFAULT_IFMR_PRIORS
-
-        if extraneous_params := (priors.keys() - defaults.keys()):
-            raise ValueError(f"Invalid parameters: {extraneous_params}")
-
-        # ------------------------------------------------------------------
-        # Prep for any fixed parameters
-        # ------------------------------------------------------------------
-
-        # In prior transforms, fixed values will be basically ignored
-
-        if fixed_initials is None:
-            fixed_initials = {}
-
-        self.fixed_initials = fixed_initials
-
-        # get list of variable params, sorted for the later unpacking of U
-        var_params = defaults.keys() - fixed_initials.keys()
-        self.var_params = sorted(var_params, key=list(defaults).index)
+        self._model_params = model_params
 
         # ------------------------------------------------------------------
         # Initialize all Prior objects
         # ------------------------------------------------------------------
 
         # Fill in unspecified parameters with default priors
-        self.priors = {**defaults, **priors}
+        self.priors = {**DEFAULT_PRIORS, **priors}
 
-        for key in self.fixed_initials:
-            del self.priors[key]
+        if extra_params := (set(model_params.free_params) - self.priors.keys()):
+            mssg = f"No priors found for the free parameters {extra_params}"
+            raise ValueError(mssg)
 
         # Fill the dict with actual priors objects
         for param in self.priors:
@@ -437,8 +389,9 @@ class _PriorBase:
         except ValueError:
             # val is a name of a param
 
-            if val not in DEFAULT_THETA:
-                raise ValueError(f'Invalid dependant parameter {val}')
+            # TODO can add check against model_params._all_params
+            # if val not in DEFAULT_THETA:
+            #     raise ValueError(f'Invalid dependant parameter {val}')
 
             self.dependants.append(val)
 
@@ -672,6 +625,7 @@ class CromwellUniformPrior(_PriorBase):
     pass
 
 
+# TODO these defaults of course assume `compatibility_transforms=True`
 DEFAULT_PRIORS = {
     'W0': ('uniform', [(3, 20)]),
     'M': ('uniform', [(0.01, 5)]),
@@ -685,30 +639,14 @@ DEFAULT_PRIORS = {
     'a2': ('uniform', [(-1, 2.35), ('a1', np.inf)]),
     'a3': ('uniform', [(1.6, 4), ('a2', np.inf)]),
     'BHret': ('uniform', [(0, 100)]),
-    'd': ('uniform', [(2, 18)])
-}
-
-DEFAULT_EV_PRIORS = {
-    'W0': ('uniform', [(3, 20)]),
+    'd': ('uniform', [(2, 18)]),
+    #
     'M0': ('uniform', [(0.001, 10)]),
-    'rh0': ('uniform', [(0.1, 50)]),
-    'ra': ('uniform', [(0, 5)]),
-    'g': ('uniform', [(0, 3.5)]),
-    'delta': ('uniform', [(0.3, 0.5)]),
-    's2': ('uniform', [(0, 15)]),
-    'F': ('uniform', [(1, 3)]),
-    'a1': ('uniform', [(-1, 2.35)]),
-    'a2': ('uniform', [(-1, 2.35), ('a1', np.inf)]),
-    'a3': ('uniform', [(1.6, 4), ('a2', np.inf)]),
-    'd': ('uniform', [(2, 18)])
-}
-
-DEFAULT_KICK_PRIORS = {
+    'rh0': ('uniform', [(0.01, 15)]),
+    #
+    'kick_vdisp': ('uniform', [(50, 265.)]),
     'kick_slope': ('uniform', [(1e-5, 2)]),
     'kick_scale': ('uniform', [(5, 100)]),
-}
-
-DEFAULT_IFMR_PRIORS = {
     'IFMR_slope1': ('uniform', [(0.1, 10)]),
     'IFMR_slope2': ('uniform', [(1e-6, 0.1)]),
     'IFMR_slope3': ('uniform', [(0.01, 2)]),
@@ -716,8 +654,6 @@ DEFAULT_IFMR_PRIORS = {
     'IFMR_scale2': ('uniform', [(-10, 20)]),
     'IFMR_scale3': ('uniform', [(-10, 20)])
 }
-
-DEFAULT_BH_PRIORS = DEFAULT_KICK_PRIORS | DEFAULT_IFMR_PRIORS
 
 _PRIORS_MAP = {
     "uniform": UniformPrior,

@@ -1,5 +1,6 @@
-from .data import Observations, DEFAULT_KICK_THETA, DEFAULT_IFMR_THETA
+from .data import Observations, DEFAULT_FREE_PARAMS, DEFAULT_FREE_EV_PARAMS
 from ..util.data import GCFIT_DIR
+from ..util.probabilities import ModelParameters
 from ..probabilities import posterior, priors
 
 import h5py
@@ -288,11 +289,12 @@ class NestedSamplingOutput(Output):
                 grp[key][-n_grow:] = val
 
 
-def MCMC_fit(cluster, Niters, Nwalkers, evolved=False, Ncpu=2, *,
-             mpi=False, initials=None, param_priors=None, moves=None,
+def MCMC_fit(cluster, Niters, Nwalkers, evolved=False, *, free_params=None,
+             Ncpu=2, mpi=False, initials=None, param_priors=None, moves=None,
              fixed_params=None, excluded_likelihoods=None, hyperparams=False,
              model_kwargs=None, cont_run=False, savedir=_here, backup=False,
-             restrict_to=None, compress=False, verbose=False, progress=False):
+             restrict_to=None, compress=False, param_transforms=None,
+             verbose=False, progress=False):
     '''Main MCMC fitting pipeline.
 
     Execute the full MCMC cluster fitting algorithm.
@@ -407,8 +409,11 @@ def MCMC_fit(cluster, Niters, Nwalkers, evolved=False, Ncpu=2, *,
         # Check arguments
         # ------------------------------------------------------------------
 
-        if fixed_params is None:
-            fixed_params = []
+        if free_params is None:
+            if evolved:
+                free_params = DEFAULT_FREE_EV_PARAMS
+            else:
+                free_params = DEFAULT_FREE_PARAMS
 
         if excluded_likelihoods is None:
             excluded_likelihoods = []
@@ -464,10 +469,20 @@ def MCMC_fit(cluster, Niters, Nwalkers, evolved=False, Ncpu=2, *,
         logging.debug(f"Likelihood components: {likelihoods}")
 
         # ------------------------------------------------------------------
+        # Set up ModelParameters
+        # ------------------------------------------------------------------
+
+        model_params = ModelParameters(free_params, model_kwargs,
+                                       observations=observations,
+                                       evolved=evolved,
+                                       param_transforms=param_transforms)
+
+        # ------------------------------------------------------------------
         # Initialize the walker positions
         # ------------------------------------------------------------------
 
         # *_params -> list of keys, *_initials -> dictionary
+        # TODO M, W0 and rh need guaranteed default initital positions
 
         spec_initials = initials
         obs_initials = (observations.initials if not evolved
@@ -482,20 +497,8 @@ def MCMC_fit(cluster, Niters, Nwalkers, evolved=False, Ncpu=2, *,
 
         logging.debug(f"Inital initals: {initials}")
 
-        if extraneous_params := (set(fixed_params) - initials.keys()):
-            raise ValueError(f"Invalid fixed parameters: {extraneous_params}")
+        variable_initials = {key: initials[key] for key in free_params}
 
-        variable_params = (initials.keys() - set(fixed_params))
-        if not variable_params:
-            mssg = f"No non-fixed parameters left, fix less parameters"
-            raise ValueError(mssg)
-
-        # variable params sorting matters for setup of theta, but fixed does not
-        fixed_initials = {key: initials[key] for key in fixed_params}
-        variable_initials = {key: initials[key] for key in
-                             sorted(variable_params, key=list(initials).index)}
-
-        logging.debug(f"Fixed initals: {fixed_initials}")
         logging.debug(f"Variable initals: {variable_initials}")
 
         init_pos = np.fromiter(variable_initials.values(), np.float64)
@@ -508,8 +511,8 @@ def MCMC_fit(cluster, Niters, Nwalkers, evolved=False, Ncpu=2, *,
         spec_priors = {k: {'type': v[0], 'args': v[1:]}
                        for k, v in param_priors.items()}
 
-        prior_kwargs = {'fixed_initials': fixed_initials, 'evolved': evolved}
-        prior_likelihood = priors.Priors(param_priors, **prior_kwargs)
+        prior_likelihood = priors.Priors(param_priors,
+                                         model_params=model_params)
 
         # check if initials are outside priors, if so then error right here
         if not np.isfinite(prior_likelihood(initials)):
@@ -521,6 +524,12 @@ def MCMC_fit(cluster, Niters, Nwalkers, evolved=False, Ncpu=2, *,
 
         backend.store_metadata('cluster', cluster)
         backend.store_metadata('evolved', evolved)
+        backend.store_metadata('free_params', free_params)
+
+        if param_transforms is not None:
+            # backend.store_metadata('param_transforms', param_transforms)
+            mssg = "passing parameter transforms to fitting is currently broken"
+            raise NotImplementedError(mssg)
 
         # Only store if set. Will default read to None if not stored here
         if restrict_to is not None:
@@ -534,7 +543,6 @@ def MCMC_fit(cluster, Niters, Nwalkers, evolved=False, Ncpu=2, *,
 
         backend.store_metadata('ndim', init_pos.shape[-1])
 
-        backend.store_metadata('fixed_params', fixed_initials)
         backend.store_metadata('excluded_likelihoods', excluded_likelihoods)
 
         if model_kwargs:
@@ -557,13 +565,13 @@ def MCMC_fit(cluster, Niters, Nwalkers, evolved=False, Ncpu=2, *,
         logging.info("Initializing sampler")
 
         sampler_kwargs = {'hyperparams': hyperparams, 'evolved': evolved,
-                          'return_indiv': True, 'model_kw': model_kwargs}
+                          'return_indiv': True}
 
         sampler = emcee.EnsembleSampler(
             nwalkers=Nwalkers,
             ndim=init_pos.shape[-1],
             log_prob_fn=posterior,
-            args=(observations, fixed_initials, likelihoods, prior_likelihood),
+            args=(observations, model_params, likelihoods, prior_likelihood),
             kwargs=sampler_kwargs,
             pool=pool,
             moves=moves,
@@ -645,14 +653,13 @@ def MCMC_fit(cluster, Niters, Nwalkers, evolved=False, Ncpu=2, *,
     logging.info("FINISHED")
 
 
-def nested_fit(cluster, evolved=False, *,
-               flexible_IFMR=False, flexible_natal_kicks=False,
-               bound_type='multi', sample_type='auto',
+def nested_fit(cluster, evolved=False, *, free_params=None,
                initial_kwargs=None, batch_kwargs=None, model_kwargs=None,
+               bound_type='multi', sample_type='auto',
                pfrac=1.0, maxfrac=0.8, eff_samples=5000, plat_wt_func=False,
-               Ncpu=2, mpi=False, initials=None, param_priors=None,
-               fixed_params=None, excluded_likelihoods=None, hyperparams=False,
-               savedir=_here, restrict_to=None, compress=False, verbose=False):
+               Ncpu=2, mpi=False, param_priors=None, excluded_likelihoods=None,
+               hyperparams=False, savedir=_here, restrict_to=None,
+               compress=False, verbose=False, param_transforms=None):
     '''Main nested sampling fitting pipeline.
 
     Execute the full nested sampling cluster fitting algorithm.
@@ -790,8 +797,14 @@ def nested_fit(cluster, evolved=False, *,
         # Check arguments
         # ----------------------------------------------------------------------
 
-        if fixed_params is None:
-            fixed_params = []
+        if free_params is None:
+            if evolved:
+                free_params = DEFAULT_FREE_EV_PARAMS
+            else:
+                free_params = DEFAULT_FREE_PARAMS
+
+        # if fixed_params is None:
+        #     fixed_params = []
 
         if excluded_likelihoods is None:
             excluded_likelihoods = []
@@ -853,46 +866,15 @@ def nested_fit(cluster, evolved=False, *,
         logging.debug(f"Likelihood components: {likelihoods}")
 
         # ------------------------------------------------------------------
-        # Initialize the walker positions
+        # Set up ModelParameters
         # ------------------------------------------------------------------
 
-        # *_params -> list of keys, *_initials -> dictionary
-
-        spec_initials = initials
-        obs_initials = (observations.initials if not evolved
-                        else observations.ev_initials)
-
-        # get supplied initials, or read them from the data files if not given
-        if initials is None:
-            initials = obs_initials
-        else:
-            # fill manually supplied dict with defaults
-            initials = obs_initials | initials
-
-        # TODO technically these initials also make sense within obs probably
-        if flexible_natal_kicks:
-            initials |= DEFAULT_KICK_THETA
-
-        if flexible_IFMR:
-            initials |= DEFAULT_IFMR_THETA
-
-        logging.debug(f"Inital initals: {initials}")
-
-        if extraneous_params := (set(fixed_params) - initials.keys()):
-            raise ValueError(f"Invalid fixed parameters: {extraneous_params}")
-
-        variable_params = (initials.keys() - set(fixed_params))
-        if not variable_params:
-            mssg = "No non-fixed parameters left, fix less parameters"
-            raise ValueError(mssg)
-
-        # variable params sorting matters for setup of theta, but fixed does not
-        fixed_initials = {key: initials[key] for key in fixed_params}
-        variable_initials = {key: initials[key] for key in
-                             sorted(variable_params, key=list(initials).index)}
-
-        logging.debug(f"Fixed initals: {fixed_initials}")
-        logging.debug(f"Variable initals: {variable_initials}")
+        # TODO transforms only currently works (ie can be stored) with sympy
+        #   eqs; but those are off by default. So they don't really work at all
+        model_params = ModelParameters(free_params, model_kwargs,
+                                       observations=observations,
+                                       evolved=evolved,
+                                       transforms=param_transforms)
 
         # ------------------------------------------------------------------
         # Setup param_priors transforms
@@ -902,10 +884,9 @@ def nested_fit(cluster, evolved=False, *,
         spec_priors = {k: {'type': v[0], 'args': v[1:]}
                        for k, v in param_priors.items()}
 
-        prior_kwargs = {'fixed_initials': fixed_initials, 'err_on_fail': False,
-                        'evolved': evolved, 'flexible_IFMR': flexible_IFMR,
-                        'flexible_natal_kicks': flexible_natal_kicks}
-        prior_transform = priors.PriorTransforms(param_priors, **prior_kwargs)
+        prior_transform = priors.PriorTransforms(param_priors,
+                                                 model_params=model_params,
+                                                 err_on_fail=False)
 
         # ------------------------------------------------------------------
         # Write run metadata to output (backend) file
@@ -913,8 +894,12 @@ def nested_fit(cluster, evolved=False, *,
 
         backend.store_metadata('cluster', cluster)
         backend.store_metadata('evolved', evolved)
-        backend.store_metadata('flexible_natal_kicks', flexible_natal_kicks)
-        backend.store_metadata('flexible_IFMR', flexible_IFMR)
+        backend.store_metadata('free_params', free_params)
+
+        if param_transforms is not None:
+            # backend.store_metadata('param_transforms', param_transforms)
+            mssg = "passing parameter transforms to fitting is currently broken"
+            raise NotImplementedError(mssg)
 
         # Only store if set. Will default read to None if not stored here
         if restrict_to is not None:
@@ -926,8 +911,7 @@ def nested_fit(cluster, evolved=False, *,
         backend.store_metadata('mpi', mpi)
         backend.store_metadata('Ncpu', Ncpu)
 
-        ndim = len(variable_initials)
-        backend.store_metadata('ndim', ndim)
+        backend.store_metadata('ndim', model_params.ndim)
         backend.store_metadata('pfrac', pfrac)
         backend.store_metadata('maxfrac', maxfrac)
         backend.store_metadata('eff_samples', eff_samples)
@@ -936,7 +920,6 @@ def nested_fit(cluster, evolved=False, *,
 
         backend.store_metadata('hyperparams', hyperparams)
 
-        backend.store_metadata('fixed_params', fixed_initials)
         backend.store_metadata('excluded_likelihoods', excluded_likelihoods)
 
         if model_kwargs:
@@ -948,9 +931,6 @@ def nested_fit(cluster, evolved=False, *,
         if batch_kwargs:
             backend.store_metadata('batch_kwargs', batch_kwargs)
 
-        if spec_initials is not None:
-            backend.store_metadata('specified_initials', spec_initials)
-
         if spec_priors:
             backend.store_metadata('specified_priors', spec_priors)
 
@@ -960,18 +940,16 @@ def nested_fit(cluster, evolved=False, *,
 
         logging.info("Initializing sampler")
 
-        backend.ndim = ndim
+        backend.ndim = model_params.ndim
 
         logl_kwargs = {'hyperparams': hyperparams, 'evolved': evolved,
-                       'return_indiv': False, 'model_kw': model_kwargs,
-                       'flexible_IFMR': flexible_IFMR,
-                       'flexible_natal_kicks': flexible_natal_kicks}
+                       'return_indiv': False}
 
         sampler = dynesty.DynamicNestedSampler(
-            ndim=ndim,
+            ndim=model_params.ndim,
             loglikelihood=posterior,  # cause we need the defaults/checks it has
             prior_transform=prior_transform,
-            logl_args=(observations, fixed_initials, likelihoods, 'ignore'),
+            logl_args=(observations, model_params, likelihoods, 'ignore'),
             logl_kwargs=logl_kwargs,
             pool=pool,
             bound=bound_type,
