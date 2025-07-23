@@ -5180,20 +5180,20 @@ class RunCollection(_RunAnalysis):
         if params is None:
 
             # assume runs are all of same flavour
-            params = self.runs[0]._get_labels(label_fixed=False)
+            params = self.runs[0]._get_labels()
 
             if log_radii:
                 params = [f'log_{p}' if p.startswith('rh') else p
                           for p in params]
 
             if include_FeH:
-                params += ['FeH']
+                params += ('FeH',)
 
             if include_BH:
-                params += ['M_BH']
+                params += ('M_BH',)
 
             if include_rt:
-                params += ['log_rt' if log_radii else 'rt']
+                params += ('log_rt' if log_radii else 'rt',)
 
         # setup axes
         Nparams = len(params)
@@ -5300,13 +5300,13 @@ class RunCollection(_RunAnalysis):
             labels = self.runs[0]._get_labels()
 
         else:
-            labels = params
+            labels = tuple(params)
 
         if include_FeH:
-            labels = ['FeH'] + labels
+            labels = ('FeH',) + labels
 
         if include_BH:
-            labels += ['M_BH', 'N_BH', 'f_BH', 'f_rem']
+            labels += ('M_BH', 'N_BH', 'f_BH', 'f_rem')
 
         # Fill in a dictionary of column data
 
