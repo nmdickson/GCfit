@@ -594,7 +594,8 @@ class _SingleRunAnalysis(_RunAnalysis):
 
             # Load free parameters in a backwards compatible way
             try:
-                free_params = tuple(fp.decode() for fp in mdata['free_params'])
+                free_params = tuple(fp.decode()
+                                    for fp in file['metadata/free_params'])
 
                 # If any transforms stored, use those (and assume nothing else)
                 # TODO currently can only support sympy-style transforms
@@ -871,8 +872,7 @@ class MCMCRun(_SingleRunAnalysis):
                 except KeyError:
                     continue
 
-        prior_kwargs = {'model_params': self._modelparams, 'err_on_fail': False,
-                        'evolved': self._evolved}
+        prior_kwargs = {'model_params': self._modelparams, 'err_on_fail': False}
 
         return priors.Priors(prior_params, **prior_kwargs)
 
