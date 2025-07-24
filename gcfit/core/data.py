@@ -1737,15 +1737,13 @@ class EvolvedModel(Model):
 
         cbh_kwargs = {} if cbh_kwargs is None else cbh_kwargs.copy()
 
-        if MF_kwargs is not None:
+        cbh_kwargs.setdefault('kick', natal_kicks)
 
-            # Try to get some flexible BH params from MF_kwargs for the ibh
-            bhkws = {'kick_method', 'kick_slope', 'kick_scale',
-                     'BH_IFMR_method', 'BH_IFMR_kwargs'}
-            ibh_kwargs = {k: MF_kwargs[k] for k in (MF_kwargs.keys() & bhkws)}
+        ibh_kwargs = dict(kick_method=kick_method, kick_vdisp=kick_vdisp,
+                          kick_slope=kick_slope, kick_scale=kick_scale)
 
-            # Don't overwrite if given explicitly
-            cbh_kwargs.setdefault('ibh_kwargs', ibh_kwargs)
+        # Don't overwrite if given explicitly
+        cbh_kwargs.setdefault('ibh_kwargs', ibh_kwargs)
 
         m_breaks <<= u.Msun
         a_slopes = [-a1, -a2, -a3]
