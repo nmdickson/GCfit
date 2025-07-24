@@ -396,7 +396,9 @@ def MCMC_fit(cluster, Niters, Nwalkers, evolved=False, *, free_params=None,
 
     logging.info("Beginning pool")
 
-    with schwimmbad.choose_pool(mpi=mpi, processes=Ncpu) as pool:
+    pool_kw = {'use_dill': True} if mpi else {}
+
+    with schwimmbad.choose_pool(mpi=mpi, processes=Ncpu, **pool_kw) as pool:
 
         logging.debug(f"Pool class: {pool}, with {mpi=}, {Ncpu=}")
 
@@ -782,7 +784,9 @@ def nested_fit(cluster, evolved=False, *, free_params=None,
 
     logging.info("Beginning pool")
 
-    with schwimmbad.choose_pool(mpi=mpi, processes=Ncpu) as pool:
+    pool_kw = {'use_dill': True} if mpi else {}
+
+    with schwimmbad.choose_pool(mpi=mpi, processes=Ncpu, **pool_kw) as pool:
 
         map_ = pool.map
 
