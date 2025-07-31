@@ -1,9 +1,7 @@
 from .pulsars import *
 from .priors import Priors
 from .. import util
-from ..core.data import (DEFAULT_THETA, DEFAULT_EV_THETA,
-                         DEFAULT_KICK_THETA, DEFAULT_IFMR_THETA,
-                         FittableModel, FittableEvolvedModel)
+from ..core.data import Model, EvolvedModel
 
 import numpy as np
 import astropy.units as u
@@ -1058,8 +1056,8 @@ def likelihood_mass_func(model, mf, fields, *, hyperparams=False):
 # --------------------------------------------------------------------------
 
 
-def log_likelihood(theta, observations, L_components, hyperparams, evolved,
-                   **model_kw):
+def log_likelihood(theta, observations, model_params, L_components,
+                   hyperparams, evolved):
     r'''Compute log likelihood of given `theta`, based on component likelihoods.
 
     Main likelihood function, which generates the relevant model based on
@@ -1079,6 +1077,10 @@ def log_likelihood(theta, observations, L_components, hyperparams, evolved,
         initialize the model and to read in all datasets specified by
         `L_components`.
 
+    model_params : ModelParameters
+        The `ModelParameters` instance being used during fitting. Will be used
+        to construct the model class based on `theta`.
+
     L_components : list of lists
         List of likelihood components to compute. Must be a list of lists
         in the same format as `Observations.valid_likelihoods` (dataset name,
@@ -1086,9 +1088,6 @@ def log_likelihood(theta, observations, L_components, hyperparams, evolved,
 
     hyperparams : bool
         Whether to include bayesian hyperparameters in all likelihood functions.
-
-    **model_kw : dict, optional
-        All other arguments are passed to the model class
 
     Returns
     -------
@@ -1113,16 +1112,19 @@ def log_likelihood(theta, observations, L_components, hyperparams, evolved,
                  = \sum_i \ln(\mathcal{L}_i(\Theta)))
     '''
 
-    if evolved:
-        model_cls = FittableEvolvedModel
-    else:
-        model_cls = FittableModel
+    model_cls = EvolvedModel if evolved else Model
+
+    params = model_params.build_args(theta)
 
     try:
-        model = model_cls(theta, observations, **model_kw)
+        model = model_cls(*params.args, **params.kwargs)
+
     except ValueError as err:
-        mssg = f"Model did not converge with {theta=} **{model_kw=}({err})"
+
+        mssg = (f"Model did not converge with {theta=} "
+                f"(`Model(*{params.args=}, **{params.kwargs=})`) -> ({err})")
         logging.debug(mssg)
+
         return -np.inf, -np.inf * np.ones(len(L_components))
 
     # Calculate each log likelihood
@@ -1136,11 +1138,10 @@ def log_likelihood(theta, observations, L_components, hyperparams, evolved,
     return sum(probs), probs
 
 
-def posterior(theta, observations, fixed_initials=None,
+def posterior(theta, observations, model_params,
               L_components=None, prior_likelihood=None, *,
               hyperparams=False, return_indiv=True,
-              evolved=False, flexible_natal_kicks=False, flexible_IFMR=False,
-              model_kw=None):
+              evolved=False):
     '''Compute the full posterior probability given `theta` and `observations`.
 
     Combines the various likelihood functions (through `log_likelihood`)
@@ -1164,11 +1165,9 @@ def posterior(theta, observations, fixed_initials=None,
         The `Observations` instance corresponding to this cluster, to provide
         the "data" for this posterior calculation.
 
-    fixed_initials : dict, optional
-        An optional dictionary of parameters which provides fixed values for
-        specific parameters used to fill out the `theta` array. This is useful
-        for allowing samplers to explore a smaller set of parameters by fixing
-        certain usually free ones.
+    model_params : ModelParameters
+        The `ModelParameters` instance being used during fitting. Will be used
+        to construct the model class based on `theta`.
 
     L_components : list of lists, optional
         List of likelihood components to compute. Must be a list of lists
@@ -1191,9 +1190,6 @@ def posterior(theta, observations, fixed_initials=None,
         alongside the posterior probability. Can be used by some sampler
         classes, such as the `blobs` functionality of `emcee`.
 
-    model_kw : dict, optional
-        Extra arguments to be passed to the initialization of all models.
-
     Returns
     -------
     float or tuple
@@ -1203,28 +1199,11 @@ def posterior(theta, observations, fixed_initials=None,
         individual log likelihood values for each likelihood function.
     '''
 
-    if fixed_initials is None:
-        fixed_initials = {}
-
     if L_components is None:
         L_components = observations.valid_likelihoods
 
     if prior_likelihood is None:
-        prior_likelihood = Priors(dict(), evolved=evolved)
-
-    if evolved:
-        default_θ = DEFAULT_EV_THETA.copy()
-    else:
-        default_θ = DEFAULT_THETA.copy()
-
-    if flexible_natal_kicks:
-        default_θ |= DEFAULT_KICK_THETA.copy()
-
-    if flexible_IFMR:
-        default_θ |= DEFAULT_IFMR_THETA.copy()
-
-    if model_kw is None:
-        model_kw = {}
+        prior_likelihood = Priors(dict(), model_params=model_params)
 
     # Check if any values of theta are not finite, probably caused by invalid
     # prior transforms, and indicating we should return -inf
@@ -1234,13 +1213,6 @@ def posterior(theta, observations, fixed_initials=None,
             return -np.inf, *(-np.inf * np.ones(len(L_components)))
         else:
             return -np.inf
-
-    # get a list of variable params, sorted for the unpacking of theta
-    variable_params = default_θ.keys() - fixed_initials.keys()
-    params = sorted(variable_params, key=list(default_θ).index)
-
-    # TODO add type check on theta, cause those exceptions aren't very pretty
-    theta = dict(zip(params, theta)) | fixed_initials
 
     # prior likelihoods
     if prior_likelihood != 'ignore':
@@ -1255,20 +1227,15 @@ def posterior(theta, observations, fixed_initials=None,
     else:
         log_Pθ = 0
 
-    # Eat the BH params again
-    if flexible_natal_kicks or flexible_IFMR:
-        theta, MF_kwargs = util.pop_flexible_BHs(theta, flexible_natal_kicks,
-                                                 flexible_IFMR)
-
-        model_kw['MF_kwargs'] = model_kw.get('MF_kwargs', dict()) | MF_kwargs
-
-    log_L, individuals = log_likelihood(theta, observations, L_components,
+    log_L, individuals = log_likelihood(theta, observations, model_params,
+                                        L_components=L_components,
                                         hyperparams=hyperparams,
-                                        evolved=evolved, **model_kw)
+                                        evolved=evolved)
 
     probability = log_L + log_Pθ
 
     if return_indiv:
+        # TODO this `individuals` does not include any prior likelihood
         return probability, *individuals
     else:
         return probability

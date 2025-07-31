@@ -14,63 +14,20 @@ import itertools
 from collections import namedtuple
 
 
-__all__ = ['DEFAULT_THETA', 'DEFAULT_EV_THETA',
-           'Model', 'FittableModel', 'SingleMassModel',
-           'EvolvedModel', 'FittableEvolvedModel',
-           'SampledModel', 'Observations']
+__all__ = ['DEFAULT_FREE_PARAMS', 'DEFAULT_FREE_EV_PARAMS',
+           'Model', 'SingleMassModel', 'EvolvedModel', 'SampledModel',
+           'Observations']
 
 
-# The order of these is important!
-DEFAULT_THETA = {
-    'W0': 6.0,
-    'M': 0.69,
-    'rh': 2.88,
-    'ra': 1.23,
-    'g': 0.75,
-    'delta': 0.45,
-    's2': 0.1,
-    'F': 1.1,
-    'a1': 0.5,
-    'a2': 1.3,
-    'a3': 2.5,
-    'BHret': 0.5,
-    'd': 6.405,
-}
+DEFAULT_FREE_PARAMS = (
+    'W0', 'M', 'rh', 'ra', 'g', 'delta',
+    's2', 'F', 'a1', 'a2', 'a3', 'BHret', 'd',
+)
 
-
-DEFAULT_EV_THETA = {
-    'W0': 5.0,
-    'M0': 1.0,
-    'rh0': 3.0,
-    'ra': 1.23,
-    'g': 0.75,
-    'delta': 0.45,
-    's2': 0.1,
-    'F': 1.1,
-    'a1': 0.5,
-    'a2': 1.3,
-    'a3': 2.5,
-    'd': 6.405,
-}
-
-
-# When kicks/IFMR are free, ordering kick params before IFMR params is important
-DEFAULT_KICK_THETA = {
-    'kick_slope': 1,
-    'kick_scale': 20,
-}
-
-DEFAULT_IFMR_THETA = {
-    'IFMR_slope1': 5.,  # between 20 - 22.6
-    'IFMR_slope2': 7e-4,  # between 22.6 - 36
-    'IFMR_slope3': 0.03,  # between 36 - 150
-    'IFMR_scale1': -10,
-    'IFMR_scale2': -4,
-    'IFMR_scale3': 4,
-}
-
-# In some cases it is probably fine to have both (order is important)
-DEFAULT_BH_THETA = DEFAULT_KICK_THETA | DEFAULT_IFMR_THETA
+DEFAULT_FREE_EV_PARAMS = (
+    'W0', 'M0', 'rh0', 'ra', 'g', 'delta',
+    's2', 'F', 'a1', 'a2', 'a3', 'd',
+)
 
 
 # --------------------------------------------------------------------------
@@ -587,10 +544,6 @@ class Observations:
         self.mdata = {}
         self._dict_datasets = {}
 
-        self.initials = DEFAULT_THETA.copy()
-        self.ev_initials = DEFAULT_EV_THETA.copy()
-        self.BH_initials = DEFAULT_BH_THETA.copy()  # careful using this
-
         filename = util.get_cluster_path(cluster, standardize_name, restrict_to)
 
         self.cluster = filename.stem
@@ -610,17 +563,13 @@ class Observations:
             # Read in initial values of base free parameters
             # --------------------------------------------------------------
 
+            # I'm only gonna keep whats on file. You want more initials?
+            # Specify them to MCMC_fit yourself
             try:
-                # This updates defaults with data while keeping default sort
-                self.initials = {**self.initials, **file['initials'].attrs}
-
-                if extra := (self.initials.keys() - DEFAULT_THETA.keys()):
-                    mssg = (f"Stored initials do not match expected."
-                            f"Extra values found: {extra}")
-                    raise ValueError(mssg)
-
+                self.initials = dict(file['initials'].attrs)
             except KeyError:
-                logging.info("No initial state stored, using defaults")
+                self.initials = dict()
+                logging.debug("No initial state stored")
                 pass
 
             # --------------------------------------------------------------
@@ -628,40 +577,11 @@ class Observations:
             # --------------------------------------------------------------
 
             try:
-                self.ev_initials = {**self.ev_initials,
-                                    **file['ev_initials'].attrs}
-
-                if extra := (self.ev_initials.keys() - DEFAULT_EV_THETA.keys()):
-                    mssg = (f"Stored (evolved) initials do not match expected."
-                            f"Extra values found: {extra}")
-                    raise ValueError(mssg)
-
+                self.ev_initials = dict(file['ev_initials'].attrs)
             except KeyError:
-                logging.info("No (evolved) initial state stored, using default")
+                self.ev_initials = dict()
+                logging.debug("No (evolved) initial state stored")
                 pass
-
-            # --------------------------------------------------------------
-            # Read in initial values of BH-related free parameters
-            # --------------------------------------------------------------
-
-            try:
-                self.BH_initials = {**self.BH_initials,
-                                    **file['BH_initials'].attrs}
-
-                if extra := (self.BH_initials.keys() - DEFAULT_BH_THETA.keys()):
-                    mssg = (f"Stored (BH) initials do not match expected."
-                            f"Extra values found: {extra}")
-                    raise ValueError(mssg)
-
-            except KeyError:
-                logging.info("No (BH) initial state stored, using default")
-                pass
-
-            # isolate the kick and IFMR initials
-            self._kick_initials = {k: self.BH_initials[k]
-                                   for k in DEFAULT_KICK_THETA}
-            self._IFMR_initials = {k: self.BH_initials[k]
-                                   for k in DEFAULT_IFMR_THETA}
 
             # --------------------------------------------------------------
             # Read in all other metadata
@@ -1061,7 +981,8 @@ class Model(lp.limepy):
     '''
 
     def _evolve_mf(self, m_breaks, a1, a2, a3, nbins, FeH, age, esc_rate, tcc,
-                   NS_ret, BH_ret_int, BHret, natal_kicks, vesc, **kwargs):
+                   NS_ret, BH_ret_int, BHret, natal_kicks, vesc,
+                   kick_method, kick_vdisp,  kick_slope,  kick_scale, **kwargs):
         '''Compute an evolved mass function using `ssptools.EvolvedMF`'''
 
         self._imf = masses.PowerLawIMF(
@@ -1080,6 +1001,10 @@ class Model(lp.limepy):
             BH_ret_dyn=BHret / 100.,
             natal_kicks=natal_kicks,
             vesc=vesc.value,
+            kick_method=kick_method,
+            kick_vdisp=kick_vdisp,
+            kick_slope=kick_slope,
+            kick_scale=kick_scale,
             **kwargs  # will error here if MF_kwargs included any of above args
         )
 
@@ -1164,8 +1089,10 @@ class Model(lp.limepy):
                  s2=0., F=1., *, observations=None, age=None, FeH=None,
                  m_breaks=[0.1, 0.5, 1.0, 100], nbins=[5, 5, 20],
                  tracer_masses=None, tcc=0.0, NS_ret=0.1, BH_ret_int=1.0,
-                 esc_rate=0.0, natal_kicks=True, vesc=90, MF_kwargs=None,
-                 meanmassdef='global', ode_maxstep=1e10, ode_rtol=1e-7):
+                 esc_rate=0.0, natal_kicks=True, kick_method='maxwellian',
+                 vesc=90, kick_vdisp=265., kick_slope=1, kick_scale=20,
+                 MF_kwargs=None, meanmassdef='global',
+                 ode_maxstep=1e10, ode_rtol=1e-7):
 
         # ------------------------------------------------------------------
         # Add/convert units of some quantities. Supports quantities as inputs
@@ -1236,7 +1163,9 @@ class Model(lp.limepy):
         self._mf = self._evolve_mf(m_breaks, a1, a2, a3, nbins,
                                    FeH, age, esc_rate, tcc,
                                    NS_ret, BH_ret_int, BHret,
-                                   natal_kicks, self.vesc0, **MF_kwargs)
+                                   natal_kicks, self.vesc0,
+                                   kick_method, kick_vdisp,
+                                   kick_slope,  kick_scale, **MF_kwargs)
 
         if not self._mf.converged:
             mssg = ("Mass function evolution ODE failed to converge"
@@ -1746,104 +1675,6 @@ class SingleMassModel(lp.limepy):
 
 
 # --------------------------------------------------------------------------
-# Model to be used in fitting to observations
-# --------------------------------------------------------------------------
-
-
-class FittableModel(Model):
-    '''Model subclass for use in all fitting functions.
-
-    A subclass of the base `Model`, with a simplified and specific
-    initilization signature based on a single `theta` input containing the main
-    13 model parameters, in a specific order, and `observations` which the
-    model should be compared to.
-
-    Unless you have a set of parameters `theta` taken directly from the fitting
-    results, you most likely do not want to use this class directly.
-
-    Parameters
-    ----------
-    theta : dict or list
-        The model input parameters. Must either be a dict, or a full list of
-        all parameters, in the exact same order as `DEFAULT_THETA`.
-        The 13 free parameters used here (W0, M, rh, ra, g, delta, a1, a2, a3,
-        BHret, s2, F and d) are key for defining the model structure, mass
-        evolution algorithm and fitting parameters.
-        See `Model` for further explanation of all possible input parameters.
-
-    observations : Observations
-        The `Observations` instance corresponding to this cluster. Required at
-        initilization so that the models can be compared to these observations
-        in the most consistent way possible.
-
-    **kwargs : dict
-        All other arguments are passed to `Model`.
-
-    Attributes
-    ----------
-    theta : dict
-        Dictionary of input parameters.
-        Some parameters may technically also be accessible directly as
-        attributes, but that interface should not be considered stable.
-        This dictionary should be used as the only direct access to any input
-        parameters that make up theta.
-
-    Notes
-    -----
-    The units of the inputs in `theta` here do not match those in `Model`
-    directly. `M` should be in units of [1e6 Msun] and ra should actually be
-    log10(ra).
-
-    All cluster metadata parameters (such as age, vesc, etc.) will be read from
-    the observations, and should not be provided as arguments here.
-    '''
-
-    def __init__(self, theta, observations, **kwargs):
-
-        self.observations = observations
-
-        # ------------------------------------------------------------------
-        # Unpack theta
-        # ------------------------------------------------------------------
-
-        if not isinstance(theta, dict):
-            theta = dict(zip(DEFAULT_THETA, theta))
-
-        else:
-            theta = theta.copy()
-
-        if missing_params := (DEFAULT_THETA.keys() - theta.keys()):
-            mssg = f"Missing required params: {missing_params}"
-            raise KeyError(mssg)
-
-        self.theta = theta
-
-        # ------------------------------------------------------------------
-        # Convert a few quantities
-        # ------------------------------------------------------------------
-
-        theta['M'] = theta['M'] * 1e6
-
-        theta['ra'] = 10**theta['ra']
-
-        # ------------------------------------------------------------------
-        # Create the base model
-        # ------------------------------------------------------------------
-
-        kwargs = kwargs.copy()
-
-        # Extra check if vesc/Ndot exist in obs first, otherwise use default
-        #   Necessary because checks in Model aren't sufficient
-        if ('vesc' not in kwargs) and ('vesc' in observations.mdata):
-            kwargs['vesc'] = observations.mdata['vesc'] << u.km / u.s
-
-        if ('esc_rate' not in kwargs) and ('esc_rate' in observations.mdata):
-            kwargs['esc_rate'] = observations.mdata['esc_rate']
-
-        super().__init__(observations=observations, **theta, **kwargs)
-
-
-# --------------------------------------------------------------------------
 # Model evolved from initial conditions using evolutionary model `clusterBH`
 # --------------------------------------------------------------------------
 
@@ -1857,7 +1688,8 @@ class EvolvedModel(Model):
     '''
 
     def _evolve_mf(self, m_breaks, a1, a2, a3, nbins, FeH, age, esc_rate, tcc,
-                   NS_ret, BH_ret_int, BHret, natal_kicks, vesc, **kwargs):
+                   NS_ret, BH_ret_int, BHret, natal_kicks, vesc,
+                   kick_method, kick_vdisp,  kick_slope,  kick_scale, **kwargs):
         '''Alternative MF init using prior-computed IMF and clusterBH outputs'''
         from ssptools import EvolvedMFWithBH
 
@@ -1876,6 +1708,10 @@ class EvolvedModel(Model):
             vesc=vesc.value,
             esc_norm='M',
             md=self.md,
+            kick_method=kick_method,
+            kick_vdisp=kick_vdisp,
+            kick_slope=kick_slope,
+            kick_scale=kick_scale,
             **kwargs  # will error here if MF_kwargs included any of above args
         )
 
@@ -1885,7 +1721,11 @@ class EvolvedModel(Model):
                  a1=1.3, a2=2.3, a3=2.3, d=5,
                  s2=0., F=1., *, observations=None, age=None, FeH=None,
                  Zsun=0.02, m_breaks=[0.1, 0.5, 1.0, 100], nbins=[5, 5, 20],
-                 md=1.2, cbh_kwargs=None, MF_kwargs=None, **kwargs):
+                 tracer_masses=None, tcc=0.0, NS_ret=0.1, BH_ret_int=1.0,
+                 md=1.2, natal_kicks=True, kick_method='maxwellian',
+                 kick_vdisp=265., kick_slope=1, kick_scale=20,
+                 cbh_kwargs=None, MF_kwargs=None, meanmassdef='global',
+                 ode_maxstep=1e10, ode_rtol=1e-7):
         import clusterbh
 
         M0 <<= u.Msun
@@ -1897,15 +1737,13 @@ class EvolvedModel(Model):
 
         cbh_kwargs = {} if cbh_kwargs is None else cbh_kwargs.copy()
 
-        if MF_kwargs is not None:
+        cbh_kwargs.setdefault('kick', natal_kicks)
 
-            # Try to get some flexible BH params from MF_kwargs for the ibh
-            bhkws = {'kick_method', 'kick_slope', 'kick_scale',
-                     'BH_IFMR_method', 'BH_IFMR_kwargs'}
-            ibh_kwargs = {k: MF_kwargs[k] for k in (MF_kwargs.keys() & bhkws)}
+        ibh_kwargs = dict(kick_method=kick_method, kick_vdisp=kick_vdisp,
+                          kick_slope=kick_slope, kick_scale=kick_scale)
 
-            # Don't overwrite if given explicitly
-            cbh_kwargs.setdefault('ibh_kwargs', ibh_kwargs)
+        # Don't overwrite if given explicitly
+        cbh_kwargs.setdefault('ibh_kwargs', ibh_kwargs)
 
         m_breaks <<= u.Msun
         a_slopes = [-a1, -a2, -a3]
@@ -1941,21 +1779,32 @@ class EvolvedModel(Model):
                 cbh_kwargs.setdefault('rg', Rgal.to_value('kpc'))
 
             # Get age to evolve to
-            age = (observations.mdata['age'] << u.Gyr)
-            cbh_kwargs.setdefault('tend', age.to_value('Myr'))
+            if age is None:
+                age = observations.mdata['age'] << u.Gyr
+
+            if FeH is None:
+                FeH = observations.mdata['FeH']
+
+            # cbh_kwargs.setdefault('tend', age.to_value('Myr'))
 
             # Get metallicity
-            cbh_kwargs.setdefault('Z', Zsun * 10**observations.mdata['FeH'])
+            # cbh_kwargs.setdefault('Z', Zsun * 10**observations.mdata['FeH'])
+
+        else:
+            if age is None or FeH is None:
+                # Error here if age, FeH can't be found
+                mssg = ("Must supply either `age` and `FeH` or "
+                        "an `observations`, to read them from")
+                raise ValueError(mssg)
 
         # ------------------------------------------------------------------
         # Get age and metallicity, if given (TODO make this logic match others)
         # ------------------------------------------------------------------
 
-        if age is not None:
-            cbh_kwargs.setdefault('tend', age.to_value('Myr'))
+        age = age << u.Gyr
 
-        if FeH is not None:
-            cbh_kwargs.setdefault('Z', Zsun * 10**FeH)
+        cbh_kwargs.setdefault('tend', age.to_value('Myr'))
+        cbh_kwargs.setdefault('Z', Zsun * 10**FeH)
 
         cbh_kwargs.setdefault('Zsolar', Zsun)
 
@@ -2029,11 +1878,18 @@ class EvolvedModel(Model):
 
         BHret = -1  # Spoof unneeded BH retention fraction for `Model`
 
+        # Explicitly specify everything so we can get the correct Signature
         super().__init__(W0, M, rh, g=g, delta=delta, ra=ra,
                          a1=a1, a2=a2, a3=a3, BHret=BHret, d=d,
                          s2=s2, F=F, observations=observations, age=age,
                          FeH=FeH, m_breaks=m_breaks, vesc=vesc, esc_rate=Mdot_t,
-                         tcc=tcc, MF_kwargs=MF_kwargs, **kwargs)
+                         tcc=tcc, tracer_masses=tracer_masses,
+                         NS_ret=NS_ret, BH_ret_int=BH_ret_int,
+                         natal_kicks=natal_kicks, kick_method=kick_method,
+                         kick_vdisp=kick_vdisp, kick_slope=kick_slope,
+                         kick_scale=kick_scale, meanmassdef=meanmassdef,
+                         ode_maxstep=ode_maxstep, ode_rtol=ode_rtol,
+                         MF_kwargs=MF_kwargs)
 
         # reset theta to use initial values
         self.theta = dict(W0=W0, M0=M0.to_value('1e6 Msun'), rh0=rh0.value,
@@ -2046,51 +1902,6 @@ class EvolvedModel(Model):
         from ..analysis import EvolvedVisualizer
         return EvolvedVisualizer(self, observations=self.observations)
 
-
-class FittableEvolvedModel(EvolvedModel):
-    '''Evolved Model subclass for use in all fitting functions.'''
-
-    def __init__(self, theta, observations, **kwargs):
-
-        self.observations = observations
-
-        # ------------------------------------------------------------------
-        # Unpack theta
-        # ------------------------------------------------------------------
-
-        if not isinstance(theta, dict):
-            theta = dict(zip(DEFAULT_EV_THETA, theta))
-
-        else:
-            theta = theta.copy()
-
-        if missing_params := (DEFAULT_EV_THETA.keys() - theta.keys()):
-            mssg = f"Missing required params: {missing_params}"
-            raise KeyError(mssg)
-
-        self.theta = theta
-
-        # ------------------------------------------------------------------
-        # Convert a few quantities
-        # ------------------------------------------------------------------
-
-        theta['M0'] = theta['M0'] * 1e6
-
-        theta['ra'] = 10**theta['ra']
-
-        # ------------------------------------------------------------------
-        # Create the base model
-        # ------------------------------------------------------------------
-
-        kwargs = kwargs.copy()
-
-        # Extra check if esc_rate exist in obs first, otherwise use default
-        #   Necessary because checks in Model aren't sufficient
-
-        if ('esc_rate' not in kwargs) and ('esc_rate' in observations.mdata):
-            kwargs['esc_rate'] = observations.mdata['esc_rate']
-
-        super().__init__(observations=observations, **theta, **kwargs)
 
 # --------------------------------------------------------------------------
 # Sampled model
