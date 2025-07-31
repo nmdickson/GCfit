@@ -291,7 +291,7 @@ class NestedSamplingOutput(Output):
 
 def MCMC_fit(cluster, Niters, Nwalkers, evolved=False, *, free_params=None,
              Ncpu=2, mpi=False, initials=None, param_priors=None, moves=None,
-             fixed_params=None, excluded_likelihoods=None, hyperparams=False,
+             excluded_likelihoods=None, hyperparams=False,
              model_kwargs=None, cont_run=False, savedir=_here, backup=False,
              restrict_to=None, compress=False, param_transforms=None,
              verbose=False, progress=False):
@@ -323,6 +323,12 @@ def MCMC_fit(cluster, Niters, Nwalkers, evolved=False, *, free_params=None,
     Nwalkers : int
         Number of sampler walkers.
 
+    free_params : list of str, optional
+        List of parameters to allow to vary freely during fitting.
+        All other  parameters will be fixed to their default  (or
+        `model_kwargs`) values. By default the `DEFAULT_FREE_PARAMS` or
+        `DEFAULT_FREE_EV_PARAMS` will be used.
+
     Ncpu : int, optional
         Number of CPU's to parallelize the sampling computation over. Is
         ignored if `mpi` is True.
@@ -345,10 +351,6 @@ def MCMC_fit(cluster, Niters, Nwalkers, evolved=False, *, free_params=None,
         List of MCMC proposal algorithms, or "moves", as defined within `emcee`.
         This list is simply passed to `emcee.EnsembleSampler`.
 
-    fixed_params : list of str, optional
-        List of parameters to fix to the initial value, and not allow to be
-        varied through the sampler.
-
     excluded_likelihoods : list of str, optional
         List of component likelihoods to exclude from the posterior probability
         function. Each likelihood can be specified using either the name of
@@ -357,6 +359,12 @@ def MCMC_fit(cluster, Niters, Nwalkers, evolved=False, *, free_params=None,
     hyperparams : bool, optional
         Whether to include bayesian hyperparameters (see Hobson et al., 2002)
         in all likelihood functions.
+
+    model_kwargs : dict, optional
+        Values of any model parameters which will not be freely varying. Any
+        parameters given will override the defaults of the Model class.
+        Any model parameters which do not have any defaults should be provided
+        here, if they are not given in `free_params`.
 
     cont_run : bool, optional
         Not Implemented.
@@ -691,6 +699,12 @@ def nested_fit(cluster, evolved=False, *, free_params=None,
     cluster : str
         Cluster common name, as used to load `gcfit.Observations`.
 
+    free_params : list of str, optional
+        List of parameters to allow to vary freely during fitting.
+        All other  parameters will be fixed to their default  (or
+        `model_kwargs`) values. By default the `DEFAULT_FREE_PARAMS` or
+        `DEFAULT_FREE_EV_PARAMS` will be used.
+
     bound_type : {'none', 'single', 'multi', 'balls', 'cubes'}, optional
         Method used to approximately bound the prior using the current
         set of live points. Conditions the sampling methods used to propose
@@ -709,6 +723,12 @@ def nested_fit(cluster, evolved=False, *, free_params=None,
         Kwargs to be passed to the `dynesty.DynamicNestedSampler.sample_batch`
         batch sampling function. Defaults include `nlive_new` of 100.
         See `dynesty` for more info and all other defaults.
+
+    model_kwargs : dict, optional
+        Values of any model parameters which will not be freely varying. Any
+        parameters given will override the defaults of the Model class.
+        Any model parameters which do not have any defaults should be provided
+        here, if they are not given in `free_params`.
 
     pfrac : float, optional
         Fractional weight of the posterior (versus evidence) for stop function.
@@ -741,10 +761,6 @@ def nested_fit(cluster, evolved=False, *, free_params=None,
     param_priors : dict, optional
         Dictionary of prior bounds/args for each parameter.
         See `probabilities.priors` for formatting of args and defaults.
-
-    fixed_params : list of str, optional
-        List of parameters to fix to the initial value, and not allow to be
-        varied through the sampler.
 
     excluded_likelihoods : list of str, optional
         List of component likelihoods to exclude from the posterior probability
@@ -806,9 +822,6 @@ def nested_fit(cluster, evolved=False, *, free_params=None,
                 free_params = DEFAULT_FREE_EV_PARAMS
             else:
                 free_params = DEFAULT_FREE_PARAMS
-
-        # if fixed_params is None:
-        #     fixed_params = []
 
         if excluded_likelihoods is None:
             excluded_likelihoods = []

@@ -1057,7 +1057,7 @@ def likelihood_mass_func(model, mf, fields, *, hyperparams=False):
 
 
 def log_likelihood(theta, observations, model_params, L_components,
-                   hyperparams, evolved, **model_kw):
+                   hyperparams, evolved):
     r'''Compute log likelihood of given `theta`, based on component likelihoods.
 
     Main likelihood function, which generates the relevant model based on
@@ -1077,6 +1077,10 @@ def log_likelihood(theta, observations, model_params, L_components,
         initialize the model and to read in all datasets specified by
         `L_components`.
 
+    model_params : ModelParameters
+        The `ModelParameters` instance being used during fitting. Will be used
+        to construct the model class based on `theta`.
+
     L_components : list of lists
         List of likelihood components to compute. Must be a list of lists
         in the same format as `Observations.valid_likelihoods` (dataset name,
@@ -1084,9 +1088,6 @@ def log_likelihood(theta, observations, model_params, L_components,
 
     hyperparams : bool
         Whether to include bayesian hyperparameters in all likelihood functions.
-
-    **model_kw : dict, optional
-        All other arguments are passed to the model class
 
     Returns
     -------
@@ -1164,11 +1165,9 @@ def posterior(theta, observations, model_params,
         The `Observations` instance corresponding to this cluster, to provide
         the "data" for this posterior calculation.
 
-    fixed_initials : dict, optional
-        An optional dictionary of parameters which provides fixed values for
-        specific parameters used to fill out the `theta` array. This is useful
-        for allowing samplers to explore a smaller set of parameters by fixing
-        certain usually free ones.
+    model_params : ModelParameters
+        The `ModelParameters` instance being used during fitting. Will be used
+        to construct the model class based on `theta`.
 
     L_components : list of lists, optional
         List of likelihood components to compute. Must be a list of lists

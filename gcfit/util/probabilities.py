@@ -98,9 +98,59 @@ def div_error(a, a_err, b, b_err):
 
 
 class ModelParameters:
-    '''Helper class meant to parse and setup parameters for use by model fitting
-    with the ultimate aim of simplifying the handling of free and fixed params
-    and of making it much simpler to allow various parameters to freely vary.
+    '''Helper class for parsing Model parameters for fitting
+
+    In order to make the handling of free parameters during model fitting more
+    flexible, extensible and secure, this class handles all arguments passed
+    to the initialization of the desired model class. Based on the function
+    signature of `__init__`, it determines which parameters are valid, and
+    provides methods for easily transforming an array of free parameter
+    values to a useable function signature.
+
+    This class eliminates the need for having fixed sets of possible free
+    model parameters, allowing each different fitting run to be its own.
+
+    Models can be initialized by calling:
+    `Model(*modelparams.build_args(θ).args, **modelparams.build_args(θ).kwargs)`
+
+    Parameters
+    ----------
+    free_params : tuple of str
+        The names of which parameters will be freely varied. The order of this
+        must be matched by whatever data is passed to the constructor methods.
+        The parameters must be valid (i.e. appear directly in the signature)
+        for the relevant Model class, and must be parameters which accept a
+        single scalar value.
+
+    model_kwargs : dict, optional
+        Values of any model parameters which will not be freely varying. Any
+        parameters given will override the defaults of the Model class. These
+        parameters are not restricted to scalar arguments. Any model parameters
+        which do not have any defaults must be provided here, if they are
+        not given in `free_params`.
+
+    observations : gcfit.Observations, optional
+        The `Observations` instance to be provided to the Model class. Appears
+        here directly as it is handled specially. Should not be given in
+        `model_kwargs`.
+
+    evolved : bool, optional
+        Whether to use the `Model` or `EvolvedModel` class. Important for
+        determining the correct valid parameters. Defaults to `Model` class.
+
+    transforms : dict, optional
+        Optional dictionaries of scalar->scalar functions which will be applied
+        to the relevant parameters when given to the one of the argument
+        building methods. Necessary if, for example, you wish to vary the log
+        of a parameter, rather than the parameter itself.
+
+    sympy_transforms : bool, optional
+        Flag allowing the passed transforms to be strings parseable by sympy,
+        rather than callable functions.
+
+    compatibility_transforms : bool, optional
+        By default, use some transforms that have always been used in the past,
+        mostly for backwards compatibility. Namely, `M * 1e6` and `10**ra`.
     '''
 
     def __init__(self, free_params: tuple[str, ...],
@@ -164,7 +214,7 @@ class ModelParameters:
                              if k not in self.free_params}
 
     def label_theta(self, theta):
-        '''turn theta into a dict'''
+        '''Turn theta into a dict with correct parameter names'''
         try:
             return dict(zip(self.free_params, theta, strict=True))
         except ValueError as err:
@@ -173,7 +223,7 @@ class ModelParameters:
             raise ValueError(mssg) from err
 
     def build_args(self, theta, *, return_dict=False):
-        '''call model with Model(*build_args.args, **build_args.kwargs)'''
+        '''Build the Model arguments required to init a model with theta.'''
 
         if isinstance(theta, dict):
 

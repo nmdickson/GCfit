@@ -38,9 +38,10 @@ class Priors:
         of ["prior name", *function args]. Any missing parameters will be filled
         in with `DEFAULT_PRIORS`.
 
-    fixed_initials : dict, optional
-        A dictionary of any parameters which have fixed values, used in cases of
-        dependant priors with these values.
+    model_params : ModelParameters
+        The `ModelParameters` instance being used during fitting. This is
+        necessary to determine which parameters are free, and what values to
+        use for any other required (dependant) parameters during computation.
 
     logged : bool, optional
         Whether to log the returned likelihoods. Defaults to True.
@@ -194,9 +195,10 @@ class PriorTransforms(Priors):
         of ["prior name", *function args]. Any missing parameters will be filled
         in with `DEFAULT_PRIORS`.
 
-    fixed_initials : dict, optional
-        A dictionary of any parameters which have fixed values, used in cases of
-        dependant priors with these values.
+    model_params : ModelParameters
+        The `ModelParameters` instance being used during fitting. This is
+        necessary to determine which parameters are free, and what values to
+        use for any other required (dependant) parameters during computation.
 
     logged : bool, optional
         Whether to log the returned likelihoods. Defaults to True.
