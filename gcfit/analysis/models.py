@@ -5111,7 +5111,7 @@ class EvolvedVisualizer(ModelVisualizer):
         --------
         gcfit.FittableModel : Model subclass used to initialize the model.
         '''
-        return cls(_get_ev_model(theta, observations, strict=True),
+        return cls(_get_ev_model(theta, model_params, strict=True),
                    observations)
 
     def __init__(self, model, observations=None):
