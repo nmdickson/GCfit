@@ -1913,7 +1913,7 @@ class _ClusterVisualizer:
         return fig
 
     @_support_units
-    def plot_all(self, fig=None, sharex=True, **kwargs):
+    def plot_all(self, fig=None, sharex=True, only_PM_RT=False, **kwargs):
         '''Plot all primary model radial profiles in one figure.
 
         Plots the six primary radial profile quantities used for fitting
@@ -1921,8 +1921,11 @@ class _ClusterVisualizer:
         That is, clockwise from the top left, number density, total PM,
         tangential PM, radial PM, PM ratio and LOS dispersion profiles.
 
-        Simply sets up a figure with six axes and calls the various relevant
-        profile plotting functions to populate each ax.
+        If `only_PM_RT` is True, will remove the total PM and PM ratio axes
+        from the figure.
+
+        Simply sets up a figure with six (or four) axes and calls the
+        various relevant profile plotting functions to populate each ax.
 
         Parameters
         ----------
@@ -1936,6 +1939,10 @@ class _ClusterVisualizer:
             If True, created subplots will all share the same x-axis.
             Will also remove the x axis ticks and labels on all but the bottom
             row.
+
+        only_PM_RT : bool, optional
+            If True, will only plot the radial and tangential component proper
+            motion profiles, and exclude the total and anisotropy profiles.
 
         **kwargs : dict
             All other arguments are passed to each plotting function.
@@ -1953,9 +1960,18 @@ class _ClusterVisualizer:
         # Setup figure
         # ------------------------------------------------------------------
 
-        fig, axes = self._setup_multi_artist(fig, (3, 2), sharex=sharex)
+        # TODO add option to only plot R&T, not ratio and total
 
-        axes = axes.reshape((3, 2))
+        if only_PM_RT:
+            arch = ('nd', 't', 'los', 'r')
+            fig, axes = self._setup_multi_artist(fig, (2, 2), sharex=sharex)
+            axes = dict(zip(arch, axes))
+            # axes = axes.reshape((2, 2))
+        else:
+            arch = ('nd', 'tot', 'los', 't', 'rat', 'r')
+            fig, axes = self._setup_multi_artist(fig, (3, 2), sharex=sharex)
+            axes = dict(zip(arch, axes))
+            # axes = axes.reshape((3, 2))
 
         res_kwargs = dict(size="25%", show_chi2=False, percentage=True)
         kwargs.setdefault('res_kwargs', res_kwargs)
@@ -1978,7 +1994,7 @@ class _ClusterVisualizer:
                     show_numdens_background = True
                     bg_lim = 0.9 * nd.mdata['background'] << nd['Σ'].unit
 
-        self.plot_number_density(fig=fig, ax=axes[0, 0], label_position='left',
+        self.plot_number_density(fig=fig, ax=axes['nd'], label_position='left',
                                  blank_xaxis=True,
                                  show_background=show_numdens_background,
                                  **kwargs)
@@ -1990,46 +2006,51 @@ class _ClusterVisualizer:
         if bg_lim is not None and bg_lim <= 0.0:
             bg_lim = 1e-3
 
-        axes[0, 0].set_ylim(bottom=bg_lim)
+        axes['nd'].set_ylim(bottom=bg_lim)
 
         # Line-of-Sight Velocity Dispersion
 
-        self.plot_LOS(fig=fig, ax=axes[1, 0], label_position='left',
-                      blank_xaxis=True, **kwargs)
+        self.plot_LOS(fig=fig, ax=axes['los'], label_position='left',
+                      blank_xaxis=(not only_PM_RT), **kwargs)
 
-        axes[1, 0].set_ylim(bottom=0.0)
+        axes['los'].set_ylim(bottom=0.0)
 
-        # Proper Motion Anisotropy
+        if not only_PM_RT:
 
-        self.plot_pm_ratio(fig=fig, ax=axes[2, 0], label_position='left',
-                           **kwargs)
+            # Proper Motion Anisotropy
 
-        axes[2, 0].set_ylim(bottom=0.4, top=max(axes[2, 0].get_ylim()[1], 1.2))
+            self.plot_pm_ratio(fig=fig, ax=axes['rat'], label_position='left',
+                               **kwargs)
 
-        # ------------------------------------------------------------------
-        # Right Plots
-        # ------------------------------------------------------------------
+            rat_toplim = max(axes['rat'].get_ylim()[1], 1.2)
+            axes['rat'].set_ylim(bottom=0.4, top=rat_toplim)
 
-        # Total Proper Motion Dispersion
+            # ------------------------------------------------------------------
+            # Right Plots
+            # ------------------------------------------------------------------
 
-        self.plot_pm_tot(fig=fig, ax=axes[0, 1], label_position='left',
-                         blank_xaxis=True, **kwargs)
+            # Total Proper Motion Dispersion
 
-        axes[0, 1].set_ylim(bottom=0.0)
+            self.plot_pm_tot(fig=fig, ax=axes['tot'], label_position='left',
+                             blank_xaxis=True, **kwargs)
+
+            axes['tot'].set_ylim(bottom=0.0)
 
         # Tangential Proper Motion Dispersion
 
-        self.plot_pm_T(fig=fig, ax=axes[1, 1], label_position='left',
+        self.plot_pm_T(fig=fig, ax=axes['t'], label_position='left',
                        blank_xaxis=True, **kwargs)
 
-        axes[1, 1].set_ylim(bottom=0.0)
+        axes['t'].set_ylim(bottom=0.0)
+        # axes[0, 1].set_ylim(bottom=0.0)
 
         # Radial Proper Motion Dispersion
 
-        self.plot_pm_R(fig=fig, ax=axes[2, 1], label_position='left',
+        self.plot_pm_R(fig=fig, ax=axes['r'], label_position='left',
                        **kwargs)
 
-        axes[2, 1].set_ylim(bottom=0.0)
+        axes['r'].set_ylim(bottom=0.0)
+        # axes[1, 1].set_ylim(bottom=0.0)
 
         # ------------------------------------------------------------------
         # Style plots
