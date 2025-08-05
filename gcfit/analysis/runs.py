@@ -620,9 +620,12 @@ class _SingleRunAnalysis(_RunAnalysis):
                 transforms = None
                 compatibility_transforms = True
 
+            modelkw = self._get_model_kwargs()
+
             # backwards compatibility with old --free-kicks
             if mdata.get('flexible_natal_kicks', False):
                 free_params += ('kick_slope', 'kick_scale')
+                modelkw['kick_method'] = 'sigmoid'
 
             self._parameters = free_params
 
@@ -648,7 +651,7 @@ class _SingleRunAnalysis(_RunAnalysis):
                 raise ValueError(mssg) from err
 
         self._modelparams = ModelParameters(
-            self._parameters, self._get_model_kwargs(),
+            self._parameters, modelkw,
             self.obs, self._evolved, transforms=transforms,
             compatibility_transforms=compatibility_transforms
         )
@@ -1828,8 +1831,7 @@ class NestedRun(_SingleRunAnalysis):
                 except KeyError:
                     continue
 
-        prior_kwargs = {'model_params': self._modelparams, 'err_on_fail': False,
-                        'evolved': self._evolved}
+        prior_kwargs = {'model_params': self._modelparams, 'err_on_fail': False}
 
         return priors.PriorTransforms(prior_params, **prior_kwargs)
 
