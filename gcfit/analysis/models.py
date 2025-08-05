@@ -2072,8 +2072,9 @@ class _ClusterVisualizer:
     @_support_units
     def plot_mass_func(self, fig=None, show_obs=True, show_fields=True, *,
                        PI_legend=False, propid_legend=False,
-                       label_unit='arcmin', model_color=None, model_label=None,
-                       logscaled=False, field_kw=None, **kwargs):
+                       label_unit='arcmin', data_color=None, model_color=None,
+                       model_label=None, logscaled=False, field_kw=None,
+                       **kwargs):
         """Plot present day mass functions in various radial bins.
 
         Plots each of the stored `self.mass_func` radial (present-day) mass
@@ -2082,8 +2083,8 @@ class _ClusterVisualizer:
         observational datasets.
 
         Each grouping of mass functions bins (i.e. under a certain data
-        source proposal) will be plotted with it's own colour and sorted to be
-        next to one another.
+        source proposal) will be plotted with it's own colour (by default) and
+        sorted to be next to one another.
 
         Optionally, a panel will be added to the left of the figure showing
         the related field outlines on the sky (using `plot_MF_fields`).
@@ -2120,6 +2121,13 @@ class _ClusterVisualizer:
             The unit used to denote each radial bin in it's corresponding label.
             Does not change anything about what is plotted, only the label.
             Defaults to arcminutes (').
+
+        data_color : str, optional
+            Optionally colour all datasets with a specific colour. This
+            will give the same colour to *all* radial bins, regardless of
+            proposal grouping. By default, the data in each grouping will be
+            given its own colour, as dictated within `self.mass_func`, or
+            as set by the default matplotlib colour cycler, if not set.
 
         model_color : str, optional
             Optionally colour all model profiles with a specific colour. This
@@ -2213,11 +2221,14 @@ class _ClusterVisualizer:
         # Iterate over each PI, gathering data to plot
         # ------------------------------------------------------------------
 
+        # TODO y-axis tick labels should be sci-notation at some point
+
         kwargs.setdefault('mfc', None)
         kwargs.setdefault('mec', 'k')
         kwargs.setdefault('mew', 0.3)
         kwargs.setdefault('linestyle', 'None')
         kwargs.setdefault('marker', 'o')
+        kwargs.setdefault('zorder', 10)
 
         for PI in sorted(self.mass_func,
                          key=lambda k: self.mass_func[k][0]['r1']):
@@ -2256,7 +2267,7 @@ class _ClusterVisualizer:
 
                 ax = axes[ax_ind]
 
-                data_clr = rbin.get('colour', None)
+                data_clr = data_color or rbin.get('colour', None)
 
                 # ----------------------------------------------------------
                 # Plot observations
@@ -2296,7 +2307,6 @@ class _ClusterVisualizer:
 
                 median = dNdm[midpoint]
 
-                # TODO zorder needs work here, noticeable when colors dont match
                 med_plot, = ax.plot(mj, median, color=model_clr)
 
                 alpha = 0.8 / (midpoint + 1)
