@@ -3977,6 +3977,52 @@ class RunCollection(_RunAnalysis):
 
         return scatter_kw
 
+
+    def _set_multi_markers(self, pathcoll, markers):
+        '''allow for multiple kinds of markers in plt.scatter
+        pathcoll is the return value from `plt.scatter`, markers is list of
+        markers to use, in correct order.
+
+        Adapted from matplotlib#11155
+        '''
+        import matplotlib.markers as mpl_mrk
+
+        if markers is None:
+            return pathcoll
+
+        markers = np.atleast_1d(markers)
+
+        paths = []
+        for mrk in markers:
+
+            if isinstance(mrk, mpl_mrk.MarkerStyle):
+                marker_obj = mrk
+
+            else:
+                marker_obj = mpl_mrk.MarkerStyle(mrk)
+
+            path = marker_obj.get_path().transformed(
+                        marker_obj.get_transform())
+
+            paths.append(path)
+
+        pathcoll.set_paths(paths)
+
+        return pathcoll
+
+    def _scatter_error(self, ax, x, y, xerr, yerr, marker, label, **kwargs):
+        '''plot scatterplot with errorbars'''
+
+        sc_kwargs = self._dissect_scatter_kwargs(kwargs)
+
+        errbar = ax.errorbar(x, y, xerr=xerr, yerr=yerr, fmt='none', **kwargs)
+
+        points = ax.scatter(x, y, picker=True, label=label, **sc_kwargs)
+
+        points = self._set_multi_markers(points, marker)
+
+        return points, errbar
+
     # ----------------------------------------------------------------------
     # Model Collection Visualizers
     # ----------------------------------------------------------------------
@@ -4252,14 +4298,13 @@ class RunCollection(_RunAnalysis):
         '''
 
         fig, ax = self._setup_artist(fig, ax)
-        sc_kwargs = self._dissect_scatter_kwargs(kwargs)
 
         x, *dx = self._get_param(param1, force_model=force_model)
         y, *dy = self._get_param(param2, force_model=force_model)
 
-        errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', **kwargs)
-        points = ax.scatter(x, y, picker=True, marker=marker,
-                            label=label, **sc_kwargs)
+        points, errbar = self._scatter_error(ax, x, y, xerr=dx, yerr=dy,
+                                             marker=marker, label=label,
+                                             **kwargs)
 
         ax.set_xlabel(self._get_latex_labels(param1, force_model=force_model))
         ax.set_ylabel(self._get_latex_labels(param2, force_model=force_model))
@@ -4297,6 +4342,8 @@ class RunCollection(_RunAnalysis):
 
             if histogram_kwargs is None:
                 histogram_kwargs = {}
+
+            # TODO this messes up overplotting using same figure
 
             divider = make_axes_locatable(ax)
 
@@ -4395,14 +4442,13 @@ class RunCollection(_RunAnalysis):
         '''
 
         fig, ax = self._setup_artist(fig, ax)
-        sc_kwargs = self._dissect_scatter_kwargs(kwargs)
 
         x, *dx = self._get_param(param, force_model=force_model)
         y, dy = truths, e_truths
 
-        errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', **kwargs)
-        points = ax.scatter(x, y, picker=True, marker=marker,
-                            label=label, **sc_kwargs)
+        points, errbar = self._scatter_error(ax, x, y, xerr=dx, yerr=dy,
+                                             marker=marker, label=label,
+                                             **kwargs)
 
         if diagonal:
             grid_kw = {
@@ -4539,7 +4585,6 @@ class RunCollection(_RunAnalysis):
         '''
 
         fig, ax = self._setup_artist(fig, ax)
-        sc_kwargs = self._dissect_scatter_kwargs(kwargs)
 
         x, *dx = self._get_param(param, force_model=force_model)
         y, dy = lit, e_lit
@@ -4554,9 +4599,9 @@ class RunCollection(_RunAnalysis):
             dx, dy = dy, dx
             xlabel, ylabel = ylabel, xlabel
 
-        errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', **kwargs)
-        points = ax.scatter(x, y, picker=True, marker=marker,
-                            label=label, **sc_kwargs)
+        points, errbar = self._scatter_error(ax, x, y, xerr=dx, yerr=dy,
+                                             marker=marker, label=label,
+                                             **kwargs)
 
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
@@ -4800,7 +4845,6 @@ class RunCollection(_RunAnalysis):
             The corresponding figure, containing all axes and plot artists.
         '''
         fig, ax = self._setup_artist(fig, ax)
-        sc_kwargs = self._dissect_scatter_kwargs(kwargs)
 
         mean, *err = self._get_param(param, force_model=force_model)
 
@@ -4808,8 +4852,8 @@ class RunCollection(_RunAnalysis):
 
         labels = self.names
 
-        errbar = ax.errorbar(x=xticks, y=mean, yerr=err, fmt='none', **kwargs)
-        points = ax.scatter(x=xticks, y=mean, picker=True, **sc_kwargs)
+        points, errbar = self._scatter_error(ax, xticks, mean,
+                                             xerr=None, yerr=err, **kwargs)
 
         if clr_param is not None:
 
