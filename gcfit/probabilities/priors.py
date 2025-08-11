@@ -646,6 +646,7 @@ DEFAULT_PRIORS = {
     'M0': ('uniform', [(0.001, 10)]),
     'rh0': ('uniform', [(0.01, 15)]),
     #
+    'f_kick': ('uniform', [(0.0, 1.0)]),
     'kick_vdisp': ('uniform', [(50, 265.)]),
     'kick_slope': ('uniform', [(1e-5, 2)]),
     'kick_scale': ('uniform', [(5, 100)]),
