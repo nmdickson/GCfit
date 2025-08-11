@@ -982,7 +982,7 @@ class Model(lp.limepy):
 
     def _evolve_mf(self, m_breaks, a1, a2, a3, nbins, FeH, age, esc_rate, tcc,
                    NS_ret, BH_ret_int, BHret, natal_kicks, vesc,
-                   kick_method, SNe_method, kick_vdisp,
+                   kick_method, f_kick, SNe_method, kick_vdisp,
                    kick_slope,  kick_scale, **kwargs):
         '''Compute an evolved mass function using `ssptools.EvolvedMF`'''
 
@@ -1003,6 +1003,7 @@ class Model(lp.limepy):
             natal_kicks=natal_kicks,
             vesc=vesc.value,
             kick_method=kick_method,
+            f_kick=f_kick,
             SNe_method=SNe_method,
             kick_vdisp=kick_vdisp,
             kick_slope=kick_slope,
@@ -1092,7 +1093,7 @@ class Model(lp.limepy):
                  m_breaks=[0.1, 0.5, 1.0, 100], nbins=[5, 5, 20],
                  tracer_masses=None, tcc=0.0, NS_ret=0.1, BH_ret_int=1.0,
                  esc_rate=0.0, natal_kicks=True, kick_method='maxwellian',
-                 SNe_method='rapid', vesc=90, kick_vdisp=265.,
+                 f_kick=None, SNe_method='rapid', vesc=90, kick_vdisp=265.,
                  kick_slope=1, kick_scale=20, MF_kwargs=None,
                  meanmassdef='global', ode_maxstep=1e10, ode_rtol=1e-7):
 
@@ -1166,7 +1167,7 @@ class Model(lp.limepy):
                                    FeH, age, esc_rate, tcc,
                                    NS_ret, BH_ret_int, BHret,
                                    natal_kicks, self.vesc0,
-                                   kick_method, SNe_method, kick_vdisp,
+                                   kick_method, f_kick, SNe_method, kick_vdisp,
                                    kick_slope,  kick_scale, **MF_kwargs)
 
         if not self._mf.converged:
@@ -1691,7 +1692,7 @@ class EvolvedModel(Model):
 
     def _evolve_mf(self, m_breaks, a1, a2, a3, nbins, FeH, age, esc_rate, tcc,
                    NS_ret, BH_ret_int, BHret, natal_kicks, vesc,
-                   kick_method, SNe_method, kick_vdisp,
+                   kick_method, f_kick, SNe_method, kick_vdisp,
                    kick_slope,  kick_scale, **kwargs):
         '''Alternative MF init using prior-computed IMF and clusterBH outputs'''
         from ssptools import EvolvedMFWithBH
@@ -1712,6 +1713,7 @@ class EvolvedModel(Model):
             esc_norm='M',
             md=self.md,
             kick_method=kick_method,
+            f_kick=f_kick,
             SNe_method=SNe_method,
             kick_vdisp=kick_vdisp,
             kick_slope=kick_slope,
@@ -1727,7 +1729,7 @@ class EvolvedModel(Model):
                  Zsun=0.02, m_breaks=[0.1, 0.5, 1.0, 100], nbins=[5, 5, 20],
                  tracer_masses=None, tcc=0.0, NS_ret=0.1, BH_ret_int=1.0,
                  md=1.2, natal_kicks=True, kick_method='maxwellian',
-                 SNe_method='rapid', kick_vdisp=265.,
+                 f_kick=None, SNe_method='rapid', kick_vdisp=265.,
                  kick_slope=1, kick_scale=20,
                  cbh_kwargs=None, MF_kwargs=None, meanmassdef='global',
                  ode_maxstep=1e10, ode_rtol=1e-7):
@@ -1744,7 +1746,10 @@ class EvolvedModel(Model):
 
         cbh_kwargs.setdefault('kick', natal_kicks)
 
-        ibh_kwargs = dict(kick_method=kick_method,
+        # TODO sometimes scale found here when using f_kick is very slightly
+        #   different then the scale found in _evolve_mf.
+        #   Should probably not be recomputing it, just re-use this.
+        ibh_kwargs = dict(kick_method=kick_method, f_kick=f_kick,
                           SNe_method=SNe_method, kick_vdisp=kick_vdisp,
                           kick_slope=kick_slope, kick_scale=kick_scale)
 
@@ -1891,8 +1896,8 @@ class EvolvedModel(Model):
                          FeH=FeH, m_breaks=m_breaks, vesc=vesc, esc_rate=Mdot_t,
                          tcc=tcc, tracer_masses=tracer_masses,
                          NS_ret=NS_ret, BH_ret_int=BH_ret_int,
-                         natal_kicks=natal_kicks,
-                         kick_method=kick_method, SNe_method=SNe_method,
+                         natal_kicks=natal_kicks, kick_method=kick_method,
+                         f_kick=f_kick, SNe_method=SNe_method,
                          kick_vdisp=kick_vdisp, kick_slope=kick_slope,
                          kick_scale=kick_scale, meanmassdef=meanmassdef,
                          ode_maxstep=ode_maxstep, ode_rtol=ode_rtol,
