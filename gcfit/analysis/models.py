@@ -3447,6 +3447,9 @@ class ModelVisualizer(_ClusterVisualizer):
         self.M_t = model.M[t_slc]
         self.M_BH = self.M_BH0 = model.BH.Mj.sum()
         self.N_BH = self.N_BH0 = model.BH.Nj.sum()
+        self.BH_massfunc = self.BH0_massfunc = self._init_BH_dNdm(model)
+        self.BH_kick_ret = self._init_kicks(model)
+        self.M_kicked = model._mf._kick_stats.total_kicked << u.Msun
         self.Ms_t = model.nonBH.Mj.sum()[t_slc]
         self.mmean_t = model.mmean[t_slc]
         self.rt_t = model.rt[t_slc]
@@ -3672,6 +3675,26 @@ class ModelVisualizer(_ClusterVisualizer):
         self.cum_M_WD = cum_WD
         self.cum_M_NS = cum_NS
         self.cum_M_BH = cum_BH
+
+    def _init_BH_dNdm(self, model):
+
+        BH_bins = model._mf.massbins.bins.BH
+        b = np.r_[BH_bins.lower, BH_bins.upper[-1]] << u.Msun
+        bw = (BH_bins.upper - BH_bins.lower) << u.Msun
+
+        model_dN0dm = model._mf.Nr.BH / bw
+
+        bhmf_interp = util.QuantitySpline(b[:-1] + (bw / 2), model_dN0dm, k=1)
+
+        return bhmf_interp(self.mbh)
+
+    def _init_kicks(self, model):
+        from ssptools import kicks
+
+        ks = model._mf._kick_stats
+        ret_func = kicks._get_kick_method(model._mf_kwargs['kick_method'])
+
+        return ret_func(self.mbh, **ks.parameters)
 
 
 class CIModelVisualizer(_ClusterVisualizer):
@@ -4016,6 +4039,10 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         viz.t = [huge_model.age] << u.Gyr
 
+        # Average out BH mass bins, for interpolation onto
+        # All models should share these bins, unless using really weird setup
+        viz.mbh = 0.5 * np.sum(huge_model._mf.massbins.bins.BH, axis=0)
+
         # Assume that this example model has same nms bin as all models
         # This approximation isn't exactly correct (especially when Ndot != 0),
         # but close enough for plots
@@ -4029,19 +4056,25 @@ class CIModelVisualizer(_ClusterVisualizer):
         viz.mj = np.r_[mj_MS, mj_tracer]
 
         # ------------------------------------------------------------------
-        # Setup the final full parameters arrays with dims of
-        # [mass bins, intervals (from percentile of models), radial bins] for
-        # all "profile" datasets
+        # Setup the final full parameters arrays with dims of:
+        # Profiles:
+        # [mass bins, intervals (from percentile of models), radial bins]
+        # Evolution:
+        # [1, intervals, time bins]
+        # Component Mass Functions:
+        # [mass bins, intervals, 1]
+        # Quantities
+        # [chain size]
         # ------------------------------------------------------------------
 
+        Nm = 1 + len(mj_tracer)
         Nr = viz.r.size
         Nt = viz.t.size
+        Nbhmf = viz.mbh.size
 
         # velocities
 
         vel_unit = np.sqrt(huge_model.v2Tj).unit
-
-        Nm = 1 + len(mj_tracer)
 
         vpj = np.full((Nm, N, Nr), np.nan) << vel_unit
         vTj, vRj, vtotj = vpj.copy(), vpj.copy(), vpj.copy()
@@ -4116,6 +4149,11 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         M_BH_t = np.full((1, N, Nt), np.nan) << u.Msun
         M_BH0 = np.full(N, np.nan) << u.Msun
+
+        M_kicked = np.full(N, np.nan) << u.Msun
+        BH_massfunc = np.full((Nbhmf, N, 1), np.nan) << 1 / u.Msun
+        BH0_massfunc = np.full((Nbhmf, N, 1), np.nan) << 1 / u.Msun
+        BH_kick_ret = np.full((Nbhmf, N, 1), np.nan) << u.dimensionless_unscaled
 
         # Structural params
 
@@ -4254,6 +4292,12 @@ class CIModelVisualizer(_ClusterVisualizer):
             M_BH0[model_ind] = M_BH[model_ind]
             N_BH0[model_ind] = N_BH[model_ind]
 
+            M_kicked[model_ind] = model._mf._kick_stats.total_kicked << u.Msun
+
+            bhslc = (slice(None), model_ind, 0)
+            BH_massfunc[bhslc] = BH0_massfunc[bhslc] = viz._init_BH_dNdm(model)
+            BH_kick_ret[bhslc] = viz._init_kicks(model)
+
             # Structural params
 
             M_t[slc] = model.M
@@ -4344,6 +4388,9 @@ class CIModelVisualizer(_ClusterVisualizer):
         viz.E_t = np.transpose(perc(E_t, q, axis=1), axes)
 
         viz.vesc_t = np.transpose(perc(vesc_t, q, axis=1), axes)
+        viz.BH0_massfunc = np.transpose(perc(BH0_massfunc, q, axis=1), axes)
+        viz.BH_massfunc = np.transpose(perc(BH_massfunc, q, axis=1), axes)
+        viz.BH_kick_ret = np.transpose(perc(BH_kick_ret, q, axis=1), axes)
 
         viz.f_rem = f_rem
         viz.f_BH = f_BH
@@ -4353,6 +4400,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         viz.N_BH = viz.BH_num = N_BH
         viz.M_BH0 = M_BH0
         viz.N_BH0 = N_BH0
+        viz.M_kicked = M_kicked
 
         viz.r0 = r0
         viz.rt = rt
@@ -4602,6 +4650,32 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         return dNdm_interp(self._mf_domain)
 
+    def _init_BH_dNdm(self, model):
+
+        # TODO is is better to interpolate dNdm, or N and then use same bw?
+
+        BH_bins = model._mf.massbins.bins.BH
+        b = np.r_[BH_bins.lower, BH_bins.upper[-1]] << u.Msun
+        bw = (BH_bins.upper - BH_bins.lower) << u.Msun
+
+        model_dN0dm = model._mf.Nr.BH / bw
+
+        bhmf_interp = util.QuantitySpline(b[:-1] + (bw / 2), model_dN0dm, k=1)
+
+        return bhmf_interp(self.mbh)
+
+    def _init_kicks(self, model):
+        from ssptools import kicks
+
+        # This holds nans wherever kicks are not actually done (e.g. 0 BH bins)
+        # model_ret = model._mf._kick_stats['retention']
+
+        # So instead, recompute the kicks (which are really fast)
+        ks = model._mf._kick_stats
+        ret_func = kicks._get_kick_method(model._mf_kwargs['kick_method'])
+
+        return ret_func(self.mbh, **ks.parameters)
+
     # ----------------------------------------------------------------------
     # Save and load confidence intervals to a file
     # ----------------------------------------------------------------------
@@ -4689,6 +4763,10 @@ class CIModelVisualizer(_ClusterVisualizer):
                 'rt_t', 'rh_t', 'rv_t', 'psi_t', 'E_t', 'vesc_t'
             )
 
+            profile_keys += (  # comp mass function profiles
+                'BH_massfunc', 'BH0_massfunc', 'BH_kick_ret'
+            )
+
             for key in profile_keys:
 
                 data = getattr(self, key)
@@ -4705,7 +4783,7 @@ class CIModelVisualizer(_ClusterVisualizer):
                 'f_rem', 'f_BH', 'M_BH', 'N_BH', 'f_BH0', 'M_BH0', 'N_BH0',
                 'r0', 'rt', 'rh', 'rhp', 'ra', 'rv', 'mmean', 'volume', 'vesc0',
                 'rhoh0', 'BH_rh', 'spitzer_chi', 'trh', 'N_relax', 'K_scale',
-                'delta_r50', 'delta_A'
+                'M_kicked', 'delta_r50', 'delta_A'
             )
 
             for key in quant_keys:
@@ -5150,6 +5228,18 @@ class EvolvedVisualizer(ModelVisualizer):
         return cls(_get_ev_model(theta, model_params, strict=True),
                    observations)
 
+    def _init_BH_dN0dm(self, model):
+
+        BH_bins = model._clusterbh.ibh.bins
+        b = np.r_[BH_bins.lower, BH_bins.upper[-1]] << u.Msun
+        bw = (BH_bins.upper - BH_bins.lower) << u.Msun
+
+        model_dN0dm = model._clusterbh.ibh.N / bw
+
+        bhmf_interp = util.QuantitySpline(b[:-1] + (bw / 2), model_dN0dm, k=1)
+
+        return bhmf_interp(self.mbh)
+
     def __init__(self, model, observations=None):
 
         super().__init__(model, observations=observations)
@@ -5169,6 +5259,7 @@ class EvolvedVisualizer(ModelVisualizer):
         actual_M0 = cbh.M0 + cbh.Mbh0 - cbh.ibh.Ms_lost
         self.f_BH0 = (100 * cbh.Mbh0 / actual_M0) << u.pct
         self.N_BH0 = cbh.Nbh0 << u.dimensionless_unscaled
+        self.BH0_massfunc = self._init_BH_dN0dm(model)
         self.mav_t = cbh.mav[slc] << u.Msun
 
         self.rh_t = cbh.rh[slc] << u.pc
@@ -5484,6 +5575,10 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
 
         viz.t = huge_model._clusterbh.t << u.Gyr
 
+        # Average out BH mass bins, for interpolation onto
+        # All models should share these bins, unless using really weird setup
+        viz.mbh = 0.5 * np.sum(huge_model._mf.massbins.bins.BH, axis=0)
+
         # Assume that this example model has same nms bin as all models
         # This approximation isn't exactly correct but close enough for plots
         viz.star_bin = 0
@@ -5496,19 +5591,25 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
         viz.mj = np.r_[mj_MS, mj_tracer]
 
         # ------------------------------------------------------------------
-        # Setup the final full parameters arrays with dims of
-        # [mass bins, intervals (from percentile of models), radial bins] for
-        # all "profile" datasets
+        # Setup the final full parameters arrays with dims of:
+        # Profiles:
+        # [mass bins, intervals (from percentile of models), radial bins]
+        # Evolution:
+        # [1, intervals, time bins]
+        # Component Mass Functions:
+        # [mass bins, intervals, 1]
+        # Quantities
+        # [chain size]
         # ------------------------------------------------------------------
 
+        Nm = 1 + len(mj_tracer)
         Nr = viz.r.size
         Nt = viz.t.size
+        Nbhmf = viz.mbh.size
 
         # velocities
 
         vel_unit = np.sqrt(huge_model.v2Tj).unit
-
-        Nm = 1 + len(mj_tracer)
 
         vpj = np.full((Nm, N, Nr), np.nan) << vel_unit
         vTj, vRj, vtotj = vpj.copy(), vpj.copy(), vpj.copy()
@@ -5583,6 +5684,11 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
         M_BH_t = np.full((1, N, Nt), np.nan) << u.Msun
         M_BH0 = np.full(N, np.nan) << u.Msun
         N_BH0 = np.full(N, np.nan) << u.dimensionless_unscaled
+
+        M_kicked = np.full(N, np.nan) << u.Msun
+        BH_massfunc = np.full((Nbhmf, N, 1), np.nan) << 1 / u.Msun
+        BH0_massfunc = np.full((Nbhmf, N, 1), np.nan) << 1 / u.Msun
+        BH_kick_ret = np.full((Nbhmf, N, 1), np.nan) << u.dimensionless_unscaled
 
         # Structural params
 
@@ -5728,6 +5834,11 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
             M_BH_t[slc] = cbh.Mbh << M_BH_t.unit
             M_BH0[model_ind] = cbh.Mbh0 << M_BH_t.unit
 
+            M_kicked[model_ind] = model._mf._kick_stats.total_kicked << u.Msun
+            BH_massfunc[:, model_ind, 0] = viz._init_BH_dNdm(model)
+            BH0_massfunc[:, model_ind, 0] = viz._init_BH_dN0dm(model)
+            BH_kick_ret[:, model_ind, 0] = viz._init_kicks(model)
+
             # Structural params
 
             M_t[slc] = cbh.M << M_t.unit
@@ -5826,10 +5937,14 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
         viz.E_t = np.transpose(perc(E_t, q, axis=1), axes)
 
         viz.vesc_t = np.transpose(perc(vesc_t, q, axis=1), axes)
+        viz.BH_massfunc = np.transpose(perc(BH_massfunc, q, axis=1), axes)
+        viz.BH0_massfunc = np.transpose(perc(BH0_massfunc, q, axis=1), axes)
+        viz.BH_kick_ret = np.transpose(perc(BH_kick_ret, q, axis=1), axes)
 
         viz.f_rem = f_rem
         viz.f_BH = f_BH
         viz.f_BH0 = f_BH0
+        viz.M_kicked = M_kicked
 
         viz.M_BH = viz.BH_mass = M_BH
         viz.N_BH = viz.BH_num = N_BH
