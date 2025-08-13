@@ -3144,7 +3144,7 @@ class _ClusterVisualizer:
 
         fig, ax = self._setup_artist(fig, ax)
 
-        self._plot_model(ax, x_data=self.mbh, data=self.BH_kick_ret[:, :, 0].T,
+        self._plot_model(ax, x_data=self.mbh, data=self.BH_kick_ret.T[0, :, :],
                          x_unit=x_unit, **kwargs)
 
         if verbose_label:
@@ -3573,6 +3573,7 @@ class ModelVisualizer(_ClusterVisualizer):
         # Spoof evolutionary quantities
 
         t_slc = (np.newaxis, np.newaxis, np.newaxis)
+        bh_slc = (..., np.newaxis, np.newaxis)
 
         self.f_BH_t = self.f_BH[t_slc]
         self.f_BH0 = self.f_BH
@@ -3580,8 +3581,8 @@ class ModelVisualizer(_ClusterVisualizer):
         self.M_t = model.M[t_slc]
         self.M_BH = self.M_BH0 = model.BH.Mj.sum()
         self.N_BH = self.N_BH0 = model.BH.Nj.sum()
-        self.BH_massfunc = self.BH0_massfunc = self._init_BH_dNdm(model)
-        self.BH_kick_ret = self._init_kicks(model)
+        self.BH_massfunc = self.BH0_massfunc = self._init_BH_dNdm(model)[bh_slc]
+        self.BH_kick_ret = self._init_kicks(model)[bh_slc]
         self.M_kicked = model._mf._kick_stats.total_kicked << u.Msun
         self.Ms_t = model.nonBH.Mj.sum()[t_slc]
         self.mmean_t = model.mmean[t_slc]
@@ -3825,9 +3826,9 @@ class ModelVisualizer(_ClusterVisualizer):
         from ssptools import kicks
 
         ks = model._mf._kick_stats
-        ret_func = kicks._get_kick_method(model._mf_kwargs['kick_method'])
+        fret = kicks._get_kick_method(model._mf_kwargs['kick_method'])
 
-        return ret_func(self.mbh.value, **ks.parameters)
+        return fret(self.mbh.value, **ks.parameters) << u.dimensionless_unscaled
 
 
 class CIModelVisualizer(_ClusterVisualizer):
@@ -4853,9 +4854,9 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         # So instead, recompute the kicks (which are really fast)
         ks = model._mf._kick_stats
-        ret_func = kicks._get_kick_method(model._mf_kwargs['kick_method'])
+        fret = kicks._get_kick_method(model._mf_kwargs['kick_method'])
 
-        return ret_func(self.mbh.value, **ks.parameters)
+        return fret(self.mbh.value, **ks.parameters) << u.dimensionless_unscaled
 
     # ----------------------------------------------------------------------
     # Save and load confidence intervals to a file
@@ -5066,6 +5067,11 @@ class CIModelVisualizer(_ClusterVisualizer):
                 viz.t = modelgrp['metadata']['t'][:] << u.Gyr
             except KeyError:
                 viz.t = [] << u.Gyr
+
+            try:
+                viz.mbh = modelgrp['metadata']['mbh'][:] << u.Msun
+            except KeyError:
+                viz.mbh = [] << u.Msun
 
             # Get profile and quantity percentiles
             for grp in ('profiles', 'quantities'):
