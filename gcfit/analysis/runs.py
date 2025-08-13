@@ -3487,6 +3487,11 @@ class RunCollection(_RunAnalysis):
         self._params = [dict(zip(labels, r._get_equal_weight_chains()[1].T))
                         for r in runs]
 
+        self._fixedparams = [
+            {k: [v, ] for k, v in r._modelparams.fixed_params.items()}
+            for r in self.runs
+        ]
+
         self._mdata = [{k: [v, ] for k, v in r.obs.mdata.items()}
                        for r in self.runs]
 
@@ -3681,7 +3686,8 @@ class RunCollection(_RunAnalysis):
         # try to get it from the best-fit params or metadata
         try:
             chains = [
-                {**self._params[ind], **self._mdata[ind]}[param]
+                {**self._params[ind], **self._fixedparams[ind],
+                 **self._mdata[ind]}[param]
                 for ind, run in enumerate(self.runs)
             ]
 
