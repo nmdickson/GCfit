@@ -2293,6 +2293,7 @@ class _ClusterVisualizer:
                 # this is *not* a profile, but does use similar, but simpler,
                 # logic
                 # ----------------------------------------------------------
+                # TODO switch to calling _plot_model directly (like evolution)
 
                 # If really desired, don't match model colour to bins
                 model_clr = model_color if model_color is not None else data_clr
@@ -3099,6 +3100,135 @@ class _ClusterVisualizer:
 
         return fig
 
+    @_support_units
+    def plot_BH_kick_fret(self, fig=None, ax=None, *, x_unit='Msun',
+                          label_position='left', verbose_label=True, **kwargs):
+        r'''Plot model BH natal kick retention fraction.
+
+        Plots the retention fraction of BHs caused by natal kicks in this
+        model, as a function of BH mass.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot the retention fraction. Should be
+            a part of the given `fig`.
+
+        x_unit : u.Unit, optional
+            Units to convert the x axis to. By default, x-units are in Msun.
+
+        label_position : {'top', 'left', 'right'}, optional
+            Where to place the quantity (y) label. If "top", will be
+            set as the ax title, otherwise will be set to one side. If on a
+            side, will also attempt to correctly append the units to the end
+            of the label. Defaults to the left.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "BH Kick Retention
+            Fraction", otherwise "$f_{\mathrm{ret}}$".
+
+        **kwargs : dict, optional
+            All other arguments are passed to `_plot_model`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        self._plot_model(ax, x_data=self.mbh, data=self.BH_kick_ret[:, :, 0].T,
+                         x_unit=x_unit, **kwargs)
+
+        if verbose_label:
+            label = "BH Kick Retention Fraction"
+        else:
+            label = r'$f_{\mathrm{ret}}$'
+
+        self._set_ylabel(ax, label, self.BH_kick_ret.unit, label_position)
+        self._set_xlabel(ax, r'$m_{\mathrm{BH}}$', unit=x_unit)
+
+        return fig
+
+    @_support_units
+    def plot_BH_mass_func(self, fig=None, ax=None, *, initial=False,
+                          x_unit='Msun', color='tab:blue',
+                          label_position='left', verbose_label=True, **kwargs):
+        r'''Plot model BH mass function.
+
+        Plots the mass function (i.e. :math:`\frac{dN_{\mathrm{BH}}}}{dm}`.)
+        of BHs in this model, as a function of BH mass, as a step-plot.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot the mass function. Should be
+            a part of the given `fig`.
+
+        x_unit : u.Unit, optional
+            Units to convert the x axis to. By default, x-units are in Msun.
+
+        label_position : {'top', 'left', 'right'}, optional
+            Where to place the quantity (y) label. If "top", will be
+            set as the ax title, otherwise will be set to one side. If on a
+            side, will also attempt to correctly append the units to the end
+            of the label. Defaults to the left.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "BH Mass Function",
+            otherwise "$\frac{\mathrm{d}\,N}{\mathrm{d}\,m}_{BH}$".
+
+        **kwargs : dict, optional
+            All other arguments are passed to `_plot_model`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        # self._plot_model(ax, x_data=self.mbh, data=self.BH_kick_ret[:, :, 0].T,
+        #                  x_unit=x_unit, **kwargs)
+
+        ymodel = self.BH0_massfunc if initial else self.BH_massfunc
+
+        # TODO can't use _plot_model, but need to make sure using same kwargs
+        ax.stairs(ymodel[:, 2, 0], self._mbh_edges,
+                  color=color, **kwargs)
+
+        alpha = 0.8 / (1 + 1)
+        for sig in range(1, 1 + 1):
+            ax.stairs(ymodel[:, 2 + sig, 0], self._mbh_edges,
+                      baseline=ymodel[:, 2 - sig, 0],
+                      fill=True, color=color, alpha=(1 - alpha), **kwargs)
+            alpha += alpha
+
+        if verbose_label:
+            label = "BH Mass Function"
+        else:
+            label = r'$\frac{\mathrm{d}\,N}{\mathrm{d}\,m}_{BH}$'
+
+        self._set_ylabel(ax, label, self.BH_kick_ret.unit, label_position)
+        self._set_xlabel(ax, r'$m_{\mathrm{BH}}$', unit=x_unit)
+
+        return fig
+
+
     # -----------------------------------------------------------------------
     # Goodness of fit statistics
     # -----------------------------------------------------------------------
@@ -3397,6 +3527,9 @@ class ModelVisualizer(_ClusterVisualizer):
 
         self.r = model.r
         self.t = [model.age] << u.Gyr
+        self.mbh = .5 * np.sum(model._mf.massbins.bins.BH, axis=0) << u.Msun
+        self._mbh_edges = np.r_[model._mf.massbins.bins.BH.lower,
+                                model._mf.massbins.bins.BH.upper[-1]]
 
         self.rlims = (9e-3, model.r.max().value + 5) << model.r.unit
 
@@ -3694,7 +3827,7 @@ class ModelVisualizer(_ClusterVisualizer):
         ks = model._mf._kick_stats
         ret_func = kicks._get_kick_method(model._mf_kwargs['kick_method'])
 
-        return ret_func(self.mbh, **ks.parameters)
+        return ret_func(self.mbh.value, **ks.parameters)
 
 
 class CIModelVisualizer(_ClusterVisualizer):
@@ -3932,6 +4065,52 @@ class CIModelVisualizer(_ClusterVisualizer):
         warnings.warn("Deprecated in favour of plot_N_BH", DeprecationWarning)
         return self.plot_N_BH(**kwargs)
 
+    @_ClusterVisualizer._support_units
+    def plot_M_kicked(self, fig=None, ax=None, color='tab:blue',
+                      verbose_label=True, **kwargs):
+        r'''Plot the total amount of BH mass kicked in this model.
+
+        Plots a histogram of the values of the total mass of black holes
+        lost in the given chain of models through the effects of natal kicks.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_ClusterVisualizer._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this quantity. Should be a
+            part of the given `fig`.
+
+        color : color, optional
+            The colour of the plotted histogram. This colour will be applied to
+            the edge (border) of the histogram as is, and to the face at 33%
+            transparency.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "BH Mass Kicked",
+            otherwise "$\mathrm{M}_{\mathrm{BH,kicked}}$".
+
+        **kwargs : dict, optional
+            All other arguments are passed to `plt.hist`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
+
+        if verbose_label:
+            label = "BH Mass Kicked"
+        else:
+            label = r"$\mathrm{M}_{\mathrm{BH,kicked}}$"
+
+        return self._plot_quantity('M_kicked', fig=fig, ax=ax, color=color,
+                                   xlabel=label, **kwargs)
+
     def __init__(self, observations):
         self.obs = observations
         self.name = observations.cluster
@@ -4041,7 +4220,9 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         # Average out BH mass bins, for interpolation onto
         # All models should share these bins, unless using really weird setup
-        viz.mbh = 0.5 * np.sum(huge_model._mf.massbins.bins.BH, axis=0)
+        viz.mbh = .5 * np.sum(huge_model._mf.massbins.bins.BH, axis=0) << u.Msun
+        viz._mbh_edges = np.r_[huge_model._mf.massbins.bins.BH.lower,
+                               huge_model._mf.massbins.bins.BH.upper[-1]]
 
         # Assume that this example model has same nms bin as all models
         # This approximation isn't exactly correct (especially when Ndot != 0),
@@ -4674,7 +4855,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         ks = model._mf._kick_stats
         ret_func = kicks._get_kick_method(model._mf_kwargs['kick_method'])
 
-        return ret_func(self.mbh, **ks.parameters)
+        return ret_func(self.mbh.value, **ks.parameters)
 
     # ----------------------------------------------------------------------
     # Save and load confidence intervals to a file
@@ -4735,6 +4916,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             meta_grp.create_dataset('r', data=self.r)
             meta_grp.create_dataset('t', data=self.t)
+            meta_grp.create_dataset('mbh', data=self.mbh)
             meta_grp.create_dataset('star_bin', data=self.star_bin)
             meta_grp.create_dataset('mj', data=self.mj)
             meta_grp.attrs['rlims'] = self.rlims.to_value('pc')
@@ -5577,7 +5759,9 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
 
         # Average out BH mass bins, for interpolation onto
         # All models should share these bins, unless using really weird setup
-        viz.mbh = 0.5 * np.sum(huge_model._mf.massbins.bins.BH, axis=0)
+        viz.mbh = .5 * np.sum(huge_model._mf.massbins.bins.BH, axis=0) << u.Msun
+        viz._mbh_edges = np.r_[huge_model._mf.massbins.bins.BH.lower,
+                               huge_model._mf.massbins.bins.BH.upper[-1]]
 
         # Assume that this example model has same nms bin as all models
         # This approximation isn't exactly correct but close enough for plots
