@@ -431,7 +431,7 @@ class _ClusterVisualizer:
     def _plot_model(self, ax, data, intervals=None, *,
                     x_data=None, x_unit='pc', y_unit=None,
                     scale=1.0, background=0.0,
-                    CI_kwargs=None, **kwargs):
+                    CI_kwargs=None, stairplot=False, **kwargs):
         '''Base plotting function for all model profiles.
 
         Plots a given array of y-values representing a radial profile
@@ -532,7 +532,12 @@ class _ClusterVisualizer:
 
         median = data[midpoint]
 
-        med_plot, = ax.plot(x_domain, median, **kwargs)
+        if not stairplot:
+            med_plot, = ax.plot(x_domain, median, **kwargs)
+            med_color = med_plot.get_color()
+        else:
+            med_plot = ax.stairs(median, x_domain, **kwargs)
+            med_color = med_plot.get_edgecolor()
 
         # ------------------------------------------------------------------
         # Plot confidence intervals successively from the midpoint
@@ -540,15 +545,22 @@ class _ClusterVisualizer:
 
         output = [med_plot]
 
-        CI_kwargs.setdefault('color', med_plot.get_color())
+        CI_kwargs.setdefault('color', med_color)
 
         alpha = 0.8 / (intervals + 1)
         for sigma in range(1, intervals + 1):
 
-            CI = ax.fill_between(
-                x_domain, data[midpoint + sigma], data[midpoint - sigma],
-                alpha=(1 - alpha), **CI_kwargs
-            )
+            if not stairplot:
+                CI = ax.fill_between(
+                    x_domain, data[midpoint + sigma], data[midpoint - sigma],
+                    alpha=(1 - alpha), **CI_kwargs
+                )
+            else:
+                CI = ax.stairs(
+                    data[midpoint + sigma], x_domain,
+                    baseline=data[midpoint - sigma],
+                    fill=True, alpha=(1 - alpha), **CI_kwargs
+                )
 
             output.append(CI)
 
@@ -3102,7 +3114,8 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_BH_kick_fret(self, fig=None, ax=None, *, x_unit='Msun',
-                          label_position='left', verbose_label=True, **kwargs):
+                          label_position='left', verbose_label=True,
+                          stairplot=False, **kwargs):
         r'''Plot model BH natal kick retention fraction.
 
         Plots the retention fraction of BHs caused by natal kicks in this
@@ -3133,6 +3146,10 @@ class _ClusterVisualizer:
             If True (default), quantity label will be "BH Kick Retention
             Fraction", otherwise "$f_{\mathrm{ret}}$".
 
+        stairplot : bool, optional
+            If True, plots a stairplot with the real bin sizes represented.
+            Otherwise, by default, plots using mean bin masses.
+
         **kwargs : dict, optional
             All other arguments are passed to `_plot_model`.
 
@@ -3141,11 +3158,18 @@ class _ClusterVisualizer:
         matplotlib.figure.Figure
             The corresponding figure, containing all axes and plot artists.
         '''
+        # TODO this is really not smooth cause mbh bins are quite coarse...
+        #   Could show on full mbh range using kickparams but this is whats real
 
         fig, ax = self._setup_artist(fig, ax)
 
-        self._plot_model(ax, x_data=self.mbh, data=self.BH_kick_ret.T[0, :, :],
-                         x_unit=x_unit, **kwargs)
+        if stairplot:
+            mbh = self._mbh_edges
+        else:
+            mbh = 0.5 * (self._mbh_edges[1:] + self._mbh_edges[:-1])
+
+        self._plot_model(ax, x_data=mbh, data=self.BH_kick_ret.T[0, :, :],
+                         x_unit=x_unit, stairplot=stairplot, **kwargs)
 
         if verbose_label:
             label = "BH Kick Retention Fraction"
@@ -3202,21 +3226,10 @@ class _ClusterVisualizer:
 
         fig, ax = self._setup_artist(fig, ax)
 
-        # self._plot_model(ax, x_data=self.mbh, data=self.BH_kick_ret[:, :, 0].T,
-        #                  x_unit=x_unit, **kwargs)
-
         ymodel = self.BH0_massfunc if initial else self.BH_massfunc
 
-        # TODO can't use _plot_model, but need to make sure using same kwargs
-        ax.stairs(ymodel[:, 2, 0], self._mbh_edges,
-                  color=color, **kwargs)
-
-        alpha = 0.8 / (1 + 1)
-        for sig in range(1, 1 + 1):
-            ax.stairs(ymodel[:, 2 + sig, 0], self._mbh_edges,
-                      baseline=ymodel[:, 2 - sig, 0],
-                      fill=True, color=color, alpha=(1 - alpha), **kwargs)
-            alpha += alpha
+        self._plot_model(ax, data=ymodel[:, :, 0].T, x_data=self._mbh_edges,
+                         x_unit=x_unit, stairplot=True, **kwargs)
 
         if verbose_label:
             label = "BH Mass Function"
@@ -3227,7 +3240,6 @@ class _ClusterVisualizer:
         self._set_xlabel(ax, r'$m_{\mathrm{BH}}$', unit=x_unit)
 
         return fig
-
 
     # -----------------------------------------------------------------------
     # Goodness of fit statistics
@@ -3527,9 +3539,8 @@ class ModelVisualizer(_ClusterVisualizer):
 
         self.r = model.r
         self.t = [model.age] << u.Gyr
-        self.mbh = .5 * np.sum(model._mf.massbins.bins.BH, axis=0) << u.Msun
         self._mbh_edges = np.r_[model._mf.massbins.bins.BH.lower,
-                                model._mf.massbins.bins.BH.upper[-1]]
+                                model._mf.massbins.bins.BH.upper[-1]] << u.Msun
 
         self.rlims = (9e-3, model.r.max().value + 5) << model.r.unit
 
@@ -3820,7 +3831,9 @@ class ModelVisualizer(_ClusterVisualizer):
 
         bhmf_interp = util.QuantitySpline(b[:-1] + (bw / 2), model_dN0dm, k=1)
 
-        return bhmf_interp(self.mbh)
+        mbh = 0.5 * (self._mbh_edges[1:] + self._mbh_edges[:-1])
+
+        return bhmf_interp(mbh)
 
     def _init_kicks(self, model):
         from ssptools import kicks
@@ -3828,7 +3841,9 @@ class ModelVisualizer(_ClusterVisualizer):
         ks = model._mf._kick_stats
         fret = kicks._get_kick_method(model._mf_kwargs['kick_method'])
 
-        return fret(self.mbh.value, **ks.parameters) << u.dimensionless_unscaled
+        mbh = 0.5 * (self._mbh_edges[1:] + self._mbh_edges[:-1])
+
+        return fret(mbh.value, **ks.parameters) << u.dimensionless_unscaled
 
 
 class CIModelVisualizer(_ClusterVisualizer):
@@ -4221,9 +4236,10 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         # Average out BH mass bins, for interpolation onto
         # All models should share these bins, unless using really weird setup
-        viz.mbh = .5 * np.sum(huge_model._mf.massbins.bins.BH, axis=0) << u.Msun
-        viz._mbh_edges = np.r_[huge_model._mf.massbins.bins.BH.lower,
-                               huge_model._mf.massbins.bins.BH.upper[-1]]
+        viz._mbh_edges = np.r_[
+            huge_model._mf.massbins.bins.BH.lower,
+            huge_model._mf.massbins.bins.BH.upper[-1]
+        ] << u.Msun
 
         # Assume that this example model has same nms bin as all models
         # This approximation isn't exactly correct (especially when Ndot != 0),
@@ -4252,7 +4268,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         Nm = 1 + len(mj_tracer)
         Nr = viz.r.size
         Nt = viz.t.size
-        Nbhmf = viz.mbh.size
+        Nbhmf = viz._mbh_edges.size - 1
 
         # velocities
 
@@ -4844,7 +4860,9 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         bhmf_interp = util.QuantitySpline(b[:-1] + (bw / 2), model_dN0dm, k=1)
 
-        return bhmf_interp(self.mbh)
+        mbh = 0.5 * (self._mbh_edges[1:] + self._mbh_edges[:-1])
+
+        return bhmf_interp(mbh)
 
     def _init_kicks(self, model):
         from ssptools import kicks
@@ -4856,7 +4874,9 @@ class CIModelVisualizer(_ClusterVisualizer):
         ks = model._mf._kick_stats
         fret = kicks._get_kick_method(model._mf_kwargs['kick_method'])
 
-        return fret(self.mbh.value, **ks.parameters) << u.dimensionless_unscaled
+        mbh = 0.5 * (self._mbh_edges[1:] + self._mbh_edges[:-1])
+
+        return fret(mbh.value, **ks.parameters) << u.dimensionless_unscaled
 
     # ----------------------------------------------------------------------
     # Save and load confidence intervals to a file
@@ -4917,7 +4937,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             meta_grp.create_dataset('r', data=self.r)
             meta_grp.create_dataset('t', data=self.t)
-            meta_grp.create_dataset('mbh', data=self.mbh)
+            meta_grp.create_dataset('mbh_edges', data=self._mbh_edges)
             meta_grp.create_dataset('star_bin', data=self.star_bin)
             meta_grp.create_dataset('mj', data=self.mj)
             meta_grp.attrs['rlims'] = self.rlims.to_value('pc')
@@ -5069,9 +5089,9 @@ class CIModelVisualizer(_ClusterVisualizer):
                 viz.t = [] << u.Gyr
 
             try:
-                viz.mbh = modelgrp['metadata']['mbh'][:] << u.Msun
+                viz._mbh_edges = modelgrp['metadata']['mbh_edges'][:] << u.Msun
             except KeyError:
-                viz.mbh = [] << u.Msun
+                viz._mbh_edges = [] << u.Msun  # for bad backwards compatibility
 
             # Get profile and quantity percentiles
             for grp in ('profiles', 'quantities'):
@@ -5426,7 +5446,9 @@ class EvolvedVisualizer(ModelVisualizer):
 
         bhmf_interp = util.QuantitySpline(b[:-1] + (bw / 2), model_dN0dm, k=1)
 
-        return bhmf_interp(self.mbh)
+        mbh = 0.5 * (self._mbh_edges[1:] + self._mbh_edges[:-1])
+
+        return bhmf_interp(mbh)
 
     def __init__(self, model, observations=None):
 
@@ -5438,6 +5460,8 @@ class EvolvedVisualizer(ModelVisualizer):
         self.t = cbh.t << u.Gyr
 
         slc = (np.newaxis, np.newaxis, ...)
+        bh_slc = (..., np.newaxis, np.newaxis)
+
 
         self.M_t = cbh.M[slc] << u.Msun
         self.Ms_t = cbh.Mst[slc] << u.Msun
@@ -5447,7 +5471,7 @@ class EvolvedVisualizer(ModelVisualizer):
         actual_M0 = cbh.M0 + cbh.Mbh0 - cbh.ibh.Ms_lost
         self.f_BH0 = (100 * cbh.Mbh0 / actual_M0) << u.pct
         self.N_BH0 = cbh.Nbh0 << u.dimensionless_unscaled
-        self.BH0_massfunc = self._init_BH_dN0dm(model)
+        self.BH0_massfunc = self._init_BH_dN0dm(model)[bh_slc]
         self.mav_t = cbh.mav[slc] << u.Msun
 
         self.rh_t = cbh.rh[slc] << u.pc
@@ -5765,9 +5789,10 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
 
         # Average out BH mass bins, for interpolation onto
         # All models should share these bins, unless using really weird setup
-        viz.mbh = .5 * np.sum(huge_model._mf.massbins.bins.BH, axis=0) << u.Msun
-        viz._mbh_edges = np.r_[huge_model._mf.massbins.bins.BH.lower,
-                               huge_model._mf.massbins.bins.BH.upper[-1]]
+        viz._mbh_edges = np.r_[
+            huge_model._mf.massbins.bins.BH.lower,
+            huge_model._mf.massbins.bins.BH.upper[-1]
+        ] << u.Msun
 
         # Assume that this example model has same nms bin as all models
         # This approximation isn't exactly correct but close enough for plots
@@ -5795,7 +5820,7 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
         Nm = 1 + len(mj_tracer)
         Nr = viz.r.size
         Nt = viz.t.size
-        Nbhmf = viz.mbh.size
+        Nbhmf = viz._mbh_edges.size - 1
 
         # velocities
 
@@ -6216,6 +6241,7 @@ class ObservationsVisualizer(_ClusterVisualizer):
 
             field = mass.Field.from_dataset(mf, cen=cen)
 
+            # TODO rbins arent actually seeming to be sorted always? see CMC
             rbins = np.unique(np.c_[mf['r1'], mf['r2']], axis=0)
             rbins.sort(axis=0)
 
