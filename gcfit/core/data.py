@@ -1749,9 +1749,17 @@ class EvolvedModel(Model):
         # TODO sometimes scale found here when using f_kick is very slightly
         #   different then the scale found in _evolve_mf.
         #   Should probably not be recomputing it, just re-use this.
+
+        # Make sure the relevant kickparams are passed to clusterBH by default
+        # but still respect any explicitly passed in `ibh_kwargs` too
+
         ibh_kwargs = dict(kick_method=kick_method, f_kick=f_kick,
                           SNe_method=SNe_method, kick_vdisp=kick_vdisp,
                           kick_slope=kick_slope, kick_scale=kick_scale)
+
+        ibh_kwargs |= cbh_kwargs.get('ibh_kwargs', {}).copy()
+
+        cbh_kwargs['ibh_kwargs'] = ibh_kwargs
 
         # Don't overwrite if given explicitly
         cbh_kwargs.setdefault('ibh_kwargs', ibh_kwargs)
