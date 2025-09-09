@@ -3292,6 +3292,8 @@ class ModelVisualizer(_ClusterVisualizer):
         self.f_BH = model.BH.f
 
         self.BH_rh = model.BH.rh
+        self.NS_rh = model.NS.rh
+        self.WD_rh = model.WD.rh
         self.spitzer_chi = model._spitzer_chi
 
         self.trh = model.trh
@@ -3943,10 +3945,16 @@ class CIModelVisualizer(_ClusterVisualizer):
                 rslice['mj'] = huge_model.mj[:huge_model.nms]
                 rslice['dNdm'] = np.full((N, huge_model.nms), np.nan)
 
-        # BH mass
+        # Remnant masses and numbers
 
         BH_mass = np.full(N, np.nan) << u.Msun
         BH_num = np.full(N, np.nan) << u.dimensionless_unscaled
+
+        NS_mass = np.full(N, np.nan) << u.Msun
+        NS_num = np.full(N, np.nan) << u.dimensionless_unscaled
+
+        WD_mass = np.full(N, np.nan) << u.Msun
+        WD_num = np.full(N, np.nan) << u.dimensionless_unscaled
 
         # Structural params
 
@@ -3962,6 +3970,9 @@ class CIModelVisualizer(_ClusterVisualizer):
         # BH derived quantities
 
         BH_rh = np.full(N, np.nan) << huge_model.BH.rh.unit
+        NS_rh = np.full(N, np.nan) << huge_model.NS.rh.unit
+        WD_rh = np.full(N, np.nan) << huge_model.WD.rh.unit
+
         spitz_chi = np.full(N, np.nan) << u.dimensionless_unscaled
 
         # Relaxation times
@@ -4060,10 +4071,16 @@ class CIModelVisualizer(_ClusterVisualizer):
             f_rem[model_ind] = model.rem.f
             f_BH[model_ind] = model.BH.f
 
-            # Black holes
+            # Remnant masses and numbers
 
             BH_mass[model_ind] = np.sum(model.BH.Mj)
             BH_num[model_ind] = np.sum(model.BH.Nj)
+
+            NS_mass[model_ind] = np.sum(model.NS.Mj)
+            NS_num[model_ind] = np.sum(model.NS.Nj)
+
+            WD_mass[model_ind] = np.sum(model.WD.Mj)
+            WD_num[model_ind] = np.sum(model.WD.Nj)
 
             # Structural params
 
@@ -4077,6 +4094,8 @@ class CIModelVisualizer(_ClusterVisualizer):
             volume[model_ind] = model.volume
 
             BH_rh[model_ind] = model.BH.rh
+            NS_rh[model_ind] = model.NS.rh
+            WD_rh[model_ind] = model.WD.rh
             spitz_chi[model_ind] = model._spitzer_chi
 
             trh[model_ind] = model.trh
@@ -4141,6 +4160,10 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         viz.BH_mass = BH_mass
         viz.BH_num = BH_num
+        viz.NS_mass = NS_mass
+        viz.NS_num = NS_num
+        viz.WD_mass = WD_mass
+        viz.WD_num = WD_num
 
         viz.r0 = r0
         viz.rt = rt
@@ -4153,6 +4176,9 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         viz.BH_rh = BH_rh
         viz.spitzer_chi = spitz_chi
+
+        viz.NS_rh = NS_rh
+        viz.WD_rh = WD_rh
 
         viz.trh = trh
         viz.N_relax = N_relax
@@ -4479,10 +4505,10 @@ class CIModelVisualizer(_ClusterVisualizer):
             quant_grp = modelgrp.create_group('quantities')
 
             quant_keys = (
-                'f_rem', 'f_BH', 'BH_mass', 'BH_num',
-                'r0', 'rt', 'rh', 'rhp', 'ra', 'rv', 'mmean', 'volume',
-                'BH_rh', 'spitzer_chi', 'trh', 'N_relax', 'K_scale',
-                'delta_r50', 'delta_A'
+                'f_rem', 'f_BH', 'BH_mass', 'BH_num', 'NS_mass', 'NS_num',
+                'WD_mass', 'WD_num', 'r0', 'rt', 'rh', 'rhp', 'ra', 'rv',
+                'mmean', 'volume', 'BH_rh', 'NS_rh', 'WD_rh', 'spitzer_chi',
+                'trh', 'N_relax', 'K_scale', 'delta_r50', 'delta_A'
             )
 
             for key in quant_keys:
