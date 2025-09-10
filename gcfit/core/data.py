@@ -986,6 +986,7 @@ class Model(lp.limepy):
                    kick_slope,  kick_scale, **kwargs):
         '''Compute an evolved mass function using `ssptools.EvolvedMF`'''
 
+        # Total mass of this will be wrong due to N0 but Mj is scaled in limepy
         self._imf = masses.PowerLawIMF(
             m_break=m_breaks.value, a=[-a1, -a2, -a3], ext='zeros', N0=5e5
         )
@@ -1095,7 +1096,8 @@ class Model(lp.limepy):
                  esc_rate=0.0, natal_kicks=True, kick_method='maxwellian',
                  f_kick=None, SNe_method='rapid', vesc=90, kick_vdisp=265.,
                  kick_slope=1, kick_scale=20, MF_kwargs=None,
-                 meanmassdef='global', ode_maxstep=1e10, ode_rtol=1e-7):
+                 meanmassdef='global', ode_maxstep=1e10, ode_rtol=1e-7,
+                 diffcrit=1e-8):
 
         # ------------------------------------------------------------------
         # Add/convert units of some quantities. Supports quantities as inputs
@@ -1232,7 +1234,8 @@ class Model(lp.limepy):
             verbose=False,
             meanmassdef=meanmassdef,
             max_step=ode_maxstep,
-            ode_rtol=ode_rtol
+            ode_rtol=ode_rtol,
+            diffcrit=diffcrit
         )
 
         try:
@@ -1733,7 +1736,7 @@ class EvolvedModel(Model):
                  f_kick=None, SNe_method='rapid', kick_vdisp=265.,
                  kick_slope=1, kick_scale=20,
                  cbh_kwargs=None, MF_kwargs=None, meanmassdef='global',
-                 ode_maxstep=1e10, ode_rtol=1e-7):
+                 ode_maxstep=1e10, ode_rtol=1e-7, diffcrit=1e-8):
         import clusterbh
 
         M0 <<= u.Msun
@@ -1910,7 +1913,7 @@ class EvolvedModel(Model):
                          kick_vdisp=kick_vdisp, kick_slope=kick_slope,
                          kick_scale=kick_scale, meanmassdef=meanmassdef,
                          ode_maxstep=ode_maxstep, ode_rtol=ode_rtol,
-                         MF_kwargs=MF_kwargs)
+                         diffcrit=diffcrit, MF_kwargs=MF_kwargs)
 
         # reset theta to use initial values
         self.theta = dict(W0=W0, M0=M0.to_value('1e6 Msun'), rh0=rh0.value,
