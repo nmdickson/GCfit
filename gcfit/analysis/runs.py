@@ -684,18 +684,29 @@ class _SingleRunAnalysis(_RunAnalysis):
     def _get_model_kwargs(self):
         '''Return the `model_kwargs` metadata (backwards compatible)'''
 
-        def _gather_attrs(key, grp):
-            try:
-                model_kw[key] = grp[:]  # in case this is a dataset, not a group
-            except TypeError:
-                model_kw[key] = dict(grp.attrs)
+        model_kw = dict()
 
         with self._openfile('metadata') as mdata:
-            try:
+
+            if 'model_kwargs' in mdata:
+
                 model_kw = dict(mdata['model_kwargs'].attrs)
+
+                def _gather_attrs(key, grp, mkw=model_kw):
+                    try:
+                        # Is this a dataset, not a group?
+                        mkw[key] = grp[:]
+                    except TypeError:
+                        if '/' in key:
+                            # is this a nested dict
+                            basekey, subkey = key.split('/', maxsplit=1)
+                            _gather_attrs(subkey, mdata['model_kwargs'][key],
+                                          mkw=mkw[basekey])
+                        else:
+                            # read in the attrs of this group
+                            mkw[key] = dict(grp.attrs)
+
                 mdata['model_kwargs'].visititems(_gather_attrs)
-            except KeyError:
-                model_kw = {}
 
         return model_kw
 
