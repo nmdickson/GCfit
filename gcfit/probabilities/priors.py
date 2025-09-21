@@ -652,6 +652,7 @@ class FunctionalUniformPrior(UniformPrior):
     UniformPrior : Uniform prior with constant bounds.
     scipy.stats.uniform : Distribution class used for pdf/ppf evaluation.
     '''
+    # TODO this should also accept functions directly instead of symbolic strs
 
     def __repr__(self):
         # TODO this should print the symbolic representations, not the lambdas

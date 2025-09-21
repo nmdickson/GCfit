@@ -521,6 +521,11 @@ def MCMC_fit(cluster, Niters, Nwalkers, evolved=False, *, free_params=None,
         spec_priors = {k: {'type': v[0], 'args': v[1:]}
                        for k, v in param_priors.items()}
 
+        # Make sure serialization of exec'd functions will work with dill
+        if any([p[0].startswith('functional') for p in param_priors.values()]):
+            import dill
+            dill.settings['recurse'] = True
+
         prior_likelihood = priors.Priors(param_priors,
                                          model_params=model_params)
 
@@ -900,6 +905,12 @@ def nested_fit(cluster, evolved=False, *, free_params=None,
 
         spec_priors = {k: {'type': v[0], 'args': v[1:]}
                        for k, v in param_priors.items()}
+
+        # Make sure serialization of exec'd functions will work with dill
+        if any([p[0].startswith('functional') for p in param_priors.values()]):
+            # TODO should also be done if sympy transforms used in modelparams
+            import dill
+            dill.settings['recurse'] = True
 
         prior_transform = priors.PriorTransforms(param_priors,
                                                  model_params=model_params,
