@@ -140,7 +140,7 @@ class ModelParameters:
 
     transforms : dict, optional
         Optional dictionaries of scalar->scalar functions which will be applied
-        to the relevant parameters when given to the one of the argument
+        to the relevant free parameters when given to the one of the argument
         building methods. Necessary if, for example, you wish to vary the log
         of a parameter, rather than the parameter itself.
 
@@ -154,10 +154,10 @@ class ModelParameters:
     '''
 
     def __init__(self, free_params: tuple[str, ...],
-                 model_kwargs: dict|None=None, observations=None,
-                 evolved: bool=False,
-                 transforms: dict|None=None, sympy_transforms: bool=False,
-                 compatibility_transforms: bool=True):
+                 model_kwargs: dict | None = None, observations=None,
+                 evolved: bool = False,
+                 transforms: dict | None = None, sympy_transforms: bool = False,
+                 compatibility_transforms: bool = True):
         import inspect
         from ..core.data import Model, EvolvedModel
 
@@ -222,7 +222,7 @@ class ModelParameters:
                     f'of free parameters (size {self.ndim})')
             raise ValueError(mssg) from err
 
-    def build_args(self, theta, *, return_dict=False):
+    def build_args(self, theta, *, return_dict=False, apply_transforms=True):
         '''Build the Model arguments required to init a model with theta.'''
 
         if isinstance(theta, dict):
@@ -237,7 +237,7 @@ class ModelParameters:
 
             free_theta = self.label_theta(theta=theta)
 
-        if self.transforms is not None:
+        if apply_transforms and (self.transforms is not None):
             free_theta = {prm: self.transforms.get(prm, lambda v: v)(val)
                           for prm, val in free_theta.items()}
 

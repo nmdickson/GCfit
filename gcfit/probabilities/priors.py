@@ -88,9 +88,9 @@ class Priors:
         if not isinstance(theta, dict):
             theta = self._model_params.label_theta(theta)
 
-        # TODO good argument to be made that deps should not pass through
-        #   transforms here before being passed to prior functions
-        full_args = self._model_params.build_args(theta, return_dict=True)
+        # Build args for dependants, but don't apply any transforms
+        full_args = self._model_params.build_args(theta, return_dict=True,
+                                                  apply_transforms=False)
 
         L = {p: 0. for p in theta}
         inv = []
@@ -638,12 +638,11 @@ class FunctionalUniformPrior(UniformPrior):
 
     Notes
     -----
-    Be aware that the value of dependant parameters is taken from the final
-    model parameters, and thus, if the relevant `ModelParameters` has
-    transforms for that parameter, they will be applied before use in these
-    functions, but they will *not* be applied to the value of the main parameter
-    of this prior. This may change how the bounding functions must be written,
-    to account for this.
+    Be aware that the value of dependant parameters will be taken from the
+    input θ (passed through their respective priors) or fixed model parameters
+    directly, and thus any relevant transforms in the `ModelParameters` will
+    *not* be applied. This may change how the bounding functions must be
+    written, to account for this.
 
     This function uses `sympy.lambdify` to convert the symbolic functions to
     python function, and thus is *not* safe for use on unsanitized inputs.
