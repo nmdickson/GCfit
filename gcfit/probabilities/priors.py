@@ -88,6 +88,8 @@ class Priors:
         if not isinstance(theta, dict):
             theta = self._model_params.label_theta(theta)
 
+        # TODO good argument to be made that deps should not pass through
+        #   transforms here before being passed to prior functions
         full_args = self._model_params.build_args(theta, return_dict=True)
 
         L = {p: 0. for p in theta}
@@ -276,7 +278,6 @@ class PriorTransforms(Priors):
         inv = []
 
         for param, value in U.items():
-        # for param, prior in self.priors.items():
 
             prior = self.priors[param]
 
@@ -487,7 +488,7 @@ class UniformPrior(_PriorBase):
         self.param = param
 
         self.bounds = []
-        self.dependants = []
+        self.dependants = []  # TODO should this be a set?
 
         for bounds in edges:
 
@@ -603,6 +604,120 @@ class GaussianPrior(_PriorBase):
         self._caller = self.dist.pdf if not transform else self.dist.ppf
 
 
+class FunctionalUniformPrior(UniformPrior):
+    '''Flat uniform prior function, with bounds that are functions.
+
+    Represents a normalized uniform prior likelihood distribution, defined by
+    N bounding pairs which must all overlap smoothly. The returned likelihood
+    value for any point between the minimum and maximum bounds is defined by
+    the size of the distribution, and normalized to 1.
+
+    Unlike the normal UniformPrior, the bounds supplied to this prior must be
+    string representations of functions, and not constant values or the names
+    of dependant model parameters. The functions must be valid functions for
+    use with `sympy`, and only *other* model parameter may be used as free
+    parameters of the function. The functions should return a single value,
+    to be used as the bound on this parameter.
+
+    Bounds are evaluated on each call, in order to support dependant parameters,
+    and the `inv_value` will be returned in the case of bound-pairs which do not
+    overlap.
+
+    Parameters
+    ----------
+    param : str
+        Name of the corresponding parameter.
+
+    edges : list of 2-tuple
+        List of all bound pairs (lower, upper). Bounds must be symbolic string
+        representations of mathematical functions, valid for use by `sympy`.
+
+    transform : bool, optional
+        Whether this is a prior likelihood or a prior transform function.
+        Changes whether the distribution PDF or PPF is evaluated upon calling.
+
+    Notes
+    -----
+    Be aware that the value of dependant parameters is taken from the final
+    model parameters, and thus, if the relevant `ModelParameters` has
+    transforms for that parameter, they will be applied before use in these
+    functions, but they will *not* be applied to the value of the main parameter
+    of this prior. This may change how the bounding functions must be written,
+    to account for this.
+
+    This function uses `sympy.lambdify` to convert the symbolic functions to
+    python function, and thus is *not* safe for use on unsanitized inputs.
+
+    See Also
+    --------
+    UniformPrior : Uniform prior with constant bounds.
+    scipy.stats.uniform : Distribution class used for pdf/ppf evaluation.
+    '''
+
+    def __repr__(self):
+        # TODO this should print the symbolic representations, not the lambdas
+        return (f'{self.__class__.__name__}'
+                f'("{self.param}", {self.bounds}, transform={self._transform})')
+
+    def __call__(self, param_val, *args, **kwargs):
+        '''Evaluate this prior function at the value `param_val`.'''
+
+        # check that all dependants were supplied
+        if (missing_deps := set(self.dependants) - kwargs.keys()):
+            mssg = f"Missing required dependant params: {missing_deps}"
+            raise TypeError(mssg)
+
+        # bounds consist of list of (func, dep_param) pairs for each bound
+        lower_funcs, upper_funcs = zip(*self.bounds)
+
+        lowers = np.array([func(*[kwargs.get(p) for p in dep_params])
+                           for func, dep_params in lower_funcs])
+        uppers = np.array([func(*[kwargs.get(p) for p in dep_params])
+                           for func, dep_params in upper_funcs])
+
+        # Check if the bounds themselves are valid (all overlapping correctly)
+        if not (valid := np.less_equal.outer(lowers, uppers)).all():
+
+            inv_lowers = lowers[np.where(~valid)[0]]
+            inv_uppers = uppers[np.where(~valid)[1]]
+
+            inv_pairs = np.c_[inv_lowers, inv_uppers]
+
+            nlt = u"\u226E"
+
+            self._inv_mssg = (
+                f"Invalid UniformPrior on {self.param}, improper bounds: "
+                + ",".join(f"{li} {nlt} {ui}" for li, ui in inv_pairs)
+            )
+
+            return self.inv_value
+
+        # compute overall bounds, and loc/scale
+        l_bnd, r_bnd = lowers.max(), uppers.min()
+        loc, scale = l_bnd, r_bnd - l_bnd
+
+        # evaluate the dist
+        return self._caller(param_val, loc=loc, scale=scale)
+
+    def _init_val(self, val):
+        '''lambdify given strings representing a function, and note any deps'''
+        import sympy
+
+        # figure out the dependent parameters used in this function
+        sym_func = sympy.sympify(val)
+
+        # TODO probably has weird error if these aren't valid model params
+        func_params = list(map(str, sym_func.free_symbols))
+
+        # lambdify the function
+        func = sympy.lambdify(func_params, sym_func, docstring_limit=0)
+
+        # store the dependents
+        self.dependants.extend(func_params)
+
+        return (func, func_params)
+
+
 class BoundedGaussianPrior(_PriorBase):
     '''Gaussian normal prior function with truncated bounds.
 
@@ -661,6 +776,7 @@ DEFAULT_PRIORS = {
 _PRIORS_MAP = {
     "uniform": UniformPrior,
     "gaussian": GaussianPrior,
+    "functionaluniform": FunctionalUniformPrior,
     "boundedgaussian": BoundedGaussianPrior,
     "cromwelluniform": CromwellUniformPrior,
 }
