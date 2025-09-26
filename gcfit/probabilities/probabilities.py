@@ -1068,8 +1068,7 @@ def log_likelihood(theta, observations, model_params, L_components,
     Parameters
     ----------
     theta : dict
-        The model input parameters (W0, M, rh, ra, g, delta, a1, a2, a3,
-        BHret, s2, F and d). Passed directly to `gcfit.FittableModel` to
+        The model input parameters. Passed directly to `gcfit.Model` to
         generate the model used in all likelihood functions.
 
     observations : Observations
@@ -1133,7 +1132,13 @@ def log_likelihood(theta, observations, model_params, L_components,
 
         kwargs = {'hyperparams': hyperparams}
 
-        probs[ind] = likelihood(model, observations[key], *args, **kwargs)
+        dset = observations[key]
+
+        probs[ind] = likelihood(model, dset, *args, **kwargs)
+
+        # Optionally apply extra exponential weight to the likelihood
+        if 'weight' in dset.mdata:
+            probs[ind] = probs[ind] * dset.mdata['weight']
 
     return sum(probs), probs
 
