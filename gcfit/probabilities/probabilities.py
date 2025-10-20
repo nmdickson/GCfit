@@ -1052,12 +1052,70 @@ def likelihood_mass_func(model, mf, fields, *, hyperparams=False):
 
 
 # --------------------------------------------------------------------------
+# Special likelihood functions
+# --------------------------------------------------------------------------
+
+
+def likelihood_BH_core_radius(model, *, slope=0.5, scale=-0.5,
+                              width=0.5, threshold=-1.5):
+    '''A probability function based on the rc/rh vs f_BH relationship.
+
+    Computes a log likelihood based on the roughly linear relationship found
+    between log(f_BH) and log(rc/rh).
+    Based on the results of a grid of dynamical models (CMC; Kremer+2020),
+    a linear relationship between these two is defined using the given slope
+    and scale, and a Gaussian likelihood is evaluated at the model rc/rh,
+    assuming a width of 0.5.
+    In order to account for models with no BHs, a truncation threshold
+    for the linear relation is set at log(rc/rh)=threshold.
+
+
+    Parameters
+    ----------
+    model : gcfit.FittableModel
+        Cluster model used to compute probability distribution.
+
+    slope : float, optional
+        Slope of the linear relation. Defaults to 0.5, as based (approximately)
+        on fits to the CMC grid.
+
+    scale : float, optional
+        y-intercept of the linear relation. Defaults to -0.5, as based
+        (approximately) on fits to the CMC grid.
+
+    width : float, optional
+        Width of the evaluated Gaussian dsitribution. Defaults to 0.5,
+        roughly representing the spread in the CMC grid.
+
+    threshold : float, optional
+        A lower value of log(rc/rh) to truncate the linear relation at, in order
+        to accomodate 0-BH models. Defaults to -1.5, based approximately on
+        the centre of the distribution of rc/rh in CMC models with no retained
+        BHs.
+
+    Returns
+    -------
+    float
+        Log likelihood value.
+    '''
+
+    lg_fbh = np.log10(model.f_BH.to_value('pct'))
+
+    lg_rcrh = np.log10((model.r0 / model.rh).value)
+
+    mu = np.nanmax([slope * lg_fbh + scale, threshold])
+    sigma = width
+
+    return util.gaussian_likelihood(X_data=mu, X_model=lg_rcrh, err=sigma)
+
+
+# --------------------------------------------------------------------------
 # Composite likelihood functions
 # --------------------------------------------------------------------------
 
 
 def log_likelihood(theta, observations, model_params, L_components,
-                   hyperparams, evolved):
+                   hyperparams, evolved, BH_core_likelihood):
     r'''Compute log likelihood of given `theta`, based on component likelihoods.
 
     Main likelihood function, which generates the relevant model based on
@@ -1111,6 +1169,7 @@ def log_likelihood(theta, observations, model_params, L_components,
                  = \sum_i \ln(\mathcal{L}_i(\Theta)))
     '''
 
+    # Build model
     model_cls = EvolvedModel if evolved else Model
 
     params = model_params.build_args(theta)
@@ -1140,13 +1199,19 @@ def log_likelihood(theta, observations, model_params, L_components,
         if 'weight' in dset.mdata:
             probs[ind] = probs[ind] * dset.mdata['weight']
 
+    # Calculate other special likelihoods
+    prob_other = 0.0
+
+    if BH_core_likelihood:
+        prob_other += likelihood_BH_core_radius(model)
+
     return sum(probs), probs
 
 
 def posterior(theta, observations, model_params,
               L_components=None, prior_likelihood=None, *,
               hyperparams=False, return_indiv=True,
-              evolved=False):
+              evolved=False, BH_core_likelihood=False):
     '''Compute the full posterior probability given `theta` and `observations`.
 
     Combines the various likelihood functions (through `log_likelihood`)
@@ -1235,7 +1300,8 @@ def posterior(theta, observations, model_params,
     log_L, individuals = log_likelihood(theta, observations, model_params,
                                         L_components=L_components,
                                         hyperparams=hyperparams,
-                                        evolved=evolved)
+                                        evolved=evolved,
+                                        BH_core_likelihood=BH_core_likelihood)
 
     probability = log_L + log_Pθ
 

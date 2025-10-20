@@ -140,6 +140,10 @@ def main():
                                help='Likelihood components to '
                                     'exclude from posteriors')
 
+    shared_parser.add_argument('--constrain-BH-core', dest='BH_core_constraint',
+                               action='store_true',
+                               help="Use Bayesian hyperparams")
+
     shared_parser.add_argument('--hyperparams', dest='hyperparams',
                                action='store_true',
                                help="Use Bayesian hyperparams")
