@@ -5476,7 +5476,7 @@ class EvolvedVisualizer(ModelVisualizer):
 
         self.rh_t = cbh.rh[slc] << u.pc
         self.rt_t = cbh.rt[slc] << u.pc
-        self.rv_t = cbh.rv[slc] << u.pc
+        self.rv_t = (cbh.rh / cbh.r)[slc] << u.pc
 
         self.rhoh0 = model.rhoh0
 
@@ -6068,7 +6068,7 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
             rhp[model_ind] = model.rhp
             ra[model_ind] = model.ra
             rv[model_ind] = model.rv
-            rv_t[slc] = cbh.rv << rv_t.unit
+            rv_t[slc] = (cbh.rh / cbh.r) << rv_t.unit
             mmean[model_ind] = model.mmean
             volume[model_ind] = model.volume
 
