@@ -1057,18 +1057,17 @@ def likelihood_mass_func(model, mf, fields, *, hyperparams=False):
 
 
 def likelihood_BH_core_radius(model, *, slope=0.5, scale=-0.5,
-                              width=0.5, threshold=-1.5):
+                              width=0.2, threshold=-1.5):
     '''A probability function based on the rc/rh vs f_BH relationship.
 
     Computes a log likelihood based on the roughly linear relationship found
     between log(f_BH) and log(rc/rh).
     Based on the results of a grid of dynamical models (CMC; Kremer+2020),
     a linear relationship between these two is defined using the given slope
-    and scale, and a Gaussian likelihood is evaluated at the model rc/rh,
-    assuming a width of 0.5.
+    and scale, and a Truncated Gaussian likelihood is evaluated at the model
+    rc/rh. The likelihood is truncated outside 3*width from the relation.
     In order to account for models with no BHs, a truncation threshold
     for the linear relation is set at log(rc/rh)=threshold.
-
 
     Parameters
     ----------
@@ -1106,7 +1105,12 @@ def likelihood_BH_core_radius(model, *, slope=0.5, scale=-0.5,
     mu = np.nanmax([slope * lg_fbh + scale, threshold])
     sigma = width
 
-    return util.gaussian_likelihood(X_data=mu, X_model=lg_rcrh, err=sigma)
+    # Truncated Gaussian
+    if not ((mu - 3 * width) < lg_rcrh < (mu + 3 * width)):
+        return -np.inf
+
+    else:
+        return util.gaussian_likelihood(X_data=mu, X_model=lg_rcrh, err=sigma)
 
 
 # --------------------------------------------------------------------------
