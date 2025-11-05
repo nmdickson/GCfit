@@ -1209,7 +1209,7 @@ def log_likelihood(theta, observations, model_params, L_components,
     if BH_core_likelihood:
         prob_other += likelihood_BH_core_radius(model)
 
-    return sum(probs), probs
+    return sum(probs) + prob_other, probs
 
 
 def posterior(theta, observations, model_params,
