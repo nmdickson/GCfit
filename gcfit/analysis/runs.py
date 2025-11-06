@@ -56,17 +56,10 @@ _label_math_mapping = {
     'rt_t': r'r_{\mathrm{t}}(t)',
     'rv_t': r'r_{\mathrm{v}}(t)',
     'vesc_t': r'v_{\mathrm{esc}}(t)',
-    # Flexible BH Parameters  # TODO need symbols for these
-    'kick_slope': r'\mathrm{kick\ slope}',
-    'kick_scale': r'\mathrm{kick\ scale}',
-    'IFMR_slope': r'\mathrm{IFMR\ slope}',
-    'IFMR_slope1': r'\mathrm{IFMR\ slope 1}',
-    'IFMR_slope2': r'\mathrm{IFMR\ slope 2}',
-    'IFMR_slope3': r'\mathrm{IFMR\ slope 3}',
-    'IFMR_scale': r'\mathrm{IFMR\ scale}',
-    'IFMR_scale1': r'\mathrm{IFMR\ scale 1}',
-    'IFMR_scale2': r'\mathrm{IFMR\ scale 2}',
-    'IFMR_scale3': r'\mathrm{IFMR\ scale 3}',
+    # Flexible BH Parameters
+    'f_kick': r'f_k',
+    'kick_slope': r'u_k',
+    'kick_scale': r'm_k',
     # Cluster Metadata
     'FeH': r'[\mathrm{Fe}/\mathrm{H}]',
     'Ndot': r'\dot{N}',
@@ -385,6 +378,190 @@ class _RunAnalysis:
         # ------------------------------------------------------------------
 
         return fig, np.atleast_1d(axarr)
+
+    def _setup_mosaic_artist(self, fig, layout, *, sharex=False, sharey=False,
+                             allow_1d=False, triangularize=False,
+                             use_name=True, constrained_layout=True,
+                             empty_sentinel='.', **kwargs):
+        '''Setup a figure with multiple axes, using a nested list of labels.
+
+        Given a nested list of axis labels, returns a figure with the desired
+        layout as produced by `subplot_mosaic`.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure
+            Given starting figure. If None will create a new figure from
+            scratch. If given an existing `Figure` with existing axes, will
+            simply check that axes labels match and return the figure
+            untouched If `Figure` is empty (no axes), will create new axes
+            within the given figure.
+
+        layout : list of list of str
+            A two-dimensional list/array of strings to be used to assemble the
+            mosaic. See `fig.subplot_mosaic` for more details, but note that
+            the ASCII-art option is *not* accepted here.
+
+        sharex, sharey : bool or {'row', 'col'}
+            If True, the x-axis (sharex) or y-axis (sharey) will be shared
+            among all subplots, otherwise each will be independent.
+            Iff `triangularize` is True, then 'col' (sharex) or 'row' (sharey)
+            will also be accepted and the axis will be shared among each column
+            or row in the triangle. Note that this is not possible in normal
+            mosaics.
+
+        allow_1d : bool, optional
+            If True and a flat list is passed in as layout, will assume this
+            represents a single flat row. Exclusive with `triangularize`.
+
+        triangularize : bool, optional
+            If True and a flat list is passed in as layout, will assume this
+            represents a list of parameters, and will contruct a
+            lower-triangular matrix of axes, corresponding to each pair of
+            parameters. There must be no repeated parameters.
+            Exclusive with `allow_1d`.
+
+        use_name : bool, optional
+            If True (default) add `self.name` to the figure suptitle.
+
+        constrained_layout : bool, optional
+            Passed to `Figure` if a new figure must be created. Defaults to
+            True.
+
+        empty_sentinel : str, optional
+            Entry in the layout to mean "leave this space empty".
+            Defaults to '.'.
+
+        **kwargs : dict, optional
+            Extra arguments passed to all calls to `fig.subplot_mosaic`.
+
+        Returns
+        -------
+        fig : matplotlib.figure.Figure
+            The created figure.
+
+        axes : dict of str, matplotlib.axes.AxesSubplot
+            Dictionary of all axes in `fig`, with corresponding labels as keys.
+        '''
+
+        sharey_row = sharex_col = False
+
+        # ------------------------------------------------------------------
+        # Create figure, if necessary
+        # ------------------------------------------------------------------
+
+        if fig is None:
+            fig = plt.figure()
+
+        # empty if this was new fig
+        axes = {ax.get_label(): ax for ax in fig.axes}
+
+        if constrained_layout:
+            fig.set_layout_engine('constrained')  # TODO compressed may be best
+
+        # ------------------------------------------------------------------
+        # If no shape is provided, just return the figure, probably empty
+        # ------------------------------------------------------------------
+
+        if layout is None:
+            return fig, axes
+
+        # ------------------------------------------------------------------
+        # Do some error checking on inputted layout
+        # ------------------------------------------------------------------
+
+        ndim = np.asanyarray(layout).ndim
+
+        if (ndim < 1) or (ndim > 2):
+
+            if isinstance(layout, str):
+                mssg = "Can't parse string layouts here, pass in list instead"
+
+            else:
+                mssg = "Mosaic layout must be 2D"
+
+            raise ValueError(mssg)
+
+        elif ndim == 1:
+
+            if allow_1d:
+                if triangularize:
+                    mssg = "Both 'allow_1d' and 'triangularize' cannot be True"
+                    raise ValueError()
+
+                # parse flat list into a layout
+                layout = [layout,]
+
+            elif triangularize:
+                # parse flat list into a triangle
+
+                if len(layout) != len(set(layout)):
+                    mssg = "Cannot triangularize layout with repeated elements"
+                    raise ValueError(mssg)
+
+                layout = [[f"{px}-{py}" if (j < i + 1) else empty_sentinel
+                           for j, px in enumerate(layout)]
+                          for i, py in enumerate(layout)]
+
+                if sharey == 'row':
+                    sharey = False
+                    sharey_row = True
+
+                if sharex == 'col':
+                    sharex = False
+                    sharex_col = True
+
+            else:
+                mssg = "Mosaic layout must be 2D, or 'allow_1d' must be True"
+                raise ValueError(mssg)
+
+        # ------------------------------------------------------------------
+        # Create the mosaic axes
+        # ------------------------------------------------------------------
+
+        # If this fig has axes, check they (maybe) match with given layout
+        if axes:
+
+            unique_keys = set(itertools.chain.from_iterable(layout))
+            if extra := ((unique_keys - {empty_sentinel}) ^ axes.keys()):
+
+                mssg = (f"figure {fig} already contains wrong"
+                        f"unique labels (missing {extra})")
+                raise ValueError(mssg)
+
+        else:
+
+            axes = fig.subplot_mosaic(
+                layout, empty_sentinel=empty_sentinel, **kwargs
+            )
+
+            # If made triangle, go through and maybe manually share the axes
+            if triangularize:
+
+                for i, row in enumerate(layout):
+                    for j, lbl in enumerate(row):
+
+                        if lbl == empty_sentinel:
+                            continue
+
+                        if sharex_col:
+                            axes[lbl].sharex(axes[layout[-1][j]])
+
+                        if sharey_row and (i != j):
+                            axes[lbl].sharey(axes[layout[i][0]])
+
+        # ------------------------------------------------------------------
+        # If desired, default to titling the figure based on it's "name"
+        # ------------------------------------------------------------------
+
+        if hasattr(self, 'name') and use_name:
+            fig.suptitle(self.name)
+
+        # ------------------------------------------------------------------
+        # Ensure the axes are always returned as a dict
+        # ------------------------------------------------------------------
+
+        return fig, axes
 
     def add_residuals(self, ax, y1, y2, e1, e2, clrs=None,
                       res_ax=None, loc='bottom', size='15%', pad=0.1):
@@ -2844,6 +3021,7 @@ class NestedRun(_SingleRunAnalysis):
         def this_imf(m, perc=50.):
             '''perc is percentile of alpha chain to use'''
 
+            # TODO this is not valid anymore, since free parameters can change!
             ch = self._get_equal_weight_chains()[1]
             a1, a2, a3 = np.percentile(ch[:, 8:11], perc, axis=0)
 
@@ -3994,7 +4172,6 @@ class RunCollection(_RunAnalysis):
 
         return scatter_kw
 
-
     def _set_multi_markers(self, pathcoll, markers):
         '''allow for multiple kinds of markers in plt.scatter
         pathcoll is the return value from `plt.scatter`, markers is list of
@@ -4314,7 +4491,20 @@ class RunCollection(_RunAnalysis):
             The corresponding figure, containing all axes and plot artists.
         '''
 
-        fig, ax = self._setup_artist(fig, ax)
+        if show_histograms:
+
+            layout = [['x', '.'], ['m', 'y']]
+            gs_kw = {"height_ratios": [0.2, 1.0], "width_ratios": [1.0, 0.2]}
+
+            fig, axes = self._setup_mosaic_artist(fig, layout,
+                                                  gridspec_kw=gs_kw,
+                                                  sharex='col', sharey='row')
+
+            ax_x, ax, ax_y = axes['x'], axes['m'], axes['y']
+
+        else:
+            fig, ax = self._setup_artist(fig, ax)
+            ax_x = ax_y = None
 
         x, *dx = self._get_param(param1, force_model=force_model)
         y, *dy = self._get_param(param2, force_model=force_model)
@@ -4359,13 +4549,6 @@ class RunCollection(_RunAnalysis):
 
             if histogram_kwargs is None:
                 histogram_kwargs = {}
-
-            # TODO this messes up overplotting using same figure
-
-            divider = make_axes_locatable(ax)
-
-            ax_x = divider.append_axes("top", '20%', pad=0.1, sharex=ax)
-            ax_y = divider.append_axes("right", '20%', pad=0.1, sharey=ax)
 
             self.plot_param_hist(param1, fig=fig, ax=ax_x, **histogram_kwargs)
             self.plot_param_hist(param2, fig=fig, ax=ax_y,
@@ -5259,66 +5442,23 @@ class RunCollection(_RunAnalysis):
                 params += ('log_rt' if log_radii else 'rt',)
 
         # setup axes
-        Nparams = len(params)
-        Nrows = Ncols = Nparams - 1
+        fig, axes = self._setup_mosaic_artist(fig, params,
+                                              sharex='col', sharey='row',
+                                              triangularize=True)
 
-        # TODO redo this using the subplot_mosaic logic to make alot easier
-        fig, axes = self._setup_multi_artist(fig, (Nrows, Ncols),
-                                             constrained_layout=False,
-                                             sharex='col', sharey='row')
-        axes = axes.reshape((Nrows, Ncols))
+        for label, ax in axes.items():
+            px, py = label.split('-')
 
-        # TODO these are not ideal, lots of conflicting labels and ticks
-        # Setup axis layout (from `corner`).
-        factor = 2.0  # size of side of one panel
-        lbdim = 0.5 * factor  # size of left/bottom margin
-        trdim = 0.2 * factor  # size of top/right margin
-        whspace = 0.05  # size of width/height margin
-        plotdim = factor * (Nrows - 1) + factor * (Ncols - 2.) * whspace
-        dim = lbdim + plotdim + trdim  # total size
+            if px == py:
 
-        # Format figure.
-        lb = lbdim / dim
-        tr = (lbdim + plotdim) / dim
-        fig.subplots_adjust(left=lb,
-                            bottom=lb,
-                            right=tr,
-                            top=tr,
-                            wspace=whspace,
-                            hspace=whspace)
+                self.plot_param_hist(px, fig=fig, ax=ax)
 
-        for i, py in enumerate(params[1:]):
+            else:
 
-            for j, px in enumerate(params[:-1]):
+                self.plot_relation(px, py, fig=fig, ax=ax,
+                                   force_model=force_model, **kwargs)
 
-                ax = axes[i, j]
-
-                if j > i:
-                    ax.remove()
-                    continue
-
-                else:
-
-                    self.plot_relation(px, py, fig=fig, ax=ax,
-                                       force_model=force_model, **kwargs)
-
-                # set labels on bottom row
-                if i + 1 == Nrows:
-                    xlabel = self._get_latex_labels(px, force_model=force_model)
-                    # rotate_ticks(ax, 'x')
-                    ax.set_xlabel(xlabel)
-                    # ax.xaxis.set_label_coords(0.5, -0.3)
-                else:
-                    ax.set_xlabel('')
-
-                # Set labels on leftmost col
-                if j == 0:
-                    ylabel = self._get_latex_labels(py, force_model=force_model)
-                    # rotate_ticks(ax, 'y')
-                    ax.set_ylabel(ylabel)
-                    # ax.yaxis.set_label_coords(-0.3, 0.5)
-                else:
-                    ax.set_ylabel('')
+            ax.label_outer()
 
         return fig
 
