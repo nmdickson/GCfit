@@ -2819,7 +2819,8 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_cumulative_mass(self, fig=None, ax=None, kind='all', *,
-                             x_unit='pc', label_position='left', colors=None):
+                             x_unit='pc', label_position='left', colors=None,
+                             normalize=False, **kwargs):
         '''Plot model cumulative mass profiles.
 
         Plots the radial cumulative mass profiles of the total,
@@ -2871,42 +2872,73 @@ class _ClusterVisualizer:
 
         # Total density
         if 'tot' in kind:
-            self._plot_profile(ax, None, None, self.cum_M_tot,
+
+            if normalize:
+                val = self.cum_M_tot / self.cum_M_tot[:, :, -1].T
+            else:
+                val = self.cum_M_tot
+
+            self._plot_profile(ax, None, None, val,
                                x_unit=x_unit, model_label="Total",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("tot", "tab:cyan"))
+                               color=colors.get("tot", "tab:cyan"), **kwargs)
 
         # Main sequence density
         if 'MS' in kind:
-            self._plot_profile(ax, None, None, self.cum_M_MS,
+
+            if normalize:
+                val = self.cum_M_MS / self.cum_M_MS[:, :, -1].T
+            else:
+                val = self.cum_M_MS
+
+            self._plot_profile(ax, None, None, val,
                                x_unit=x_unit, model_label="Main-sequence stars",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("MS", "tab:orange"))
+                               color=colors.get("MS", "tab:orange"), **kwargs)
 
         if 'WD' in kind:
-            self._plot_profile(ax, None, None, self.cum_M_WD,
+
+            if normalize:
+                val = self.cum_M_WD / self.cum_M_WD[:, :, -1].T
+            else:
+                val = self.cum_M_WD
+
+            self._plot_profile(ax, None, None, val,
                                x_unit=x_unit, model_label="White Dwarfs",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("WD", "tab:green"))
+                               color=colors.get("WD", "tab:green"), **kwargs)
 
         if 'NS' in kind:
-            self._plot_profile(ax, None, None, self.cum_M_NS,
+
+            if normalize:
+                val = self.cum_M_NS / self.cum_M_NS[:, :, -1].T
+            else:
+                val = self.cum_M_NS
+
+            self._plot_profile(ax, None, None, val,
                                x_unit=x_unit, model_label="Neutron Stars",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("NS", "tab:red"))
+                               color=colors.get("NS", "tab:red"), **kwargs)
 
         # Black hole density
         if 'BH' in kind:
-            self._plot_profile(ax, None, None, self.cum_M_BH,
+
+            if normalize:
+                val = self.cum_M_BH / self.cum_M_BH[:, :, -1].T
+            else:
+                val = self.cum_M_BH
+
+            self._plot_profile(ax, None, None, val,
                                x_unit=x_unit, model_label="Black Holes",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("BH", "tab:gray"))
+                               color=colors.get("BH", "tab:gray"), **kwargs)
 
-        ax.set_yscale("log")
         ax.set_xscale("log")
+        if not normalize:
+            ax.set_yscale("log")
 
-        self._set_ylabel(ax, rf'$M_{{enc}}$', self.cum_M_tot.unit,
-                         label_position)
+        self._set_ylabel(ax, rf'$M_{{enc}}{" / M(r_t)" if normalize else ""}$',
+                         self.cum_M_tot.unit, label_position)
         self._set_xlabel(ax, unit=x_unit)
 
         ax.legend(loc='lower center', ncol=len(kind), fancybox=True)
@@ -3796,30 +3828,13 @@ class ModelVisualizer(_ClusterVisualizer):
     def _init_cum_mass(self, model, observations):
         '''Initialize cumulative mass quantities.'''
 
-        int_tot = util.QuantitySpline(self.r, self._2πr * self.Sigma_tot)
-        int_MS = util.QuantitySpline(self.r, self._2πr * self.Sigma_MS)
-        int_BH = util.QuantitySpline(self.r, self._2πr * self.Sigma_BH)
-        int_WD = util.QuantitySpline(self.r, self._2πr * self.Sigma_WD)
-        int_NS = util.QuantitySpline(self.r, self._2πr * self.Sigma_NS)
+        shp = (np.newaxis, np.newaxis, slice(None))
 
-        cum_tot = np.empty((1, 1, self.r.size)) << u.Msun
-        cum_MS = np.empty((1, 1, self.r.size)) << u.Msun
-        cum_BH = np.empty((1, 1, self.r.size)) << u.Msun
-        cum_WD = np.empty((1, 1, self.r.size)) << u.Msun
-        cum_NS = np.empty((1, 1, self.r.size)) << u.Msun
-
-        for i in range(0, self.r.size):
-            cum_tot[0, 0, i] = int_tot.integral(model.r[0], model.r[i])
-            cum_MS[0, 0, i] = int_MS.integral(model.r[0], model.r[i])
-            cum_BH[0, 0, i] = int_BH.integral(model.r[0], model.r[i])
-            cum_WD[0, 0, i] = int_WD.integral(model.r[0], model.r[i])
-            cum_NS[0, 0, i] = int_NS.integral(model.r[0], model.r[i])
-
-        self.cum_M_tot = cum_tot
-        self.cum_M_MS = cum_MS
-        self.cum_M_WD = cum_WD
-        self.cum_M_NS = cum_NS
-        self.cum_M_BH = cum_BH
+        self.cum_M_tot = model.mc[shp]
+        self.cum_M_MS = model.MS.mc[shp]
+        self.cum_M_WD = model.WD.mc[shp]
+        self.cum_M_NS = model.NS.mc[shp]
+        self.cum_M_BH = model.BH.mc[shp]
 
     def _init_BH_dNdm(self, model):
 
@@ -4702,30 +4717,25 @@ class CIModelVisualizer(_ClusterVisualizer):
     def _init_cum_mass(self, model):
         '''Initialize cumulative mass quantities.'''
 
-        # TODO it seems like the integrated mass is a bit less than total Mj?
-        # TODO why doing all this instead of using model.mc?
+        cum_M_MS = model.MS.mc
+        cum_M_MS_interp = util.QuantitySpline(model.r, cum_M_MS, ext=3)
+        cum_M_MS = cum_M_MS_interp(self.r)
 
-        _2πr = 2 * np.pi * model.r
+        cum_M_tot = model.mc
+        cum_M_tot_interp = util.QuantitySpline(model.r, cum_M_tot, ext=3)
+        cum_M_tot = cum_M_tot_interp(self.r)
 
-        cum_M_MS = _2πr * np.sum(model.MS.Sigmaj, axis=0)
-        cum_M_MS_interp = util.QuantitySpline(model.r, cum_M_MS)
-        cum_M_MS = [cum_M_MS_interp.integral(self.r[0], ri) for ri in self.r]
+        cum_M_BH = model.BH.mc
+        cum_M_BH_interp = util.QuantitySpline(model.r, cum_M_BH, ext=3)
+        cum_M_BH = cum_M_BH_interp(self.r)
 
-        cum_M_tot = _2πr * np.sum(model.Sigmaj, axis=0)
-        cum_M_tot_interp = util.QuantitySpline(model.r, cum_M_tot)
-        cum_M_tot = [cum_M_tot_interp.integral(self.r[0], ri) for ri in self.r]
+        cum_M_WD = model.WD.mc
+        cum_M_WD_interp = util.QuantitySpline(model.r, cum_M_WD, ext=3)
+        cum_M_WD = cum_M_WD_interp(self.r)
 
-        cum_M_BH = _2πr * np.sum(model.BH.Sigmaj, axis=0)
-        cum_M_BH_interp = util.QuantitySpline(model.r, cum_M_BH)
-        cum_M_BH = [cum_M_BH_interp.integral(self.r[0], ri) for ri in self.r]
-
-        cum_M_WD = _2πr * np.sum(model.WD.Sigmaj, axis=0)
-        cum_M_WD_interp = util.QuantitySpline(model.r, cum_M_WD)
-        cum_M_WD = [cum_M_WD_interp.integral(self.r[0], ri) for ri in self.r]
-
-        cum_M_NS = _2πr * np.sum(model.NS.Sigmaj, axis=0)
-        cum_M_NS_interp = util.QuantitySpline(model.r, cum_M_NS)
-        cum_M_NS = [cum_M_NS_interp.integral(self.r[0], ri) for ri in self.r]
+        cum_M_NS = model.NS.mc
+        cum_M_NS_interp = util.QuantitySpline(model.r, cum_M_NS, ext=3)
+        cum_M_NS = cum_M_NS_interp(self.r)
 
         return cum_M_MS, cum_M_tot, cum_M_BH, cum_M_WD, cum_M_NS
 
