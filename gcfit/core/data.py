@@ -1085,11 +1085,11 @@ class Model(lp.limepy):
         mc = self.mcj[mask].sum(axis=0)
         rh = np.interp(0.5 * Mj.sum(), mc, self.r)
 
-        return _attributes(mj=mj, Mj=Mj, Nj=Nj, mavg=mavg,
+        return _attributes(mj=mj, Mj=Mj, Nj=Nj, mavg=mavg, mc=mc,
                            rhoj=rhoj, Sigmaj=Sigmaj, f=f, rh=rh)
 
     def __init__(self, W0, M, rh, g=1.5, delta=0.45, ra=1e8,
-                 a1=1.3, a2=2.3, a3=2.3, BHret=1.0, d=5,
+                 a1=1.3, a2=2.3, a3=2.3, BHret=5.0, d=5,
                  s2=0., F=1., *, observations=None, age=None, FeH=None,
                  m_breaks=[0.1, 0.5, 1.0, 100], nbins=[5, 5, 20], meq=0.0,
                  tracer_masses=None, tcc=0.0, NS_ret=0.1, BH_ret_int=1.0,
@@ -1097,7 +1097,7 @@ class Model(lp.limepy):
                  f_kick=None, SNe_method='rapid', vesc=90, kick_vdisp=265.,
                  kick_slope=1, kick_scale=20, MF_kwargs=None,
                  meanmassdef='global', ode_maxstep=1e10, ode_rtol=1e-7,
-                 diffcrit=1e-8):
+                 diffcrit=1e-8, max_mf_iter=100):
 
         # ------------------------------------------------------------------
         # Add/convert units of some quantities. Supports quantities as inputs
@@ -1166,7 +1166,7 @@ class Model(lp.limepy):
         MF_kwargs = {} if MF_kwargs is None else MF_kwargs.copy()
 
         self._mf = self._evolve_mf(m_breaks, a1, a2, a3, nbins,
-                                   FeH, age, esc_rate, tcc,
+                                   self.FeH, self.age, esc_rate, tcc,
                                    NS_ret, BH_ret_int, BHret,
                                    natal_kicks, self.vesc0,
                                    kick_method, f_kick, SNe_method, kick_vdisp,
@@ -1235,7 +1235,8 @@ class Model(lp.limepy):
             meanmassdef=meanmassdef,
             max_step=ode_maxstep,
             ode_rtol=ode_rtol,
-            diffcrit=diffcrit
+            diffcrit=diffcrit,
+            max_mf_iter=max_mf_iter
         )
 
         try:
