@@ -1737,7 +1737,8 @@ class EvolvedModel(Model):
                  f_kick=None, SNe_method='rapid', kick_vdisp=265.,
                  kick_slope=1, kick_scale=20,
                  cbh_kwargs=None, MF_kwargs=None, meanmassdef='global',
-                 ode_maxstep=1e10, ode_rtol=1e-7, diffcrit=1e-8):
+                 ode_maxstep=1e10, ode_rtol=1e-7, diffcrit=1e-8,
+                 max_mf_iter=100):
         import clusterbh
 
         M0 <<= u.Msun
@@ -1914,7 +1915,8 @@ class EvolvedModel(Model):
                          kick_vdisp=kick_vdisp, kick_slope=kick_slope,
                          kick_scale=kick_scale, meanmassdef=meanmassdef,
                          ode_maxstep=ode_maxstep, ode_rtol=ode_rtol,
-                         diffcrit=diffcrit, MF_kwargs=MF_kwargs)
+                         diffcrit=diffcrit, max_mf_iter=max_mf_iter,
+                         MF_kwargs=MF_kwargs)
 
         # reset theta to use initial values
         self.theta = dict(W0=W0, M0=M0.to_value('1e6 Msun'), rh0=rh0.value,
