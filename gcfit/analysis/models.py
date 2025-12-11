@@ -1025,7 +1025,7 @@ class _ClusterVisualizer:
     # -----------------------------------------------------------------------
 
     def _add_residuals(self, ax, ymodel, errorbars, percentage=False, *,
-                       show_chi2=False, xmodel=None, y_unit=None, size="15%",
+                       show_logl=True, xmodel=None, y_unit=None, size="25%",
                        res_ax=None, divider_kwargs=None):
         '''Append an extra axis to `ax` for plotting residuals.
 
@@ -1056,9 +1056,9 @@ class _ClusterVisualizer:
             Whether to plot the residuals in physical units (model - data;
             default) or in percentages (100 * (model - data) / data).
 
-        show_chi2 : bool, optional
-            If True, will add an annotation with the computed Chi-squared
-            value between all data and the plotted model median.
+        show_logl : bool, optional
+            If True, will add an annotation with the computed gaussian
+            likelihood value between all data and the plotted model median.
 
         x_model : u.Quantity[Nr], optional
             Alternative x-axis data to use instead of `self.r`.
@@ -1089,6 +1089,9 @@ class _ClusterVisualizer:
 
         if divider_kwargs is None:
             divider_kwargs = {}
+
+        # TODO add hyperparams support here
+        likelihood_func = util.gaussian_likelihood
 
         # ------------------------------------------------------------------
         # Get model data and spline
@@ -1136,7 +1139,7 @@ class _ClusterVisualizer:
         # Get data from the plotted errorbars
         # ------------------------------------------------------------------
 
-        chi2 = 0.
+        logl = 0.
 
         for errbar in errorbars:
 
@@ -1183,15 +1186,11 @@ class _ClusterVisualizer:
 
                 yerr_segs = yerr_lines.get_segments() << ydata.unit
 
-                if percentage:
-                    yerr = 100 * np.array([
-                        np.abs(seg[:, 1] - ydata[i]) / ydata[i]
-                        for i, seg in enumerate(yerr_segs)
-                    ]).T
-
-                else:
-                    yerr = u.Quantity([np.abs(seg[:, 1] - ydata[i])
-                                       for i, seg in enumerate(yerr_segs)]).T
+                yerr = u.Quantity(
+                    [np.abs(seg[:, 1] - ydata[i])
+                     for i, seg in enumerate(yerr_segs)],
+                    unit=ydata.unit
+                ).T
 
             # --------------------------------------------------------------
             # Compute the residuals and plot them
@@ -1212,11 +1211,11 @@ class _ClusterVisualizer:
             # Optionally compute chi-squared statistic
             # --------------------------------------------------------------
 
-            if show_chi2:
-                chi2 += np.sum((res / yerr)**2)
+            if show_logl:
+                logl += likelihood_func(ydata, yspline(xdata), yerr)
 
-        if show_chi2:
-            fake = plt.Line2D([], [], label=fr"$\chi^2={chi2:.2f}$")
+        if show_logl:
+            fake = plt.Line2D([], [], label=fr"$\log\mathcal{{L}}={logl:.2f}$")
             res_ax.legend(handles=[fake], handlelength=0, handletextpad=0)
 
         # ------------------------------------------------------------------
@@ -1987,9 +1986,6 @@ class _ClusterVisualizer:
             fig, axes = self._setup_multi_artist(fig, (3, 2), sharex=sharex)
             axes = dict(zip(arch, axes))
             # axes = axes.reshape((3, 2))
-
-        res_kwargs = dict(size="25%", show_chi2=False, percentage=True)
-        kwargs.setdefault('res_kwargs', res_kwargs)
 
         # ------------------------------------------------------------------
         # Left Plots
@@ -3293,11 +3289,12 @@ class _ClusterVisualizer:
     # -----------------------------------------------------------------------
 
     @_support_units
-    def _compute_profile_chi2(self, ds_pattern, y_key, model_data, *,
-                              x_key='r', err_transform=None, reduced=True):
-        '''Compute chi2 for this dataset (pattern)'''
+    def _compute_profile_logl(self, ds_pattern, y_key, model_data, *,
+                              x_key='r', err_transform=None, hyperparams=False):
+        '''Compute logl for this dataset (pattern)'''
+        from ..util import gaussian_likelihood, hyperparam_likelihood
 
-        chi2 = 0.
+        logl = 0.
 
         # ensure that the data is (mass bin, intervals, r domain)
         if len(model_data.shape) != 3:
@@ -3312,7 +3309,7 @@ class _ClusterVisualizer:
         datasets = self.obs.filter_datasets(ds_pattern)
 
         # ------------------------------------------------------------------
-        # Iterate over the datasets, computing chi2 for each
+        # Iterate over the datasets, computing logl for each
         # ------------------------------------------------------------------
 
         for dset in datasets.values():
@@ -3359,20 +3356,22 @@ class _ClusterVisualizer:
             ymodel = util.QuantitySpline(xmodel, ymedian)(xdata).to(ydata.unit)
 
             # --------------------------------------------------------------
-            # compute chi2
+            # compute logl
             # --------------------------------------------------------------
 
-            denom = (ydata.size - 13) if reduced else 1.
+            if hyperparams:
+                logl += hyperparam_likelihood(ydata, ymodel, yerr)
+            else:
+                logl += gaussian_likelihood(ydata, ymodel, yerr)
 
-            chi2 += np.nansum(((ymodel - ydata) / yerr)**2) / denom
-
-        return chi2
+        return logl
 
     @_support_units
-    def _compute_massfunc_chi2(self, *, reduced=True):
-        '''Compute chi2 for all mass functions'''
+    def _compute_massfunc_logl(self, *, hyperparams=False):
+        '''Compute logl for all mass functions'''
+        from ..util import gaussian_likelihood, hyperparam_likelihood, hyperparam_effective
 
-        chi2 = 0.
+        logl = 0.
 
         # ------------------------------------------------------------------
         # Iterate over each PI, gathering data
@@ -3421,18 +3420,20 @@ class _ClusterVisualizer:
 
                 ymodel = util.QuantitySpline(xmodel, ymedian)(xdata)
 
-                # TODO really should get this Nparam dynamically, if some fixed
-                denom = (ydata.size - 13) if reduced else 1.
+                # TODO if would be nice to note/return this for each bin
 
-                chi2 += np.sum(((ymodel - ydata) / yerr)**2) / denom
+                if hyperparams:
+                    logl += hyperparam_likelihood(ydata, ymodel, yerr)
+                else:
+                    logl += gaussian_likelihood(ydata, ymodel, yerr)
 
-        return chi2
+        return logl
 
     @property
-    def chi2(self):
-        '''Compute χ^2 between the median model and all observational data.'''
-
-        # TODO seems to produce alot of infs?
+    def logl(self):
+        '''Compute logl between the median model and all observational data.
+        Not super instructive on a total level like this, just look at the run.
+        '''
 
         def numdens_nuisance(err):
             return np.sqrt(err**2 + (self.s2 << u.arcmin**-4))
@@ -3452,14 +3453,14 @@ class _ClusterVisualizer:
              'model_data': self.numdens, 'err_transform': numdens_nuisance},
         ]
 
-        chi2 = 0.
+        logl = 0.
 
         for comp in all_components:
-            chi2 += self._compute_profile_chi2(**comp)
+            logl += self._compute_profile_logl(**comp)
 
-        chi2 += self._compute_massfunc_chi2()
+        logl += self._compute_massfunc_logl()
 
-        return chi2
+        return logl
 
 
 class ModelVisualizer(_ClusterVisualizer):
