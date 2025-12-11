@@ -1048,8 +1048,8 @@ class _ClusterVisualizer:
             Array of model profile data to plot. Must be equivalent to
             that plotted on `ax` using `_plot_model`.
 
-        errorbars : matplotlib.ErrorbarContainer
-            The outputs from a call to `plt.errorbars`, as returned from
+        errorbars : list of matplotlib.ErrorbarContainer
+            The outputs from calls to `plt.errorbars`, as returned from
             `_plot_data`.
 
         percentage : bool, optional
@@ -1129,7 +1129,8 @@ class _ClusterVisualizer:
         else:
             baseline = ymodel - ymedian
 
-        self._plot_model(res_ax, baseline, color='k')
+        self._plot_model(res_ax, baseline, x_data=xmodel, x_unit=xmodel.unit,
+                         color='k')
 
         # ------------------------------------------------------------------
         # Get data from the plotted errorbars
@@ -1198,10 +1199,12 @@ class _ClusterVisualizer:
 
             if percentage:
                 res = 100 * (ydata - yspline(xdata)) / yspline(xdata)
+                res_yerr = 100 * yerr / ydata
             else:
                 res = ydata - yspline(xdata)
+                res_yerr = yerr
 
-            res_ax.errorbar(xdata, res, xerr=xerr, yerr=yerr,
+            res_ax.errorbar(xdata, res, xerr=xerr, yerr=res_yerr,
                             color=mfc, mec=mec, mew=mew, marker=mrk, ms=ms,
                             linestyle='none')
 
@@ -2086,6 +2089,7 @@ class _ClusterVisualizer:
                        PI_legend=False, propid_legend=False,
                        label_unit='arcmin', data_color=None, model_color=None,
                        model_label=None, logscaled=False, field_kw=None,
+                       residuals=False, res_kwargs=None,
                        **kwargs):
         """Plot present day mass functions in various radial bins.
 
@@ -2181,6 +2185,9 @@ class _ClusterVisualizer:
             #   at which point I'm not sure what you're even trying to plot
             #   (this avoids a very ugly error)
             raise ValueError("No mass function data exists to plot")
+
+        if res_kwargs is None:
+            res_kwargs = {}
 
         # ------------------------------------------------------------------
         # Setup axes, splitting into two columns if necessary and adding the
@@ -2290,8 +2297,8 @@ class _ClusterVisualizer:
                     r_mask = ((mf['r1'] == rbin['r1'])
                               & (mf['r2'] == rbin['r2']))
 
-                    N_data = N[r_mask].value
-                    err_data = ΔN[r_mask].value
+                    N_data = N[r_mask]
+                    err_data = ΔN[r_mask]
 
                     err = self.F * err_data
 
@@ -2314,7 +2321,7 @@ class _ClusterVisualizer:
                 # which don't store the entire mass range (e.g. CImodels)
                 mj = rbin['mj']
 
-                dNdm = rbin['dNdm']
+                dNdm = rbin['dNdm'] << u.Msun**(-1)
 
                 midpoint = dNdm.shape[0] // 2
 
@@ -2333,6 +2340,14 @@ class _ClusterVisualizer:
                     )
 
                     alpha += alpha
+
+                res_ax = None
+
+                if residuals:
+                    res_ax = self._add_residuals(
+                        ax, dNdm, [pnts], xmodel=mj,
+                        res_ax=res_ax, y_unit=dNdm.unit, **res_kwargs
+                    )
 
                 if logscaled:
                     ax.set_xscale('log')
@@ -3748,7 +3763,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
         base = mass.Field(shapely.Point((0, 0)).buffer(10 * limit), unit='pc')
 
-        domain = np.arange(0, limit, 1) * u.pc
+        domain = np.linspace(0, limit, 10) * u.pc
 
         for r_in, r_out in np.c_[domain[:-1], domain[1:]]:
 
