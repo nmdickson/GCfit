@@ -2783,7 +2783,7 @@ class NestedRun(_SingleRunAnalysis):
     def plot_params(self, fig=None, params=None, *,
                     posterior_color='tab:blue', posterior_border=True,
                     show_weight=True, fill_type='weights', ylims=None,
-                    truths=None, **kw):
+                    truths=None, initial_batch_only=False, c=None, **kw):
         '''Plot a diagnostic figure of the distributions of parameter samples.
 
         Plots an Nparam-panel figure showcasing the parameter values of all
@@ -2867,6 +2867,9 @@ class NestedRun(_SingleRunAnalysis):
 
         elif fill_type in ('bound', 'samples_bound'):
             c = self.results.samples_bound
+
+        elif fill_type is None:
+            pass
 
         else:
             mssg = ('Invalid fill type, must be one of '
@@ -2964,6 +2967,7 @@ class NestedRun(_SingleRunAnalysis):
             try:
                 prm, eq_prm = chain[:, ind], eq_chain[:, ind]
                 lbl = labels[ind]
+
             except IndexError:
                 # If theres an odd number of (>5) params need to delete last one
                 # TODO preferably this would also resize this column of plots
@@ -2984,7 +2988,13 @@ class NestedRun(_SingleRunAnalysis):
             # --------------------------------------------------------------
 
             # TODO the y tick values have disappeared should be on the last axis
-            ax.scatter(-self.results.logvol, prm, c=c, cmap=self.cmap, **kw)
+            if initial_batch_only:
+                msk = self.results.samples_batch == 0
+                ax.scatter(-self.results.logvol[msk], prm[msk],
+                           c=c[msk], cmap=self.cmap, **kw)
+
+            else:
+                ax.scatter(-self.results.logvol, prm, c=c, cmap=self.cmap, **kw)
 
             ax.set_ylabel(lbl)
             ax.set_xlim(left=0)
@@ -3006,6 +3016,9 @@ class NestedRun(_SingleRunAnalysis):
                 self.plot_posterior(lbl, fig=fig, ax=post_ax, **post_kw)
             except ValueError:
                 post_ax.axhline(np.median(prm), color=color)
+
+            if post_kw['truth'] is not None:
+                ax.axhline(post_kw['truth'], color='r')
 
             if not posterior_border:
                 post_ax.axis('off')
