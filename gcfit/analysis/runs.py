@@ -3680,15 +3680,24 @@ class RunCollection(_RunAnalysis):
 
         self.runs = runs
 
-        # TODO assumes all runs have same free params, obviously not foolproof
-        labels = runs[0]._get_labels()
+        # Note if these runs had different free parameters
+        self._mixed_runs = (
+            len(list(itertools.groupby([r._get_labels() for r in runs]))) > 1
+        )
+
+        if self._mixed_runs:
+            mssg = ("These runs do not share the same set of free parameters. "
+                    "Note that some function may produce unexpected results.")
+            warnings.warn(mssg)
 
         # TODO this `equal_weights...` breaks when using MCMCRun's
-        self._params = [dict(zip(labels, r._get_equal_weight_chains()[1].T))
-                        for r in runs]
+        self._params = [
+            dict(zip(r._get_labels(), r._get_equal_weight_chains()[1].T))
+            for r in runs
+        ]
 
         self._fixedparams = [
-            {k: [v, ] for k, v in r._modelparams.fixed_params.items()}
+            {k: np.array([v, ]) for k, v in r._modelparams.fixed_params.items()}
             for r in self.runs
         ]
 
@@ -3873,9 +3882,11 @@ class RunCollection(_RunAnalysis):
 
     def _update(self):
         '''Quickly update all run params, in case something has changed.'''
-        labels = self.runs[0]._get_labels()
-        self._params = [dict(zip(labels, r._get_equal_weight_chains()[1].T))
-                        for r in self.runs]
+
+        self._params = [
+            dict(zip(r._get_labels(), r._get_equal_weight_chains()[1].T))
+            for r in self.runs
+        ]
 
         self._mdata = [{k: [v, ] for k, v in r.obs.mdata.items()}
                        for r in self.runs]
@@ -3955,8 +3966,19 @@ class RunCollection(_RunAnalysis):
         else:
             raise ValueError(f'Invalid sigma {sigma} (0, 1, 2)')
 
-        out = base([np.nanpercentile(ds, q=q) for ds in chains]).T
-        out[1:] = np.abs(out[1:] - out[0])
+        try:
+            out = base([np.nanpercentile(ds, q=q) for ds in chains]).T
+            out[1:] = np.abs(out[1:] - out[0])
+
+        except TypeError as err:
+            if self._mixed_runs:
+                mssg = (f"Could not compute percentiles for {param}. "
+                        "If all runs do not share this parameter, the fixed "
+                        "values must at least share the same type")
+                raise ValueError(mssg) from err
+
+            else:
+                raise err
 
         return out
 
@@ -3985,7 +4007,7 @@ class RunCollection(_RunAnalysis):
 
         # try to get it from the best-fit params, metadata or run stats
         try:
-            if force_model:
+            if force_model:  # mssg actually only meant to be raised below
                 mssg = '`force_model` is True, must set `allow_model=True`'
                 raise ValueError(mssg)
 
@@ -4324,6 +4346,7 @@ class RunCollection(_RunAnalysis):
                 _, ch = run._get_equal_weight_chains(add_errors=add_errors)
 
                 if shuffle:
+                    ch = ch.copy()  # because chain may be readonly
                     np.random.default_rng().shuffle(ch, axis=0)
 
                 chains.append(ch)
