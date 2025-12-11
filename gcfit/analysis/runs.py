@@ -1096,7 +1096,7 @@ class MCMCRun(_SingleRunAnalysis):
         return model_cls.from_chain(chain, self.obs, self._modelparams,
                                     method=method)
 
-    def get_CImodel(self, N=100, Nprocesses=1, load=False):
+    def get_CImodel(self, N=100, Nprocesses=1, load=False, progress=False):
         '''Return a `CIModelVisualizer` instance corresponding to this run.
 
         The visualizer is initialized through the `CIModelVisualizer.from_chain`
@@ -1118,6 +1118,10 @@ class MCMCRun(_SingleRunAnalysis):
             If True, will attempt to load a CI model, rather than creating a
             new one.
 
+        progress : bool, optional
+            Optionally display a tqdm loading bar when creating CIs, if load is
+            False. Passed to model `from_chain` method as 'verbose' argument.
+
         Returns
         -------
         CIModelVisualizer
@@ -1136,7 +1140,7 @@ class MCMCRun(_SingleRunAnalysis):
 
             with multiprocess.Pool(processes=Nprocesses) as pool:
                 return viz_cls.from_chain(chain, self.obs, self._modelparams,
-                                          N, pool=pool)
+                                          N, pool=pool, verbose=progress)
 
     # ----------------------------------------------------------------------
     # Plots
@@ -2073,7 +2077,7 @@ class NestedRun(_SingleRunAnalysis):
                                         method=method)
 
     def get_CImodel(self, N=100, Nprocesses=1, add_errors=False, shuffle=True,
-                    load=False):
+                    load=False, progress=False):
         '''Return a `CIModelVisualizer` instance corresponding to this run.
 
         The visualizer is initialized through the `CIModelVisualizer.from_chain`
@@ -2106,6 +2110,10 @@ class NestedRun(_SingleRunAnalysis):
             If True, will attempt to load a CI model, rather than creating a
             new one.
 
+        progress : bool, optional
+            Optionally display a tqdm loading bar when creating CIs, if load is
+            False. Passed to model `from_chain` method as 'verbose' argument.
+
         Returns
         -------
         CIModelVisualizer
@@ -2126,7 +2134,7 @@ class NestedRun(_SingleRunAnalysis):
 
             with multiprocess.Pool(processes=Nprocesses) as pool:
                 return ci_cls.from_chain(chain, self.obs, self._modelparams,
-                                         N, pool=pool)
+                                         N, pool=pool, verbose=progress)
 
     # ----------------------------------------------------------------------
     # Plots
