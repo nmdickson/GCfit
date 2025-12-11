@@ -3594,7 +3594,8 @@ class RunCollection(_RunAnalysis):
             mssg = f"No Run found with name {name}"
             raise ValueError(mssg)
 
-    def filter_runs(self, pattern, sort_by=None, sort=True, **kwargs):
+    def filter_runs(self, pattern, sort_by=None, sort=True, filter_out=False,
+                    **kwargs):
         '''Filter all runs based on names and return a new object with them.
 
         Based on a given string pattern, filters out all runs within this
@@ -3616,6 +3617,10 @@ class RunCollection(_RunAnalysis):
             If None (default), simply passes `sort` to the new collection init
             and sorting is handled there, by name. This argument is only used
             if `sort` is True.
+
+        filter_out : bool, optional
+            If True, will return a new object with the filtered runs *removed*,
+            rather than with only the filtered runs. Defaults to False.
 
         sort : bool, optional
             Whether or not to sort this run. If `sort_by` is None, this
@@ -3649,6 +3654,9 @@ class RunCollection(_RunAnalysis):
         if not filtered_names:
             mssg = f"No matched runs found with pattern {pattern}"
             raise ValueError(mssg)
+
+        if filter_out:
+            filtered_names = list(set(self.names) - set(filtered_names))
 
         if sort:
             if sort_by == 'old':
@@ -3748,8 +3756,6 @@ class RunCollection(_RunAnalysis):
             All other arguments are passed to the new RunCollection object.
         '''
 
-        cls._src = f'{directory}/{pattern}'
-
         directory = pathlib.Path(directory)
 
         if sampler == 'nested':
@@ -3790,7 +3796,11 @@ class RunCollection(_RunAnalysis):
             mssg = f"No valid runs found in {directory}"
             raise RuntimeError(mssg)
 
-        return cls(runs, *args, **kwargs)
+        rc = cls(runs, *args, **kwargs)
+
+        rc._src = f'{directory}/{pattern}'
+
+        return rc
 
     @classmethod
     def from_files(cls, file_list, strict=False,
