@@ -5063,6 +5063,208 @@ class RunCollection(_RunAnalysis):
 
         return fig
 
+    def plot_density(self, param1, param2, fig=None, ax=None, method='hex', *,
+                     force_model=False, nbins=50, expand_fixed=True, **kwargs):
+        '''Plot 2D density of distributions of two parameters across all runs.
+
+        Concatenates the distributions of two given parameters across all runs
+        and plots the 2D density of the corresponding total distribution.
+
+        Generates a density plot (e.g., hexbin, 2D histogram, KDE, or contour)
+        to visualize the relationship between two parameters across all runs
+        in the collection.
+
+        Parameters
+        ----------
+        param1 : str
+            Name of the parameter to plot on the x-axis.
+
+        param2 : str
+            Name of the parameter to plot on the y-axis.
+
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_RunAnalysis._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this relation. Should be a
+            part of the given `fig`.
+
+        method : {'hex', 'hist', 'kde', 'contour'}, optional
+            The method used to create the density plot. Each uses the same
+            underlying data with different plotting functions. Options are:
+            - 'hex': Hexagonally binned 2D histogram (`ax.hexbin`; default).
+            - 'hist': 2D histogram (`ax.hist2d`).
+            - 'kde': Colour-image plot, based on a KDE (`ax.pcolormesh`).
+            - 'contour': Contour plot, based on KDE (`ax.contour`).
+
+        force_model : bool, optional
+            Force these parameter values to be taken from model quantities.
+            Can be useful when some parameter names overlap (e.g. "ra").
+
+        nbins : int, optional
+            The number of bins used for grid plotting. By default defines the
+            number of bins on x-axis (which may or may not match the y-axis).
+            Passed to 'gridsize' for hex method, 'bins' for hist, and used to
+            set equal-sized bins for all others.  Default is 50 bins.
+
+        expand_fixed : bool, optional
+            If True (default), expands any fixed parameters to match the size
+            of any free parameters. Otherwise, plotting free and fixed params
+            will error.
+
+        **kwargs : dict
+            All other arguments are passed to the relevant plotting function.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+
+        Notes
+        -----
+        To bin or create these density estimates, the two parameter chains must
+        be the same size. This means that run and model parameters can likely
+        not be combined in this function, as they are not aligned.
+        '''
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        px = self._get_param_chains(param1, force_model=force_model)
+        py = self._get_param_chains(param2, force_model=force_model)
+
+        if expand_fixed:
+            px, py = zip(*[
+                (xi if xi.size > 1 else np.repeat(xi, yi.size),
+                 yi if yi.size > 1 else np.repeat(yi, xi.size))
+                for xi, yi in zip(px, py)
+            ])
+
+        x = np.hstack(px)
+        y = np.hstack(py)
+
+        if x.size != y.size:
+            mssg = ("Cannot mix model and run parameters when plotting density."
+                    "If plotting fixed parameter, set `expand_fixed=True`.")
+            raise ValueError(mssg)
+
+        match method.casefold():
+
+            case 'hex' | 'hexbin':
+
+                ax.hexbin(x, y, gridsize=nbins, **kwargs)
+
+            case 'hist' | 'hist2d':
+
+                ax.hist2d(x, y, bins=nbins, **kwargs)
+
+            case 'kde':
+                from scipy.stats import gaussian_kde
+
+                # TODO not exactly fast with large collections
+                kde = gaussian_kde([x, y])
+                xg, yg = np.mgrid[
+                   x.min():x.max():nbins*1j,
+                   y.min():y.max():nbins*1j
+                ]
+
+                dens = kde(np.c_[xg.flatten(), yg.flatten()].T)
+
+                ax.pcolormesh(xg, yg, dens.reshape(xg.shape), **kwargs)
+
+            case 'contour':
+                from scipy.stats import gaussian_kde
+
+                kde = gaussian_kde([x, y])
+                xg, yg = np.mgrid[
+                   x.min():x.max():nbins*1j,
+                   y.min():y.max():nbins*1j
+                ]
+
+                dens = kde(np.c_[xg.flatten(), yg.flatten()].T)
+
+                ax.contour(xg, yg, dens.reshape(xg.shape), **kwargs)
+
+        ax.set_xlabel(self._get_latex_labels(param1, force_model=force_model))
+        ax.set_ylabel(self._get_latex_labels(param2, force_model=force_model))
+
+        return fig
+
+    def plot_contours(self, param1, param2, fig=None, ax=None, *,
+                      force_model=False, levels=2, **kwargs):
+        '''Plot 2D contours of distributions of two parameters for each run.
+
+        Creates a 2D kernel density estimate (KDE) for the given parameters, for
+        each run in the collection, and plots the KDE as contours with the
+        specified levels.
+
+        Parameters
+        ----------
+        param1 : str
+            Name of the parameter to plot on the x-axis.
+
+        param2 : str
+            Name of the parameter to plot on the y-axis.
+
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_RunAnalysis._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this relation. Should be a
+            part of the given `fig`.
+
+        force_model : bool, optional
+            Force these parameter values to be taken from model quantities.
+            Can be useful when some parameter names overlap (e.g. "ra").
+
+        levels : int or array-like, optional
+            The number and positions of the contour levels to draw.
+            See `ax.contour` for more details. Defaults to plotting 2 levels.
+
+        **kwargs : dict
+            All other arguments are passed to `ax.contour`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
+        from scipy.stats import gaussian_kde
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        xs = self._get_param_chains(param1, force_model=force_model)
+        ys = self._get_param_chains(param2, force_model=force_model)
+
+        for run, xi, yi in zip(self.runs, xs, ys):
+
+            if xi.size != yi.size:
+                mssg = "Cannot create contours with a fixed parameter"
+                raise ValueError(mssg)
+
+            # TODO not exactly fast with large collections
+            kde = gaussian_kde([xi, yi])
+            xg, yg = np.mgrid[
+               xi.min():xi.max():100*1j,
+               yi.min():yi.max():100*1j
+            ]
+
+            dens = kde(np.c_[xg.flatten(), yg.flatten()].T).reshape(xg.shape)
+
+            # TODO levels corresponding to quantiles would be nice (SO/37890550)
+            # ax.pcolormesh(xg, yg, dens, **kwargs)
+            ax.contour(xg, yg, dens, levels=levels, **kwargs)
+
+        ax.set_xlabel(self._get_latex_labels(param1, force_model=force_model))
+        ax.set_ylabel(self._get_latex_labels(param2, force_model=force_model))
+
+        return fig
+
     # ----------------------------------------------------------------------
     # Summary plots
     # ----------------------------------------------------------------------
@@ -5419,6 +5621,9 @@ class RunCollection(_RunAnalysis):
             # get param distributions
             domain = np.linspace(chains.min(), chains.max(), 500)
 
+            if hasattr(chains, 'unit'):
+                chains = chains.value  # erase units for plotting KDE
+
             distribution = gaussian_kde(chains)(domain)
 
             distribution /= interp.UnivariateSpline(
@@ -5443,13 +5648,18 @@ class RunCollection(_RunAnalysis):
 
         return fig
 
-    def plot_param_corner(self, params=None, fig=None, *,
+    def plot_param_corner(self, params=None, fig=None, *, density=False,
                           include_FeH=True, include_BH=False, include_rt=False,
-                          log_radii=False, force_model=False, **kwargs):
+                          log_radii=False, force_model=False,
+                          hist_kwargs=None, **kwargs):
         '''Plot a "corner plot" showing relationship between parameters.
 
-        Plots a Nparam-Nparam lower-triangular "corner" plot showing the mean
-        and 1σ values for all parameters for all runs.
+        Plots a Nparam-Nparam lower-triangular "corner" plot showing the
+        relationships between all parameters, for all runs.
+
+        By default, will plot the median and 1σ values for all parameters,
+        unless `density` is True, in which case a total 2D density plot will
+        be shown.
 
         Parameters
         ----------
@@ -5463,6 +5673,10 @@ class RunCollection(_RunAnalysis):
             be created, otherwise the given figure should be empty, or already
             have the correct number of axes.
             See `_RunAnalysis._setup_multi_artist` for more details.
+
+        density : bool, optional
+            If True, will plot the relationships between parameters using
+            `plot_density` instead of `plot_relation`.
 
         include_FeH : bool, optional
             If True, the metallicity `FeH` is included in the default params.
@@ -5481,8 +5695,13 @@ class RunCollection(_RunAnalysis):
             Force these parameter values to be taken from model quantities.
             Can be useful when some parameter names overlap (e.g. "ra").
 
+        hist_kwargs : dict, optional
+            Optional arguments passed to `plot_param_hist` when making
+            histograms along the diagonal.
+
         **kwargs : dict
-            All other arguments are passed to `plot_relation`.
+            All other arguments are passed to `plot_relation` (or `plot_density`
+            if density is True).
 
         Returns
         -------
@@ -5513,17 +5732,22 @@ class RunCollection(_RunAnalysis):
                                               sharex='col', sharey='row',
                                               triangularize=True)
 
+        plot_func = self.plot_density if density else self.plot_relation
+
+        if hist_kwargs is None:
+            hist_kwargs = dict()
+
         for label, ax in axes.items():
             px, py = label.split('-')
 
             if px == py:
 
-                self.plot_param_hist(px, fig=fig, ax=ax)
+                self.plot_param_hist(px, fig=fig, ax=ax, **hist_kwargs)
 
             else:
 
-                self.plot_relation(px, py, fig=fig, ax=ax,
-                                   force_model=force_model, **kwargs)
+                plot_func(px, py, fig=fig, ax=ax,
+                          force_model=force_model, **kwargs)
 
             ax.label_outer()
 
