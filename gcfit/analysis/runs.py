@@ -1800,7 +1800,8 @@ class NestedRun(_SingleRunAnalysis):
 
     @property
     def chains(self):
-        return self._get_equal_weight_chains()[1]
+        # Ensure that this does not change by using a cached version
+        return self._get_equal_weight_chains(reresample=False)[1]
 
     @property
     def ESS(self):
@@ -1868,6 +1869,8 @@ class NestedRun(_SingleRunAnalysis):
     # ----------------------------------------------------------------------
     # Helpers
     # ----------------------------------------------------------------------
+
+    _resampled_chains = None
 
     def _get_results(self, finite_only=False, *, apply_mask=True):
         '''Return a `dynesty.Results` class reconstructed from this run file.'''
@@ -1973,10 +1976,16 @@ class NestedRun(_SingleRunAnalysis):
         return labels, chain
 
     def _get_equal_weight_chains(self, add_errors=False, *,
-                                 apply_mask=True):
+                                 apply_mask=True, reresample=True):
         '''Get the "chains" of samples resampled to be equally weighted.'''
 
         from dynesty.utils import resample_equal
+
+        labels = self._parameters
+
+        # If desired, re-use cached array, to avoid chains changing each time
+        if (self._resampled_chains is not None) and (reresample is False):
+            return labels, self._resampled_chains
 
         with self._openfile() as file:
 
@@ -1994,7 +2003,9 @@ class NestedRun(_SingleRunAnalysis):
                 sim_wt = weight_function(sim_run, {'pfrac': 1.}, True)[1][2]
                 eq_chain = resample_equal(sim_run.samples, sim_wt)
 
-            labels = self._parameters
+        # store cached version
+        self._resampled_chains = eq_chain
+        self._resampled_chains.flags.writeable = False  # readonly
 
         return labels, eq_chain
 
