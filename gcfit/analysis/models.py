@@ -863,7 +863,7 @@ class _ClusterVisualizer:
             mrk = next(markers)
 
             # get mass bin of this dataset, for later model plotting
-            if 'm' in dset.mdata:
+            if ('m' in dset.mdata) and (model_data is not None):
                 m = dset.mdata['m'] * u.Msun
                 mass_bin = np.where(self.mj == m)[0][0]
             else:
