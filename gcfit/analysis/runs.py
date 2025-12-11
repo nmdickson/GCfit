@@ -4124,7 +4124,9 @@ class RunCollection(_RunAnalysis):
         cvalues = np.atleast_1d(cvalues)
 
         # If cvalues looks like they might be valid plt colours, move on
-        if cvalues.dtype.kind in 'US':
+        if ((cvalues.dtype.kind in 'US') or
+                ((cvalues.ndim == 2) and (cvalues.shape[1] == 4))):
+
             colors = cvalues
 
             add_colorbar = False
