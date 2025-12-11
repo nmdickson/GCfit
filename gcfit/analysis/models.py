@@ -3226,7 +3226,7 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_BH_mass_func(self, fig=None, ax=None, *, initial=False,
-                          x_unit='Msun', color='tab:blue',
+                          x_unit='Msun',
                           label_position='left', verbose_label=True, **kwargs):
         r'''Plot model BH mass function.
 
@@ -3907,12 +3907,17 @@ class CIModelVisualizer(_ClusterVisualizer):
 
     @_ClusterVisualizer._support_units
     def _plot_quantity(self, quant_name, fig=None, ax=None,
-                       color='tab:blue', xlabel=None, alpha=0.33, **kwargs):
+                       color='tab:blue', xlabel=None, alpha=0.33, kde=False,
+                       logged=False, **kwargs):
         '''Helper function for plotting histograms of singular quantities.'''
 
         fig, ax = self._setup_artist(fig, ax)
 
         quant = getattr(self, quant_name)
+
+        # TODO this needs to change labels as well in below functions
+        if logged:
+            quant = np.log10(quant / getattr(quant, 'unit', 1.0))
 
         if quant.ndim > 1:
             mssg = (f"Invalid shape of quantity array {quant.shape}, "
@@ -3922,8 +3927,25 @@ class CIModelVisualizer(_ClusterVisualizer):
         color = mpl_clr.to_rgb(color)
         facecolor = color + (alpha, )
 
-        ax.hist(quant, histtype='stepfilled',
-                ec=color, fc=facecolor, lw=2, **kwargs)
+        if kde:
+            from scipy.stats import gaussian_kde
+            try:
+                gkde = gaussian_kde(quant)
+            except np.linalg.LinAlgError as err:
+                mssg = f"Cannot compute gkde of {quant_name}: {err}"
+                raise ValueError(mssg)
+
+            domain = np.linspace(quant.min(), quant.max(), 500)
+
+            ax.fill_between(domain, 0, gkde(domain),
+                            ec=color, fc=facecolor, **kwargs)
+
+            ax.set_ylim(bottom=0.)
+
+        else:
+
+            ax.hist(quant, histtype='stepfilled',
+                    ec=color, fc=facecolor, **kwargs)
 
         if xlabel is None:
             xlabel = quant_name
