@@ -5170,25 +5170,47 @@ class EvolvedVisualizer(ModelVisualizer):
 
         fig, ax = self._setup_artist(fig, ax)
 
+        label = "Total Mass" if verbose_label else r'$M\,(t)$'
+
         if kind == 'all':
             kind = {'total', 'MS', 'BH'}
 
+        multi = (len(kind) > 1) and not isinstance(kind, str)
+
         if 'total' in kind:
+
+            if multi:
+                linelabel = "Total"
+            else:
+                linelabel = None
+
             ax = self._plot_evolution(ax, self.M_t,
-                                      model_label="Total", legend=legend,
+                                      model_label=linelabel, legend=legend,
                                       x_unit=x_unit, y_unit=y_unit, **kwargs)
 
         if 'MS' in kind:
+
+            if multi:
+                linelabel = "Stars"
+            else:
+                linelabel = None
+                label = "Stellar Mass" if verbose_label else r'$M_\ast\,(t)$'
+
             ax = self._plot_evolution(ax, self.Ms_t,
-                                      model_label="Stars", legend=legend,
+                                      model_label=linelabel, legend=legend,
                                       x_unit=x_unit, y_unit=y_unit, **kwargs)
 
         if 'BH' in kind:
-            ax = self._plot_evolution(ax, self.M_BH_t,
-                                      model_label="Black Holes", legend=legend,
-                                      x_unit=x_unit, y_unit=y_unit, **kwargs)
 
-        label = "Total Mass" if verbose_label else r'$M\,(t)$'
+            if multi:
+                linelabel = "Black Holes"
+            else:
+                linelabel = None
+                label = "Black Hole Mass" if verbose_label else r'$M_{BH}\,(t)$'
+
+            ax = self._plot_evolution(ax, self.M_BH_t,
+                                      model_label=linelabel, legend=legend,
+                                      x_unit=x_unit, y_unit=y_unit, **kwargs)
 
         self._set_ylabel(ax, label, y_unit, label_position)
         self._set_xlabel(ax, 'Time', unit=x_unit, remove_all=blank_xaxis)
@@ -5203,28 +5225,48 @@ class EvolvedVisualizer(ModelVisualizer):
 
         fig, ax = self._setup_artist(fig, ax)
 
+        label = "Radius" if verbose_label else r'$r\,(t)$'
+
         if kind == 'all':
             kind = {'rh', 'rt', 'rv'}
 
+        multi = (len(kind) > 1) and not isinstance(kind, str)
+
         if 'rh' in kind:
+            if multi:
+                linelabel = "Half-mass radius"
+            else:
+                label = "Half-mass radius" if verbose_label else r'$r_h\,(t)$'
+                linelabel = None
+
             ax = self._plot_evolution(ax, self.rh_t,
-                                      model_label="Half-mass radius",
+                                      model_label=linelabel,
                                       x_unit=x_unit, y_unit=y_unit,
                                       legend=legend, **kwargs)
 
         if 'rt' in kind:
-            ax = self._plot_evolution(ax, self.rh_t,
-                                      model_label="Tidal radius",
+            if multi:
+                linelabel = "Tidal radius"
+            else:
+                label = "Tidal radius" if verbose_label else r'$r_t\,(t)$'
+                linelabel = None
+
+            ax = self._plot_evolution(ax, self.rt_t,
+                                      model_label=linelabel,
                                       x_unit=x_unit, y_unit=y_unit,
                                       legend=legend, **kwargs)
 
         if 'rv' in kind:
-            ax = self._plot_evolution(ax, self.rh_t,
-                                      model_label="Virial radius",
+            if multi:
+                linelabel = "Virial radius"
+            else:
+                label = "Virial Radius" if verbose_label else r'$r_v\,(t)$'
+                linelabel = None
+
+            ax = self._plot_evolution(ax, self.rv_t,
+                                      model_label=linelabel,
                                       x_unit=x_unit, y_unit=y_unit,
                                       legend=legend, **kwargs)
-
-        label = "Radius" if verbose_label else r'$r\,(t)$'
 
         self._set_ylabel(ax, label, y_unit, label_position)
         self._set_xlabel(ax, 'Time', unit=x_unit, remove_all=blank_xaxis)
@@ -5240,7 +5282,6 @@ class EvolvedVisualizer(ModelVisualizer):
         fig, ax = self._setup_artist(fig, ax)
 
         ax = self._plot_evolution(ax, self.f_BH_t.to(y_unit),
-                                  model_label=r"$f_{\mathrm{BH}}$",
                                   x_unit=x_unit, y_unit=y_unit,
                                   legend=legend, **kwargs)
 
@@ -5335,7 +5376,8 @@ class EvolvedVisualizer(ModelVisualizer):
 
         return fig
 
-    def plot_all_evolution(self, fig=None, sharex=True, **kwargs):
+    def plot_all_evolution(self, fig=None, sharex=True, all_kinds=False,
+                           **kwargs):
 
         # ------------------------------------------------------------------
         # Setup figure
@@ -5350,11 +5392,13 @@ class EvolvedVisualizer(ModelVisualizer):
         # Mass
 
         self.plot_mass_evolution(fig=fig, ax=axes[0], label_position='left',
+                                 kind='all' if all_kinds else 'total',
                                  blank_xaxis=True, **kwargs)
 
         # Radius
 
         self.plot_radius_evolution(fig=fig, ax=axes[1], label_position='left',
+                                   kind='all' if all_kinds else 'rh',
                                    blank_xaxis=True, **kwargs)
 
         # f_BH
