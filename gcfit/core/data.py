@@ -1244,11 +1244,17 @@ class Model(lp.limepy):
         except ValueError as err:
             cause = err.args[0]
 
-            if ("rmax reached in mf iteration" in cause
-                    or "maximum number of iterations reached" in cause):
+            if "rmax reached in mf iteration" in cause:
+
+                mssg = (f"Model extent is not finite (rt>{self.rt:.2f}). "
+                        "Model parameters must be adjusted")
+                raise ValueError(mssg) from err
+
+            elif "maximum number of iterations reached" in cause:
 
                 mssg = ("Model solver failed to converge in time. "
-                        "Model parameters must be adjusted")
+                        "Model parameters must be adjusted "
+                        "or max_mf_iter increased")
                 raise ValueError(mssg) from err
 
             else:
