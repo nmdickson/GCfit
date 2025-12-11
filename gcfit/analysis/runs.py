@@ -1494,7 +1494,7 @@ class MCMCRun(_SingleRunAnalysis):
 
     def plot_posterior(self, param, fig=None, ax=None, chain=None,
                        flipped=True, truth=None, truth_ci=None,
-                       *args, **kwargs):
+                       truth_color='tab:red', *args, **kwargs):
         '''Plot a smoothed posterior distribution of a single parameter.
 
         Plots a gaussian-KDE smoothed posterior probability distribution of
@@ -1570,10 +1570,10 @@ class MCMCRun(_SingleRunAnalysis):
             ax.fill_betweenx(domain, 0, kde(domain), *args, **kwargs)
 
             if truth is not None:
-                ax.axhline(truth, c='tab:red')
+                ax.axhline(truth, c=truth_color)
 
                 if truth_ci is not None:
-                    ax.axhspan(*truth_ci, color='tab:red', alpha=0.33)
+                    ax.axhspan(*truth_ci, color=truth_color, alpha=0.33)
 
             ax.set_xlim(left=0)
 
@@ -1582,10 +1582,10 @@ class MCMCRun(_SingleRunAnalysis):
             ax.fill_between(domain, 0, kde(domain), *args, **kwargs)
 
             if truth is not None:
-                ax.axvline(truth, c='tab:red')
+                ax.axvline(truth, c=truth_color)
 
                 if truth_ci is not None:
-                    ax.axvspan(*truth_ci, color='tab:red', alpha=0.33)
+                    ax.axvspan(*truth_ci, color=truth_color, alpha=0.33)
 
             ax.set_ylim(bottom=0)
 
@@ -2659,7 +2659,7 @@ class NestedRun(_SingleRunAnalysis):
 
     def plot_posterior(self, param, fig=None, ax=None, chain=None,
                        flipped=True, kde=True, truth=None, truth_ci=None,
-                       *args, **kwargs):
+                       truth_color='tab:red', *args, **kwargs):
         '''Plot a smoothed posterior distribution of a single parameter.
 
         Plots a gaussian-KDE smoothed posterior probability distribution of
@@ -2753,20 +2753,20 @@ class NestedRun(_SingleRunAnalysis):
         if flipped:
 
             if truth is not None:
-                ax.axhline(truth, c='tab:red')
+                ax.axhline(truth, c=truth_color)
 
                 if truth_ci is not None:
-                    ax.axhspan(*truth_ci, color='tab:red', alpha=0.33)
+                    ax.axhspan(*truth_ci, color=truth_color, alpha=0.33)
 
             ax.set_xlim(left=0)
 
         else:
 
             if truth is not None:
-                ax.axvline(truth, c='tab:red')
+                ax.axvline(truth, c=truth_color)
 
                 if truth_ci is not None:
-                    ax.axvspan(*truth_ci, color='tab:red', alpha=0.33)
+                    ax.axvspan(*truth_ci, color=truth_color, alpha=0.33)
 
             ax.set_ylim(bottom=0)
 
