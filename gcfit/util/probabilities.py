@@ -175,6 +175,9 @@ class ModelParameters:
         if extra := (set(free_params) - {prm.name for prm in self._all_params}):
             raise ValueError(f"Invalid parameters: {extra}")
 
+        if repeated := (set(free_params & model_kwargs.keys())):
+            raise ValueError(f"Parameters {repeated} were both freed and fixed")
+
         # Some params don't have defaults. It's not that they must be free, but
         # should be free or specifically given (and thus fixed) (M, W0, rh)
         given_params = set(free_params) | model_kwargs.keys()
@@ -198,8 +201,6 @@ class ModelParameters:
             transforms = {'M': lambda M: 1e6 * M,
                           'M0': lambda M: 1e6 * M,
                           'ra': lambda ra: 10**ra}
-
-        # TODO check that params are not in both free and fixed, and model_kw
 
         self.free_params = free_params
         self.model_kwargs = model_kwargs
