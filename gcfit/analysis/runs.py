@@ -1896,6 +1896,9 @@ class NestedRun(_SingleRunAnalysis):
                 if k in ('current_batch', 'initial_batch', 'bound'):
                     continue
 
+                if k == 'batch_bounds':  # backwards compatibility w/ dynesty<3
+                    k = 'batch_logl_bounds'
+
                 if d.shape and (d.shape[0] == Niter):
                     d = np.asarray(d)[inds]
 
@@ -1935,28 +1938,29 @@ class NestedRun(_SingleRunAnalysis):
 
                 ds = bnd_grp[str(i)]
                 btype = ds.attrs['type']
+                ndim = ds.attrs.get('ndim', len(self._parameters))  # fallback
 
                 if btype == 'UnitCube':
-                    bnds.append(bounding.UnitCube(ds.attrs['ndim']))
+                    bnds.append(bounding.UnitCube(ndim=ndim))
 
                 elif btype == 'Ellipsoid':
                     ctr = ds['centre'][:]
                     cov = ds['covariance'][:]
-                    bnds.append(bounding.Ellipsoid(ctr=ctr, cov=cov))
+                    bnds.append(bounding.Ellipsoid(ndim=ndim, ctr=ctr, cov=cov))
 
                 elif btype == 'MultiEllipsoid':
                     ctrs = ds['centres'][:]
                     covs = ds['covariances'][:]
-                    bnds.append(bounding.MultiEllipsoid(ctrs=ctrs, covs=covs))
+                    bnds.append(
+                        bounding.MultiEllipsoid(ndim=ndim, ctrs=ctrs, covs=covs)
+                    )
 
                 elif btype == 'RadFriends':
                     cov = ds['covariances'][:]
-                    ndim = ds.attrs['ndim']
                     bnds.append(bounding.RadFriends(ndim=ndim, cov=cov))
 
                 elif btype == 'SupFriends':
                     cov = ds['covariances'][:]
-                    ndim = ds.attrs['ndim']
                     bnds.append(bounding.SupFriends(ndim=ndim, cov=cov))
 
                 else:

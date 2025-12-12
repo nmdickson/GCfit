@@ -186,26 +186,28 @@ class NestedSamplingOutput(Output):
 
             if isinstance(bnd, dynesty.bounding.MultiEllipsoid):
                 bnd_grp.attrs['type'] = 'MultiEllipsoid'
+                bnd_grp.attrs['ndim'] = bnd.ndim
                 bnd_grp.create_dataset('centres', data=bnd.ctrs)
                 bnd_grp.create_dataset('covariances', data=bnd.covs)
 
             elif isinstance(bnd, dynesty.bounding.Ellipsoid):
                 bnd_grp.attrs['type'] = 'Ellipsoid'
+                bnd_grp.attrs['ndim'] = bnd.ndim
                 bnd_grp.create_dataset('centre', data=bnd.ctr)
                 bnd_grp.create_dataset('covariance', data=bnd.cov)
 
             elif isinstance(bnd, dynesty.bounding.UnitCube):
                 bnd_grp.attrs['type'] = 'UnitCube'
-                bnd_grp.attrs['ndim'] = bnd.n
+                bnd_grp.attrs['ndim'] = bnd.ndim
 
             elif isinstance(bnd, dynesty.bounding.RadFriends):
                 bnd_grp.attrs['type'] = 'RadFriends'
-                bnd_grp.attrs['ndim'] = bnd.n
+                bnd_grp.attrs['ndim'] = bnd.ndim
                 bnd_grp.create_dataset('covariances', data=bnd.cov)
 
             elif isinstance(bnd, dynesty.bounding.SupFriends):
                 bnd_grp.attrs['type'] = 'SupFriends'
-                bnd_grp.attrs['ndim'] = bnd.n
+                bnd_grp.attrs['ndim'] = bnd.ndim
                 bnd_grp.create_dataset('covariances', data=bnd.cov)
 
         if not file:

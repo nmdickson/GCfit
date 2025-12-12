@@ -18,7 +18,7 @@ dependencies = [
     "astro-limepy",
     "astro-ssptools",
     "emcee",
-    "dynesty",
+    "dynesty>=3.0.0",
     "h5py",
     "tqdm",
     "gala",
