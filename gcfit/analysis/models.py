@@ -402,6 +402,8 @@ class _ClusterVisualizer:
         @functools.wraps(method)
         def _unit_decorator(self, *args, **kwargs):
 
+            # TODO there are no checks here for bad distances (e.g. nan, -tive)
+
             # convert based on median distance parameter
             eqvs = util.angular_width(self.d)
 
@@ -2585,7 +2587,15 @@ class _ClusterVisualizer:
 
             r_lbl = f'$r_{{{r_type[1:]}}}$'
 
-            radius = getattr(self, r_type).to(unit)
+            try:
+                radius = getattr(self, r_type) << unit
+
+                if not np.isfinite(radius):
+                    raise AttributeError("radius must be finite.")
+
+            except AttributeError as err:
+                raise ValueError(f"Could not overplot {r_type}: {err}") from err
+
 
             σr_u, r, σr_l = np.nanpercentile(radius, q=q)
 
@@ -6409,20 +6419,17 @@ class ObservationsVisualizer(_ClusterVisualizer):
 
                 self.mass_func[key].append(this_slc)
 
-    def __init__(self, observations, rh=None, d=None):
+    def __init__(self, observations, d, rh=None):
         self.obs = observations
         self.name = observations.cluster
 
         self.star_bin = None
         self.mj = [] << u.Msun
 
-        try:
-            self.rh = (rh or observations.initials['rh']) << u.pc
-            self.d = (d or observations.initials['d']) << u.kpc
-        except KeyError:
-            mssg = ("Must either supply both rh and d, or have them stored "
-                    "in observations.initials")
-            raise ValueError(mssg)
+        self.rh = (observations.initials.get('rh', np.nan)
+                   if rh is None else rh) << u.pc
+
+        self.d = (d or observations.initials['d']) << u.kpc
 
         self.s2 = 0.
         self.F = 1.
