@@ -1920,6 +1920,7 @@ class NestedRun(_SingleRunAnalysis):
         except KeyError:
             r['bound'] = None
 
+        # TODO should be storing and rebuilding blobs and proposal_stats
         r['blob'] = np.full_like(r['logl'], np.nan)  # should be None, but okay
 
         return Results(r)
