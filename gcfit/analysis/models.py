@@ -3602,6 +3602,8 @@ class ModelVisualizer(_ClusterVisualizer):
         self.f_BH = model.BH.f
 
         self.BH_rh = model.BH.rh
+        self.NS_rh = model.NS.rh
+        self.WD_rh = model.WD.rh
         self.spitzer_chi = model._spitzer_chi
 
         self.trh = model.trh
@@ -3640,6 +3642,10 @@ class ModelVisualizer(_ClusterVisualizer):
         self.M_t = model.M[t_slc]
         self.M_BH = self.M_BH0 = model.BH.Mj.sum()
         self.N_BH = self.N_BH0 = model.BH.Nj.sum()
+        self.M_NS = model.NS.Mj.sum()
+        self.N_NS = model.NS.Nj.sum()
+        self.M_WD = model.WD.Mj.sum()
+        self.N_WD = model.WD.Nj.sum()
         self.BH_massfunc = self.BH0_massfunc = self._init_BH_dNdm(model)[bh_slc]
         self.BH_kick_ret = self._init_kicks(model)[bh_slc]
         self.M_kicked = model._mf._kick_stats.total_kicked << u.Msun
@@ -4392,7 +4398,7 @@ class CIModelVisualizer(_ClusterVisualizer):
                 rslice['mj'] = viz._mf_domain
                 rslice['dNdm'] = np.full((N, viz._mf_domain.size), np.nan)
 
-        # BH mass
+        # Remnant masses and numbers
 
         M_BH = np.full(N, np.nan) << u.Msun
         N_BH = np.full(N, np.nan) << u.dimensionless_unscaled
@@ -4405,6 +4411,12 @@ class CIModelVisualizer(_ClusterVisualizer):
         BH_massfunc = np.full((Nbhmf, N, 1), np.nan) << 1 / u.Msun
         BH0_massfunc = np.full((Nbhmf, N, 1), np.nan) << 1 / u.Msun
         BH_kick_ret = np.full((Nbhmf, N, 1), np.nan) << u.dimensionless_unscaled
+
+        M_NS = np.full(N, np.nan) << u.Msun
+        N_NS = np.full(N, np.nan) << u.dimensionless_unscaled
+
+        M_WD = np.full(N, np.nan) << u.Msun
+        N_WD = np.full(N, np.nan) << u.dimensionless_unscaled
 
         # Structural params
 
@@ -4436,6 +4448,9 @@ class CIModelVisualizer(_ClusterVisualizer):
         # BH derived quantities
 
         BH_rh = np.full(N, np.nan) << huge_model.BH.rh.unit
+        NS_rh = np.full(N, np.nan) << huge_model.NS.rh.unit
+        WD_rh = np.full(N, np.nan) << huge_model.WD.rh.unit
+
         spitz_chi = np.full(N, np.nan) << u.dimensionless_unscaled
 
         # Relaxation times
@@ -4536,7 +4551,7 @@ class CIModelVisualizer(_ClusterVisualizer):
             f_rem[model_ind] = model.rem.f
             f_BH[model_ind] = f_BH0[model_ind] = f_BH_t[slc] = model.BH.f
 
-            # Black holes
+            # Remnant masses and numbers
 
             M_BH[model_ind] = M_BH_t[slc] = np.sum(model.BH.Mj)
             N_BH[model_ind] = np.sum(model.BH.Nj)
@@ -4548,6 +4563,12 @@ class CIModelVisualizer(_ClusterVisualizer):
             bhslc = (slice(None), model_ind, 0)
             BH_massfunc[bhslc] = BH0_massfunc[bhslc] = viz._init_BH_dNdm(model)
             BH_kick_ret[bhslc] = viz._init_kicks(model)
+
+            M_NS[model_ind] = np.sum(model.NS.Mj)
+            N_NS[model_ind] = np.sum(model.NS.Nj)
+
+            M_WD[model_ind] = np.sum(model.WD.Mj)
+            N_WD[model_ind] = np.sum(model.WD.Nj)
 
             # Structural params
 
@@ -4569,6 +4590,8 @@ class CIModelVisualizer(_ClusterVisualizer):
             vesc0[model_ind] = vesc_t[slc] = model.vesc0
 
             BH_rh[model_ind] = model.BH.rh
+            NS_rh[model_ind] = model.NS.rh
+            WD_rh[model_ind] = model.WD.rh
             spitz_chi[model_ind] = model._spitzer_chi
 
             trh[model_ind] = trh_t[slc] = model.trh
@@ -4649,6 +4672,10 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         viz.M_BH = viz.BH_mass = M_BH
         viz.N_BH = viz.BH_num = N_BH
+        viz.M_NS = M_NS
+        viz.N_NS = N_NS
+        viz.M_WD = M_WD
+        viz.N_WD = N_WD
         viz.M_BH0 = M_BH0
         viz.N_BH0 = N_BH0
         viz.M_kicked = M_kicked
@@ -4667,6 +4694,9 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         viz.BH_rh = BH_rh
         viz.spitzer_chi = spitz_chi
+
+        viz.NS_rh = NS_rh
+        viz.WD_rh = WD_rh
 
         viz.trh = trh
         viz.N_relax = N_relax
@@ -5031,9 +5061,10 @@ class CIModelVisualizer(_ClusterVisualizer):
             quant_grp = modelgrp.create_group('quantities')
 
             quant_keys = (
-                'f_rem', 'f_BH', 'M_BH', 'N_BH', 'f_BH0', 'M_BH0', 'N_BH0',
-                'r0', 'rt', 'rh', 'rhp', 'ra', 'rv', 'mmean', 'volume', 'vesc0',
-                'rhoh0', 'BH_rh', 'spitzer_chi', 'trh', 'N_relax', 'K_scale',
+                'f_rem', 'f_BH', 'M_BH', 'N_BH', 'M_NS', 'N_NS', 'M_WD', 'N_WD',
+                'f_BH0', 'M_BH0', 'N_BH0', 'r0', 'rt', 'rh', 'rhp', 'ra', 'rv',
+                'mmean', 'volume', 'vesc0', 'rhoh0', 'BH_rh', 'NS_rh', 'WD_rh',
+                'spitzer_chi', 'trh', 'N_relax', 'K_scale',
                 'M_kicked', 'delta_r50', 'delta_A'
             )
 
@@ -5983,7 +6014,7 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
                 rslice['mj'] = viz._mf_domain
                 rslice['dNdm'] = np.full((N, viz._mf_domain.size), np.nan)
 
-        # BH mass
+        # Remnant masses and numbers
 
         M_BH = np.full(N, np.nan) << u.Msun
         N_BH = np.full(N, np.nan) << u.dimensionless_unscaled
@@ -5996,6 +6027,12 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
         BH_massfunc = np.full((Nbhmf, N, 1), np.nan) << 1 / u.Msun
         BH0_massfunc = np.full((Nbhmf, N, 1), np.nan) << 1 / u.Msun
         BH_kick_ret = np.full((Nbhmf, N, 1), np.nan) << u.dimensionless_unscaled
+
+        M_NS = np.full(N, np.nan) << u.Msun
+        N_NS = np.full(N, np.nan) << u.dimensionless_unscaled
+
+        M_WD = np.full(N, np.nan) << u.Msun
+        N_WD = np.full(N, np.nan) << u.dimensionless_unscaled
 
         # Structural params
 
@@ -6027,6 +6064,9 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
         # BH derived quantities
 
         BH_rh = np.full(N, np.nan) << huge_model.BH.rh.unit
+        NS_rh = np.full(N, np.nan) << huge_model.NS.rh.unit
+        WD_rh = np.full(N, np.nan) << huge_model.WD.rh.unit
+
         spitz_chi = np.full(N, np.nan) << u.dimensionless_unscaled
 
         # Relaxation times
@@ -6133,7 +6173,7 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
             actual_M0 = cbh.M0 + cbh.Mbh0 - cbh.ibh.Ms_lost
             f_BH0[model_ind] = (100 * cbh.Mbh0 / actual_M0) << u.pct
 
-            # Black holes
+            # Remnant masses and number
 
             M_BH[model_ind] = np.sum(model.BH.Mj)
             N_BH[model_ind] = np.sum(model.BH.Nj)
@@ -6145,6 +6185,12 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
             BH_massfunc[:, model_ind, 0] = viz._init_BH_dNdm(model)
             BH0_massfunc[:, model_ind, 0] = viz._init_BH_dN0dm(model)
             BH_kick_ret[:, model_ind, 0] = viz._init_kicks(model)
+
+            M_NS[model_ind] = np.sum(model.NS.Mj)
+            N_NS[model_ind] = np.sum(model.NS.Nj)
+
+            M_WD[model_ind] = np.sum(model.WD.Mj)
+            N_WD[model_ind] = np.sum(model.WD.Nj)
 
             # Structural params
 
@@ -6170,6 +6216,8 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
             vesc_t[slc] = cbh.vesc << vel_unit
 
             BH_rh[model_ind] = model.BH.rh
+            NS_rh[model_ind] = model.NS.rh
+            WD_rh[model_ind] = model.WD.rh
             spitz_chi[model_ind] = model._spitzer_chi
 
             trh[model_ind] = model.trh
@@ -6255,6 +6303,10 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
 
         viz.M_BH = viz.BH_mass = M_BH
         viz.N_BH = viz.BH_num = N_BH
+        viz.M_NS = M_NS
+        viz.N_NS = N_NS
+        viz.M_WD = M_WD
+        viz.N_WD = N_WD
         viz.M_BH0 = M_BH0
         viz.N_BH0 = N_BH0
 
@@ -6272,6 +6324,9 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
 
         viz.BH_rh = BH_rh
         viz.spitzer_chi = spitz_chi
+
+        viz.NS_rh = NS_rh
+        viz.WD_rh = WD_rh
 
         viz.trh = trh
         viz.N_relax = N_relax
