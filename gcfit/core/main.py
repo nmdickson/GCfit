@@ -1022,7 +1022,7 @@ def nested_fit(cluster, evolved=False, *, free_params=None,
 
         # run the dynamic sampler in batches, until the stop condition is met
         while not dysamp.stopping_function(sampler.results, args=stop_kw,
-                                           M=map_, rstate=sampler.rstate):
+                                           mapper=map_, rstate=sampler.rstate):
 
             backend.reset_current_batch()
 
