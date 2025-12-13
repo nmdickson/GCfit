@@ -2135,6 +2135,7 @@ class NestedRun(_SingleRunAnalysis):
             _, chain = self._get_equal_weight_chains(add_errors=add_errors)
 
             if shuffle:
+                chain = chain.copy()  # because chain may be readonly
                 np.random.default_rng().shuffle(chain, axis=0)
 
             with multiprocess.Pool(processes=Nprocesses) as pool:

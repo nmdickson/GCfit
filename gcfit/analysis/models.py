@@ -4467,7 +4467,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         trh = np.full(N, np.nan) << u.Gyr
         N_relax = np.full(N, np.nan) << u.dimensionless_unscaled
-        trh_t = np.full((1, N, Nt), np.nan)
+        trh_t = np.full((1, N, Nt), np.nan) << u.Gyr
 
         # Mass segregation
 
@@ -4670,6 +4670,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         viz.rv_t = np.transpose(perc(rv_t, q, axis=1), axes)
         viz.psi_t = np.transpose(perc(psi_t, q, axis=1), axes)
         viz.E_t = np.transpose(perc(E_t, q, axis=1), axes)
+        viz.trh_t = np.transpose(perc(trh_t, q, axis=1), axes)
 
         viz.vesc_t = np.transpose(perc(vesc_t, q, axis=1), axes)
         viz.BH0_massfunc = np.transpose(perc(BH0_massfunc, q, axis=1), axes)
@@ -5051,7 +5052,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             profile_keys += (  # time evolution profiles
                 'f_BH_t', 'M_BH_t', 'M_t', 'Ms_t', 'mmean_t',
-                'rt_t', 'rh_t', 'rv_t', 'psi_t', 'E_t', 'vesc_t'
+                'rt_t', 'rh_t', 'rv_t', 'psi_t', 'E_t', 'trh_t', 'vesc_t'
             )
 
             profile_keys += (  # comp mass function profiles
@@ -6083,7 +6084,7 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
 
         trh = np.full(N, np.nan) << u.Gyr
         N_relax = np.full(N, np.nan) << u.dimensionless_unscaled
-        trh_t = np.full((1, N, Nt), np.nan)
+        trh_t = np.full((1, N, Nt), np.nan) << u.Gyr
 
         # Mass segregation
 
@@ -6231,7 +6232,7 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
             spitz_chi[model_ind] = model._spitzer_chi
 
             trh[model_ind] = model.trh
-            trh_t[slc] = cbh.trh
+            trh_t[slc] = cbh.trh << u.Myr  # Myr in cbh, Gyr here
             N_relax[model_ind] = model.N_relax
 
             psi_t[slc] = cbh.psi
@@ -6300,6 +6301,7 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
         viz.rv_t = np.transpose(perc(rv_t, q, axis=1), axes)
         viz.psi_t = np.transpose(perc(psi_t, q, axis=1), axes)
         viz.E_t = np.transpose(perc(E_t, q, axis=1), axes)
+        viz.trh_t = np.transpose(perc(trh_t, q, axis=1), axes)
 
         viz.vesc_t = np.transpose(perc(vesc_t, q, axis=1), axes)
         viz.BH_massfunc = np.transpose(perc(BH_massfunc, q, axis=1), axes)
