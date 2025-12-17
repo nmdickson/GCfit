@@ -6,7 +6,7 @@ import astropy.units as u
 from astropy.units.equivalencies import Equivalency
 
 
-__all__ = ['angular_width', 'QuantitySpline', 'q2pv']
+__all__ = ['angular_width', 'QuantitySpline', 'q2pv', 'Rhel2Rgal']
 
 
 def angular_width(D):
@@ -178,3 +178,10 @@ def q2pv(p, v):
     pv = np.rec.fromarrays([p, v], erfa.dt_pv) << pvunit
 
     return pv
+
+
+def Rhel2Rgal(lon, lat, Rhel, *, R0=8.122 << u.kpc):
+    '''convert a heliocentric/galactic distance to a galactocentric distance'''
+    return np.sqrt((Rhel * np.cos(lat) * np.cos(lon) - R0)**2
+                   + (Rhel * np.cos(lat) * np.sin(lon))**2
+                   + (Rhel * np.sin(lat))**2)

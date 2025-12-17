@@ -14,26 +14,20 @@ import itertools
 from collections import namedtuple
 
 
-__all__ = ['DEFAULT_THETA', 'Model', 'FittableModel', 'SingleMassModel',
-           'SampledModel', 'Observations']
+__all__ = ['DEFAULT_FREE_PARAMS', 'DEFAULT_FREE_EV_PARAMS',
+           'Model', 'SingleMassModel', 'EvolvedModel', 'SampledModel',
+           'Observations']
 
 
-# The order of this is important!
-DEFAULT_THETA = {
-    'W0': 6.0,
-    'M': 0.69,
-    'rh': 2.88,
-    'ra': 1.23,
-    'g': 0.75,
-    'delta': 0.45,
-    's2': 0.1,
-    'F': 1.1,
-    'a1': 0.5,
-    'a2': 1.3,
-    'a3': 2.5,
-    'BHret': 0.5,
-    'd': 6.405,
-}
+DEFAULT_FREE_PARAMS = (
+    'W0', 'M', 'rh', 'ra', 'g', 'delta',
+    's2', 'F', 'a1', 'a2', 'a3', 'BHret', 'd',
+)
+
+DEFAULT_FREE_EV_PARAMS = (
+    'W0', 'M0', 'rh0', 'ra', 'g', 'delta',
+    's2', 'F', 'a1', 'a2', 'a3', 'd',
+)
 
 
 # --------------------------------------------------------------------------
@@ -549,7 +543,6 @@ class Observations:
 
         self.mdata = {}
         self._dict_datasets = {}
-        self.initials = DEFAULT_THETA.copy()
 
         filename = util.get_cluster_path(cluster, standardize_name, restrict_to)
 
@@ -559,21 +552,40 @@ class Observations:
 
             logging.info(f"Observations read from {filename}")
 
+            # --------------------------------------------------------------
+            # Read in all observational data products
+            # --------------------------------------------------------------
+
             for group in self._find_groups(file):
                 self._dict_datasets[group] = Dataset(file[group])
 
+            # --------------------------------------------------------------
+            # Read in initial values of base free parameters
+            # --------------------------------------------------------------
+
+            # I'm only gonna keep whats on file. You want more initials?
+            # Specify them to MCMC_fit yourself
             try:
-                # This updates defaults with data while keeping default sort
-                self.initials = {**self.initials, **file['initials'].attrs}
-
-                if extras := (self.initials.keys() - DEFAULT_THETA.keys()):
-                    mssg = (f"Stored initials do not match expected."
-                            f"Extra values found: {extras}")
-                    raise ValueError(mssg)
-
+                self.initials = dict(file['initials'].attrs)
             except KeyError:
-                logging.info("No initial state stored, using defaults")
+                self.initials = dict()
+                logging.debug("No initial state stored")
                 pass
+
+            # --------------------------------------------------------------
+            # Read in initial values of evolved free parameters
+            # --------------------------------------------------------------
+
+            try:
+                self.ev_initials = dict(file['ev_initials'].attrs)
+            except KeyError:
+                self.ev_initials = dict()
+                logging.debug("No (evolved) initial state stored")
+                pass
+
+            # --------------------------------------------------------------
+            # Read in all other metadata
+            # --------------------------------------------------------------
 
             # TODO need a way to read units for some mdata from file
             self.mdata = dict(file.attrs)
@@ -710,8 +722,8 @@ class Observations:
 # Attributes namespace for storing various attrs for individual stellar types
 _attributes = namedtuple(
     '_attributes',
-    ['mj', 'Mj', 'Nj', 'mavg', 'rhoj', 'Sigmaj', 'f', 'rh'],
-    defaults=[None, ] * 8
+    ['mj', 'Mj', 'Nj', 'mavg', 'mc', 'rhoj', 'Sigmaj', 'f', 'rh'],
+    defaults=[None, ] * 9
 )
 
 # --------------------------------------------------------------------------
@@ -968,6 +980,40 @@ class Model(lp.limepy):
     limepy : Distribution-function model base of this class.
     '''
 
+    def _evolve_mf(self, m_breaks, a1, a2, a3, nbins, FeH, age, esc_rate, tcc,
+                   NS_ret, BH_ret_int, BHret, natal_kicks, vesc,
+                   kick_method, f_kick, SNe_method, kick_vdisp,
+                   kick_slope,  kick_scale, **kwargs):
+        '''Compute an evolved mass function using `ssptools.EvolvedMF`'''
+
+        # Total mass of this will be wrong due to N0 but Mj is scaled in limepy
+        self._imf = masses.PowerLawIMF(
+            m_break=m_breaks.value, a=[-a1, -a2, -a3], ext='zeros', N0=5e5
+        )
+
+        self._mf_kwargs = dict(
+            IMF=self._imf,
+            nbins=nbins,
+            FeH=FeH,
+            tout=np.array([age.to_value('Myr')]),
+            esc_rate=esc_rate,
+            tcc=tcc,
+            NS_ret=NS_ret,
+            BH_ret_int=BH_ret_int,
+            BH_ret_dyn=BHret / 100.,
+            natal_kicks=natal_kicks,
+            vesc=vesc.value,
+            kick_method=kick_method,
+            f_kick=f_kick,
+            SNe_method=SNe_method,
+            kick_vdisp=kick_vdisp,
+            kick_slope=kick_slope,
+            kick_scale=kick_scale,
+            **kwargs  # will error here if MF_kwargs included any of above args
+        )
+
+        return EvolvedMF(**self._mf_kwargs)
+
     def _assign_units(self):
         '''Convert most values to `astropy.Quantity` with correct units'''
 
@@ -1039,16 +1085,19 @@ class Model(lp.limepy):
         mc = self.mcj[mask].sum(axis=0)
         rh = np.interp(0.5 * Mj.sum(), mc, self.r)
 
-        return _attributes(mj=mj, Mj=Mj, Nj=Nj, mavg=mavg,
+        return _attributes(mj=mj, Mj=Mj, Nj=Nj, mavg=mavg, mc=mc,
                            rhoj=rhoj, Sigmaj=Sigmaj, f=f, rh=rh)
 
     def __init__(self, W0, M, rh, g=1.5, delta=0.45, ra=1e8,
-                 a1=1.3, a2=2.3, a3=2.3, BHret=1.0, d=5,
+                 a1=1.3, a2=2.3, a3=2.3, BHret=5.0, d=5,
                  s2=0., F=1., *, observations=None, age=None, FeH=None,
-                 m_breaks=[0.1, 0.5, 1.0, 100], nbins=[5, 5, 20],
+                 m_breaks=[0.1, 0.5, 1.0, 100], nbins=[5, 5, 20], meq=0.0,
                  tracer_masses=None, tcc=0.0, NS_ret=0.1, BH_ret_int=1.0,
-                 natal_kicks=True, esc_rate=0.0, vesc=90.,
-                 meanmassdef='global', ode_maxstep=1e10, ode_rtol=1e-7):
+                 esc_rate=0.0, natal_kicks=True, kick_method='maxwellian',
+                 f_kick=None, SNe_method='rapid', vesc=90, kick_vdisp=265.,
+                 kick_slope=1, kick_scale=20, MF_kwargs=None,
+                 meanmassdef='global', ode_maxstep=1e10, ode_rtol=1e-7,
+                 diffcrit=1e-8, max_mf_iter=100):
 
         # ------------------------------------------------------------------
         # Add/convert units of some quantities. Supports quantities as inputs
@@ -1114,25 +1163,24 @@ class Model(lp.limepy):
         # Get mass function
         # ------------------------------------------------------------------
 
-        self._imf = masses.PowerLawIMF(
-            m_break=m_breaks.value, a=[-a1, -a2, -a3], ext='zeros', N0=5e5
-        )
+        MF_kwargs = {} if MF_kwargs is None else MF_kwargs.copy()
 
-        self._mf_kwargs = dict(
-            IMF=self._imf,
-            nbins=nbins,
-            FeH=self.FeH,
-            tout=np.array([self.age.to_value('Myr')]),
-            esc_rate=esc_rate,
-            tcc=tcc,
-            NS_ret=NS_ret,
-            BH_ret_int=BH_ret_int,
-            BH_ret_dyn=BHret / 100.,
-            natal_kicks=natal_kicks,
-            vesc=self.vesc0.value
-        )
+        self._mf = self._evolve_mf(m_breaks, a1, a2, a3, nbins,
+                                   self.FeH, self.age, esc_rate, tcc,
+                                   NS_ret, BH_ret_int, BHret,
+                                   natal_kicks, self.vesc0,
+                                   kick_method, f_kick, SNe_method, kick_vdisp,
+                                   kick_slope,  kick_scale, **MF_kwargs)
 
-        self._mf = EvolvedMF(**self._mf_kwargs)
+        if not self._mf.converged:
+            mssg = ("Mass function evolution ODE failed to converge"
+                    f" with kwargs={self._mf_kwargs}")
+            raise ValueError(mssg)
+
+        if self._mf.M.size <= 1:
+            mssg = ("Mass function has only one non-empty mass bin. "
+                    "If this is truly desired, must use `SingleMassModel`.")
+            raise ValueError(mssg)
 
         mj, Mj = self._mf.m, self._mf.M
 
@@ -1181,11 +1229,14 @@ class Model(lp.limepy):
             delta=delta,
             mj=mj,
             Mj=Mj,
+            meq=meq,
             project=True,
             verbose=False,
             meanmassdef=meanmassdef,
             max_step=ode_maxstep,
-            ode_rtol=ode_rtol
+            ode_rtol=ode_rtol,
+            diffcrit=diffcrit,
+            max_mf_iter=max_mf_iter
         )
 
         try:
@@ -1193,13 +1244,28 @@ class Model(lp.limepy):
         except ValueError as err:
             cause = err.args[0]
 
-            if ("rmax reached in mf iteration" in cause
-                    or "maximum number of iterations reached" in cause):
+            if "rmax reached in mf iteration" in cause:
 
-                mssg = ("Model solver failed to converge in time. "
+                mssg = (f"Model extent is not finite (rt>{self.rt:.2f}). "
                         "Model parameters must be adjusted")
                 raise ValueError(mssg) from err
 
+            elif "maximum number of iterations reached" in cause:
+
+                mssg = ("Model solver failed to converge in time. "
+                        "Model parameters must be adjusted "
+                        "or max_mf_iter increased")
+                raise ValueError(mssg) from err
+
+            else:
+                raise err
+
+        except IndexError as err:
+            # Can sometimes occur in not converged models
+
+            if not self.converged:
+                mssg = "Model solver failed to converge to a finite extent"
+                raise ValueError(mssg) from err
             else:
                 raise err
 
@@ -1566,6 +1632,15 @@ class SingleMassModel(lp.limepy):
             else:
                 raise err
 
+        except IndexError as err:
+            # Can sometimes occur in not converged models
+
+            if not self.converged:
+                mssg = "Model solver failed to converge to a finite extent"
+                raise ValueError(mssg) from err
+            else:
+                raise err
+
         if not self.converged:
             mssg = "Model solver failed to converge to a finite extent"
             raise ValueError(mssg)
@@ -1614,101 +1689,251 @@ class SingleMassModel(lp.limepy):
 
 
 # --------------------------------------------------------------------------
-# Model to be used in fitting to observations
+# Model evolved from initial conditions using evolutionary model `clusterBH`
 # --------------------------------------------------------------------------
 
 
-class FittableModel(Model):
-    '''Model subclass for use in all fitting functions.
-
-    A subclass of the base `Model`, with a simplified and specific
-    initilization signature based on a single `theta` input containing the main
-    13 model parameters, in a specific order, and `observations` which the
-    model should be compared to.
-
-    Unless you have a set of parameters `theta` taken directly from the fitting
-    results, you most likely do not want to use this class directly.
-
-    Parameters
-    ----------
-    theta : dict or list
-        The model input parameters. Must either be a dict, or a full list of
-        all parameters, in the exact same order as `DEFAULT_THETA`.
-        The 13 free parameters used here (W0, M, rh, ra, g, delta, a1, a2, a3,
-        BHret, s2, F and d) are key for defining the model structure, mass
-        evolution algorithm and fitting parameters.
-        See `Model` for further explanation of all possible input parameters.
-
-    observations : Observations
-        The `Observations` instance corresponding to this cluster. Required at
-        initilization so that the models can be compared to these observations
-        in the most consistent way possible.
-
-    **kwargs : dict
-        All other arguments are passed to `Model`.
-
-    Attributes
-    ----------
-    theta : dict
-        Dictionary of input parameters.
-        Some parameters may technically also be accessible directly as
-        attributes, but that interface should not be considered stable.
-        This dictionary should be used as the only direct access to any input
-        parameters that make up theta.
-
-    Notes
-    -----
-    The units of the inputs in `theta` here do not match those in `Model`
-    directly. `M` should be in units of [1e6 Msun] and ra should actually be
-    log10(ra).
-
-    All cluster metadata parameters (such as age, vesc, etc.) will be read from
-    the observations, and should not be provided as arguments here.
+class EvolvedModel(Model):
+    '''
+    modified model that takes in different initial parameters and uses
+    `clusterBH` to evolve them to the present day conditions of a normal model.
+    most importantly, changes M, rh to M0, rh0 (their initial conditions)
+    and removes the need for a BH_ret (gets target M_BH from clusterBH)
     '''
 
-    def __init__(self, theta, observations, **kwargs):
+    def _evolve_mf(self, m_breaks, a1, a2, a3, nbins, FeH, age, esc_rate, tcc,
+                   NS_ret, BH_ret_int, BHret, natal_kicks, vesc,
+                   kick_method, f_kick, SNe_method, kick_vdisp,
+                   kick_slope,  kick_scale, **kwargs):
+        '''Alternative MF init using prior-computed IMF and clusterBH outputs'''
+        from ssptools import EvolvedMFWithBH
 
-        self.observations = observations
+        self._mf_kwargs = dict(
+            IMF=self._imf,
+            nbins=nbins,
+            FeH=FeH,
+            tout=np.array([age.to_value('Myr')]),
+            esc_rate=esc_rate,
+            f_BH=self._clusterbh.fbh[-1],
+            N0=self._clusterbh.N,  # N is N0
+            tcc=tcc,
+            NS_ret=NS_ret,
+            BH_ret_int=BH_ret_int,
+            natal_kicks=natal_kicks,
+            vesc=vesc.value,
+            esc_norm='M',
+            md=self.md,
+            kick_method=kick_method,
+            f_kick=f_kick,
+            SNe_method=SNe_method,
+            kick_vdisp=kick_vdisp,
+            kick_slope=kick_slope,
+            kick_scale=kick_scale,
+            **kwargs  # will error here if MF_kwargs included any of above args
+        )
+
+        return EvolvedMFWithBH(**self._mf_kwargs)
+
+    def __init__(self, W0, M0, rh0, g=1.5, delta=0.45, ra=1e8,
+                 a1=1.3, a2=2.3, a3=2.3, d=5,
+                 s2=0., F=1., *, observations=None, age=None, FeH=None,
+                 Zsun=0.02, m_breaks=[0.1, 0.5, 1.0, 100], nbins=[5, 5, 20],
+                 tracer_masses=None, tcc=0.0, NS_ret=0.1, BH_ret_int=1.0,
+                 meq=0.0, md=1.2, natal_kicks=True, kick_method='maxwellian',
+                 f_kick=None, SNe_method='rapid', kick_vdisp=265.,
+                 kick_slope=1, kick_scale=20,
+                 cbh_kwargs=None, MF_kwargs=None, meanmassdef='global',
+                 ode_maxstep=1e10, ode_rtol=1e-7, diffcrit=1e-8,
+                 max_mf_iter=100):
+        import clusterbh
+
+        M0 <<= u.Msun
+        rh0 <<= u.pc
+        d <<= u.kpc
+
+        self.M0 = M0
+        self.rh0 = rh0
+
+        cbh_kwargs = {} if cbh_kwargs is None else cbh_kwargs.copy()
+
+        cbh_kwargs.setdefault('kick', natal_kicks)
+
+        # TODO sometimes scale found here when using f_kick is very slightly
+        #   different then the scale found in _evolve_mf.
+        #   Should probably not be recomputing it, just re-use this.
+
+        # Make sure the relevant kickparams are passed to clusterBH by default
+        # but still respect any explicitly passed in `ibh_kwargs` too
+
+        ibh_kwargs = dict(kick_method=kick_method, f_kick=f_kick,
+                          SNe_method=SNe_method, kick_vdisp=kick_vdisp,
+                          kick_slope=kick_slope, kick_scale=kick_scale)
+
+        ibh_kwargs |= cbh_kwargs.get('ibh_kwargs', {}).copy()
+
+        cbh_kwargs['ibh_kwargs'] = ibh_kwargs
+
+        # Don't overwrite if given explicitly
+        cbh_kwargs.setdefault('ibh_kwargs', ibh_kwargs)
+
+        m_breaks <<= u.Msun
+        a_slopes = [-a1, -a2, -a3]
+
+        self.md = md
+
+        # TODO unfortunately repeating this imf init here and in clusterBH
+        self._imf = masses.PowerLawIMF.from_M0(
+            m_break=m_breaks.value, a=a_slopes, ext='zeros', M0=M0.value
+        )
+
+        m0 = self._imf.mmean
+
+        N0 = M0.value / m0
+        self.rhoh0 = (3 * M0) / (8 * np.pi * rh0**3)
 
         # ------------------------------------------------------------------
-        # Unpack theta
+        # Try to read some metadata from the observations
         # ------------------------------------------------------------------
 
-        if not isinstance(theta, dict):
-            theta = dict(zip(DEFAULT_THETA, theta))
+        if observations is not None:
+
+            # Try to use the effective radius (circularized orbit)
+            try:
+                cbh_kwargs.setdefault('rg', observations.mdata['RG_eff'])
+
+            # Get cluster galactocentric radius based on current position
+            except KeyError:
+                Rgal = util.Rhel2Rgal(observations.mdata['l'] << u.deg,
+                                      observations.mdata['b'] << u.deg,
+                                      d << u.kpc)
+
+                cbh_kwargs.setdefault('rg', Rgal.to_value('kpc'))
+
+            # Get age to evolve to
+            if age is None:
+                age = observations.mdata['age'] << u.Gyr
+
+            if FeH is None:
+                FeH = observations.mdata['FeH']
+
+            # cbh_kwargs.setdefault('tend', age.to_value('Myr'))
+
+            # Get metallicity
+            # cbh_kwargs.setdefault('Z', Zsun * 10**observations.mdata['FeH'])
 
         else:
-            theta = theta.copy()
-
-        if missing_params := (DEFAULT_THETA.keys() - theta.keys()):
-            mssg = f"Missing required params: {missing_params}"
-            raise KeyError(mssg)
-
-        self.theta = theta
+            if age is None or FeH is None:
+                # Error here if age, FeH can't be found
+                mssg = ("Must supply either `age` and `FeH` or "
+                        "an `observations`, to read them from")
+                raise ValueError(mssg)
 
         # ------------------------------------------------------------------
-        # Convert a few quantities
+        # Get age and metallicity, if given (TODO make this logic match others)
         # ------------------------------------------------------------------
 
-        theta['M'] = theta['M'] * 1e6
+        age = age << u.Gyr
 
-        theta['ra'] = 10**theta['ra']
+        cbh_kwargs.setdefault('tend', age.to_value('Myr'))
+        cbh_kwargs.setdefault('Z', Zsun * 10**FeH)
+
+        cbh_kwargs.setdefault('Zsolar', Zsun)
 
         # ------------------------------------------------------------------
-        # Create the base model
+        # Set some default clusterBH parameters
+        # clusterBH fit parameters should use defaults, or given in cbh_kwargs
         # ------------------------------------------------------------------
 
-        kwargs = kwargs.copy()
+        cbh_kwargs.setdefault('ssp', True)
+        cbh_kwargs.setdefault('kick', True)
+        cbh_kwargs.setdefault('tidal', True)
+        cbh_kwargs.setdefault('escapers', False)
+        cbh_kwargs.setdefault('tsev', 1)  # Myr
 
-        # Extra check if vesc/Ndot exist in obs first, otherwise use default
-        #   Necessary because checks in Model aren't sufficient
-        if ('vesc' not in kwargs) and ('vesc' in observations.mdata):
-            kwargs['vesc'] = observations.mdata['vesc'] << u.km / u.s
+        # ------------------------------------------------------------------
+        # Make sure clusterBH IMF matches this one
+        # ------------------------------------------------------------------
 
-        if ('esc_rate' not in kwargs) and ('esc_rate' in observations.mdata):
-            kwargs['esc_rate'] = observations.mdata['esc_rate']
+        cbh_kwargs.setdefault('m_breaks', m_breaks.value)
+        cbh_kwargs.setdefault('a_slopes', a_slopes)
+        cbh_kwargs.setdefault('nbins', nbins)
 
-        super().__init__(observations=observations, **theta, **kwargs)
+        # ------------------------------------------------------------------
+        # Compute evolutionary model
+        # ------------------------------------------------------------------
+
+        self.cbh_kwargs = cbh_kwargs
+
+        self._clusterbh = clusterbh.clusterBH(N0, self.rhoh0.value,
+                                              **self.cbh_kwargs)
+
+        # Make sure no negative f_BH values are allowed
+        self._clusterbh.fbh[self._clusterbh.fbh < 0] = 0.
+
+        # ------------------------------------------------------------------
+        # Determine present day values from the model
+        # ------------------------------------------------------------------
+
+        M = self._clusterbh.M[-1] << u.Msun
+        rh = self._clusterbh.rh[-1] << u.pc
+
+        # ------------------------------------------------------------------
+        # Compute some relevant quantities for mass function evolution
+        # ------------------------------------------------------------------
+
+        vesc = self._clusterbh.vesc0 << u.km / u.s
+        tcc = self._clusterbh.tcc
+
+        # Compute Mdot_esc based on the clusterBH formulation, for ssptools
+
+        # Evaporation
+        Mst_dot = (-self._clusterbh.xi * self._clusterbh.Mst
+                   / self._clusterbh.tev)
+
+        # Ejection
+        bf = self._clusterbh.balance_function(self._clusterbh.t)
+        alpha_c = (self._clusterbh.alpha_ci * bf)
+        alpha_c += ((self._clusterbh.alpha_cf * bf - alpha_c)
+                    * (1 - self._clusterbh.beta_function(self._clusterbh.S)))
+
+        Mst_dot -= (alpha_c * self._clusterbh.zeta
+                    * self._clusterbh.M / self._clusterbh.trh)
+
+        if self._clusterbh.t.size > 3:  # Cubic Spline will fail otherwise
+            Mdot_t = util.QuantitySpline(self._clusterbh.t * 1e3, Mst_dot)
+
+        else:
+            # If only 3 timesteps, something has gone terribly wrong.
+            mssg = f'Too few clusterBH timesteps created: t={self._clusterbh.t}'
+            raise ValueError(mssg)
+
+        BHret = -1  # Spoof unneeded BH retention fraction for `Model`
+
+        # Explicitly specify everything so we can get the correct Signature
+        super().__init__(W0, M, rh, g=g, delta=delta, ra=ra,
+                         a1=a1, a2=a2, a3=a3, BHret=BHret, d=d, meq=meq,
+                         s2=s2, F=F, observations=observations, age=age,
+                         FeH=FeH, m_breaks=m_breaks, vesc=vesc, esc_rate=Mdot_t,
+                         tcc=tcc, tracer_masses=tracer_masses,
+                         NS_ret=NS_ret, BH_ret_int=BH_ret_int,
+                         natal_kicks=natal_kicks, kick_method=kick_method,
+                         f_kick=f_kick, SNe_method=SNe_method,
+                         kick_vdisp=kick_vdisp, kick_slope=kick_slope,
+                         kick_scale=kick_scale, meanmassdef=meanmassdef,
+                         ode_maxstep=ode_maxstep, ode_rtol=ode_rtol,
+                         diffcrit=diffcrit, max_mf_iter=max_mf_iter,
+                         MF_kwargs=MF_kwargs)
+
+        # reset theta to use initial values
+        self.theta = dict(W0=W0, M0=M0.to_value('1e6 Msun'), rh0=rh0.value,
+                          ra=np.log10(ra), g=g, delta=delta,
+                          a1=a1, a2=a2, a3=a3, BHret=BHret,
+                          s2=s2, F=F, d=d.value)
+
+    def get_visualizer(self):
+        '''Return a `analysis.ModelVisualizer` instance based on this model.'''
+        from ..analysis import EvolvedVisualizer
+        return EvolvedVisualizer(self, observations=self.observations)
 
 
 # --------------------------------------------------------------------------
@@ -2470,3 +2695,8 @@ class SampledModel:
                             pixel_scale=pixel_scale, **kwargs)
 
         return (src, (rem_x, rem_y, rem_t)) if return_rem else src
+
+    def get_visualizer(self):
+        '''Return `analysis.SampledVisualizer` instance based on this model.'''
+        from ..analysis import SampledVisualizer
+        return SampledVisualizer(self, observations=self.observations)

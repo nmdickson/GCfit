@@ -103,31 +103,54 @@ def main():
     parallel_group.add_argument("--mpi", action="store_true",
                                 help="Run with MPI rather than multiprocessing")
 
+    shared_parser.add_argument('--free', dest='free_params', nargs='*',
+                               default=None,
+                               help='Free parameters to fit on. All other '
+                                    'parameters will be fixed to their default '
+                                    '(or --model-kwargs) values. By default '
+                                    'the 13 typical free parameters will be '
+                                    'used (W0, M/1e6, rh, log(ra), g, delta, '
+                                    's2, F, a1, a2, a3, BHret, d).')
+
     shared_parser.add_argument('--restrict-to', default=None,
                                choices={None, 'local', 'core'},
                                help='Optionally restrict datafiles used to '
                                     '"core" or "local" cluster files')
     shared_parser.add_argument('--savedir', default=default_dir,
                                help='location of saved sampling runs')
-    shared_parser.add_argument('-i', '--initials',
-                               help='alternative JSON file '
-                                    'with different intials')
+
     shared_parser.add_argument('-p', '--priors', dest='param_priors',
-                               help='alternative JSON file '
+                               help='Alternative JSON file '
                                     'with different priors')
+    shared_parser.add_argument('--model-kwargs',
+                               help='Alternative JSON file '
+                                    'with different model kwargs. These '
+                                    'parameters will be passed to the model '
+                                    'init each time, and will be used as the '
+                                    '"fixed" value of all non-free parameters')
 
     shared_parser.add_argument('--fix', dest='fixed_params', nargs='*',
-                               help='Parameters to fix, '
-                                    'not estimate from the sampler')
+                               help='Parameters to fix, not estimate from the '
+                               'sampler. This is only really required for a '
+                               'specific setup, and it is recommended to just '
+                               'use --free to specify which params are free')
 
     shared_parser.add_argument('--exclude', nargs='*',
                                dest='excluded_likelihoods',
                                help='Likelihood components to '
                                     'exclude from posteriors')
 
+    shared_parser.add_argument('--constrain-BH-core', dest='BH_core_constraint',
+                               action='store_true',
+                               help="Use Bayesian hyperparams")
+
     shared_parser.add_argument('--hyperparams', dest='hyperparams',
                                action='store_true',
                                help="Use Bayesian hyperparams")
+
+    shared_parser.add_argument('--evolved', dest='evolved',
+                               action='store_true',
+                               help="Use evolved models")
 
     shared_parser.add_argument('--verbose', action='store_true')
     shared_parser.add_argument('--debug', action='store_true')
@@ -151,6 +174,10 @@ def main():
                              help='Number of sampling iterations')
     parser_MCMC.add_argument('--Nwalkers', required=True, type=pos_int,
                              help='Number of walkers for MCMC sampler')
+
+    parser_MCMC.add_argument('-i', '--initials',
+                             help='Alternative JSON file with desired initial '
+                                  'positions of walkers')
 
     parser_MCMC.add_argument('--moves', type=str.lower, nargs='*',
                              default=['stretchmove'],
@@ -220,25 +247,38 @@ def main():
     # Common arguments
     # ----------------------------------------------------------------------
 
-    if args.initials:
-
-        if (init_file := pathlib.Path(args.initials)).is_file():
-
-            with open(init_file, 'r') as init_of:
-                args.initials = json.load(init_of)
-
+    if args.free_params is None:
+        if args.evolved:
+            args.free_params = gcfit.DEFAULT_FREE_EV_PARAMS
         else:
-            parser.error(f"Cannot access '{init_file}': No such file")
+            args.free_params = gcfit.DEFAULT_FREE_PARAMS
+
+        if args.fixed_params:
+            # maintain sort order
+            args.free_params = [fp for fp in args.free_params
+                                if fp not in args.fixed_params]
+
+    del args.fixed_params
 
     if args.param_priors:
 
         if (bnd_file := pathlib.Path(args.param_priors)).is_file():
 
-            with open(bnd_file, 'r') as init_of:
-                args.param_priors = json.load(init_of)
+            with open(bnd_file, 'r') as bnd_of:
+                args.param_priors = json.load(bnd_of)
 
         else:
             parser.error(f"Cannot access '{bnd_file}': No such file")
+
+    if args.model_kwargs:
+
+        if (kw_file := pathlib.Path(args.model_kwargs)).is_file():
+
+            with open(kw_file, 'r') as kw_of:
+                args.model_kwargs = json.load(kw_of)
+
+        else:
+            parser.error(f"Cannot access '{kw_file}': No such file")
 
     pathlib.Path(args.savedir).mkdir(exist_ok=True)
 
@@ -247,6 +287,16 @@ def main():
     # ----------------------------------------------------------------------
 
     if args.sampler == 'MCMC':
+
+        if args.initials:
+
+            if (init_file := pathlib.Path(args.initials)).is_file():
+
+                with open(init_file, 'r') as init_of:
+                    args.initials = json.load(init_of)
+
+            else:
+                parser.error(f"Cannot access '{init_file}': No such file")
 
         if args.cont_run:
             raise NotImplementedError
