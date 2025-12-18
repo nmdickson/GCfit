@@ -1039,6 +1039,7 @@ class Model(lp.limepy):
         self.mmean <<= M_units
         self.mbin_widths <<= M_units
 
+        # TODO compute some lagrangian radii as well (from mc)
         self.r <<= R_units
         self.r0 <<= R_units
         self.r0j <<= R_units
@@ -2765,6 +2766,54 @@ class SampledModel:
 
         return indices, bins, bin_centres, bin_errs
 
+    def _compute_dispersion(self, values, errors, *, Nwalkers=32,
+                            Niters=5000, Nburn=2000, progress=False):
+        import emcee
+
+        # strip units
+        unit = values.unit
+        values = values.to_value(unit)
+        errors = errors.to_value(unit)
+
+        def logprior(th):
+            if th[1] <= 0.0:
+                return -np.inf
+            else:
+                return 0.0
+
+        def logL(th):
+            return -0.5 * np.sum(
+                np.log(th[1]**2 + errors**2)
+                + (((values - th[0])**2) / (th[1]**2 + errors**2))
+            ) + logprior(th)
+
+        if Nburn > Niters:
+            raise ValueError(f"Nburn ({Nburn}) is larger than Niter ({Niters})")
+
+        init_pos = self.rng.normal(
+            loc=[np.mean(values), np.std(values)],
+            scale=0.1, size=(Nwalkers, 2)
+        )
+
+        sampler = emcee.EnsembleSampler(Nwalkers, 2, logL)
+
+        pkw = dict(desc="MCMC", leave=False, position=1)
+
+        # Initialize the walkers
+        sampler.run_mcmc(init_pos, Niters, progress=progress,
+                         progress_kwargs=pkw)
+
+        # Get the samples
+        samples = sampler.get_chain(flat=True, discard=Nburn) << unit
+
+        # import corner
+        # import matplotlib.pyplot as plt
+        # corner.corner(samples.value)
+        # plt.show()
+
+        # Return dispersions (not means)
+        return np.median(samples[:, 1]), np.std(samples[:, 1]), sampler
+
     def _mock_numdens(self, Nbins, mass_bounds=None, bin_method='equal',
                       mean_cen=True, angular_units=True, progress=True):
 
@@ -2813,6 +2862,99 @@ class SampledModel:
                 Δnumdens = Δnumdens.to('arcmin-2')
 
         return bin_centres, bin_errs, numdens, Δnumdens, mean_mass
+
+    def _mock_vels(self, velos, Nbins, mass_bounds=None, vel_err=0.1,
+                   bin_method='equal', mean_cen=True, angular_units=True,
+                   progress=True, show_fits=False, **samp_kw):
+        import tqdm
+
+        # Get selection of stars
+
+        if mass_bounds is None:
+            sel = self._select_TO_stars()
+        else:
+            sel = self._select_stars(*mass_bounds)
+
+        mean_mass = np.mean(self.m[sel])
+
+        # r = self.r[sel]  <- unprojected
+        r = self.pos.p[sel]  # projected radius
+
+        indices, bins, bin_centres, bin_errs = self._bin_stars(r, Nbins,
+                                                     bin_method=bin_method,
+                                                     mean_cen=mean_cen)
+
+        # Resample velocities with uncertainties applied
+
+        vel_unit = velos.unit
+
+        vel = self.rng.normal(loc=velos[sel], scale=vel_err) << vel_unit
+
+        # Loop over bins and compute LOS dispersion in bin
+
+        disp = np.zeros_like(bin_centres.value) << vel_unit
+        Δdisp = np.zeros_like(bin_centres.value) << vel_unit
+
+        for i in tqdm.tqdm(np.unique(indices), position=0, desc="bins",
+                           disable=(not progress)):
+
+            mask = (indices == i)
+
+            v = vel[mask]
+            ve = np.full_like(v, vel_err << vel_unit)
+
+            disp[i-1], Δdisp[i-1], sampler = self._compute_dispersion(
+                v, ve, progress=progress, **samp_kw
+            )
+
+            if show_fits:
+                import scipy.stats
+                import matplotlib.pyplot as plt
+                plt.hist(v, bins=50, alpha=0.5, density=True, label=f"{np.std(v)=:.2f}")
+                x = np.linspace(v.min(), v.max())
+                for mui, sigi in sampler.get_chain(flat=True)[-100:]:
+                    plt.plot(x, scipy.stats.norm.pdf(x, loc=mui, scale=sigi))
+                plt.legend()
+                plt.show()
+
+        if angular_units:
+            with u.set_enabled_equivalencies(util.angular_width(self.d)):
+
+                bin_centres = bin_centres.to('arcmin')
+                bin_errs = bin_errs.to('arcmin')
+
+                # TODO does it matter if done before or after sampler?
+                disp = disp.to('mas/yr')
+                Δdisp = Δdisp.to('mas/yr')
+
+        return bin_centres, bin_errs, disp, Δdisp, mean_mass
+
+    def _mock_los(self, Nbins, mass_bounds=None, vel_err=0.1,
+                  bin_method='equal', mean_cen=True, progress=True, **samp_kw):
+
+        return self._mock_vels(
+            velos=self.vel.z, Nbins=Nbins,
+            mass_bounds=mass_bounds, vel_err=vel_err, bin_method=bin_method,
+            mean_cen=mean_cen, angular_units=False, progress=progress, **samp_kw
+        )
+
+    def _mock_pm_r(self, Nbins, mass_bounds=None, vel_err=0.1,
+                   bin_method='equal', mean_cen=True, progress=True, **samp_kw):
+
+        return self._mock_vels(
+            velos=self.vel.p, Nbins=Nbins,
+            mass_bounds=mass_bounds, vel_err=vel_err, bin_method=bin_method,
+            mean_cen=mean_cen, progress=progress, **samp_kw
+        )
+
+    def _mock_pm_t(self, Nbins, mass_bounds=None, vel_err=0.1,
+                   bin_method='equal', mean_cen=True, progress=True, **samp_kw):
+
+        return self._mock_vels(
+            velos=self.vel.phi, Nbins=Nbins,
+            mass_bounds=mass_bounds, vel_err=vel_err, bin_method=bin_method,
+            mean_cen=mean_cen, progress=progress, **samp_kw
+        )
 
     def get_visualizer(self):
         '''Return `analysis.SampledVisualizer` instance based on this model.'''
