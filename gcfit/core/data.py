@@ -2708,7 +2708,113 @@ class SampledModel:
 
         return (src, (rem_x, rem_y, rem_t)) if return_rem else src
 
+    # ----------------------------------------------------------------------
+    # Mock observations
+    # ----------------------------------------------------------------------
+
+    def _select_stars(self, lower_mass, upper_mass):
+        '''return mask of MS stars satisfying these cuts'''
+        return (self.star_mask
+                & ((lower_mass << u.Msun) <= self.m)
+                & (self.m <= (upper_mass << u.Msun)))
+
+    def _select_TO_stars(self):
+        '''Select all stars which were sampled from the turn-off bin (nms-1)'''
+        return self.mbins == (self._basemodel.nms - 1)
+
+    def _bin_stars(self, R, Nbins, bin_method='linear', mean_cen=True):
+        '''create bins and place each star within them'''
+
+        # Create the bins
+
+        match bin_method.casefold():
+            case 'linear' | 'lin':
+                bins = np.linspace(R.min() * 0.99, R.max() * 1.01, Nbins + 1)
+
+            case 'log':
+                bins = np.geomspace(R.min() * 0.99, R.max() * 1.01, Nbins + 1)
+
+            case 'equal-n' | 'equal':
+                bins = np.quantile(R, q=np.linspace(0, 1, Nbins + 1))
+                bins[-1] *= 1.01  # make sure last bin contains last star
+
+            case 'n-per-bin':
+                Nbins = self.N // Nbins  # treat Nbins as "n per bin"
+                bins = np.quantile(R, q=np.linspace(0, 1, Nbins + 1))
+                bins[-1] *= 1.01
+
+            case _:
+                raise ValueError(f"Invalid bin_method '{bin_method}'")
+
+        # Sort the objects into their bins
+
+        indices = np.digitize(R, bins)
+
+        # Determine the bin centres
+
+        bin_widths = (bins[1:] - bins[:-1])
+
+        if mean_cen:
+            bin_centres = u.Quantity([np.mean(R[indices == i])
+                                      for i in range(1, indices.max()+1)])
+            bin_errs =  u.Quantity([np.std(R[indices == i])
+                                      for i in range(1, indices.max()+1)])
+        else:
+            bin_centres = bins[1:] + (bin_widths / 2)
+            bin_errs = bin_widths / 2  # "bin errors"
+
+        return indices, bins, bin_centres, bin_errs
+
+    def _mock_numdens(self, Nbins, mass_bounds=None, bin_method='equal',
+                      mean_cen=True, angular_units=True, progress=True):
+
+        # Get selection of stars
+
+        if mass_bounds is None:
+            sel = self._select_TO_stars()
+        else:
+            sel = self._select_stars(*mass_bounds)
+
+        mean_mass = np.mean(self.m[sel])
+
+        # r = self.r[sel]  <- unprojected
+        r = self.pos.p[sel]  # projected radius
+
+        indices, bins, bin_centres, bin_errs = self._bin_stars(r, Nbins,
+                                                     bin_method=bin_method,
+                                                     mean_cen=mean_cen)
+
+        # Loop over bins and compute numdens in bin
+
+        numdens = np.zeros_like(bin_centres**(-2))
+        Δnumdens = np.zeros_like(bin_centres**(-2))
+
+        for i in np.unique(indices):
+
+            N = (indices == i).sum()
+
+            bin_l, bin_r = bins[[i-1, i]]
+
+            # calculate surface number density, in current annulus
+            numdens[i - 1] = N / (np.pi * (bin_r**2 - bin_l**2))
+
+            # calculate error
+            Δnumdens[i - 1] = np.sqrt(N) / (np.pi * (bin_r**2 - bin_l**2))
+
+        # Convert to angular units
+
+        if angular_units:
+            with u.set_enabled_equivalencies(util.angular_width(self.d)):
+
+                bin_centres = bin_centres.to('arcmin')
+                bin_errs = bin_errs.to('arcmin')
+
+                numdens = numdens.to('arcmin-2')
+                Δnumdens = Δnumdens.to('arcmin-2')
+
+        return bin_centres, bin_errs, numdens, Δnumdens, mean_mass
+
     def get_visualizer(self):
         '''Return `analysis.SampledVisualizer` instance based on this model.'''
         from ..analysis import SampledVisualizer
-        return SampledVisualizer(self, observations=self.observations)
+        return SampledVisualizer(self)
