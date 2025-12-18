@@ -2956,6 +2956,47 @@ class SampledModel:
             mean_cen=mean_cen, progress=progress, **samp_kw
         )
 
+    def _mock_mfs(self, N_rbins, N_mbins, limiting_masses, rbin_size=2.0):
+
+        F = self._basemodel.theta['F']
+        r = self.pos.p
+
+        rbins = np.linspace(0.0, N_rbins * rbin_size, N_rbins + 1) << u.pc
+
+        N = np.zeros((N_rbins, N_mbins))
+        Nerrs = np.zeros((N_rbins, N_mbins))
+        mc = np.zeros((N_rbins, N_mbins))
+        merrs = np.zeros((N_rbins, N_mbins))
+
+        for rind in range(N_rbins):
+
+            # select stars in this radial range and above limiting mass
+
+            rl, ru = rbins[[rind, rind + 1]]
+
+            ml = limiting_masses[rind] << u.Msun
+            mu = 10. << u.Msun  # just gets all stars (above ml)
+            sel = (rl <= r) & (r < ru) & self._select_stars(ml, mu)
+
+            # TODO could also just use histogram
+            # TODO this will create equal N bins, so different mbin widths
+
+            # Create bins based on mass
+            indices, _, mc[rind, :], merrs[rind, :] = self._bin_stars(
+                self.m[sel], N_mbins, bin_method='linear'
+            )
+
+            # Count number of stars each each mass bin
+            _, counts = np.unique(indices, return_counts=True)
+
+            # Poisson error
+            Nerrs[rind, :] = np.sqrt(counts)
+
+            # Resample counts based on scaled poisson error
+            N[rind, :] = self.rng.normal(loc=counts, scale=Nerrs[rind] * F)
+
+        return mc, merrs, N, Nerrs
+
     def get_visualizer(self):
         '''Return `analysis.SampledVisualizer` instance based on this model.'''
         from ..analysis import SampledVisualizer
