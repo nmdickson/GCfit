@@ -1942,10 +1942,11 @@ class EvolvedModel(Model):
 
 
 # Some helpful namespaces for SampledModel
-_position = namedtuple('position', ['x', 'y', 'z', 'r', 'theta', 'phi'],
-                       defaults=[None, ] * 6)
-_direction = namedtuple('direction', ['x', 'y', 'z', 'r', 't', 'theta', 'phi'],
-                        defaults=[None, ] * 7)
+_position = namedtuple('position', ['x', 'y', 'z', 'r', 'theta', 'phi', 'p'],
+                       defaults=[None, ] * 7)
+_direction = namedtuple('direction', ['x', 'y', 'z', 'r', 't',
+                                      'theta', 'phi', 'p'],
+                        defaults=[None, ] * 8)
 _projection = namedtuple('projection', ['lat', 'lon', 'distance',
                                         'pm_l_cosb', 'pm_b', 'v_los'],
                          defaults=[None, ] * 6)
@@ -2253,7 +2254,7 @@ class SampledModel:
 
         def _pdf_angle(q, a, R):
             # Sample random values for: q = cos(theta)
-            # P(q) = erfi(sqrt(k)*p*q)/erfi(sqrt(k)*p)
+            # cdf(q) = erfi(sqrt(k)*p*q)/erfi(sqrt(k)*p)
             from scipy.special import erfi
             return R - erfi(a * q) / erfi(a)
 
@@ -2295,7 +2296,8 @@ class SampledModel:
 
         # Compute radial and tangential velocities from sampled angles
 
-        # TODO should q (cos(θ), but not that θ) also be saved? Interesting?
+        self._q = q  # Save to help with debugging
+
         vr = self.v * q * self.rng.choice((-1, 1), size=self.N)
         vt = self.v * np.sqrt(1 - q**2)
 
@@ -2318,6 +2320,10 @@ class SampledModel:
 
         theta = np.arccos(z / self.r)
         phi = np.arctan2(y, x)
+
+        # Project R into the plane of the sky
+
+        p = self.r * np.sin(theta)
 
         # ------------------------------------------------------------------
         # Sampling of velocity in 3D directions, in spherical and cartesian
@@ -2357,12 +2363,17 @@ class SampledModel:
             vy = np.sqrt(self.v**2 - vx**2) * np.cos(2 * np.pi * R2)
             vz = np.sqrt(self.v**2 - vx**2) * np.sin(2 * np.pi * R2)
 
+        # Project R into the plane of the sky
+
+        vp = (vr * np.sin(theta)) + (vtheta * np.cos(theta))
+
         # ------------------------------------------------------------------
         # Place the various positions/velocities into convenient namespaces
         # ------------------------------------------------------------------
 
-        p = _position(x=x, y=y, z=z, r=self.r, theta=theta, phi=phi)
-        v = _direction(x=vx, y=vy, z=vz, r=vr, t=vt, phi=vphi, theta=vtheta)
+        p = _position(x=x, y=y, z=z, r=self.r, theta=theta, phi=phi, p=p)
+        v = _direction(x=vx, y=vy, z=vz, r=vr, t=vt,
+                       phi=vphi, theta=vtheta, p=vp)
 
         return p, v
 
@@ -2440,6 +2451,7 @@ class SampledModel:
         self.m = np.repeat(model.mj, self.Nj)
 
         if distribute_masses:
+            # TODO obviously this would be better using model._mf.alpha slope
             halfwidth = np.repeat(model.mbin_widths / 2., self.Nj)
             low, high = self.m - halfwidth, self.m + halfwidth
             self.m = self.rng.uniform(low, high) << u.Msun
