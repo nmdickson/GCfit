@@ -2951,11 +2951,14 @@ class SampledModel:
             mean_cen=mean_cen, angular_units=angular_units, progress=progress, **samp_kw
         )
 
-    def _mock_mfs(self, N_rbins, N_mbins, limiting_masses, rbin_size=2.0):
+    def _mock_mfs(self, N_rbins, N_mbins, limiting_masses, rbin_size=2.0,
+                  angular_units=True):
 
         F = self._basemodel.theta['F']
         r = self.pos.p
 
+        # TODO equal-area bins would make more sense
+        # r2=((area/np.pi)+r1**2)**0.5
         rbins = np.linspace(0.0, N_rbins * rbin_size, N_rbins + 1) << u.pc
 
         r1 = np.full(N_rbins * N_mbins, np.nan) << u.pc
@@ -3004,6 +3007,12 @@ class SampledModel:
             # Resample counts based on scaled poisson error
             # TODO should also catch N<0 counts after this, in right way
             N[outslc] = self.rng.normal(loc=counts, scale=Nerrs[outslc] * F)
+
+        # convert radial bins to arcmin
+        if angular_units:
+            with u.set_enabled_equivalencies(util.angular_width(self.d)):
+                r1 = r1 << u.arcmin
+                r2 = r2 << u.arcmin
 
         # Remove any invalid bins
 
