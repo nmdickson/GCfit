@@ -3011,6 +3011,146 @@ class SampledModel:
 
         return r1[val], r2[val], m1[val], m2[val], N[val], Nerrs[val]
 
+    def observe(self, name, Nbins=None, default_Nbins=10,
+                MF_limiting_masses=[0.1,] * 10, tracer_masses=False,
+                return_clusterfile=False):
+        '''make and save a ClusterFile from mocks of this sampled model'''
+        from ..util.data import ClusterFile, Dataset as MockDataset
+
+        if Nbins is None:
+            Nbins = {}
+
+        shared_kw = dict(angular_units=True, bin_method='equal', mean_cen=True)
+
+        cf = ClusterFile(name, force_new=True)
+
+        # metadata
+
+        cf.add_metadata('FeH', self.FeH)
+        cf.add_metadata('age', self.age.to_value('Gyr'))
+
+        # TODO optionally pass or try to read these from self._basemodel.obs
+        cf.add_metadata("l", 0.0)
+        cf.add_metadata("b", 0.0)
+        cf.add_metadata("RA", 0.0)
+        cf.add_metadata("DEC", 0.0)
+        # cf.add_metadata("RG_eff", )
+        cf.add_metadata("μ", 0.0)
+        cf.add_metadata("Ndot", 0.0)
+
+        cf.add_metadata("vesc", self._basemodel.vesc0.to_value('km/s'))
+
+        # number density
+
+        r, er, nd, end, mm = self._mock_numdens(
+            Nbins.get('number_density', default_Nbins), **shared_kw
+        )
+
+        ND = MockDataset('number_density')
+
+        ND.read_data({
+            "r": {'data': r.value, 'unit': r.unit, "metadata": {}},
+            "Δr": {'data': er.value, 'unit': er.unit, 'error_base': "r",
+                   "metadata": {}},
+            "Σ": {'data': nd.value, 'unit': nd.unit, "metadata": {}},
+            "ΔΣ": {'data': end.value, 'unit': end.unit, 'error_base': "Σ",
+                   "metadata": {}},
+            "metadata": {"background": 0} | ({"m": mm} if tracer_masses else {})
+        })
+
+        cf.add_dataset(ND)
+
+        # LOS dispersion
+
+        r, er, los, elos, mm = self._mock_los(
+            Nbins.get('LOS', default_Nbins), **shared_kw
+        )
+
+        LOS = MockDataset('velocity_dispersion')
+
+        LOS.read_data({
+            "r": {'data': r.value, 'unit': r.unit, "metadata": {}},
+            "Δr": {'data': er.value, 'unit': er.unit, 'error_base': "r",
+                   "metadata": {}},
+            "σ": {'data': los.value, 'unit': los.unit, "metadata": {}},
+            "Δσ": {'data': elos.value, 'unit': elos.unit, 'error_base': "σ",
+                   "metadata": {}},
+            "metadata": {"m": mm} if tracer_masses else {}
+        })
+
+        cf.add_dataset(LOS)
+
+        # Proper motion dispersion
+
+        # pm_r and pm_t *should* shared r, mm, but its just kinda assumed here
+        r, er, pmr, epmr, mm = self._mock_pm_r(
+            Nbins.get('PM', default_Nbins), **shared_kw
+        )
+        _, _, pmt, epmt, _ = self._mock_pm_t(
+            Nbins.get('PM', default_Nbins), **shared_kw
+        )
+
+        PM = MockDataset('proper_motion')
+
+        PM.read_data({
+            "r": {'data': r.value, 'unit': r.unit, "metadata": {}},
+            "Δr": {'data': er.value, 'unit': er.unit, 'error_base': "r",
+                   "metadata": {}},
+            "PM_R": {'data': pmr.value, 'unit': pmr.unit, "metadata": {}},
+            "ΔPM_R": {'data': epmr.value, 'unit': epmr.unit,
+                      'error_base': "PM_R", "metadata": {}},
+            "PM_T": {'data': pmt.value, 'unit': pmt.unit, "metadata": {}},
+            "ΔPM_T": {'data': epmt.value, 'unit': epmt.unit,
+                      'error_base': "PM_T", "metadata": {}},
+            "metadata": {"m": mm} if tracer_masses else {}
+        })
+
+        cf.add_dataset(PM)
+
+        # Mass function
+        # As single dataset
+
+        r1, r2, m1, m2, N, Nerrs = self._mock_mfs(
+            Nbins.get('MF_radius', default_Nbins),
+            Nbins.get('MF_mass', default_Nbins),
+            limiting_masses=MF_limiting_masses,
+            rbin_size=2.0
+        )
+
+        MF = MockDataset("mass_function")
+
+        MF.read_data({
+            "r1": {'data': r1.value, 'unit': r1.unit, "metadata": {}},
+            "r2": {'data': r2.value, 'unit': r2.unit, "metadata": {}},
+            "m1": {'data': m1.value, 'unit': m1.unit, "metadata": {}},
+            "m2": {'data': m2.value, 'unit': m2.unit, "metadata": {}},
+            "N": {'data': N, 'unit': None, "metadata": {}},
+            "ΔN": {'data': Nerrs, 'unit': None, 'error_base': "N",
+                   "metadata": {}},
+        })
+
+        field = {
+            "a": np.array(
+                [[5.0, 5.0], [5.0, -5.0], [-5.0, -5.0], [-5.0, 5.0]], dtype="f"
+            )
+        }
+        MF.add_variable("fields", h5py.Empty("f"), "deg", field)
+        MF.add_metadata("field_unit", "deg")
+
+        MF.add_metadata("proposal", "mock")
+
+        cf.add_dataset(MF)
+
+        cf.save()
+
+        if return_clusterfile:
+            return cf
+        else:
+            return Observations(name, restrict_to='local')
+
+    # ----------------------------------------------------------------------
+    # Model visualizers
+    # ----------------------------------------------------------------------
 
     def get_visualizer(self):
         '''Return `analysis.SampledVisualizer` instance based on this model.'''
