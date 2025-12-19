@@ -668,7 +668,7 @@ class _ClusterVisualizer:
 
         label = dataset.cite()
         if 'm' in dataset.mdata:
-            label += fr' ($m={dataset.mdata["m"]}\ M_\odot$)'
+            label = fr'{label} ($m={dataset.mdata["m"]}\ M_\odot$)'
 
         # ------------------------------------------------------------------
         # Plot
@@ -1843,6 +1843,7 @@ class _ClusterVisualizer:
         # Compute the scaling relations if necessary
         # ------------------------------------------------------------------
 
+        # TODO this doesn't work for plotting tracer masses
         try:
             if scale_to == 'model':
                 if data_kwargs is None:
@@ -6431,7 +6432,7 @@ class ObservationsVisualizer(_ClusterVisualizer):
         self.rh = (observations.initials.get('rh', np.nan)
                    if rh is None else rh) << u.pc
 
-        self.d = (d or observations.initials['d']) << u.kpc
+        self.d = (observations.initials['d'] if d is None else d) << u.kpc
 
         self.s2 = 0.
         self.F = 1.

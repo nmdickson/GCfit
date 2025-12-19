@@ -2806,11 +2806,6 @@ class SampledModel:
         # Get the samples
         samples = sampler.get_chain(flat=True, discard=Nburn) << unit
 
-        # import corner
-        # import matplotlib.pyplot as plt
-        # corner.corner(samples.value)
-        # plt.show()
-
         # Return dispersions (not means)
         return np.median(samples[:, 1]), np.std(samples[:, 1]), sampler
 
@@ -2829,9 +2824,9 @@ class SampledModel:
         # r = self.r[sel]  <- unprojected
         r = self.pos.p[sel]  # projected radius
 
-        indices, bins, bin_centres, bin_errs = self._bin_stars(r, Nbins,
-                                                     bin_method=bin_method,
-                                                     mean_cen=mean_cen)
+        indices, bins, bin_centres, bin_errs = self._bin_stars(
+            r, Nbins, bin_method=bin_method, mean_cen=mean_cen
+        )
 
         # Loop over bins and compute numdens in bin
 
@@ -2865,7 +2860,7 @@ class SampledModel:
 
     def _mock_vels(self, velos, Nbins, mass_bounds=None, vel_err=0.1,
                    bin_method='equal', mean_cen=True, angular_units=True,
-                   progress=True, show_fits=False, **samp_kw):
+                   progress=True, **samp_kw):
         import tqdm
 
         # Get selection of stars
@@ -2880,9 +2875,9 @@ class SampledModel:
         # r = self.r[sel]  <- unprojected
         r = self.pos.p[sel]  # projected radius
 
-        indices, bins, bin_centres, bin_errs = self._bin_stars(r, Nbins,
-                                                     bin_method=bin_method,
-                                                     mean_cen=mean_cen)
+        indices, bins, bin_centres, bin_errs = self._bin_stars(
+            r, Nbins, bin_method=bin_method, mean_cen=mean_cen
+        )
 
         # Resample velocities with uncertainties applied
 
@@ -2907,16 +2902,6 @@ class SampledModel:
                 v, ve, progress=progress, **samp_kw
             )
 
-            if show_fits:
-                import scipy.stats
-                import matplotlib.pyplot as plt
-                plt.hist(v, bins=50, alpha=0.5, density=True, label=f"{np.std(v)=:.2f}")
-                x = np.linspace(v.min(), v.max())
-                for mui, sigi in sampler.get_chain(flat=True)[-100:]:
-                    plt.plot(x, scipy.stats.norm.pdf(x, loc=mui, scale=sigi))
-                plt.legend()
-                plt.show()
-
         if angular_units:
             with u.set_enabled_equivalencies(util.angular_width(self.d)):
 
@@ -2930,30 +2915,40 @@ class SampledModel:
         return bin_centres, bin_errs, disp, Δdisp, mean_mass
 
     def _mock_los(self, Nbins, mass_bounds=None, vel_err=0.1,
-                  bin_method='equal', mean_cen=True, progress=True, **samp_kw):
+                  bin_method='equal', mean_cen=True, angular_units=True,
+                  progress=True, **samp_kw):
 
-        return self._mock_vels(
+        bin_centres, bin_errs, disp, Δdisp, mean_mass = self._mock_vels(
             velos=self.vel.z, Nbins=Nbins,
             mass_bounds=mass_bounds, vel_err=vel_err, bin_method=bin_method,
-            mean_cen=mean_cen, angular_units=False, progress=progress, **samp_kw
+            mean_cen=mean_cen, angular_units=angular_units, progress=progress, **samp_kw
         )
 
+        # Force the LOS to be linear, even if angular_units is True
+        with u.set_enabled_equivalencies(util.angular_width(self.d)):
+            disp <<= u.km / u.s
+            Δdisp <<= u.km / u.s
+
+        return bin_centres, bin_errs, disp, Δdisp, mean_mass
+
     def _mock_pm_r(self, Nbins, mass_bounds=None, vel_err=0.1,
-                   bin_method='equal', mean_cen=True, progress=True, **samp_kw):
+                   bin_method='equal', mean_cen=True, angular_units=True,
+                   progress=True, **samp_kw):
 
         return self._mock_vels(
             velos=self.vel.p, Nbins=Nbins,
             mass_bounds=mass_bounds, vel_err=vel_err, bin_method=bin_method,
-            mean_cen=mean_cen, progress=progress, **samp_kw
+            mean_cen=mean_cen, angular_units=angular_units, progress=progress, **samp_kw
         )
 
     def _mock_pm_t(self, Nbins, mass_bounds=None, vel_err=0.1,
-                   bin_method='equal', mean_cen=True, progress=True, **samp_kw):
+                   bin_method='equal', mean_cen=True, angular_units=True,
+                   progress=True, **samp_kw):
 
         return self._mock_vels(
             velos=self.vel.phi, Nbins=Nbins,
             mass_bounds=mass_bounds, vel_err=vel_err, bin_method=bin_method,
-            mean_cen=mean_cen, progress=progress, **samp_kw
+            mean_cen=mean_cen, angular_units=angular_units, progress=progress, **samp_kw
         )
 
     def _mock_mfs(self, N_rbins, N_mbins, limiting_masses, rbin_size=2.0):

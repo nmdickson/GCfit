@@ -1392,7 +1392,7 @@ class Dataset:
 
                 if varname == 'metadata':
                     for mdata_key, mdata in variable.items():
-                        self.add_metadata(varname, variable)
+                        self.add_metadata(mdata_key, mdata)
 
                 else:
                     self.add_variable(varname, **variable)
