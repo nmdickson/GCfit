@@ -2958,39 +2958,59 @@ class SampledModel:
 
         rbins = np.linspace(0.0, N_rbins * rbin_size, N_rbins + 1) << u.pc
 
-        N = np.zeros((N_rbins, N_mbins))
-        Nerrs = np.zeros((N_rbins, N_mbins))
-        mc = np.zeros((N_rbins, N_mbins))
-        merrs = np.zeros((N_rbins, N_mbins))
+        r1 = np.full(N_rbins * N_mbins, np.nan) << u.pc
+        r2 = np.full(N_rbins * N_mbins, np.nan) << u.pc
+
+        m1 = np.full(N_rbins * N_mbins, np.nan) << u.Msun
+        m2 = np.full(N_rbins * N_mbins, np.nan) << u.Msun
+
+        N = np.full(N_rbins * N_mbins, np.nan)
+        Nerrs = np.full(N_rbins * N_mbins, np.nan)
 
         for rind in range(N_rbins):
+
+            outslc = slice(rind * N_mbins, (rind + 1) * N_mbins)
 
             # select stars in this radial range and above limiting mass
 
             rl, ru = rbins[[rind, rind + 1]]
 
+            r1[outslc], r2[outslc] = rl, ru
+
             ml = limiting_masses[rind] << u.Msun
             mu = 10. << u.Msun  # just gets all stars (above ml)
             sel = (rl <= r) & (r < ru) & self._select_stars(ml, mu)
+
+            if sel.sum() < 1:
+                continue
 
             # TODO could also just use histogram
             # TODO this will create equal N bins, so different mbin widths
 
             # Create bins based on mass
-            indices, _, mc[rind, :], merrs[rind, :] = self._bin_stars(
+            indices, mbins, _, _ = self._bin_stars(
                 self.m[sel], N_mbins, bin_method='linear'
             )
 
+            m1[outslc], m2[outslc] = mbins[:-1], mbins[1:]
+
             # Count number of stars each each mass bin
+            # TODO this will fail if any bins have no stars in them
             _, counts = np.unique(indices, return_counts=True)
 
             # Poisson error
-            Nerrs[rind, :] = np.sqrt(counts)
+            Nerrs[outslc] = np.sqrt(counts)
 
             # Resample counts based on scaled poisson error
-            N[rind, :] = self.rng.normal(loc=counts, scale=Nerrs[rind] * F)
+            # TODO should also catch N<0 counts after this, in right way
+            N[outslc] = self.rng.normal(loc=counts, scale=Nerrs[outslc] * F)
 
-        return mc, merrs, N, Nerrs
+        # Remove any invalid bins
+
+        val = ~np.isnan(N)
+
+        return r1[val], r2[val], m1[val], m2[val], N[val], Nerrs[val]
+
 
     def get_visualizer(self):
         '''Return `analysis.SampledVisualizer` instance based on this model.'''
