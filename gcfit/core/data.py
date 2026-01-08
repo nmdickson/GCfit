@@ -1039,6 +1039,7 @@ class Model(lp.limepy):
         self.mmean <<= M_units
         self.mbin_widths <<= M_units
 
+        # TODO compute some lagrangian radii as well (from mc)
         self.r <<= R_units
         self.r0 <<= R_units
         self.r0j <<= R_units
@@ -1942,10 +1943,11 @@ class EvolvedModel(Model):
 
 
 # Some helpful namespaces for SampledModel
-_position = namedtuple('position', ['x', 'y', 'z', 'r', 'theta', 'phi'],
-                       defaults=[None, ] * 6)
-_direction = namedtuple('direction', ['x', 'y', 'z', 'r', 't', 'theta', 'phi'],
-                        defaults=[None, ] * 7)
+_position = namedtuple('position', ['x', 'y', 'z', 'r', 'theta', 'phi', 'p'],
+                       defaults=[None, ] * 7)
+_direction = namedtuple('direction', ['x', 'y', 'z', 'r', 't',
+                                      'theta', 'phi', 'p'],
+                        defaults=[None, ] * 8)
 _projection = namedtuple('projection', ['lat', 'lon', 'distance',
                                         'pm_l_cosb', 'pm_b', 'v_los'],
                          defaults=[None, ] * 6)
@@ -2253,7 +2255,7 @@ class SampledModel:
 
         def _pdf_angle(q, a, R):
             # Sample random values for: q = cos(theta)
-            # P(q) = erfi(sqrt(k)*p*q)/erfi(sqrt(k)*p)
+            # cdf(q) = erfi(sqrt(k)*p*q)/erfi(sqrt(k)*p)
             from scipy.special import erfi
             return R - erfi(a * q) / erfi(a)
 
@@ -2295,7 +2297,8 @@ class SampledModel:
 
         # Compute radial and tangential velocities from sampled angles
 
-        # TODO should q (cos(θ), but not that θ) also be saved? Interesting?
+        self._q = q  # Save to help with debugging
+
         vr = self.v * q * self.rng.choice((-1, 1), size=self.N)
         vt = self.v * np.sqrt(1 - q**2)
 
@@ -2318,6 +2321,10 @@ class SampledModel:
 
         theta = np.arccos(z / self.r)
         phi = np.arctan2(y, x)
+
+        # Project R into the plane of the sky
+
+        p = self.r * np.sin(theta)
 
         # ------------------------------------------------------------------
         # Sampling of velocity in 3D directions, in spherical and cartesian
@@ -2357,14 +2364,19 @@ class SampledModel:
             vy = np.sqrt(self.v**2 - vx**2) * np.cos(2 * np.pi * R2)
             vz = np.sqrt(self.v**2 - vx**2) * np.sin(2 * np.pi * R2)
 
+        # Project R into the plane of the sky
+
+        vp = (vr * np.sin(theta)) + (vtheta * np.cos(theta))
+
         # ------------------------------------------------------------------
         # Place the various positions/velocities into convenient namespaces
         # ------------------------------------------------------------------
 
-        p = _position(x=x, y=y, z=z, r=self.r, theta=theta, phi=phi)
-        v = _direction(x=vx, y=vy, z=vz, r=vr, t=vt, phi=vphi, theta=vtheta)
+        pos = _position(x=x, y=y, z=z, r=self.r, theta=theta, phi=phi, p=p)
+        vel = _direction(x=vx, y=vy, z=vz, r=vr, t=vt,
+                         phi=vphi, theta=vtheta, p=vp)
 
-        return p, v
+        return pos, vel
 
     def _project(self, cen):
         '''return projected-on-sky positions and velocities, given the centre
@@ -2440,6 +2452,7 @@ class SampledModel:
         self.m = np.repeat(model.mj, self.Nj)
 
         if distribute_masses:
+            # TODO obviously this would be better using model._mf.alpha slope
             halfwidth = np.repeat(model.mbin_widths / 2., self.Nj)
             low, high = self.m - halfwidth, self.m + halfwidth
             self.m = self.rng.uniform(low, high) << u.Msun
@@ -2696,7 +2709,459 @@ class SampledModel:
 
         return (src, (rem_x, rem_y, rem_t)) if return_rem else src
 
+    # ----------------------------------------------------------------------
+    # Mock observations
+    # ----------------------------------------------------------------------
+
+    def _select_stars(self, lower_mass, upper_mass):
+        '''return mask of MS stars satisfying these cuts'''
+        return (self.star_mask
+                & ((lower_mass << u.Msun) <= self.m)
+                & (self.m <= (upper_mass << u.Msun)))
+
+    def _select_TO_stars(self):
+        '''Select all stars which were sampled from the turn-off bin (nms-1)'''
+        return self.mbins == (self._basemodel.nms - 1)
+
+    def _bin_stars(self, R, Nbins, bin_method='linear', mean_cen=True):
+        '''create bins and place each star within them'''
+
+        # Create the bins
+
+        match bin_method.casefold():
+            case 'linear' | 'lin':
+                bins = np.linspace(R.min() * 0.99, R.max() * 1.01, Nbins + 1)
+
+            case 'log':
+                bins = np.geomspace(R.min() * 0.99, R.max() * 1.01, Nbins + 1)
+
+            case 'equal-n' | 'equal':
+                bins = np.quantile(R, q=np.linspace(0, 1, Nbins + 1))
+                bins[-1] *= 1.01  # make sure last bin contains last star
+
+            case 'n-per-bin':
+                Nbins = self.N // Nbins  # treat Nbins as "n per bin"
+                bins = np.quantile(R, q=np.linspace(0, 1, Nbins + 1))
+                bins[-1] *= 1.01
+
+            case _:
+                raise ValueError(f"Invalid bin_method '{bin_method}'")
+
+        # Sort the objects into their bins
+
+        indices = np.digitize(R, bins)
+
+        # Determine the bin centres
+
+        bin_widths = (bins[1:] - bins[:-1])
+
+        if mean_cen:
+            bin_centres = u.Quantity([np.mean(R[indices == i])
+                                      for i in range(1, indices.max()+1)])
+            bin_errs =  u.Quantity([np.std(R[indices == i])
+                                      for i in range(1, indices.max()+1)])
+        else:
+            bin_centres = bins[1:] + (bin_widths / 2)
+            bin_errs = bin_widths / 2  # "bin errors"
+
+        return indices, bins, bin_centres, bin_errs
+
+    def _compute_dispersion(self, values, errors, *, Nwalkers=32,
+                            Niters=5000, Nburn=2000, progress=False):
+        import emcee
+
+        # strip units
+        unit = values.unit
+        values = values.to_value(unit)
+        errors = errors.to_value(unit)
+
+        def logprior(th):
+            if th[1] <= 0.0:
+                return -np.inf
+            else:
+                return 0.0
+
+        def logL(th):
+            return -0.5 * np.sum(
+                np.log(th[1]**2 + errors**2)
+                + (((values - th[0])**2) / (th[1]**2 + errors**2))
+            ) + logprior(th)
+
+        if Nburn > Niters:
+            raise ValueError(f"Nburn ({Nburn}) is larger than Niter ({Niters})")
+
+        init_pos = self.rng.normal(
+            loc=[np.mean(values), np.std(values)],
+            scale=0.1, size=(Nwalkers, 2)
+        )
+
+        sampler = emcee.EnsembleSampler(Nwalkers, 2, logL)
+
+        pkw = dict(desc="MCMC", leave=False, position=1)
+
+        # Initialize the walkers
+        sampler.run_mcmc(init_pos, Niters, progress=progress,
+                         progress_kwargs=pkw)
+
+        # Get the samples
+        samples = sampler.get_chain(flat=True, discard=Nburn) << unit
+
+        # Return dispersions (not means)
+        return np.median(samples[:, 1]), np.std(samples[:, 1]), sampler
+
+    def _mock_numdens(self, Nbins, mass_bounds=None, bin_method='equal',
+                      mean_cen=True, angular_units=True, progress=True):
+
+        # Get selection of stars
+
+        if mass_bounds is None:
+            sel = self._select_TO_stars()
+        else:
+            sel = self._select_stars(*mass_bounds)
+
+        mean_mass = np.mean(self.m[sel])
+
+        # r = self.r[sel]  <- unprojected
+        r = self.pos.p[sel]  # projected radius
+
+        indices, bins, bin_centres, bin_errs = self._bin_stars(
+            r, Nbins, bin_method=bin_method, mean_cen=mean_cen
+        )
+
+        # Loop over bins and compute numdens in bin
+
+        numdens = np.zeros_like(bin_centres**(-2))
+        Δnumdens = np.zeros_like(bin_centres**(-2))
+
+        for i in np.unique(indices):
+
+            N = (indices == i).sum()
+
+            bin_l, bin_r = bins[[i-1, i]]
+
+            # calculate surface number density, in current annulus
+            numdens[i - 1] = N / (np.pi * (bin_r**2 - bin_l**2))
+
+            # calculate error
+            Δnumdens[i - 1] = np.sqrt(N) / (np.pi * (bin_r**2 - bin_l**2))
+
+        # Convert to angular units
+
+        if angular_units:
+            with u.set_enabled_equivalencies(util.angular_width(self.d)):
+
+                bin_centres = bin_centres.to('arcmin')
+                bin_errs = bin_errs.to('arcmin')
+
+                numdens = numdens.to('arcmin-2')
+                Δnumdens = Δnumdens.to('arcmin-2')
+
+        return bin_centres, bin_errs, numdens, Δnumdens, mean_mass
+
+    def _mock_vels(self, velos, Nbins, mass_bounds=None, vel_err=0.1,
+                   bin_method='equal', mean_cen=True, angular_units=True,
+                   progress=True, **samp_kw):
+        import tqdm
+
+        # Get selection of stars
+
+        if mass_bounds is None:
+            sel = self._select_TO_stars()
+        else:
+            sel = self._select_stars(*mass_bounds)
+
+        mean_mass = np.mean(self.m[sel])
+
+        # r = self.r[sel]  <- unprojected
+        r = self.pos.p[sel]  # projected radius
+
+        indices, bins, bin_centres, bin_errs = self._bin_stars(
+            r, Nbins, bin_method=bin_method, mean_cen=mean_cen
+        )
+
+        # Resample velocities with uncertainties applied
+
+        vel_unit = velos.unit
+
+        vel = self.rng.normal(loc=velos[sel], scale=vel_err) << vel_unit
+
+        # Loop over bins and compute LOS dispersion in bin
+
+        disp = np.zeros_like(bin_centres.value) << vel_unit
+        Δdisp = np.zeros_like(bin_centres.value) << vel_unit
+
+        for i in tqdm.tqdm(np.unique(indices), position=0, desc="bins",
+                           disable=(not progress)):
+
+            mask = (indices == i)
+
+            v = vel[mask]
+            ve = np.full_like(v, vel_err << vel_unit)
+
+            disp[i-1], Δdisp[i-1], sampler = self._compute_dispersion(
+                v, ve, progress=progress, **samp_kw
+            )
+
+        if angular_units:
+            with u.set_enabled_equivalencies(util.angular_width(self.d)):
+
+                bin_centres = bin_centres.to('arcmin')
+                bin_errs = bin_errs.to('arcmin')
+
+                # TODO does it matter if done before or after sampler?
+                disp = disp.to('mas/yr')
+                Δdisp = Δdisp.to('mas/yr')
+
+        return bin_centres, bin_errs, disp, Δdisp, mean_mass
+
+    def _mock_los(self, Nbins, mass_bounds=None, vel_err=0.1,
+                  bin_method='equal', mean_cen=True, angular_units=True,
+                  progress=True, **samp_kw):
+
+        bin_centres, bin_errs, disp, Δdisp, mean_mass = self._mock_vels(
+            velos=self.vel.z, Nbins=Nbins,
+            mass_bounds=mass_bounds, vel_err=vel_err, bin_method=bin_method,
+            mean_cen=mean_cen, angular_units=angular_units, progress=progress, **samp_kw
+        )
+
+        # Force the LOS to be linear, even if angular_units is True
+        with u.set_enabled_equivalencies(util.angular_width(self.d)):
+            disp <<= u.km / u.s
+            Δdisp <<= u.km / u.s
+
+        return bin_centres, bin_errs, disp, Δdisp, mean_mass
+
+    def _mock_pm_r(self, Nbins, mass_bounds=None, vel_err=0.1,
+                   bin_method='equal', mean_cen=True, angular_units=True,
+                   progress=True, **samp_kw):
+
+        return self._mock_vels(
+            velos=self.vel.p, Nbins=Nbins,
+            mass_bounds=mass_bounds, vel_err=vel_err, bin_method=bin_method,
+            mean_cen=mean_cen, angular_units=angular_units, progress=progress, **samp_kw
+        )
+
+    def _mock_pm_t(self, Nbins, mass_bounds=None, vel_err=0.1,
+                   bin_method='equal', mean_cen=True, angular_units=True,
+                   progress=True, **samp_kw):
+
+        return self._mock_vels(
+            velos=self.vel.phi, Nbins=Nbins,
+            mass_bounds=mass_bounds, vel_err=vel_err, bin_method=bin_method,
+            mean_cen=mean_cen, angular_units=angular_units, progress=progress, **samp_kw
+        )
+
+    def _mock_mfs(self, N_rbins, N_mbins, limiting_masses, rbin_size=2.0,
+                  angular_units=True):
+
+        F = self._basemodel.theta['F']
+        r = self.pos.p
+
+        # TODO equal-area bins would make more sense
+        # r2=((area/np.pi)+r1**2)**0.5
+        rbins = np.linspace(0.0, N_rbins * rbin_size, N_rbins + 1) << u.pc
+
+        r1 = np.full(N_rbins * N_mbins, np.nan) << u.pc
+        r2 = np.full(N_rbins * N_mbins, np.nan) << u.pc
+
+        m1 = np.full(N_rbins * N_mbins, np.nan) << u.Msun
+        m2 = np.full(N_rbins * N_mbins, np.nan) << u.Msun
+
+        N = np.full(N_rbins * N_mbins, np.nan)
+        Nerrs = np.full(N_rbins * N_mbins, np.nan)
+
+        for rind in range(N_rbins):
+
+            outslc = slice(rind * N_mbins, (rind + 1) * N_mbins)
+
+            # select stars in this radial range and above limiting mass
+
+            rl, ru = rbins[[rind, rind + 1]]
+
+            r1[outslc], r2[outslc] = rl, ru
+
+            ml = limiting_masses[rind] << u.Msun
+            mu = 10. << u.Msun  # just gets all stars (above ml)
+            sel = (rl <= r) & (r < ru) & self._select_stars(ml, mu)
+
+            if sel.sum() < 1:
+                continue
+
+            # TODO could also just use histogram
+            # TODO this will create equal N bins, so different mbin widths
+
+            # Create bins based on mass
+            indices, mbins, _, _ = self._bin_stars(
+                self.m[sel], N_mbins, bin_method='linear'
+            )
+
+            m1[outslc], m2[outslc] = mbins[:-1], mbins[1:]
+
+            # Count number of stars each each mass bin
+            # TODO this will fail if any bins have no stars in them
+            _, counts = np.unique(indices, return_counts=True)
+
+            # Poisson error
+            Nerrs[outslc] = np.sqrt(counts)
+
+            # Resample counts based on scaled poisson error
+            # TODO should also catch N<0 counts after this, in right way
+            N[outslc] = self.rng.normal(loc=counts, scale=Nerrs[outslc] * F)
+
+        # convert radial bins to arcmin
+        if angular_units:
+            with u.set_enabled_equivalencies(util.angular_width(self.d)):
+                r1 = r1 << u.arcmin
+                r2 = r2 << u.arcmin
+
+        # Remove any invalid bins
+
+        val = ~np.isnan(N)
+
+        return r1[val], r2[val], m1[val], m2[val], N[val], Nerrs[val]
+
+    def observe(self, name, Nbins=None, default_Nbins=10,
+                MF_limiting_masses=[0.1,] * 10, tracer_masses=False,
+                return_clusterfile=False):
+        '''make and save a ClusterFile from mocks of this sampled model'''
+        from ..util.data import ClusterFile, Dataset as MockDataset
+
+        if Nbins is None:
+            Nbins = {}
+
+        shared_kw = dict(angular_units=True, bin_method='equal', mean_cen=True)
+
+        cf = ClusterFile(name, force_new=True)
+
+        # metadata
+
+        cf.add_metadata('FeH', self.FeH)
+        cf.add_metadata('age', self.age.to_value('Gyr'))
+
+        # TODO optionally pass or try to read these from self._basemodel.obs
+        cf.add_metadata("l", 0.0)
+        cf.add_metadata("b", 0.0)
+        cf.add_metadata("RA", 0.0)
+        cf.add_metadata("DEC", 0.0)
+        # cf.add_metadata("RG_eff", )
+        cf.add_metadata("μ", 0.0)
+        cf.add_metadata("Ndot", 0.0)
+
+        cf.add_metadata("vesc", self._basemodel.vesc0.to_value('km/s'))
+
+        # number density
+
+        r, er, nd, end, mm = self._mock_numdens(
+            Nbins.get('number_density', default_Nbins), **shared_kw
+        )
+
+        ND = MockDataset('number_density')
+
+        ND.read_data({
+            "r": {'data': r.value, 'unit': r.unit, "metadata": {}},
+            "Δr": {'data': er.value, 'unit': er.unit, 'error_base': "r",
+                   "metadata": {}},
+            "Σ": {'data': nd.value, 'unit': nd.unit, "metadata": {}},
+            "ΔΣ": {'data': end.value, 'unit': end.unit, 'error_base': "Σ",
+                   "metadata": {}},
+            "metadata": {"background": 0} | ({"m": mm} if tracer_masses else {})
+        })
+
+        cf.add_dataset(ND)
+
+        # LOS dispersion
+
+        r, er, los, elos, mm = self._mock_los(
+            Nbins.get('LOS', default_Nbins), **shared_kw
+        )
+
+        LOS = MockDataset('velocity_dispersion')
+
+        LOS.read_data({
+            "r": {'data': r.value, 'unit': r.unit, "metadata": {}},
+            "Δr": {'data': er.value, 'unit': er.unit, 'error_base': "r",
+                   "metadata": {}},
+            "σ": {'data': los.value, 'unit': los.unit, "metadata": {}},
+            "Δσ": {'data': elos.value, 'unit': elos.unit, 'error_base': "σ",
+                   "metadata": {}},
+            "metadata": {"m": mm} if tracer_masses else {}
+        })
+
+        cf.add_dataset(LOS)
+
+        # Proper motion dispersion
+
+        # pm_r and pm_t *should* shared r, mm, but its just kinda assumed here
+        r, er, pmr, epmr, mm = self._mock_pm_r(
+            Nbins.get('PM', default_Nbins), **shared_kw
+        )
+        _, _, pmt, epmt, _ = self._mock_pm_t(
+            Nbins.get('PM', default_Nbins), **shared_kw
+        )
+
+        PM = MockDataset('proper_motion')
+
+        PM.read_data({
+            "r": {'data': r.value, 'unit': r.unit, "metadata": {}},
+            "Δr": {'data': er.value, 'unit': er.unit, 'error_base': "r",
+                   "metadata": {}},
+            "PM_R": {'data': pmr.value, 'unit': pmr.unit, "metadata": {}},
+            "ΔPM_R": {'data': epmr.value, 'unit': epmr.unit,
+                      'error_base': "PM_R", "metadata": {}},
+            "PM_T": {'data': pmt.value, 'unit': pmt.unit, "metadata": {}},
+            "ΔPM_T": {'data': epmt.value, 'unit': epmt.unit,
+                      'error_base': "PM_T", "metadata": {}},
+            "metadata": {"m": mm} if tracer_masses else {}
+        })
+
+        cf.add_dataset(PM)
+
+        # Mass function
+        # As single dataset
+
+        r1, r2, m1, m2, N, Nerrs = self._mock_mfs(
+            Nbins.get('MF_radius', default_Nbins),
+            Nbins.get('MF_mass', default_Nbins),
+            limiting_masses=MF_limiting_masses,
+            rbin_size=2.0
+        )
+
+        MF = MockDataset("mass_function/mock")
+
+        MF.read_data({
+            "r1": {'data': r1.value, 'unit': r1.unit, "metadata": {}},
+            "r2": {'data': r2.value, 'unit': r2.unit, "metadata": {}},
+            "m1": {'data': m1.value, 'unit': m1.unit, "metadata": {}},
+            "m2": {'data': m2.value, 'unit': m2.unit, "metadata": {}},
+            "N": {'data': N, 'unit': None, "metadata": {}},
+            "ΔN": {'data': Nerrs, 'unit': None, 'error_base': "N",
+                   "metadata": {}},
+        })
+
+        field = {
+            "a": np.array(
+                [[5.0, 5.0], [5.0, -5.0], [-5.0, -5.0], [-5.0, 5.0]], dtype="f"
+            )
+        }
+        MF.add_variable("fields", h5py.Empty("f"), "deg", field)
+        MF.add_metadata("field_unit", "deg")
+
+        MF.add_metadata("proposal", "mock")
+
+        cf.add_dataset(MF)
+
+        cf.save()
+
+        if return_clusterfile:
+            return cf
+        else:
+            return Observations(name, restrict_to='local')
+
+    # ----------------------------------------------------------------------
+    # Model visualizers
+    # ----------------------------------------------------------------------
+
     def get_visualizer(self):
         '''Return `analysis.SampledVisualizer` instance based on this model.'''
         from ..analysis import SampledVisualizer
-        return SampledVisualizer(self, observations=self.observations)
+        return SampledVisualizer(self)
