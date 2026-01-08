@@ -2372,11 +2372,11 @@ class SampledModel:
         # Place the various positions/velocities into convenient namespaces
         # ------------------------------------------------------------------
 
-        p = _position(x=x, y=y, z=z, r=self.r, theta=theta, phi=phi, p=p)
-        v = _direction(x=vx, y=vy, z=vz, r=vr, t=vt,
-                       phi=vphi, theta=vtheta, p=vp)
+        pos = _position(x=x, y=y, z=z, r=self.r, theta=theta, phi=phi, p=p)
+        vel = _direction(x=vx, y=vy, z=vz, r=vr, t=vt,
+                         phi=vphi, theta=vtheta, p=vp)
 
-        return p, v
+        return pos, vel
 
     def _project(self, cen):
         '''return projected-on-sky positions and velocities, given the centre
