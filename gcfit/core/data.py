@@ -3126,7 +3126,7 @@ class SampledModel:
             rbin_size=2.0
         )
 
-        MF = MockDataset("mass_function")
+        MF = MockDataset("mass_function/mock")
 
         MF.read_data({
             "r1": {'data': r1.value, 'unit': r1.unit, "metadata": {}},
