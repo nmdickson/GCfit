@@ -2575,7 +2575,7 @@ class _ClusterVisualizer:
         # Try to plot the various radii quantities from this model, if desired
         # ------------------------------------------------------------------
 
-        valid_rs = {'rh', 'ra', 'rt', 'r0', 'rhp', 'rv'}
+        valid_rs = {'rh', 'ra', 'rt', 'r0', 'rhp', 'rv', 'rc_obs'}
 
         q = [84.13, 50., 15.87]
 
@@ -3583,6 +3583,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
         # various structural model attributes
         self.r0 = model.r0
+        self.rc_obs = model.rc_obs
         self.rh = model.rh
         self.rhp = model.rhp
         self.ra = model.ra
@@ -4436,6 +4437,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         mmean_t = np.full((1, N, Nt), np.nan) << huge_model.mmean.unit
 
         r0 = np.full(N, np.nan) << huge_model.r0.unit
+        rc_obs = np.full(N, np.nan) << huge_model.rc_obs.unit
         rt = np.full(N, np.nan) << huge_model.rt.unit
         rh = np.full(N, np.nan) << huge_model.rh.unit
         rhp = np.full(N, np.nan) << huge_model.rhp.unit
@@ -4588,6 +4590,7 @@ class CIModelVisualizer(_ClusterVisualizer):
             mmean_t[slc] = model.mmean
 
             r0[model_ind] = model.r0
+            rc_obs[model_ind] = model.rc_obs
             rt[model_ind] = rt_t[slc] = model.rt
             rh[model_ind] = rh_t[slc] = model.rh
             rhp[model_ind] = model.rhp
@@ -4693,6 +4696,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         viz.M_kicked = M_kicked
 
         viz.r0 = r0
+        viz.rc_obs = rc_obs
         viz.rt = rt
         viz.rh = rh
         viz.rhp = rhp
@@ -5074,7 +5078,8 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             quant_keys = (
                 'f_rem', 'f_BH', 'M_BH', 'N_BH', 'M_NS', 'N_NS', 'M_WD', 'N_WD',
-                'f_BH0', 'M_BH0', 'N_BH0', 'r0', 'rt', 'rh', 'rhp', 'ra', 'rv',
+                'f_BH0', 'M_BH0', 'N_BH0',
+                'r0', 'rc_obs', 'rt', 'rh', 'rhp', 'ra', 'rv',
                 'mmean', 'volume', 'vesc0', 'rhoh0', 'BH_rh', 'NS_rh', 'WD_rh',
                 'spitzer_chi', 'trh', 'N_relax', 'K_scale',
                 'M_kicked', 'delta_r50', 'delta_A'
@@ -6053,6 +6058,7 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
         mmean_t = np.full((1, N, Nt), np.nan) << huge_model.mmean.unit
 
         r0 = np.full(N, np.nan) << huge_model.r0.unit
+        rc_obs = np.full(N, np.nan) << huge_model.rc_obs.unit
         rt = np.full(N, np.nan) << huge_model.rt.unit
         rh = np.full(N, np.nan) << huge_model.rh.unit
         rhp = np.full(N, np.nan) << huge_model.rhp.unit
@@ -6211,6 +6217,7 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
             mmean_t[slc] = cbh.mav << mmean_t.unit
 
             r0[model_ind] = model.r0
+            rc_obs[model_ind] = model.rc_obs
             rt[model_ind] = model.rt
             rt_t[slc] = cbh.rt << rt_t.unit
             rh[model_ind] = model.rh
@@ -6324,6 +6331,7 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
         viz.N_BH0 = N_BH0
 
         viz.r0 = r0
+        viz.rc_obs = rc_obs
         viz.rt = rt
         viz.rh = rh
         viz.rhp = rhp
