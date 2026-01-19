@@ -744,12 +744,12 @@ class CromwellUniformPrior(_PriorBase):
 
 # TODO these defaults of course assume `compatibility_transforms=True`
 DEFAULT_PRIORS = {
-    'W0': ('uniform', [(3, 20)]),
+    'W0': ('uniform', [(0.5, 20)]),
     'M': ('uniform', [(0.01, 5)]),
     'rh': ('uniform', [(0.5, 15)]),
     'ra': ('uniform', [(0, 5)]),
     'g': ('uniform', [(0, 3.5)]),
-    'delta': ('uniform', [(0.3, 0.5)]),
+    'delta': ('uniform', [(0.1, 0.5)]),
     's2': ('uniform', [(0, 15)]),
     'F': ('uniform', [(1, 3)]),
     'a1': ('uniform', [(-1, 2.35)]),
@@ -765,12 +765,10 @@ DEFAULT_PRIORS = {
     'kick_vdisp': ('uniform', [(50, 265.)]),
     'kick_slope': ('uniform', [(1e-5, 2)]),
     'kick_scale': ('uniform', [(5, 100)]),
-    'IFMR_slope1': ('uniform', [(0.1, 10)]),
-    'IFMR_slope2': ('uniform', [(1e-6, 0.1)]),
-    'IFMR_slope3': ('uniform', [(0.01, 2)]),
-    'IFMR_scale1': ('uniform', [(-20, 20)]),
-    'IFMR_scale2': ('uniform', [(-10, 20)]),
-    'IFMR_scale3': ('uniform', [(-10, 20)])
+    #
+    'zeta': ('uniform', [(0.01, 2.0)]),
+    'eta': ('uniform', [(-5.0, 5.0)]),
+    'meq': ('uniform', [(0.0, 15.0)]),
 }
 
 _PRIORS_MAP = {
