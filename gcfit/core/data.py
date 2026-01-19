@@ -1055,6 +1055,7 @@ class Model(lp.limepy):
         # TODO this may be wrong (it's "phase-space" volume)
         self.volume <<= R_units**3
 
+        self.v2 <<= V2_units
         self.v2T <<= V2_units
         self.v2Tj <<= V2_units
         self.v2R <<= V2_units
@@ -1324,6 +1325,37 @@ class Model(lp.limepy):
         # ------------------------------------------------------------------
         # Get some derived quantities
         # ------------------------------------------------------------------
+
+        # King concentration parameter
+
+        self.c = np.log10(self.rt / self.r0)
+
+        # Different core radius definitions
+
+        # Casertano & Hut, 1985 density radius (eq. IV.2)
+        integ = (self.rho**2) * (self.r**3)
+        norm = (self.rho**2) * (self.r**2)
+        self.rc_casertano = (
+            util.QuantitySpline(x=self.r, y=integ).integral(self.r[0], self.rt)
+            / util.QuantitySpline(x=self.r, y=norm).integral(self.r[0], self.rt)
+        )
+
+        # Casertano & Hut, 1985 surface density radius (eq. IV.4)
+        integ = (self.Sigma**2) * (self.r**2)
+        norm = (self.Sigma**2) * (self.r**1)
+        self.rc_casertano_surf = (
+            util.QuantitySpline(x=self.r, y=integ).integral(self.r[0], self.rt)
+            / util.QuantitySpline(x=self.r, y=norm).integral(self.r[0], self.rt)
+        )
+
+        # Spitzer, 1987
+        self.rc_spitzer = ((3 * self.v2[0])
+                           / (4 * np.pi * self.G * self.rho[0]))**0.5
+
+        # "Observable" core radius (analogous to Morscher+2015 / King1962)
+        self.rc_obs = util.QuantitySpline(
+            self.r, self.Sigmaj[self.nms-1] - (0.5 * self.Sigmaj[self.nms-1][0])
+        ).roots()[0]
 
         # Escape Velocity
 
@@ -2443,6 +2475,7 @@ class SampledModel:
         self.rhj = model.rhj
         self.rhp = model.rhp
         self.rt = model.rt
+        self.r0 = model.r0
 
         self.raj = np.repeat(model.raj, self.Nj)
         self.s2j = np.repeat(model.s2j, self.Nj)

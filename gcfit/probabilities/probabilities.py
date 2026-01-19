@@ -1100,7 +1100,7 @@ def likelihood_BH_core_radius(model, *, slope=0.5, scale=-0.5,
 
     lg_fbh = np.log10(model.f_BH.to_value('pct'))
 
-    lg_rcrh = np.log10((model.r0 / model.rh).value)
+    lg_rcrh = np.log10((model.rc_obs / model.rh).value)
 
     mu = np.nanmax([slope * lg_fbh + scale, threshold])
     sigma = width
