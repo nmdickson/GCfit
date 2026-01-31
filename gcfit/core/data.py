@@ -850,7 +850,7 @@ class Model(lp.limepy):
 
     m_breaks : (4,) numpy.ndarray or astropy.Quantity, optional
         The IMF break-masses (including outer bounds) in Msun, defining the
-        mass ranges of each IMF exponent. Defaults to [0.1, 0.5, 1.0, 100].
+        mass ranges of each IMF exponent. Defaults to [0.1, 0.5, 1.0, 150].
 
     nbins : (3,) numpy.ndarray of int, optional
         Number of mass bins in each regime of the IMF, as defined by `m_breaks`.
@@ -1055,6 +1055,7 @@ class Model(lp.limepy):
         # TODO this may be wrong (it's "phase-space" volume)
         self.volume <<= R_units**3
 
+        self.v2 <<= V2_units
         self.v2T <<= V2_units
         self.v2Tj <<= V2_units
         self.v2R <<= V2_units
@@ -1092,13 +1093,14 @@ class Model(lp.limepy):
     def __init__(self, W0, M, rh, g=1.5, delta=0.45, ra=1e8,
                  a1=1.3, a2=2.3, a3=2.3, BHret=5.0, d=5,
                  s2=0., F=1., *, observations=None, age=None, FeH=None,
-                 m_breaks=[0.1, 0.5, 1.0, 100], nbins=[5, 5, 20], meq=0.0,
+                 m_breaks=[0.1, 0.5, 1.0, 150], nbins=[5, 5, 20],
                  tracer_masses=None, tcc=0.0, NS_ret=0.1, BH_ret_int=1.0,
+                 meq=0.0, eta=0.0, zeta=1.0,
                  esc_rate=0.0, natal_kicks=True, kick_method='maxwellian',
                  f_kick=None, SNe_method='rapid', vesc=90, kick_vdisp=265.,
                  kick_slope=1, kick_scale=20, MF_kwargs=None,
                  meanmassdef='global', ode_maxstep=1e10, ode_rtol=1e-7,
-                 diffcrit=1e-8, max_mf_iter=100):
+                 diffcrit=1e-8, max_mf_iter=100, mf_iter_index=0.5):
 
         # ------------------------------------------------------------------
         # Add/convert units of some quantities. Supports quantities as inputs
@@ -1228,6 +1230,8 @@ class Model(lp.limepy):
             rh=rh.value,
             ra=ra.value,
             delta=delta,
+            eta=eta,
+            zeta=zeta,
             mj=mj,
             Mj=Mj,
             meq=meq,
@@ -1237,7 +1241,8 @@ class Model(lp.limepy):
             max_step=ode_maxstep,
             ode_rtol=ode_rtol,
             diffcrit=diffcrit,
-            max_mf_iter=max_mf_iter
+            max_mf_iter=max_mf_iter,
+            mf_iter_index=mf_iter_index
         )
 
         try:
@@ -1320,6 +1325,37 @@ class Model(lp.limepy):
         # ------------------------------------------------------------------
         # Get some derived quantities
         # ------------------------------------------------------------------
+
+        # King concentration parameter
+
+        self.c = np.log10(self.rt / self.r0)
+
+        # Different core radius definitions
+
+        # Casertano & Hut, 1985 density radius (eq. IV.2)
+        integ = (self.rho**2) * (self.r**3)
+        norm = (self.rho**2) * (self.r**2)
+        self.rc_casertano = (
+            util.QuantitySpline(x=self.r, y=integ).integral(self.r[0], self.rt)
+            / util.QuantitySpline(x=self.r, y=norm).integral(self.r[0], self.rt)
+        )
+
+        # Casertano & Hut, 1985 surface density radius (eq. IV.4)
+        integ = (self.Sigma**2) * (self.r**2)
+        norm = (self.Sigma**2) * (self.r**1)
+        self.rc_casertano_surf = (
+            util.QuantitySpline(x=self.r, y=integ).integral(self.r[0], self.rt)
+            / util.QuantitySpline(x=self.r, y=norm).integral(self.r[0], self.rt)
+        )
+
+        # Spitzer, 1987
+        self.rc_spitzer = ((3 * self.v2[0])
+                           / (4 * np.pi * self.G * self.rho[0]))**0.5
+
+        # "Observable" core radius (analogous to Morscher+2015 / King1962)
+        self.rc_obs = util.QuantitySpline(
+            self.r, self.Sigmaj[self.nms-1] - (0.5 * self.Sigmaj[self.nms-1][0])
+        ).roots()[0]
 
         # Escape Velocity
 
@@ -1738,9 +1774,10 @@ class EvolvedModel(Model):
     def __init__(self, W0, M0, rh0, g=1.5, delta=0.45, ra=1e8,
                  a1=1.3, a2=2.3, a3=2.3, d=5,
                  s2=0., F=1., *, observations=None, age=None, FeH=None,
-                 Zsun=0.02, m_breaks=[0.1, 0.5, 1.0, 100], nbins=[5, 5, 20],
+                 Zsun=0.02, m_breaks=[0.1, 0.5, 1.0, 150], nbins=[5, 5, 20],
                  tracer_masses=None, tcc=0.0, NS_ret=0.1, BH_ret_int=1.0,
-                 meq=0.0, md=1.2, natal_kicks=True, kick_method='maxwellian',
+                 meq=0.0, eta=0.0, zeta=1.0, md=1.2,
+                 natal_kicks=True, kick_method='maxwellian',
                  f_kick=None, SNe_method='rapid', kick_vdisp=265.,
                  kick_slope=1, kick_scale=20,
                  cbh_kwargs=None, MF_kwargs=None, meanmassdef='global',
@@ -1912,7 +1949,8 @@ class EvolvedModel(Model):
 
         # Explicitly specify everything so we can get the correct Signature
         super().__init__(W0, M, rh, g=g, delta=delta, ra=ra,
-                         a1=a1, a2=a2, a3=a3, BHret=BHret, d=d, meq=meq,
+                         a1=a1, a2=a2, a3=a3, BHret=BHret, d=d,
+                         meq=meq, eta=eta, zeta=zeta,
                          s2=s2, F=F, observations=observations, age=age,
                          FeH=FeH, m_breaks=m_breaks, vesc=vesc, esc_rate=Mdot_t,
                          tcc=tcc, tracer_masses=tracer_masses,
@@ -2437,6 +2475,7 @@ class SampledModel:
         self.rhj = model.rhj
         self.rhp = model.rhp
         self.rt = model.rt
+        self.r0 = model.r0
 
         self.raj = np.repeat(model.raj, self.Nj)
         self.s2j = np.repeat(model.s2j, self.Nj)
