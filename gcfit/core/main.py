@@ -964,6 +964,7 @@ def nested_fit(cluster, evolved=False, *, free_params=None,
         if batch_kwargs:
             backend.store_metadata('batch_kwargs', batch_kwargs)
 
+        # TODO should probably store all used priors, in case defaults change
         if spec_priors:
             backend.store_metadata('specified_priors', spec_priors)
 

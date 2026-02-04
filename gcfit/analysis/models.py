@@ -3579,7 +3579,7 @@ class ModelVisualizer(_ClusterVisualizer):
     def __init__(self, model, observations=None):
         self.model = model
         self.obs = observations if observations else model.observations
-        self.name = getattr(observations, 'cluster', 'Cluster Model')
+        self.name = model.name or getattr(self.obs, 'cluster', 'Cluster Model')
 
         # various structural model attributes
         self.r0 = model.r0
@@ -4198,14 +4198,14 @@ class CIModelVisualizer(_ClusterVisualizer):
         return self._plot_quantity('M_kicked', fig=fig, ax=ax, color=color,
                                    xlabel=label, **kwargs)
 
-    def __init__(self, observations):
+    def __init__(self, observations, name=None):
         self.obs = observations
-        self.name = observations.cluster
+        self.name = name or observations.cluster
         self._model_getter = _get_model
 
     @classmethod
     def from_chain(cls, chain, observations, model_params, N=100, *,
-                   verbose=False, pool=None):
+                   verbose=False, pool=None, name=None):
         '''Initialize a CI visualizer based on a full chain of parameters.
 
         Classmethod which creates a model visualizer object based on a
@@ -4258,7 +4258,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         import functools
 
-        viz = cls(observations)
+        viz = cls(observations, name=name)
 
         # ------------------------------------------------------------------
         # Get info about the chain and set of models
@@ -5121,7 +5121,7 @@ class CIModelVisualizer(_ClusterVisualizer):
                     slc_grp.create_dataset('dNdm', data=rbin['dNdm'])
 
     @classmethod
-    def load(cls, filename, observations=None):
+    def load(cls, filename, observations=None, name=None):
         '''Initialize this class by loading already saved model outputs.
 
         Based on model outputs computed before (by initializing this class
@@ -5165,7 +5165,7 @@ class CIModelVisualizer(_ClusterVisualizer):
                 obs = Observations(modelgrp['metadata'].attrs['cluster'],
                                    restrict_to=restrict)
 
-            viz = cls(obs)
+            viz = cls(obs, name=name)
 
             # Get metadata
             viz.N = modelgrp['metadata'].attrs['N']
@@ -5872,18 +5872,18 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
         return self._plot_quantity('vesc0', fig=fig, ax=ax, color=color,
                                    xlabel=label, **kwargs)
 
-    def __init__(self, observations):
+    def __init__(self, observations, name=None):
         self.obs = observations
-        self.name = observations.cluster
+        self.name = name or observations.cluster
         self._model_getter = _get_ev_model
 
     @classmethod
     def from_chain(cls, chain, observations, model_params, N=100, *,
-                   verbose=False, pool=None, **kwargs):
+                   verbose=False, pool=None, name=None, **kwargs):
 
         import functools
 
-        viz = cls(observations)
+        viz = cls(observations, name=name)
 
         # ------------------------------------------------------------------
         # Get info about the chain and set of models
