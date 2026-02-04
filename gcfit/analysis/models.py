@@ -415,7 +415,18 @@ class _ClusterVisualizer:
             # convert based on median distance parameter
             eqvs = util.angular_width(self.d)
 
-            with astroviz.quantity_support(), u.set_enabled_equivalencies(eqvs):
+            # Define radius-based units
+            rad_units = [
+                u.def_unit('r_h', np.median(self.rh)),
+                u.def_unit('r_0', np.median(self.r0)),
+                u.def_unit('r_v', np.median(self.rv)),
+                u.def_unit('r_t', np.median(self.rt))
+            ]
+
+            with (astroviz.quantity_support(),
+                  u.set_enabled_equivalencies(eqvs),
+                  u.add_enabled_units(rad_units)):
+
                 return method(self, *args, **kwargs)
 
         return _unit_decorator
@@ -1919,6 +1930,7 @@ class _ClusterVisualizer:
                 raise RuntimeError(mssg)
 
             try:
+                # TODO need to do this for every number density dataset
                 nd = list(self.obs.filter_datasets('*number*').values())[-1]
                 background = nd.mdata['background'] << nd['Σ'].unit
 
@@ -1938,7 +1950,7 @@ class _ClusterVisualizer:
             # --------------------------------------------------------------
 
             if show_background:
-                ax.axhline(y=background, ls='--', c='black', alpha=0.66)
+                ax.axhline(y=background << y_unit, ls='--', c='black', alpha=0.66)
 
             elif subtract_background:
                 data_kwargs['background'] = background
