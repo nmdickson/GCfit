@@ -4317,9 +4317,11 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         params = model_params.free_params
 
-        viz.F = median_chain[params.index('F')]
-        viz.s2 = median_chain[params.index('s2')]
-        viz.d = median_chain[params.index('d')] << u.kpc
+        ba = model_params.build_args(median_chain, return_dict=True)
+
+        viz.F = ba['F']
+        viz.s2 = ba['s2']
+        viz.d = ba['d'] << u.kpc
 
         # Setup the radial domain to interpolate everything onto
         # We estimate the maximum radius needed will be given by the model with
@@ -4331,7 +4333,11 @@ class CIModelVisualizer(_ClusterVisualizer):
         # very large rt. I'm not really sure yet how that might affect the CIs
         # or plots
 
-        huge_theta = chain[np.argmax(chain[:, params.index('g')])]
+        if 'g' in params:
+            huge_theta = chain[np.argmax(chain[:, params.index('g')])]
+        else:
+            # TODO use median or final chain here?
+            huge_theta = median_chain
 
         try:
             huge_model = viz._model_getter(huge_theta, model_params,
@@ -4911,6 +4917,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         if obs_nd := self.obs.filter_datasets('*number_density*'):
 
+            # Only have profiles for nms and tracer bins, so this is safe-ish
             for nd in obs_nd.values():
 
                 # TODO could have issue if multiple dsets share a tracer mass
@@ -5947,9 +5954,11 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
 
         params = model_params.free_params
 
-        viz.F = median_chain[params.index('F')]
-        viz.s2 = median_chain[params.index('s2')]
-        viz.d = median_chain[params.index('d')] << u.kpc
+        ba = model_params.build_args(median_chain, return_dict=True)
+
+        viz.F = ba['F']
+        viz.s2 = ba['s2']
+        viz.d = ba['d'] << u.kpc
 
         # Setup the radial domain to interpolate everything onto
         # We estimate the maximum radius needed will be given by the model with
@@ -5961,7 +5970,12 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
         # very large rt. I'm not really sure yet how that might affect the CIs
         # or plots
 
-        huge_theta = chain[np.argmax(chain[:, params.index('g')])]
+        if 'g' in params:
+            huge_theta = chain[np.argmax(chain[:, params.index('g')])]
+        else:
+            # TODO use median or final chain here?
+            huge_theta = median_chain
+
         huge_model = viz._model_getter(huge_theta, model_params)
 
         if huge_model is None:
