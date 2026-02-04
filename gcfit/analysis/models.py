@@ -357,10 +357,15 @@ class _ClusterVisualizer:
         ax.yaxis.set_ticks_position('both')
 
     def _set_xlabel(self, ax, label='Distance from centre', unit=None, *,
-                    residual_ax=None, remove_all=False, inline_latex=True):
+                    residual_ax=None, res_ax_method='inset',
+                    remove_all=False, inline_latex=True):
         '''Set the label for the quantity on the x axis of this plot.'''
 
-        bottom_ax = ax if residual_ax is None else residual_ax
+        # bottom_ax = ax if residual_ax is None else residual_ax
+        if residual_ax is not None and res_ax_method != 'inset':
+            bottom_ax = ax
+        else:
+            bottom_ax = ax
 
         if unit is not None:
 
@@ -379,14 +384,17 @@ class _ClusterVisualizer:
             except ValueError:
                 pass
 
-        bottom_ax.set_xlabel(label)
+        ax.set_xlabel(label)
 
-        # if has residual ax, remove the ticks/labels on the top ax
         if residual_ax is not None:
-            ax.set_xlabel('')
-            ax.xaxis.set_tick_params(bottom=False, labelbottom=False)
+            residual_ax.set_xlabel(label)
 
-        # if desired, simply remove everything
+            # If an appended residual ax, only set that
+            if res_ax_method != 'inset':
+                ax.set_xlabel('')
+                ax.xaxis.set_tick_params(bottom=False, labelbottom=False)
+
+        # if desired, simply remove everything from main ax
         if remove_all:
             bottom_ax.set_xlabel('')
             bottom_ax.xaxis.set_tick_params(bottom=False, labelbottom=False)
@@ -1040,8 +1048,9 @@ class _ClusterVisualizer:
     # -----------------------------------------------------------------------
 
     def _add_residuals(self, ax, ymodel, errorbars, percentage=False, *,
-                       show_logl=True, xmodel=None, y_unit=None, size="25%",
-                       res_ax=None, divider_kwargs=None):
+                       show_logl=True, xmodel=None, y_unit=None,
+                       padding=0.1, size=0.25,
+                       res_ax=None, ax_method='inset', divider_kwargs=None):
         '''Append an extra axis to `ax` for plotting residuals.
 
         Automatically appends a new axis to the the bottom of the given `ax`,
@@ -1084,20 +1093,26 @@ class _ClusterVisualizer:
         size : str or float, optional
             The size of the appended residuals axes, with respect to the
             primary axes.
-            See `mpl_toolkits.axes_grid1.axes_divider.AxesDivider.append_axes`
-            for more information. Defaults to "15%".
+            See `Axes.append_axes` or
+            `mpl_toolkits.axes_grid1.axes_divider.AxesDivider.append_axes`
+            for more information. Defaults to 0.25 (e.g. 25%).
 
         res_ax : matplotlib.axes.Axes, optional
             Optionally provide an already created axis to plot residuals on.
             This is useful for overplotting multiple residuals (i.e. for
             multiple datasets).
 
+        ax_method : {'inset', 'append'}, optional
+            How to create the `res_ax`, if necessary. "inset" (default) will
+            create an inset child axes in the bottom left corner of the main
+            axes, while "append" will create a new axes on the bottom of
+            the main axes, using `append_axes`.
+
         Returns
         -------
         matplotlib.axes.Axes
             The created axes instance containing the residuals plot.
         '''
-        from mpl_toolkits.axes_grid1 import make_axes_locatable
 
         if errorbars is None:
             errorbars = []
@@ -1129,14 +1144,34 @@ class _ClusterVisualizer:
 
         if res_ax is None:
 
-            divider = make_axes_locatable(ax)
-            res_ax = divider.append_axes('bottom', size=size, pad=0, sharex=ax)
+            if ax_method == 'inset':
+                bounds = [padding, padding, size, size]
+                res_ax = ax.inset_axes(bounds)
+
+                res_ax.sharex(ax)
+
+            elif ax_method == 'append':
+                from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+                # TODO if append, padding should probably always = 0.
+                divider = make_axes_locatable(ax)
+                res_ax = divider.append_axes('bottom', size=size,
+                                             # pad=padding, sharex=ax)
+                                             pad=0, sharex=ax)
+
+                ax.add_child_axes(res_ax)  # is this allowed?
 
             res_ax.grid()
 
             res_ax.set_xscale(ax.get_xscale())
 
             res_ax.spines['top'].set(**divider_kwargs)
+
+            if percentage:
+                res_ax.set_ylabel(r'Residuals')
+                res_ax.yaxis.set_major_formatter(mpl_tick.PercentFormatter())
+            else:
+                res_ax.set_ylabel(f'Residuals [{res_ax.get_ylabel()}]')
 
         # ------------------------------------------------------------------
         # Plot the model line, hopefully centred on zero
@@ -1232,16 +1267,6 @@ class _ClusterVisualizer:
         if show_logl:
             fake = plt.Line2D([], [], label=fr"$\log\mathcal{{L}}={logl:.2f}$")
             res_ax.legend(handles=[fake], handlelength=0, handletextpad=0)
-
-        # ------------------------------------------------------------------
-        # Label y-axes
-        # ------------------------------------------------------------------
-
-        if percentage:
-            res_ax.set_ylabel(r'Residuals')
-            res_ax.yaxis.set_major_formatter(mpl_tick.PercentFormatter())
-        else:
-            res_ax.set_ylabel(f'Residuals [{res_ax.get_ylabel()}]')
 
         # ------------------------------------------------------------------
         # Set bounds at 100% or less
@@ -1819,6 +1844,12 @@ class _ClusterVisualizer:
         -------
         matplotlib.figure.Figure
             The corresponding figure, containing all axes and plot artists.
+
+        Notes
+        -----
+        If plotting any mass bins here which do not have corresponding datasets,
+        no scaling will be applied (K=1). Therefore, plotting mixed profiles
+        with and without data at the same time is not recommended.
         '''
 
         # TODO add minor ticks to y axis
