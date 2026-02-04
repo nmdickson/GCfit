@@ -2679,7 +2679,7 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_density(self, fig=None, ax=None, kind='all', *,
-                     x_unit='pc', label_position='left', colors=None):
+                     x_unit='pc', label_position='left', colors=None, **kwargs):
         '''Plot model density profiles.
 
         Plots the radial mass density (`self.rho_*`) profiles of the total,
@@ -2734,40 +2734,40 @@ class _ClusterVisualizer:
             self._plot_profile(ax, None, None, self.rho_tot,
                                x_unit=x_unit, model_label="Total",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("tot", "tab:cyan"))
+                               color=colors.get("tot", "tab:cyan"), **kwargs)
 
         # Total Remnant density
         if 'rem' in kind:
             self._plot_profile(ax, None, None, self.rho_rem,
                                x_unit=x_unit, model_label="Remnants",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("rem", "tab:purple"))
+                               color=colors.get("rem", "tab:purple"), **kwargs)
 
         # Main sequence density
         if 'MS' in kind:
             self._plot_profile(ax, None, None, self.rho_MS,
                                x_unit=x_unit, model_label="Main-sequence stars",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("MS", "tab:orange"))
+                               color=colors.get("MS", "tab:orange"), **kwargs)
 
         if 'WD' in kind:
             self._plot_profile(ax, None, None, self.rho_WD,
                                x_unit=x_unit, model_label="White Dwarfs",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("WD", "tab:green"))
+                               color=colors.get("WD", "tab:green"), **kwargs)
 
         if 'NS' in kind:
             self._plot_profile(ax, None, None, self.rho_NS,
                                x_unit=x_unit, model_label="Neutron Stars",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("NS", "tab:red"))
+                               color=colors.get("NS", "tab:red"), **kwargs)
 
         # Black hole density
         if 'BH' in kind:
             self._plot_profile(ax, None, None, self.rho_BH,
                                x_unit=x_unit, model_label="Black Holes",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("BH", "tab:gray"))
+                               color=colors.get("BH", "tab:gray"), **kwargs)
 
         ax.set_yscale("log")
         ax.set_xscale("log")
@@ -2781,7 +2781,8 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_surface_density(self, fig=None, ax=None, kind='all', *,
-                             x_unit='pc', label_position='left', colors=None):
+                             x_unit='pc', label_position='left', colors=None,
+                             **kwargs):
         '''Plot model surface density profiles.
 
         Plots the radial surface mass density (`self.Sigma_*`) profiles of the
@@ -2836,40 +2837,40 @@ class _ClusterVisualizer:
             self._plot_profile(ax, None, None, self.Sigma_tot,
                                x_unit=x_unit, model_label="Total",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("tot", "tab:cyan"))
+                               color=colors.get("tot", "tab:cyan"), **kwargs)
 
         # Total Remnant density
         if 'rem' in kind:
             self._plot_profile(ax, None, None, self.Sigma_rem,
                                x_unit=x_unit, model_label="Remnants",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("rem", "tab:purple"))
+                               color=colors.get("rem", "tab:purple"), **kwargs)
 
         # Main sequence density
         if 'MS' in kind:
             self._plot_profile(ax, None, None, self.Sigma_MS,
                                x_unit=x_unit, model_label="Main-sequence stars",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("MS", "tab:orange"))
+                               color=colors.get("MS", "tab:orange"), **kwargs)
 
         if 'WD' in kind:
             self._plot_profile(ax, None, None, self.Sigma_WD,
                                x_unit=x_unit, model_label="White Dwarfs",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("WD", "tab:green"))
+                               color=colors.get("WD", "tab:green"), **kwargs)
 
         if 'NS' in kind:
             self._plot_profile(ax, None, None, self.Sigma_NS,
                                x_unit=x_unit, model_label="Neutron Stars",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("NS", "tab:red"))
+                               color=colors.get("NS", "tab:red"), **kwargs)
 
         # Black hole density
         if 'BH' in kind:
             self._plot_profile(ax, None, None, self.Sigma_BH,
                                x_unit=x_unit, model_label="Black Holes",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("BH", "tab:gray"))
+                               color=colors.get("BH", "tab:gray"), **kwargs)
 
         ax.set_yscale("log")
         ax.set_xscale("log")
@@ -3012,7 +3013,7 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_remnant_fraction(self, fig=None, ax=None, *, show_total=True,
-                              x_unit='pc', label_position='left'):
+                              x_unit='pc', label_position='left', **kwargs):
         '''Plot model stellar and remnant mass fraction profiles.
 
         Plots the radial mass fraction profile of the main sequence stars
@@ -3057,10 +3058,10 @@ class _ClusterVisualizer:
 
         self._plot_profile(ax, None, None, self.frac_M_MS,
                            x_unit=x_unit, model_label="Main-sequence stars",
-                           mass_bins=[0], label_masses=False)
+                           mass_bins=[0], label_masses=False, **kwargs)
         self._plot_profile(ax, None, None, self.frac_M_rem,
                            x_unit=x_unit, model_label="Remnants",
-                           mass_bins=[0], label_masses=False)
+                           mass_bins=[0], label_masses=False, **kwargs)
 
         label = r"Mass fraction $M_{MS}/M_{tot}$, $M_{remn}/M_{tot}$"
         self._set_ylabel(ax, label, None, label_position)
