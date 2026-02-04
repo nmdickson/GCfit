@@ -680,6 +680,7 @@ class _ClusterVisualizer:
     def _plot_profile(self, ax, ds_pattern, y_key, model_data, *,
                       y_unit=None, residuals=False, legend=False,
                       color=None, data_color=None, model_color=None,
+                      data_scale=1.0, model_scale=1.0,
                       mass_bins=None, model_label=None, label_masses=True,
                       res_kwargs=None, data_kwargs=None, model_kwargs=None,
                       **kwargs):
@@ -866,10 +867,15 @@ class _ClusterVisualizer:
 
             # get mass bin of this dataset, for later model plotting
             if ('m' in dset.mdata) and (model_data is not None):
-                m = dset.mdata['m'] * u.Msun
+                m = dset.mdata['m'] << u.Msun
                 mass_bin = np.where(self.mj == m)[0][0]
             else:
                 mass_bin = self.star_bin
+
+            if np.ndim(data_scale) > 0:
+                data_scl = data_scale[mass_bin]
+            else:
+                data_scl = data_scale
 
             if mass_bin in masses and not list_of_clr:
                 clr = masses[mass_bin][0][0].get_color()
@@ -879,7 +885,8 @@ class _ClusterVisualizer:
             # plot the data
             try:
                 line = self._plot_data(ax, dset, y_key, marker=mrk, color=clr,
-                                       y_unit=y_unit, **data_kwargs, **kwargs)
+                                       y_unit=y_unit, scale=data_scl,
+                                       **data_kwargs, **kwargs)
 
             except KeyError as err:
                 if strict:
@@ -922,6 +929,11 @@ class _ClusterVisualizer:
                             f"range (0-{self.mj.size - 1})")
                     raise ValueError(mssg)
 
+                if np.ndim(model_scale) > 0:
+                    mdl_scl = model_scale[mbin]
+                else:
+                    mdl_scl = model_scale
+
                 # if no model color specified *and* multiple masses exists, use
                 #   corresponding data colours, otherwise use default
                 if (model_color is None and errbars is not None
@@ -935,7 +947,8 @@ class _ClusterVisualizer:
                     label += fr' ($m={self.mj[mbin].value:.2f}\ M_\odot$)'
 
                 self._plot_model(ax, ymodel, color=clr, y_unit=y_unit,
-                                 label=label, **model_kwargs, **kwargs)
+                                 label=label, scale=mdl_scl,
+                                 **model_kwargs, **kwargs)
 
                 if residuals:
                     res_ax = self._add_residuals(ax, ymodel, errbars,
@@ -1843,17 +1856,14 @@ class _ClusterVisualizer:
         # Compute the scaling relations if necessary
         # ------------------------------------------------------------------
 
-        # TODO this doesn't work for plotting tracer masses
+        model_scale = data_scale = 1.0
+
         try:
             if scale_to == 'model':
-                if data_kwargs is None:
-                    data_kwargs = {}
-                data_kwargs.setdefault('scale', 1 / self.K_scale[self.star_bin])
+                data_scale = 1 / self.K_scale
 
             elif scale_to == 'data':
-                if model_kwargs is None:
-                    model_kwargs = {}
-                model_kwargs.setdefault('scale', self.K_scale[self.star_bin])
+                model_scale = self.K_scale
 
         except TypeError:
             pass
@@ -1910,7 +1920,9 @@ class _ClusterVisualizer:
                                         strict=strict, residuals=residuals,
                                         x_unit=x_unit, y_unit=y_unit,
                                         legend=legend,
+                                        model_scale=model_scale,
                                         model_kwargs=model_kwargs,
+                                        data_scale=data_scale,
                                         data_kwargs=data_kwargs,
                                         res_kwargs=res_kwargs, **kwargs)
 
@@ -3679,33 +3691,33 @@ class ModelVisualizer(_ClusterVisualizer):
 
         model_nd = model.Sigmaj / model.mj[:, np.newaxis]
 
-        nd = model_nd[:, np.newaxis, :]
-        K = np.empty(nd.shape[0]) << u.dimensionless_unscaled  # one each mbin
-        # TODO this K is only valid for the same mj as numdens obs anyways...
+        # nd = model_nd[:, np.newaxis, :]
+        K = np.ones(model_nd.shape[0]) << u.dimensionless_unscaled  # one each mbin
 
         # Check for observational numdens profiles, to compute scaling factors K
         #   but do not apply them to the numdens yet.
+        #   Only computing this for mbins with datasets, others are just K=1
         if ((observations is not None)
                 and (obs_nd := observations.filter_datasets('*number*'))):
 
-            if len(obs_nd) > 1:
-                mssg = ('Too many number density datasets, '
-                        'computing scaling factor using only final dataset')
-                logging.warning(mssg)
+            for nd in obs_nd.values():
 
-            obs_nd = list(obs_nd.values())[-1]
-            obs_r = obs_nd['r'].to(model.r.unit)
+                # TODO could have issue if multiple dsets share a tracer mass
+                if 'm' in nd.mdata:
+                    mbin = np.where(model.mj == (nd.mdata['m'] << u.Msun))[0][0]
+                else:
+                    mbin = self.star_bin
 
-            s2 = model.theta['s2'] << u.arcmin**-4
-            obs_err = np.sqrt(obs_nd['ΔΣ']**2 + s2)
+                obs_r = nd['r'].to(model.r.unit)
 
-            for mbin in range(model_nd.shape[0]):
+                s2 = model.theta['s2'] << u.arcmin**-4
+                obs_err = np.sqrt(nd['ΔΣ']**2 + s2)
 
                 nd_interp = util.QuantitySpline(model.r, model_nd[mbin, :])
 
-                interpolated = nd_interp(obs_r).to(obs_nd['Σ'].unit)
+                interpolated = nd_interp(obs_r).to(nd['Σ'].unit)
 
-                Kj = (np.nansum(obs_nd['Σ'] * interpolated / obs_err**2)
+                Kj = (np.nansum(nd['Σ'] * interpolated / obs_err**2)
                       / np.nansum(interpolated**2 / obs_err**2))
 
                 K[mbin] = Kj
@@ -3714,9 +3726,7 @@ class ModelVisualizer(_ClusterVisualizer):
             mssg = 'No number density datasets found, setting K=1'
             logging.info(mssg)
 
-            K[:] = 1
-
-        self.numdens = nd
+        self.numdens = model_nd[:, np.newaxis, :]
         self.K_scale = K
 
     @_ClusterVisualizer._support_units
@@ -4392,8 +4402,8 @@ class CIModelVisualizer(_ClusterVisualizer):
         # number density
 
         numdens = np.full((1, N, Nr), np.nan) << u.pc**-2
-        K_scale = np.full((1,), np.nan) << u.dimensionless_unscaled
-        # K_scale = np.full((Nm), np.nan) << u.Unit('pc2 / arcmin2')
+        # K_scale = np.full((1,), np.nan) << u.dimensionless_unscaled
+        K_scale = np.full((Nm), np.nan) << u.dimensionless_unscaled
 
         # mass function
 
@@ -4512,17 +4522,23 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             equivs = util.angular_width(model.d)
 
-            # Velocities
+            # Profiles with potential tracers
 
             # convoluted way of going from a slice to a list of indices
             tracers = list(range(len(model.mj))[model._tracer_bins])
 
             for i, mass_bin in enumerate([model.nms - 1] + tracers):
 
+                # Velocities
+
                 slc = (i, model_ind, slice(None))
 
                 vTj[slc], vRj[slc], vtotj[slc], \
                     vaj[slc], vpj[slc] = viz._init_velocities(model, mass_bin)
+
+                # Number Densities
+
+                numdens[slc] = viz._init_numdens(model, mass_bin, equivs=equivs)
 
             slc = (0, model_ind, slice(None))
 
@@ -4545,10 +4561,6 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             cum_M_MS[slc], cum_M_tot[slc], cum_M_BH[slc], \
                 cum_M_WD[slc], cum_M_NS[slc] = viz._init_cum_mass(model)
-
-            # Number Densities
-
-            numdens[slc] = viz._init_numdens(model, equivs=equivs)
 
             # Mass Functions
             for rbins in massfunc.values():
@@ -4849,10 +4861,11 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         return mass_MS / mass_tot, mass_rem / mass_tot
 
-    def _init_numdens(self, model, equivs=None):
+    def _init_numdens(self, model, mass_bin, equivs=None):
         '''Initialize number density quantities.'''
 
-        model_nd = model.Sigmaj[model.nms - 1] / model.mj[model.nms - 1]
+        # model_nd = model.Sigmaj[model.nms - 1] / model.mj[model.nms - 1]
+        model_nd = model.Sigmaj[mass_bin] / model.mj[mass_bin]
 
         nd_interp = util.QuantitySpline(model.r, model_nd)
 
@@ -4861,34 +4874,36 @@ class CIModelVisualizer(_ClusterVisualizer):
     def _init_K_scale(self, numdens):
         '''Initialize the K scale on the number density.'''
 
-        nd_interp = util.QuantitySpline(self.r, self._get_median(numdens[0]))
-
         equivs = util.angular_width(self.d)
+
+        K = np.ones(numdens.shape[0])
 
         if obs_nd := self.obs.filter_datasets('*number_density*'):
 
-            if len(obs_nd) > 1:
-                mssg = ('Too many number density datasets, '
-                        'computing scaling factor using only final dataset')
-                logging.warning(mssg)
+            for nd in obs_nd.values():
 
-            obs_nd = list(obs_nd.values())[-1]
-            obs_r = obs_nd['r'].to(self.r.unit, equivs)
+                # TODO could have issue if multiple dsets share a tracer mass
+                if 'm' in nd.mdata:
+                    mbin = np.where(self.mj == (nd.mdata['m'] << u.Msun))[0][0]
+                else:
+                    mbin = self.star_bin
 
-            # TODO this s2 isn't technically 100% accurate here
-            s2 = self.s2 << u.arcmin**-4
-            obs_err = np.sqrt(obs_nd['ΔΣ']**2 + s2)
+                obs_r = nd['r'].to(self.r.unit, equivs)
 
-            interpolated = nd_interp(obs_r).to(obs_nd['Σ'].unit, equivs)
+                # TODO this s2 isn't technically 100% accurate here
+                s2 = self.s2 << u.arcmin**-4
+                obs_err = np.sqrt(nd['ΔΣ']**2 + s2)
 
-            K = (np.nansum(obs_nd['Σ'] * interpolated / obs_err**2)
-                 / np.nansum(interpolated**2 / obs_err**2))
+                nd_interp = util.QuantitySpline(self.r,
+                                                self._get_median(numdens[mbin]))
+                interpolated = nd_interp(obs_r).to(nd['Σ'].unit, equivs)
+
+                K[mbin] = (np.nansum(nd['Σ'] * interpolated / obs_err**2)
+                           / np.nansum(interpolated**2 / obs_err**2))
 
         else:
             mssg = 'No number density datasets found, setting K=1'
             logging.info(mssg)
-
-            K = 1
 
         return K
 
@@ -6012,9 +6027,9 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
 
         # number density
 
-        numdens = np.full((1, N, Nr), np.nan) << u.pc**-2
-        K_scale = np.full((1,), np.nan) << u.dimensionless_unscaled
-        # K_scale = np.full((Nm), np.nan) << u.Unit('pc2 / arcmin2')
+        numdens = np.full((Nm, N, Nr), np.nan) << u.pc**-2
+        # K_scale = np.full((1,), np.nan) << u.dimensionless_unscaled
+        K_scale = np.full((Nm), np.nan) << u.dimensionless_unscaled
 
         # mass function
 
@@ -6135,17 +6150,23 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
 
             cbh = model._clusterbh
 
-            # Velocities
+            # Profiles with potential tracers
 
             # convoluted way of going from a slice to a list of indices
             tracers = list(range(len(model.mj))[model._tracer_bins])
 
             for i, mass_bin in enumerate([model.nms - 1] + tracers):
 
+                # Velocities
+
                 slc = (i, model_ind, slice(None))
 
                 vTj[slc], vRj[slc], vtotj[slc], \
                     vaj[slc], vpj[slc] = viz._init_velocities(model, mass_bin)
+
+                # Number Densities
+
+                numdens[slc] = viz._init_numdens(model, mass_bin, equivs=equivs)
 
             slc = (0, model_ind, slice(None))
 
@@ -6168,10 +6189,6 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
 
             cum_M_MS[slc], cum_M_tot[slc], cum_M_BH[slc], \
                 cum_M_WD[slc], cum_M_NS[slc] = viz._init_cum_mass(model)
-
-            # Number Densities
-
-            numdens[slc] = viz._init_numdens(model, equivs=equivs)
 
             # Mass Functions
             for rbins in massfunc.values():
@@ -6829,7 +6846,7 @@ class ModelCollection:
     '''
 
     def __str__(self):
-        return f"Collection of Models"
+        return "Collection of Models"
 
     def __iter__(self):
         '''Return an iterator over the individual model vizualizers.'''
