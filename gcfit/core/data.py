@@ -980,6 +980,17 @@ class Model(lp.limepy):
     limepy : Distribution-function model base of this class.
     '''
 
+    name: None | str = None
+
+    def __str__(self):
+
+        if self.name is not None:
+            return f"Model {self.name}"
+        elif self.observations is not None:
+            return f"Model of {self.observations.cluster}"
+        else:
+            return "Model"
+
     def _evolve_mf(self, m_breaks, a1, a2, a3, nbins, FeH, age, esc_rate, tcc,
                    NS_ret, BH_ret_int, BHret, natal_kicks, vesc,
                    kick_method, f_kick, SNe_method, kick_vdisp,
@@ -2083,8 +2094,15 @@ class SampledModel:
         v_los), based on the given cluster centre.
     '''
 
+    name: str | None = None
     centre = None
     galactic = None
+
+    def __str__(self):
+        if self.name is not None:
+            return self.name
+        else:
+            return self.__repr__()
 
     # ----------------------------------------------------------------------
     # Initial sampling of a given model
