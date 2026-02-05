@@ -1113,6 +1113,59 @@ def likelihood_BH_core_radius(model, *, slope=0.5, scale=-0.5,
         return util.gaussian_likelihood(X_data=mu, X_model=lg_rcrh, err=sigma)
 
 
+def likelihood_BH_radius_ratio(model, *, slope=0.4, scale=-1.4, width=0.3):
+    '''A probability function based on the BH relations of Breen & Heggie 2013.
+
+    Computes a log likelihood based on the roughly linear relationship found
+    in Breen & Heggie (2013), specifically their equation 4 between
+    log(f_bh^0.6 * mbh/m^0.4) and log(rh_bh/rh).
+    The proportionality constants (given slope and scale) of this relationship
+    was determined based on the results of a grid of dynamical models
+    (CMC; Kremer+2020).  The likelihood is truncated outside 3*width from the
+    relation.
+
+    Parameters
+    ----------
+    model : gcfit.FittableModel
+        Cluster model used to compute probability distribution.
+
+    slope : float, optional
+        Slope of the linear relation. Defaults to 0.4, as based (approximately)
+        on fits to the CMC grid.
+
+    scale : float, optional
+        y-intercept of the linear relation. Defaults to -1.4, as based
+        (approximately) on fits to the CMC grid.
+
+    width : float, optional
+        Width of the evaluated Gaussian dsitribution. Defaults to 0.3,
+        roughly representing the spread in the CMC grid.
+
+    Returns
+    -------
+    float
+        Log likelihood value.
+    '''
+
+    MM = model.BH.Mj.sum() / model.nonBH.Mj.sum()
+    mm = model.BH.mavg / model.nonBH.mavg
+
+    lg_MMmm = np.log10((MM)**0.6 * (mm)**0.4)
+
+    lg_rhrh = np.log10(model.BH.rh / model.nonBH.rh)
+
+    mu = slope * lg_MMmm + scale
+
+    sigma = width
+
+    # Truncated Gaussian
+    if not ((mu - 3 * width) < lg_rhrh < (mu + 3 * width)):
+        return -np.inf
+
+    else:
+        return util.gaussian_likelihood(X_data=mu, X_model=lg_rhrh, err=sigma)
+
+
 # --------------------------------------------------------------------------
 # Composite likelihood functions
 # --------------------------------------------------------------------------
