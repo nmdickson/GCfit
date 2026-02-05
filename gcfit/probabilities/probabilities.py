@@ -1172,7 +1172,7 @@ def likelihood_BH_radius_ratio(model, *, slope=0.4, scale=-1.4, width=0.3):
 
 
 def log_likelihood(theta, observations, model_params, L_components,
-                   hyperparams, evolved, BH_core_likelihood):
+                   hyperparams, evolved, BH_core_likelihood, BH_rh_likelihood):
     r'''Compute log likelihood of given `theta`, based on component likelihoods.
 
     Main likelihood function, which generates the relevant model based on
@@ -1262,13 +1262,16 @@ def log_likelihood(theta, observations, model_params, L_components,
     if BH_core_likelihood:
         prob_other += likelihood_BH_core_radius(model)
 
+    if BH_rh_likelihood:
+        prob_other += likelihood_BH_radius_ratio(model)
+
     return sum(probs) + prob_other, probs
 
 
 def posterior(theta, observations, model_params,
               L_components=None, prior_likelihood=None, *,
               hyperparams=False, return_indiv=True,
-              evolved=False, BH_core_likelihood=False):
+              evolved=False, BH_core_likelihood=False, BH_rh_likelihood=False):
     '''Compute the full posterior probability given `theta` and `observations`.
 
     Combines the various likelihood functions (through `log_likelihood`)
@@ -1358,7 +1361,8 @@ def posterior(theta, observations, model_params,
                                         L_components=L_components,
                                         hyperparams=hyperparams,
                                         evolved=evolved,
-                                        BH_core_likelihood=BH_core_likelihood)
+                                        BH_core_likelihood=BH_core_likelihood,
+                                        BH_rh_likelihood=BH_rh_likelihood)
 
     probability = log_L + log_Pθ
 

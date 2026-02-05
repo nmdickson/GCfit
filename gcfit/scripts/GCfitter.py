@@ -142,7 +142,12 @@ def main():
 
     shared_parser.add_argument('--constrain-BH-core', dest='BH_core_constraint',
                                action='store_true',
-                               help="Use Bayesian hyperparams")
+                               help="Use extra BH-core likelihood")
+
+    shared_parser.add_argument('--constrain-BH-radius',
+                               dest='BH_radius_constraint',
+                               action='store_true',
+                               help="Use extra BH-radius ratio likelihood")
 
     shared_parser.add_argument('--hyperparams', dest='hyperparams',
                                action='store_true',
