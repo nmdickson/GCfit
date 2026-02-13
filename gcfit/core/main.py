@@ -293,7 +293,8 @@ class NestedSamplingOutput(Output):
 
 def MCMC_fit(cluster, Niters, Nwalkers, evolved=False, *, free_params=None,
              Ncpu=2, mpi=False, initials=None, param_priors=None, moves=None,
-             excluded_likelihoods=None, BH_core_constraint=False,
+             excluded_likelihoods=None,
+             BH_core_constraint=False, BH_radius_constraint=False,
              hyperparams=False,
              model_kwargs=None, cont_run=False, savedir=_here, backup=False,
              restrict_to=None, compress=False, param_transforms=None,
@@ -584,7 +585,8 @@ def MCMC_fit(cluster, Niters, Nwalkers, evolved=False, *, free_params=None,
 
         sampler_kwargs = {'hyperparams': hyperparams, 'evolved': evolved,
                           'return_indiv': True,
-                          'BH_core_likelihood': BH_core_constraint}
+                          'BH_core_likelihood': BH_core_constraint,
+                          'BH_rh_likelihood': BH_radius_constraint}
 
         sampler = emcee.EnsembleSampler(
             nwalkers=Nwalkers,
@@ -677,7 +679,7 @@ def nested_fit(cluster, evolved=False, *, free_params=None,
                bound_type='multi', sample_type='auto',
                pfrac=1.0, maxfrac=0.8, eff_samples=5000, plat_wt_func=False,
                Ncpu=2, mpi=False, param_priors=None, excluded_likelihoods=None,
-               BH_core_constraint=False,
+               BH_core_constraint=False, BH_radius_constraint=False,
                hyperparams=False, savedir=_here, restrict_to=None,
                compress=False, verbose=False, param_transforms=None):
     '''Main nested sampling fitting pipeline.
@@ -978,7 +980,8 @@ def nested_fit(cluster, evolved=False, *, free_params=None,
 
         logl_kwargs = {'hyperparams': hyperparams, 'evolved': evolved,
                        'return_indiv': False,
-                       'BH_core_likelihood': BH_core_constraint}
+                       'BH_core_likelihood': BH_core_constraint,
+                       'BH_rh_likelihood': BH_radius_constraint}
 
         sampler = dynesty.DynamicNestedSampler(
             ndim=model_params.ndim,
