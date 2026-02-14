@@ -602,11 +602,11 @@ def likelihood_number_density(model, ndensity, *,
     s2 = model.theta['s2'] << u.arcmin**-4
     yerr = np.sqrt(obs_err**2 + s2)
 
-    model_r = model.r.to(obs_r.unit)
+    model_r = model.r
     model_Σ = model.Sigmaj[mass_bin] / model.mj[mass_bin]
 
     # Interpolated the model data at the measurement locations
-    interpolated = np.interp(obs_r, model_r, model_Σ).to(obs_Σ.unit)
+    interpolated = util.QuantitySpline(model_r, model_Σ)(obs_r).to(obs_Σ.unit)
 
     # Calculate K scaling factor
     K = (np.sum(obs_Σ * interpolated / yerr**2)
