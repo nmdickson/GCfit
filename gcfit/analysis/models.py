@@ -416,12 +416,16 @@ class _ClusterVisualizer:
             eqvs = util.angular_width(self.d)
 
             # Define radius-based units
-            rad_units = [
+            # TODO this starts breaking if you close a plot within the context
+            rad_units = {
                 u.def_unit('r_h', np.median(self.rh)),
                 u.def_unit('r_0', np.median(self.r0)),
                 u.def_unit('r_v', np.median(self.rv)),
                 u.def_unit('r_t', np.median(self.rt))
-            ]
+            }
+
+            rad_units = {ur for ur in rad_units if ur.name not in
+                         [equ.name for equ in u.pc.find_equivalent_units()]}
 
             with (astroviz.quantity_support(),
                   u.set_enabled_equivalencies(eqvs),
