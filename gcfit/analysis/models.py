@@ -531,7 +531,7 @@ class _ClusterVisualizer:
         # Convert any units desired
         # ------------------------------------------------------------------
 
-        data *= scale
+        data = data * scale
 
         x_domain = self.r if x_data is None else x_data
 
@@ -3421,6 +3421,9 @@ class _ClusterVisualizer:
             # ymedian[np.isnan(ymedian)] = 1.0 << ymedian.unit
 
             ymodel = util.QuantitySpline(xmodel, ymedian)(xdata).to(ydata.unit)
+
+            if model_scale is not None:
+                ymodel *= model_scale[mass_bin]
 
             # --------------------------------------------------------------
             # compute logl
