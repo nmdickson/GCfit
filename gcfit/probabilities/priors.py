@@ -588,20 +588,29 @@ class GaussianPrior(_PriorBase):
                 f'("{self.param}", {self.mu}, {self.sigma}, '
                 f'transform={self._transform})')
 
-    def __call__(self, param_val, *args, **kw):
+    def __call__(self, param_val, *args, **kwargs):
         '''Evaluate this prior function at the value `param_val`.'''
-        return self._caller(param_val)
+
+        # check that all dependants were supplied
+        if (missing_deps := set(self.dependants) - kwargs.keys()):
+            mssg = f"Missing required dependant params: {missing_deps}"
+            raise TypeError(mssg)
+
+        loc = kwargs.get(self.mu, self.mu)
+        scale = kwargs.get(self.sigma, self.sigma)
+
+        return self._caller(param_val, loc=loc, scale=scale)
 
     def __init__(self, param, mu, sigma, *, transform=False):
 
         self._transform = transform
         self.param = param
 
-        self.mu, self.sigma = mu, sigma
+        self.dependants = []
 
-        self.dist = stats.norm(loc=self.mu, scale=self.sigma)
+        self.mu, self.sigma = self._init_val(mu), self._init_val(sigma)
 
-        self._caller = self.dist.pdf if not transform else self.dist.ppf
+        self._caller = stats.norm.pdf if not transform else stats.norm.ppf
 
 
 class FunctionalUniformPrior(UniformPrior):
