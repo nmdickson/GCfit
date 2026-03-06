@@ -761,6 +761,7 @@ DEFAULT_PRIORS = {
     'delta': ('uniform', [(0.1, 0.5)]),
     's2': ('uniform', [(0, 15)]),
     'F': ('uniform', [(1, 3)]),
+    'J': ('uniform', [(1, 3)]),
     'a1': ('uniform', [(-1, 2.35)]),
     'a2': ('uniform', [(-1, 2.35), ('a1', np.inf)]),
     'a3': ('uniform', [(1.6, 4), ('a2', np.inf)]),
