@@ -1870,7 +1870,7 @@ class _ClusterVisualizer:
         # TODO add minor ticks to y axis
 
         def quad_nuisance(err):
-            return np.sqrt(err**2 + (self.s2 << u.arcmin**-4))
+            return self.J * np.sqrt(err**2 + (self.s2 << u.arcmin**-4))
 
         # ------------------------------------------------------------------
         # Setup the figures
@@ -3510,7 +3510,7 @@ class _ClusterVisualizer:
         '''
 
         def numdens_nuisance(err):
-            return np.sqrt(err**2 + (self.s2 << u.arcmin**-4))
+            return self.J * np.sqrt(err**2 + (self.s2 << u.arcmin**-4))
 
         all_components = [
             {'ds_pattern': '*velocity_dispersion*', 'y_key': 'σ',
@@ -3657,6 +3657,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
         # various fitting-related attributes
         self.F = model.theta['F']
+        self.J = model.theta['J']
         self.s2 = model.theta['s2']
         self.d = model.d
 
@@ -3762,7 +3763,7 @@ class ModelVisualizer(_ClusterVisualizer):
                 obs_r = nd['r'].to(model.r.unit)
 
                 s2 = model.theta['s2'] << u.arcmin**-4
-                obs_err = np.sqrt(nd['ΔΣ']**2 + s2)
+                obs_err = model.theta['J'] * np.sqrt(nd['ΔΣ']**2 + s2)
 
                 nd_interp = util.QuantitySpline(model.r, model_nd[mbin, :])
 
@@ -4340,6 +4341,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         ba = model_params.build_args(median_chain, return_dict=True)
 
         viz.F = ba['F']
+        viz.J = ba['J']
         viz.s2 = ba['s2']
         viz.d = ba['d'] << u.kpc
 
@@ -4950,7 +4952,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
                 # TODO this s2 isn't technically 100% accurate here
                 s2 = self.s2 << u.arcmin**-4
-                obs_err = np.sqrt(nd['ΔΣ']**2 + s2)
+                obs_err = self.J * np.sqrt(nd['ΔΣ']**2 + s2)
 
                 nd_interp = util.QuantitySpline(self.r,
                                                 self._get_median(numdens[mbin]))
@@ -5110,6 +5112,7 @@ class CIModelVisualizer(_ClusterVisualizer):
             meta_grp.attrs['rlims'] = self.rlims.to_value('pc')
             meta_grp.attrs['s2'] = self.s2
             meta_grp.attrs['F'] = self.F
+            meta_grp.attrs['J'] = self.J
             meta_grp.attrs['d'] = self.d.to_value('kpc')
             meta_grp.attrs['N'] = self.N
             meta_grp.attrs['cluster'] = self.obs.cluster
@@ -5244,6 +5247,7 @@ class CIModelVisualizer(_ClusterVisualizer):
             viz.N = modelgrp['metadata'].attrs['N']
             viz.s2 = modelgrp['metadata'].attrs['s2']
             viz.F = modelgrp['metadata'].attrs['F']
+            viz.J = modelgrp['metadata'].attrs['J']
             viz.d = modelgrp['metadata'].attrs['d'] << u.kpc
             viz.rlims = modelgrp['metadata'].attrs['rlims'] << u.pc
 
@@ -5977,6 +5981,7 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
         ba = model_params.build_args(median_chain, return_dict=True)
 
         viz.F = ba['F']
+        viz.J = ba['J']
         viz.s2 = ba['s2']
         viz.d = ba['d'] << u.kpc
 
@@ -6522,10 +6527,16 @@ class ObservationsVisualizer(_ClusterVisualizer):
         self.rh = (observations.initials.get('rh', np.nan)
                    if rh is None else rh) << u.pc
 
+        # Spoof, for unit support
+        self.r0 = 1.0 << u.pc
+        self.rv = 1.0 << u.pc
+        self.rt = 1.0 << u.pc
+
         self.d = (observations.initials['d'] if d is None else d) << u.kpc
 
         self.s2 = 0.
         self.F = 1.
+        self.J = 1.
 
         self.pm_T = None
         self.pm_R = None

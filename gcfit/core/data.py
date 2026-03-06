@@ -1103,7 +1103,7 @@ class Model(lp.limepy):
 
     def __init__(self, W0, M, rh, g=1.5, delta=0.45, ra=1e8,
                  a1=1.3, a2=2.3, a3=2.3, BHret=5.0, d=5,
-                 s2=0., F=1., *, observations=None, age=None, FeH=None,
+                 s2=0., F=1., J=1., *, observations=None, age=None, FeH=None,
                  m_breaks=[0.1, 0.5, 1.0, 150], nbins=[5, 5, 20],
                  tracer_masses=None, tcc=0.0, NS_ret=0.1, BH_ret_int=1.0,
                  meq=0.0, eta=0.0, zeta=1.0,
@@ -1132,7 +1132,7 @@ class Model(lp.limepy):
         self.theta = dict(W0=W0.value, M=M.to_value('1e6 Msun'), rh=rh.value,
                           ra=np.log10(ra.value), g=g, delta=delta,
                           a1=a1, a2=a2, a3=a3, BHret=BHret,
-                          s2=s2, F=F, d=d.value)
+                          s2=s2, F=F, J=J, d=d.value)
 
         self.d = d
 
@@ -1784,7 +1784,7 @@ class EvolvedModel(Model):
 
     def __init__(self, W0, M0, rh0, g=1.5, delta=0.45, ra=1e8,
                  a1=1.3, a2=2.3, a3=2.3, d=5,
-                 s2=0., F=1., *, observations=None, age=None, FeH=None,
+                 s2=0., F=1., J=1., *, observations=None, age=None, FeH=None,
                  Zsun=0.02, m_breaks=[0.1, 0.5, 1.0, 150], nbins=[5, 5, 20],
                  tracer_masses=None, tcc=0.0, NS_ret=0.1, BH_ret_int=1.0,
                  meq=0.0, eta=0.0, zeta=1.0, md=1.2,
@@ -1962,7 +1962,7 @@ class EvolvedModel(Model):
         super().__init__(W0, M, rh, g=g, delta=delta, ra=ra,
                          a1=a1, a2=a2, a3=a3, BHret=BHret, d=d,
                          meq=meq, eta=eta, zeta=zeta,
-                         s2=s2, F=F, observations=observations, age=age,
+                         s2=s2, F=F, J=J, observations=observations, age=age,
                          FeH=FeH, m_breaks=m_breaks, vesc=vesc, esc_rate=Mdot_t,
                          tcc=tcc, tracer_masses=tracer_masses,
                          NS_ret=NS_ret, BH_ret_int=BH_ret_int,
@@ -1978,7 +1978,7 @@ class EvolvedModel(Model):
         self.theta = dict(W0=W0, M0=M0.to_value('1e6 Msun'), rh0=rh0.value,
                           ra=np.log10(ra), g=g, delta=delta,
                           a1=a1, a2=a2, a3=a3, BHret=BHret,
-                          s2=s2, F=F, d=d.value)
+                          s2=s2, F=F, J=J, d=d.value)
 
     def get_visualizer(self):
         '''Return a `analysis.ModelVisualizer` instance based on this model.'''

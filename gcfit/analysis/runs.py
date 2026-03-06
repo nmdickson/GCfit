@@ -36,6 +36,7 @@ _label_math_mapping = {
     'delta': r'\delta',
     's2': r's^2',
     'F': r'F',
+    'J': r'J',
     'a1': r'\alpha_1',
     'a2': r'\alpha_2',
     'a3': r'\alpha_3',
