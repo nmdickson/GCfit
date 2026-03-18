@@ -5247,7 +5247,7 @@ class CIModelVisualizer(_ClusterVisualizer):
             viz.N = modelgrp['metadata'].attrs['N']
             viz.s2 = modelgrp['metadata'].attrs['s2']
             viz.F = modelgrp['metadata'].attrs['F']
-            viz.J = modelgrp['metadata'].attrs['J']
+            viz.J = modelgrp['metadata'].attrs.get('J', 1.)
             viz.d = modelgrp['metadata'].attrs['d'] << u.kpc
             viz.rlims = modelgrp['metadata'].attrs['rlims'] << u.pc
 
