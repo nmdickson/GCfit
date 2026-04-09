@@ -1989,7 +1989,8 @@ class _ClusterVisualizer:
         return fig
 
     @_support_units
-    def plot_all(self, fig=None, sharex=True, only_PM_RT=False, **kwargs):
+    def plot_all(self, fig=None, sharex=True, only_PM_RT=False,
+                 nd_scale_to='model', **kwargs):
         '''Plot all primary model radial profiles in one figure.
 
         Plots the six primary radial profile quantities used for fitting
@@ -2068,7 +2069,7 @@ class _ClusterVisualizer:
                     bg_lim = 0.9 * nd.mdata['background'] << nd['Σ'].unit
 
         self.plot_number_density(fig=fig, ax=axes['nd'], label_position='left',
-                                 blank_xaxis=True,
+                                 blank_xaxis=True, scale_to=nd_scale_to,
                                  show_background=show_numdens_background,
                                  **kwargs)
 
