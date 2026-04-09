@@ -488,7 +488,7 @@ class _RunAnalysis:
             if allow_1d:
                 if triangularize:
                     mssg = "Both 'allow_1d' and 'triangularize' cannot be True"
-                    raise ValueError()
+                    raise ValueError(mssg)
 
                 # parse flat list into a layout
                 layout = [layout,]
@@ -811,8 +811,6 @@ class _SingleRunAnalysis(_RunAnalysis):
             restrict_to = mdata.get('restrict_to', None)
 
         # Determine and init cluster observations if necessary
-        if name is not None:
-            self.name = name
 
         if observations is not None:
             self.obs = observations
@@ -827,6 +825,13 @@ class _SingleRunAnalysis(_RunAnalysis):
             except KeyError as err:
                 mssg = "No cluster name in metadata, must supply observations"
                 raise ValueError(mssg) from err
+
+        if name is not None:
+            self.name = name
+        elif self.obs is not None:
+            self.name = self.obs.cluster
+        else:
+            self.name = None
 
         self._modelparams = ModelParameters(
             self._parameters, modelkw,
@@ -871,17 +876,21 @@ class _SingleRunAnalysis(_RunAnalysis):
                 model_kw = dict(mdata['model_kwargs'].attrs)
 
                 def _gather_attrs(key, grp, mkw=model_kw):
-                    try:
+
+                    # is this a nested dict? if so, recurse
+                    if '/' in key:
+                        basekey, subkey = key.split('/', maxsplit=1)
+
+                        _gather_attrs(subkey, mdata['model_kwargs'][key],
+                                      mkw=mkw[basekey])
+
+                    else:
                         # Is this a dataset, not a group?
-                        mkw[key] = grp[:]
-                    except TypeError:
-                        if '/' in key:
-                            # is this a nested dict
-                            basekey, subkey = key.split('/', maxsplit=1)
-                            _gather_attrs(subkey, mdata['model_kwargs'][key],
-                                          mkw=mkw[basekey])
-                        else:
-                            # read in the attrs of this group
+                        try:
+                            mkw[key] = grp[:]
+
+                        # read in the attrs of this group
+                        except TypeError:
                             mkw[key] = dict(grp.attrs)
 
                 mdata['model_kwargs'].visititems(_gather_attrs)
@@ -2078,7 +2087,7 @@ class NestedRun(_SingleRunAnalysis):
             return model_cls.from_theta(theta, self.obs, self._modelparams)
 
         else:
-            _, chain = self._get_equal_weight_chains(add_errors=add_errors)
+            _, chain = self._get_equal_weight_chains(reresample=False, add_errors=add_errors)
             return model_cls.from_chain(chain, self.obs, self._modelparams,
                                         method=method)
 
@@ -3580,6 +3589,12 @@ class RunCollection(_RunAnalysis):
         '''List of `.name`s of each run in this collection.'''
         return [r.name for r in self.runs]
 
+    @property
+    def states(self):
+        '''List of `.state`s of each run in this collection.'''
+        return [r.state for r in self.runs]
+
+
     def __iter__(self):
         '''Return an iterator over the individual runs in this collection.'''
         # Important that the order of self.runs (and thus this iter) is constant
@@ -3722,6 +3737,8 @@ class RunCollection(_RunAnalysis):
         )
 
         if self._mixed_runs:
+            # TODO also raises when same parameters are out of order, which is
+            #   actually fine as _params is a dict
             mssg = ("These runs do not share the same set of free parameters. "
                     "Note that some function may produce unexpected results.")
             warnings.warn(mssg)
@@ -3808,7 +3825,7 @@ class RunCollection(_RunAnalysis):
                 else:
                     run.name = run.obs.cluster
 
-            except KeyError as err:
+            except (KeyError, IndexError) as err:
 
                 mssg = f'Failed to create run for {fn}: {err}'
 
