@@ -753,7 +753,7 @@ class CromwellUniformPrior(_PriorBase):
 
 # TODO these defaults of course assume `compatibility_transforms=True`
 DEFAULT_PRIORS = {
-    'W0': ('uniform', [(0.5, 20)]),
+    'W0': ('uniform', [(0.1, 20)]),
     'M': ('uniform', [(0.01, 5)]),
     'rh': ('uniform', [(0.5, 15)]),
     'ra': ('uniform', [(0, 5)]),
@@ -761,6 +761,7 @@ DEFAULT_PRIORS = {
     'delta': ('uniform', [(0.1, 0.5)]),
     's2': ('uniform', [(0, 15)]),
     'F': ('uniform', [(1, 3)]),
+    'J': ('uniform', [(1, 3)]),
     'a1': ('uniform', [(-1, 2.35)]),
     'a2': ('uniform', [(-1, 2.35), ('a1', np.inf)]),
     'a3': ('uniform', [(1.6, 4), ('a2', np.inf)]),
@@ -775,7 +776,7 @@ DEFAULT_PRIORS = {
     'kick_slope': ('uniform', [(1e-5, 2)]),
     'kick_scale': ('uniform', [(5, 100)]),
     #
-    'zeta': ('uniform', [(0.01, 2.0)]),
+    'zeta': ('uniform', [(0.01, 1.0)]),
     'eta': ('uniform', [(-5.0, 5.0)]),
     'meq': ('uniform', [(0.0, 15.0)]),
 }

@@ -600,7 +600,7 @@ def likelihood_number_density(model, ndensity, *,
 
     # Now nuisance parameter (from θ, not the model velocity scale)
     s2 = model.theta['s2'] << u.arcmin**-4
-    yerr = np.sqrt(obs_err**2 + s2)
+    yerr = model.theta['J'] * np.sqrt(obs_err**2 + s2)
 
     model_r = model.r
     model_Σ = model.Sigmaj[mass_bin] / model.mj[mass_bin]
