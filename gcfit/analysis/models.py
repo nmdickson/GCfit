@@ -3646,6 +3646,7 @@ class ModelVisualizer(_ClusterVisualizer):
         self.name = model.name or getattr(self.obs, 'cluster', 'Cluster Model')
 
         # various structural model attributes
+        self.M = model.M
         self.r0 = model.r0
         self.rc_obs = model.rc_obs
         self.rh = model.rh
@@ -4502,6 +4503,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         # Structural params
 
+        M = np.full(N, np.nan) << huge_model.M.unit
         M_t = np.full((1, N, Nt), np.nan) << huge_model.M.unit
         Ms_t = np.full((1, N, Nt), np.nan) << huge_model.M.unit
         mmean_t = np.full((1, N, Nt), np.nan) << huge_model.mmean.unit
@@ -4657,7 +4659,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             # Structural params
 
-            M_t[slc] = model.M
+            M[model_ind] = M_t[slc] = model.M
             Ms_t[slc] = model.nonBH.Mj.sum()
             mmean_t[slc] = model.mmean
 
@@ -4757,6 +4759,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         viz.f_BH = f_BH
         viz.f_BH0 = f_BH0
 
+        viz.M = M
         viz.M_BH = viz.BH_mass = M_BH
         viz.N_BH = viz.BH_num = N_BH
         viz.M_NS = M_NS
@@ -5154,8 +5157,8 @@ class CIModelVisualizer(_ClusterVisualizer):
             quant_grp = modelgrp.create_group('quantities')
 
             quant_keys = (
-                'f_rem', 'f_BH', 'M_BH', 'N_BH', 'M_NS', 'N_NS', 'M_WD', 'N_WD',
-                'f_BH0', 'M_BH0', 'N_BH0',
+                'M', 'f_rem', 'f_BH', 'M_BH', 'N_BH', 'M_NS', 'N_NS',
+                'M_WD', 'N_WD', 'f_BH0', 'M_BH0', 'N_BH0',
                 'r0', 'rc_obs', 'rt', 'rh', 'rhp', 'ra', 'rv',
                 'mmean', 'volume', 'vesc0', 'rhoh0', 'BH_rh', 'NS_rh', 'WD_rh',
                 'spitzer_chi', 'trh', 'N_relax', 'K_scale',
@@ -6139,6 +6142,7 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
 
         # Structural params
 
+        M = np.full(N, np.nan) << huge_model.M.unit
         M_t = np.full((1, N, Nt), np.nan) << huge_model.M.unit
         Ms_t = np.full((1, N, Nt), np.nan) << huge_model.M.unit
         mmean_t = np.full((1, N, Nt), np.nan) << huge_model.mmean.unit
@@ -6300,6 +6304,7 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
 
             # Structural params
 
+            M[model_ind] = model.M << M.unit
             M_t[slc] = cbh.M << M_t.unit
             Ms_t[slc] = cbh.Mst << Ms_t.unit
             mmean_t[slc] = cbh.mav << mmean_t.unit
@@ -6409,6 +6414,7 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
         viz.f_BH0 = f_BH0
         viz.M_kicked = M_kicked
 
+        viz.M = M
         viz.M_BH = viz.BH_mass = M_BH
         viz.N_BH = viz.BH_num = N_BH
         viz.M_NS = M_NS
