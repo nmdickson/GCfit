@@ -1856,11 +1856,25 @@ class EvolvedModel(Model):
             try:
                 cbh_kwargs.setdefault('rg', observations.mdata['RG_eff'])
 
-            # Get cluster galactocentric radius based on current position
             except KeyError:
-                Rgal = util.Rhel2Rgal(observations.mdata['l'] << u.deg,
-                                      observations.mdata['b'] << u.deg,
-                                      d << u.kpc)
+
+                # Try computing the effective orbit now
+                if (('rp' in observations.mdata)
+                        and ('ra' in observations.mdata)):
+
+                    rp = observations.mdata['rp'] << u.kpc
+                    ra = observations.mdata['ra'] << u.kpc
+                    Rgal = 2 * rp * ra / (ra + rp)
+
+                # Fall back to galactocentric radius based on current position
+                else:
+                    mssg = ("Could not get effective galactocentric radius, "
+                            "using present-day Rg instead.")
+                    logging.warning(mssg)
+
+                    Rgal = util.Rhel2Rgal(observations.mdata['l'] << u.deg,
+                                          observations.mdata['b'] << u.deg,
+                                          d << u.kpc)
 
                 cbh_kwargs.setdefault('rg', Rgal.to_value('kpc'))
 
