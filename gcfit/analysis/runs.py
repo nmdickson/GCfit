@@ -4116,15 +4116,28 @@ class RunCollection(_RunAnalysis):
 
     def _add_colours(self, ax, mappable, cparam, clabel=None, *, alpha=1.,
                      add_colorbar=True, extra_artists=None, math_label=True,
-                     fix_cbar_ticks=True, cbounds=None):
+                     fix_cbar_ticks=True, cbounds=None, part='face'):
         '''Add colours to all artists and add the relevant colorbar to ax.
         Unnecessarily complicated to account for diverse artists (violinplot).
         '''
         import matplotlib.colorbar as mpl_cbar
 
-        def set_colour(art, clr):
+        def set_colour(art, clr, which_part=part):
+
+            match which_part.casefold():
+                case 'face':
+                    setter = art.set_facecolor
+                case 'edge':
+                    setter = art.set_edgecolor
+                case 'both' | 'all' | True:
+                    setter = art.set_color
+                case _:
+                    mssg = "Invalid 'part', must be one of 'both', 'edge', face"
+                    raise ValueError(mssg)
+
             try:
-                art.set_color(clr)
+                setter(clr)
+
             except ValueError as err:
                 mssg = (f"Could not set colour '{clr}'. Colours must be a "
                         "valid model parameter, matplotlib colour or float")
@@ -4180,10 +4193,10 @@ class RunCollection(_RunAnalysis):
         if extra_artists is not None:
             for artist in extra_artists:
 
-                # Set colors normally
+                # Set colors normally (force part='all'')
                 try:
                     # artist.set_color(colors)
-                    set_colour(artist, colors)
+                    set_colour(artist, colors, which_part='all')
 
                 # If fails, attempt to set one colour at a time
                 except (ValueError, AttributeError) as err:
@@ -4194,7 +4207,7 @@ class RunCollection(_RunAnalysis):
                     try:
                         for i, subart in enumerate(artist):
                             # subart.set_color(colors[i])
-                            set_colour(subart, colors[i])
+                            set_colour(subart, colors[i], which_part='all')
 
                     except (ValueError, TypeError):
                         mssg = f'Cannot `set_color` of extra artist "{artist}"'
@@ -4300,6 +4313,9 @@ class RunCollection(_RunAnalysis):
         sc_kwargs = self._dissect_scatter_kwargs(kwargs)
 
         errbar = ax.errorbar(x, y, xerr=xerr, yerr=yerr, fmt='none', **kwargs)
+
+        # TODO markerfacecoloralt is not supported by scatter because it doesnt
+        # get and use the marker.get_alt_path(). This should be fixed in mpl.
 
         points = ax.scatter(x, y, picker=True, label=label, **sc_kwargs)
 
