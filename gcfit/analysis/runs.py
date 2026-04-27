@@ -5589,7 +5589,8 @@ class RunCollection(_RunAnalysis):
         return fig
 
     def plot_param_hist(self, param, fig=None, ax=None, kde=False,
-                        force_model=False, flipped=False, **kwargs):
+                        force_model=False, flipped=False,
+                        quantiles=[0.8413, 0.5, 0.1587], **kwargs):
         '''Plot a histogram representing the sum of all distributions of param.
 
         Plots a histogram (or smoothed Gaussian KDE) representing the sum
@@ -5620,6 +5621,9 @@ class RunCollection(_RunAnalysis):
         flipped : bool, optional
             If True the posterior will be flipped on it's side, attached to the
             left-axis.
+
+        quantiles : list of float
+            Quantiles to show as vertical lines
 
         **kwargs : dict
             All other arguments are passed to `ax.fill_between` or `ax.hist`.
@@ -5666,6 +5670,11 @@ class RunCollection(_RunAnalysis):
 
             orientation = "horizontal" if flipped else "vertical"
             ax.hist(chains, orientation=orientation, **kwargs)
+
+        for pq in np.quantile(chains, q=quantiles):
+            if hasattr(pq, 'unit'):
+                pq = pq.value
+            (ax.axhline if flipped else ax.axvline)(pq, color=('k', 0.5))
 
         lbl_func = ax.set_ylabel if flipped else ax.set_xlabel
         lbl_func(self._get_latex_labels(param, force_model=force_model))
