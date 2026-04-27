@@ -1490,17 +1490,35 @@ class MCMCRun(_SingleRunAnalysis):
         # params is None or a list of string labels
         if params is not None:
             raw_labels = self._get_labels(math_labels=False)
-            prm_inds = [raw_labels.index(p) for p in params]
 
-            labels = [labels[i] for i in prm_inds]
-            chain = chain[..., prm_inds]
+            spec_chain = np.empty((chain.shape[0], len(params)))
+            spec_labels = []
+
+            # Loop over params so we can catch fixed parameters
+            for i, p in enumerate(params):
+                try:
+                    prm_ind = raw_labels.index(p)
+                    lbl = labels[prm_ind]
+                    vals = chain[..., prm_ind]
+
+                except ValueError:
+                    lbl = _get_latex_label(p, with_units=True)
+                    vals = self._modelparams.fixed_params[p]
+
+                spec_labels.append(lbl)
+                spec_chain[:, i] = vals
+
+            labels, chain = spec_labels, spec_chain
+
+        ranges = [1, ] * chain.shape[-1]
 
         chain = chain.reshape((-1, chain.shape[-1]))
 
         corner_kw.setdefault('plot_datapoints', False)
         corner_kw.setdefault('labelpad', 0.25)
 
-        fig = corner.corner(chain, labels=labels, fig=fig, **corner_kw)
+        fig = corner.corner(chain, labels=labels, fig=fig,
+                            range=ranges, **corner_kw)
 
         fig.subplots_adjust(left=0.05, bottom=0.06)
 
@@ -2205,17 +2223,36 @@ class NestedRun(_SingleRunAnalysis):
         # params is None or a list of string labels
         if params is not None:
             raw_labels = self._get_labels(math_labels=False)
-            prm_inds = [raw_labels.index(p) for p in params]
 
-            labels = [labels[i] for i in prm_inds]
-            chain = chain[..., prm_inds]
+            spec_chain = np.empty((chain.shape[0], len(params)))
+            spec_labels = []
+
+            # Loop over params so we can catch fixed parameters
+            for i, p in enumerate(params):
+                try:
+                    prm_ind = raw_labels.index(p)
+                    lbl = labels[prm_ind]
+                    vals = chain[..., prm_ind]
+
+                except ValueError:
+                    lbl = _get_latex_label(p, with_units=True)
+                    vals = self._modelparams.fixed_params[p]
+
+                spec_labels.append(lbl)
+                spec_chain[:, i] = vals
+
+            labels, chain = spec_labels, spec_chain
+
+        ranges = [1, ] * chain.shape[-1]
 
         chain = chain.reshape((-1, chain.shape[-1]))
 
         corner_kw.setdefault('plot_datapoints', False)
         corner_kw.setdefault('labelpad', 0.25)
 
-        fig = corner.corner(chain, labels=labels, fig=fig, **corner_kw)
+        # TODO "label" kwargs dies in corner, need to manually add
+        fig = corner.corner(chain, labels=labels, fig=fig,
+                            range=ranges, **corner_kw)
 
         fig.subplots_adjust(left=0.05, bottom=0.06)
 
