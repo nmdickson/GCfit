@@ -5448,7 +5448,7 @@ class RunCollection(_RunAnalysis):
                            clr_param=None, clr_kwargs=None,
                            color=None, alpha=0.3, edgecolor='k', edgewidth=1.0,
                            quantiles=[0.9772, 0.8413, 0.5, 0.1587, 0.0228],
-                           force_model=False, **kwargs):
+                           force_model=False, xticks=None, **kwargs):
         '''Plot a violin plot showing the parameter distributions for all runs.
 
         Plots a violin plot with the full posterior distributions of a
@@ -5516,7 +5516,7 @@ class RunCollection(_RunAnalysis):
         # filter out all nans (causes violinplot to fail silently)
         chains = [ch[~np.isnan(ch)] for ch in chains]
 
-        xticks = np.arange(len(self.runs))
+        xticks = xticks or np.arange(len(self.runs))
 
         labels = self.names
 
