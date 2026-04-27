@@ -920,6 +920,9 @@ class _ClusterVisualizer:
 
             masses.setdefault(mass_bin, [])
 
+            # TODO really don't think this is how should store this lol
+            line.logl_weight = dset.mdata.get('weight', 1.0)
+
             masses[mass_bin].append(line)
 
         # ------------------------------------------------------------------
@@ -927,7 +930,13 @@ class _ClusterVisualizer:
         # the model data, calling `_plot_model`
         # ------------------------------------------------------------------
 
-        res_ax = None
+        # Attempt to find the residuals axes already present here
+        try:
+            res_ax = [child for child in ax.get_children()
+                      if child.get_label() == 'residuals'][0]
+
+        except IndexError:
+            res_ax = None
 
         if model_data is not None:
 
@@ -1063,8 +1072,8 @@ class _ClusterVisualizer:
     # -----------------------------------------------------------------------
 
     def _add_residuals(self, ax, ymodel, errorbars, percentage=False, *,
-                       show_logl=True, xmodel=None, y_unit=None,
-                       padding=0.1, size=0.25,
+                       show_logl=True, hyperparams=False, xmodel=None,
+                       y_unit=None, padding=0.1, size=0.25,
                        res_ax=None, ax_method='inset', divider_kwargs=None):
         '''Append an extra axis to `ax` for plotting residuals.
 
@@ -1135,8 +1144,10 @@ class _ClusterVisualizer:
         if divider_kwargs is None:
             divider_kwargs = {}
 
-        # TODO add hyperparams support here
-        likelihood_func = util.gaussian_likelihood
+        if hyperparams:
+            likelihood_func = util.hyperparam_likelihood
+        else:
+            likelihood_func = util.gaussian_likelihood
 
         # ------------------------------------------------------------------
         # Get model data and spline
@@ -1174,7 +1185,10 @@ class _ClusterVisualizer:
                                              # pad=padding, sharex=ax)
                                              pad=0, sharex=ax)
 
+                # TODO I think need to remove this from fig.axes, so setup works
                 ax.add_child_axes(res_ax)  # is this allowed?
+
+            res_ax.set_label('residuals')
 
             res_ax.grid()
 
@@ -1204,7 +1218,8 @@ class _ClusterVisualizer:
         # Get data from the plotted errorbars
         # ------------------------------------------------------------------
 
-        logl = 0.
+        # logl = 0.
+        logl = []
 
         for errbar in errorbars:
 
@@ -1268,20 +1283,21 @@ class _ClusterVisualizer:
                 res = ydata - yspline(xdata)
                 res_yerr = yerr
 
+            if show_logl:
+                logl_i = likelihood_func(ydata, yspline(xdata), yerr)
+                logl_i *= getattr(errbar, 'logl_weight', 1.0)
+
+                L_label = fr"$\log\mathcal{{L}}={logl_i:.2f}$"
+                logl.append(logl_i)
+            else:
+                L_label = None
+
             res_ax.errorbar(xdata, res, xerr=xerr, yerr=res_yerr,
                             color=mfc, mec=mec, mew=mew, marker=mrk, ms=ms,
-                            linestyle='none')
-
-            # --------------------------------------------------------------
-            # Optionally compute chi-squared statistic
-            # --------------------------------------------------------------
-
-            if show_logl:
-                logl += likelihood_func(ydata, yspline(xdata), yerr)
+                            linestyle='none', label=L_label)
 
         if show_logl:
-            fake = plt.Line2D([], [], label=fr"$\log\mathcal{{L}}={logl:.2f}$")
-            res_ax.legend(handles=[fake], handlelength=0, handletextpad=0)
+            res_ax.legend()
 
         # ------------------------------------------------------------------
         # Set bounds at 100% or less
@@ -3533,11 +3549,13 @@ class _ClusterVisualizer:
 
         return logl
 
-    @property
-    def logl(self):
+    def _logl_comps(self, hyperparams=False):
         '''Compute logl between the median model and all observational data.
         Not super instructive on a total level like this, just look at the run.
         '''
+        # TODO why does this not just use obs.valid_likelihoods??
+        # it should be, the VL are arranged by dataset, not component, but that
+        # could be sorted out easily enough
 
         def numdens_nuisance(err):
             return self.J * np.sqrt(err**2 + (self.s2 << u.arcmin**-4))
@@ -3554,17 +3572,23 @@ class _ClusterVisualizer:
             {'ds_pattern': '*proper_motion*', 'y_key': 'PM_R',
              'model_data': self.pm_R},
             {'ds_pattern': '*number_density*', 'y_key': 'Σ',
-             'model_data': self.numdens, 'err_transform': numdens_nuisance},
+             'model_data': self.numdens, 'err_transform': numdens_nuisance,
+             'model_scale': self.K_scale},
         ]
 
-        logl = 0.
+        logls = {}
 
         for comp in all_components:
-            logl += self._compute_profile_logl(**comp)
+            key = f"{comp['ds_pattern']}/{comp['y_key']}"
+            logls[key] = self._compute_profile_logl(**comp, hyperparams=hyperparams)
 
-        logl += self._compute_massfunc_logl()
+        logls['mass_function'] = self._compute_massfunc_logl(hyperparams=hyperparams)
 
-        return logl
+        return logls
+
+    @property
+    def logl(self):
+        return sum(self._logl_comps().values())
 
 
 class ModelVisualizer(_ClusterVisualizer):
