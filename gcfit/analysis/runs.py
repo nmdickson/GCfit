@@ -5087,6 +5087,135 @@ class RunCollection(_RunAnalysis):
 
         return fig
 
+    def plot_lit_residuals(self, param, truths, e_truths=None, src_truths='',
+                           fig=None, ax=None, *,
+                           percentage=True,
+                           annotate=False, annotate_kwargs=None,
+                           clr_param=None, clr_kwargs=None,
+                           force_model=False, label=None, marker='o', **kwargs):
+        '''Plot residuals between parameter values and "truths".
+
+        Plots a scatter plot (with errorbars) of the residuals of this `param`
+        with the given `truths` array, as a function of the `truths`, and using
+        the median and 1σ error values from each run in this collection.
+
+        Parameters
+        ----------
+        param : str
+            Name of the parameter to plot.
+
+        truths : np.ndarray[Nruns]
+            Array of "truth" values, to plot on the y-axis.
+
+        e_truths : np.ndarray[Nruns], optional
+            Array of uncertainties on the "truth" values.
+
+        src_truths : str, optional
+            The source of the "truths", included in the y-axis label.
+
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_RunAnalysis._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this relation. Should be a
+            part of the given `fig`.
+
+        percentage : bool, optional
+            If true (default), will plot residuals as a percentage of the
+            true values.
+
+        annotate : bool, optional
+            Optionally create a hook to this figure allowing the interactive
+            annotating of selected cluster names. See `_Annotator` for more
+            details.
+
+        annotate_kwargs : dict, optional
+            Optional arguments passed to the `_Annotator` instance.
+
+        clr_param : str, optional
+            Defines the colour of the plotted points. If the name of a
+            parameter, will colour each point by the respective value of that
+            parameter in each run, otherwise will accept a single colour, or
+            array of colours for each run.
+
+        clr_kwargs : dict, optional
+            Optional arguments passed to the `_add_colours` function.
+
+        force_model : bool, optional
+            Force these parameter values to be taken from model quantities.
+            Can be useful when some parameter names overlap (e.g. "ra").
+
+        label : str, optional
+            Set a label that will be displayed in the legend.
+
+        marker : str, optional
+            The marker style. See `matplotlib.markers` for more information.
+
+        **kwargs : dict
+            All other arguments are passed to `ax.errorbar` and `ax.scatter`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
+
+        # TODO currently not supporting e_truths, but it should
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        val, *dval = self._get_param(param, force_model=force_model)
+
+        if percentage:
+            res = 100 * (val - truths) / truths
+            res_err = 100 * u.Quantity(dval) / val
+        else:
+            res = val - truths
+            res_err = dval
+
+        points, errbar = self._scatter_error(ax, truths, res,
+                                             xerr=None, yerr=res_err,
+                                             marker=marker, label=label,
+                                             **kwargs)
+
+        xlbl = self._get_latex_labels(param, force_model=force_model)
+        ax.set_xlabel(xlbl + (f' ({src_truths})' if src_truths else ''))
+
+        ylbl = self._get_latex_labels(param, force_model=force_model,
+                                      with_units=False)
+        ax.set_ylabel(Fr'$\Delta${ylbl}{" [%]" if percentage else ""}')
+        # TODO ylabel should look more like that in the "dist" plots
+
+        # ax.set_xlim(0.)
+        # ax.set_ylim(0.)
+
+        if clr_param is not None:
+
+            if clr_kwargs is None:
+                clr_kwargs = {}
+
+            err_artists = itertools.chain.from_iterable(errbar[1:])
+
+            self._add_colours(ax, points, clr_param,
+                              extra_artists=err_artists, **clr_kwargs)
+
+        elif not (kwargs.keys() & {'c', 'color'}):
+            # Ensure that the points and lines are the same colour
+            for ch in errbar.get_children():
+                ch.set_color(points.get_facecolor())
+
+        if annotate:
+
+            if annotate_kwargs is None:
+                annotate_kwargs = {}
+
+            _Annotator(fig, ax, self.runs, truths, res, **annotate_kwargs)
+
+        return fig
+
     def plot_density(self, param1, param2, fig=None, ax=None, method='hex', *,
                      force_model=False, nbins=50, expand_fixed=True, **kwargs):
         '''Plot 2D density of distributions of two parameters across all runs.
