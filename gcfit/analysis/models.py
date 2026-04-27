@@ -3732,7 +3732,7 @@ class ModelVisualizer(_ClusterVisualizer):
         self.rt_t = model.rt[t_slc]
         self.rh_t = model.rh[t_slc]
         self.rv_t = model.rv[t_slc]
-        self.rhoh0 = (3 * model.M) / (8 * np.pi * model.rh**3)
+        self.rhoh = self.rhoh0 = (3 * model.M) / (8 * np.pi * model.rh**3)
         self.vesc0 = model.vesc0
         self.vesc_t = model.vesc0[t_slc]
         self.psi_t = np.full((1, 1, 1), np.nan) << u.dimensionless_unscaled
@@ -4518,7 +4518,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         mmean = np.full(N, np.nan) << huge_model.mmean.unit
         volume = np.full(N, np.nan) << huge_model.volume.unit
 
-        rhoh0 = np.full(N, np.nan) << rho_unit
+        rhoh = np.full(N, np.nan) << rho_unit
 
         vesc0 = np.full(N, np.nan) << vel_unit
         vesc_t = np.full((1, N, Nt), np.nan) << vel_unit
@@ -4673,7 +4673,7 @@ class CIModelVisualizer(_ClusterVisualizer):
             mmean[model_ind] = model.mmean
             volume[model_ind] = model.volume
 
-            rhoh0[model_ind] = (3 * model.M) / (8 * np.pi * model.rh**3)
+            rhoh[model_ind] = (3 * model.M) / (8 * np.pi * model.rh**3)
 
             vesc0[model_ind] = vesc_t[slc] = model.vesc0
 
@@ -4780,7 +4780,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         viz.mmean = mmean
         viz.volume = volume
 
-        viz.rhoh0 = rhoh0
+        viz.rhoh = viz.rhoh0 = rhoh
         viz.vesc0 = vesc0
 
         viz.BH_rh = BH_rh
@@ -5159,7 +5159,7 @@ class CIModelVisualizer(_ClusterVisualizer):
             quant_keys = (
                 'M', 'f_rem', 'f_BH', 'M_BH', 'N_BH', 'M_NS', 'N_NS',
                 'M_WD', 'N_WD', 'f_BH0', 'M_BH0', 'N_BH0',
-                'r0', 'rc_obs', 'rt', 'rh', 'rhp', 'ra', 'rv',
+                'r0', 'rc_obs', 'rt', 'rh', 'rhp', 'ra', 'rv', 'rhoh',
                 'mmean', 'volume', 'vesc0', 'rhoh0', 'BH_rh', 'NS_rh', 'WD_rh',
                 'spitzer_chi', 'trh', 'N_relax', 'K_scale',
                 'M_kicked', 'delta_r50', 'delta_A'
@@ -6157,6 +6157,7 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
         mmean = np.full(N, np.nan) << huge_model.mmean.unit
         volume = np.full(N, np.nan) << huge_model.volume.unit
 
+        rhoh = np.full(N, np.nan) << rho_unit
         rhoh0 = np.full(N, np.nan) << rho_unit
 
         vesc0 = np.full(N, np.nan) << vel_unit
@@ -6322,6 +6323,7 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
             mmean[model_ind] = model.mmean
             volume[model_ind] = model.volume
 
+            rhoh[model_ind] = (3 * model.M) / (8 * np.pi * model.rh**3)
             rhoh0[model_ind] = model.rhoh0
 
             vesc0[model_ind] = model.vesc0
@@ -6434,6 +6436,7 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
         viz.mmean = mmean
         viz.volume = volume
 
+        viz.rhoh = rhoh
         viz.rhoh0 = rhoh0
         viz.vesc0 = vesc0
 
