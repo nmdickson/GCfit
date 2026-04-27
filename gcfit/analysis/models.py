@@ -2696,7 +2696,8 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_density(self, fig=None, ax=None, kind='all', *,
-                     x_unit='pc', label_position='left', colors=None, **kwargs):
+                     x_unit='pc', label_position='left', colors=None,
+                     ls=None, **kwargs):
         '''Plot model density profiles.
 
         Plots the radial mass density (`self.rho_*`) profiles of the total,
@@ -2742,6 +2743,9 @@ class _ClusterVisualizer:
         if colors is None:
             colors = {}
 
+        if not isinstance(ls, dict):
+            ls = {k: ls for k in kind}
+
         fig, ax = self._setup_artist(fig, ax)
 
         # ax.set_title('Surface Mass Density')
@@ -2751,40 +2755,46 @@ class _ClusterVisualizer:
             self._plot_profile(ax, None, None, self.rho_tot,
                                x_unit=x_unit, model_label="Total",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("tot", "tab:cyan"), **kwargs)
+                               color=colors.get("tot", "tab:cyan"),
+                               ls=ls.get("tot"), **kwargs)
 
         # Total Remnant density
         if 'rem' in kind:
             self._plot_profile(ax, None, None, self.rho_rem,
                                x_unit=x_unit, model_label="Remnants",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("rem", "tab:purple"), **kwargs)
+                               color=colors.get("rem", "tab:purple"),
+                               ls=ls.get("rem"), **kwargs)
 
         # Main sequence density
         if 'MS' in kind:
             self._plot_profile(ax, None, None, self.rho_MS,
                                x_unit=x_unit, model_label="Main-sequence stars",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("MS", "tab:orange"), **kwargs)
+                               color=colors.get("MS", "tab:orange"),
+                               ls=ls.get("MS"), **kwargs)
 
         if 'WD' in kind:
             self._plot_profile(ax, None, None, self.rho_WD,
                                x_unit=x_unit, model_label="White Dwarfs",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("WD", "tab:green"), **kwargs)
+                               color=colors.get("WD", "tab:green"),
+                               ls=ls.get("WD"), **kwargs)
 
         if 'NS' in kind:
             self._plot_profile(ax, None, None, self.rho_NS,
                                x_unit=x_unit, model_label="Neutron Stars",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("NS", "tab:red"), **kwargs)
+                               color=colors.get("NS", "tab:red"),
+                               ls=ls.get("NS"), **kwargs)
 
         # Black hole density
         if 'BH' in kind:
             self._plot_profile(ax, None, None, self.rho_BH,
                                x_unit=x_unit, model_label="Black Holes",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("BH", "tab:gray"), **kwargs)
+                               color=colors.get("BH", "tab:gray"),
+                               ls=ls.get("BH"), **kwargs)
 
         ax.set_yscale("log")
         ax.set_xscale("log")
@@ -2799,7 +2809,7 @@ class _ClusterVisualizer:
     @_support_units
     def plot_surface_density(self, fig=None, ax=None, kind='all', *,
                              x_unit='pc', label_position='left', colors=None,
-                             **kwargs):
+                             ls=None, **kwargs):
         '''Plot model surface density profiles.
 
         Plots the radial surface mass density (`self.Sigma_*`) profiles of the
@@ -2845,6 +2855,9 @@ class _ClusterVisualizer:
         if colors is None:
             colors = {}
 
+        if not isinstance(ls, dict):
+            ls = {k: ls for k in kind}
+
         fig, ax = self._setup_artist(fig, ax)
 
         # ax.set_title('Surface Mass Density')
@@ -2854,40 +2867,46 @@ class _ClusterVisualizer:
             self._plot_profile(ax, None, None, self.Sigma_tot,
                                x_unit=x_unit, model_label="Total",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("tot", "tab:cyan"), **kwargs)
+                               color=colors.get("tot", "tab:cyan"),
+                               ls=ls.get("tot"), **kwargs)
 
         # Total Remnant density
         if 'rem' in kind:
             self._plot_profile(ax, None, None, self.Sigma_rem,
                                x_unit=x_unit, model_label="Remnants",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("rem", "tab:purple"), **kwargs)
+                               color=colors.get("rem", "tab:purple"),
+                               ls=ls.get("rem"), **kwargs)
 
         # Main sequence density
         if 'MS' in kind:
             self._plot_profile(ax, None, None, self.Sigma_MS,
                                x_unit=x_unit, model_label="Main-sequence stars",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("MS", "tab:orange"), **kwargs)
+                               color=colors.get("MS", "tab:orange"),
+                               ls=ls.get("MS"), **kwargs)
 
         if 'WD' in kind:
             self._plot_profile(ax, None, None, self.Sigma_WD,
                                x_unit=x_unit, model_label="White Dwarfs",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("WD", "tab:green"), **kwargs)
+                               color=colors.get("WD", "tab:green"),
+                               ls=ls.get("WD"), **kwargs)
 
         if 'NS' in kind:
             self._plot_profile(ax, None, None, self.Sigma_NS,
                                x_unit=x_unit, model_label="Neutron Stars",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("NS", "tab:red"), **kwargs)
+                               color=colors.get("NS", "tab:red"),
+                               ls=ls.get("NS"), **kwargs)
 
         # Black hole density
         if 'BH' in kind:
             self._plot_profile(ax, None, None, self.Sigma_BH,
                                x_unit=x_unit, model_label="Black Holes",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("BH", "tab:gray"), **kwargs)
+                               color=colors.get("BH", "tab:gray"),
+                               ls=ls.get("BH"), **kwargs)
 
         ax.set_yscale("log")
         ax.set_xscale("log")
@@ -2903,7 +2922,7 @@ class _ClusterVisualizer:
     @_support_units
     def plot_cumulative_mass(self, fig=None, ax=None, kind='all', *,
                              x_unit='pc', label_position='left', colors=None,
-                             normalize=False, **kwargs):
+                             normalize=False, ls=None, **kwargs):
         '''Plot model cumulative mass profiles.
 
         Plots the radial cumulative mass profiles of the total,
@@ -2949,6 +2968,10 @@ class _ClusterVisualizer:
         if colors is None:
             colors = {}
 
+        if not isinstance(ls, dict):
+            # TODO will fail if kind is only one thing, not a list
+            ls = {k: ls for k in kind}
+
         fig, ax = self._setup_artist(fig, ax)
 
         # ax.set_title('Cumulative Mass')
@@ -2964,7 +2987,8 @@ class _ClusterVisualizer:
             self._plot_profile(ax, None, None, val,
                                x_unit=x_unit, model_label="Total",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("tot", "tab:cyan"), **kwargs)
+                               color=colors.get("tot", "tab:cyan"),
+                               ls=ls.get("tot"), **kwargs)
 
         # Main sequence density
         if 'MS' in kind:
@@ -2977,7 +3001,8 @@ class _ClusterVisualizer:
             self._plot_profile(ax, None, None, val,
                                x_unit=x_unit, model_label="Main-sequence stars",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("MS", "tab:orange"), **kwargs)
+                               color=colors.get("MS", "tab:orange"),
+                               ls=ls.get("MS"), **kwargs)
 
         if 'WD' in kind:
 
@@ -2989,7 +3014,8 @@ class _ClusterVisualizer:
             self._plot_profile(ax, None, None, val,
                                x_unit=x_unit, model_label="White Dwarfs",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("WD", "tab:green"), **kwargs)
+                               color=colors.get("WD", "tab:green"),
+                               ls=ls.get("WD"), **kwargs)
 
         if 'NS' in kind:
 
@@ -3001,7 +3027,8 @@ class _ClusterVisualizer:
             self._plot_profile(ax, None, None, val,
                                x_unit=x_unit, model_label="Neutron Stars",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("NS", "tab:red"), **kwargs)
+                               color=colors.get("NS", "tab:red"),
+                               ls=ls.get("NS"), **kwargs)
 
         # Black hole density
         if 'BH' in kind:
@@ -3014,7 +3041,8 @@ class _ClusterVisualizer:
             self._plot_profile(ax, None, None, val,
                                x_unit=x_unit, model_label="Black Holes",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("BH", "tab:gray"), **kwargs)
+                               color=colors.get("BH", "tab:gray"),
+                               ls=ls.get("BH"), **kwargs)
 
         ax.set_xscale("log")
         if not normalize:
@@ -3362,7 +3390,8 @@ class _ClusterVisualizer:
 
     @_support_units
     def _compute_profile_logl(self, ds_pattern, y_key, model_data, *,
-                              x_key='r', err_transform=None, hyperparams=False):
+                              x_key='r', err_transform=None, model_scale=None,
+                              hyperparams=False):
         '''Compute logl for this dataset (pattern)'''
         from ..util import gaussian_likelihood, hyperparam_likelihood
 
