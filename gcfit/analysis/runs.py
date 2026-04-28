@@ -1522,6 +1522,21 @@ class MCMCRun(_SingleRunAnalysis):
 
         fig.subplots_adjust(left=0.05, bottom=0.06)
 
+        # Share the axes along row-col
+        # Must be done manually due to corner
+
+        axes = np.reshape(fig.axes, (chain.shape[-1], chain.shape[-1]))
+
+        for ir, row in enumerate(axes):
+            for ax in row[1:ir]:
+                ax.sharey(row[0])
+                ax.label_outer()
+
+        for ic, col in enumerate(axes.T):
+            for ax in col[ic:-1]:
+                ax.sharex(col[-1])
+                ax.label_outer()
+
         return fig
 
     def plot_posterior(self, param, fig=None, ax=None, chain=None,
@@ -2255,6 +2270,21 @@ class NestedRun(_SingleRunAnalysis):
                             range=ranges, **corner_kw)
 
         fig.subplots_adjust(left=0.05, bottom=0.06)
+
+        # Share the axes along row-col
+        # Must be done manually due to corner
+
+        axes = np.reshape(fig.axes, (chain.shape[-1], chain.shape[-1]))
+
+        for ir, row in enumerate(axes):
+            for ax in row[1:ir]:
+                ax.sharey(row[0])
+                ax.label_outer()
+
+        for ic, col in enumerate(axes.T):
+            for ax in col[ic:-1]:
+                ax.sharex(col[-1])
+                ax.label_outer()
 
         return fig
 
