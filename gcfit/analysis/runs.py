@@ -620,6 +620,13 @@ class _RunAnalysis:
         res_ax.set_ylabel(r"% difference")
 
         # plot residuals (in percent)
+
+        if np.ndim(e2):
+            e2 = np.median(e2, axis=0)
+
+        if np.ndim(e1):
+            e1 = np.median(e1, axis=0)
+
         res = 100 * (y2 - y1) / y1
         res_err = 100 * np.sqrt(e1**2 + e2**2) / y1
         res_ax.errorbar(y1, res, yerr=res_err, fmt='none', ecolor=clrs)
@@ -723,6 +730,10 @@ class _SingleRunAnalysis(_RunAnalysis):
             except ValueError as err:
                 mssg = "No valid fitting state was stored. Is this an old run?"
                 raise RuntimeError(mssg) from err
+
+    @property
+    def chains(self):
+        raise NotImplementedError()
 
     def __str__(self):
         try:
@@ -864,6 +875,12 @@ class _SingleRunAnalysis(_RunAnalysis):
 
         return labels
 
+    def _get_labelled_chains(self, math_labels=False) -> dict:
+        return dict(zip(
+            self._get_labels(math_labels=math_labels),
+            self.chains.T
+        ))
+
     def _get_model_kwargs(self):
         '''Return the `model_kwargs` metadata (backwards compatible)'''
 
@@ -896,6 +913,89 @@ class _SingleRunAnalysis(_RunAnalysis):
                 mdata['model_kwargs'].visititems(_gather_attrs)
 
         return model_kw
+
+    # ----------------------------------------------------------------------
+    # Shared plots
+    # ----------------------------------------------------------------------
+
+    def plot_IMF(self, fig=None, ax=None, show_canonical='all', ci=True):
+        '''Plot the IMF, based on the alpha exponents.'''
+        # TODO should this be switched to use ssptools.PowerLawIMF?
+        #   Would allow easier plotting and normalization to mass
+
+        def salpeter(m):
+            return m**-2.35
+
+        def chabrier(m):
+            k = 0.158 * np.exp(-(-np.log10(0.08))**2 / (2 * 0.69**2))
+            imf = k * m**-2.3
+            imf[m <= 1] = (0.158 * (1. / m[m <= 1])
+                           * np.exp(-(np.log10(m[m <= 1]) - np.log10(0.08))**2
+                                    / (2 * 0.69**2)))
+            return imf
+
+        def kroupa(m):
+            imf = 0.08**-0.3 * (0.5 / 0.08)**-1.3 * (m / 0.5)**-2.3
+            imf[m < 0.5] = 0.08**-0.3 * (m[m < 0.5] / 0.08)**-1.3
+            imf[m < 0.08] = m[m < 0.08]**-0.3
+            return imf
+
+        def this_imf(m, perc=50.):
+            '''perc is percentile of alpha chain to use'''
+
+            _, mb12, mb23, _ = self._modelparams.fixed_params['m_breaks']
+
+            ch = self._get_labelled_chains()
+            a1 = ch.get('a1', self._modelparams.fixed_params.get('a1'))
+            a2 = ch.get('a2', self._modelparams.fixed_params.get('a2'))
+            a3 = ch.get('a3', self._modelparams.fixed_params.get('a3'))
+
+            a1, a2, a3 = [np.percentile(a, perc) for a in (a1, a2, a3)]
+
+            imf = mb12**-a1 * (mb23 / mb12)**-a2 * (m / mb23)**-a3
+            imf[m < mb23] = mb12**-a1 * (m[m < mb23] / mb12)**-a2
+            imf[m < mb12] = m[m < mb12]**-a1
+
+            return imf
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        m0 = np.array([1])
+        m_domain = np.logspace(-2, 2, 400)  # TODO this isn't the same for all
+
+        if show_canonical is True or show_canonical == 'all':
+            show_canonical = {'salpeter', 'chabrier', 'kroupa'}
+
+        if 'salpeter' in show_canonical:
+            norm = salpeter(m0)
+            ax.loglog(m_domain, salpeter(m_domain) / norm, label='Salpeter')
+
+        if 'chabrier' in show_canonical:
+            norm = chabrier(m0)
+            ax.loglog(m_domain, chabrier(m_domain) / norm, label='Chabrier')
+
+        if 'kroupa' in show_canonical:
+            norm = kroupa(m0)
+            ax.loglog(m_domain, kroupa(m_domain) / norm, label='Kroupa')
+
+        # plot median
+        med_plot, = ax.loglog(m_domain, this_imf(m_domain) / this_imf(m0))
+
+        # if ci, plot confidence interval
+        if ci:
+            lower = this_imf(m_domain, perc=15.87) / this_imf(m0, perc=15.87)
+            upper = this_imf(m_domain, perc=84.13) / this_imf(m0, perc=84.13)
+
+            ax.fill_between(m_domain, upper, lower,
+                            alpha=0.3, color=med_plot.get_color(),
+                            label=getattr(self, 'name', None))
+
+        ax.set_xlabel(r'Mass $[M_{\odot}]$')
+        ax.set_ylabel(r'Mass Function $\xi(m)\Delta m$')
+
+        ax.legend()
+
+        return fig
 
 
 class MCMCRun(_SingleRunAnalysis):
@@ -1450,7 +1550,8 @@ class MCMCRun(_SingleRunAnalysis):
 
         return fig
 
-    def plot_marginals(self, fig=None, params=None, **corner_kw):
+    def plot_marginals(self, fig=None, params=None, label=None,
+                       hist_kwargs=None, **corner_kw):
         '''Plot a "corner plot" showcasing the relationships between parameters.
 
         Plots a Nparam-Nparam lower-triangular "corner" marginal plot showing
@@ -1490,19 +1591,61 @@ class MCMCRun(_SingleRunAnalysis):
         # params is None or a list of string labels
         if params is not None:
             raw_labels = self._get_labels(math_labels=False)
-            prm_inds = [raw_labels.index(p) for p in params]
 
-            labels = [labels[i] for i in prm_inds]
-            chain = chain[..., prm_inds]
+            spec_chain = np.empty((chain.shape[0], len(params)))
+            spec_labels = []
+
+            # Loop over params so we can catch fixed parameters
+            for i, p in enumerate(params):
+                try:
+                    prm_ind = raw_labels.index(p)
+                    lbl = labels[prm_ind]
+                    vals = chain[..., prm_ind]
+
+                except ValueError:
+                    lbl = _get_latex_label(p, with_units=True)
+                    vals = self._modelparams.fixed_params[p]
+
+                spec_labels.append(lbl)
+                spec_chain[:, i] = vals
+
+            labels, chain = spec_labels, spec_chain
+
+        ranges = [1, ] * chain.shape[-1]
 
         chain = chain.reshape((-1, chain.shape[-1]))
 
         corner_kw.setdefault('plot_datapoints', False)
         corner_kw.setdefault('labelpad', 0.25)
 
-        fig = corner.corner(chain, labels=labels, fig=fig, **corner_kw)
+        if label is not None:
+            hist_kwargs = (hist_kwargs or {}) | {'label': label}
+
+        fig = corner.corner(chain, labels=labels, fig=fig,
+                            range=ranges, hist_kwargs=hist_kwargs, **corner_kw)
+
+        # Display legend, if it's labelled
+
+        if label is not None:
+            fig.axes[0].legend(bbox_to_anchor=(1.05, 1),
+                               loc='upper left', borderaxespad=0.)
 
         fig.subplots_adjust(left=0.05, bottom=0.06)
+
+        # Share the axes along row-col
+        # Must be done manually due to corner
+
+        axes = np.reshape(fig.axes, (chain.shape[-1], chain.shape[-1]))
+
+        for ir, row in enumerate(axes):
+            for ax in row[1:ir]:
+                ax.sharey(row[0])
+                ax.label_outer()
+
+        for ic, col in enumerate(axes.T):
+            for ax in col[ic:-1]:
+                ax.sharex(col[-1])
+                ax.label_outer()
 
         return fig
 
@@ -2157,7 +2300,7 @@ class NestedRun(_SingleRunAnalysis):
     # ----------------------------------------------------------------------
 
     def plot_marginals(self, fig=None, full_volume=False, params=None,
-                       **corner_kw):
+                       label=None, hist_kwargs=None, **corner_kw):
         '''Plot a "corner plot" showcasing the relationships between parameters.
 
         Plots a Nparam-Nparam lower-triangular "corner" marginal plot showing
@@ -2205,19 +2348,61 @@ class NestedRun(_SingleRunAnalysis):
         # params is None or a list of string labels
         if params is not None:
             raw_labels = self._get_labels(math_labels=False)
-            prm_inds = [raw_labels.index(p) for p in params]
 
-            labels = [labels[i] for i in prm_inds]
-            chain = chain[..., prm_inds]
+            spec_chain = np.empty((chain.shape[0], len(params)))
+            spec_labels = []
+
+            # Loop over params so we can catch fixed parameters
+            for i, p in enumerate(params):
+                try:
+                    prm_ind = raw_labels.index(p)
+                    lbl = labels[prm_ind]
+                    vals = chain[..., prm_ind]
+
+                except ValueError:
+                    lbl = _get_latex_label(p, with_units=True)
+                    vals = self._modelparams.fixed_params[p]
+
+                spec_labels.append(lbl)
+                spec_chain[:, i] = vals
+
+            labels, chain = spec_labels, spec_chain
+
+        ranges = [1, ] * chain.shape[-1]
 
         chain = chain.reshape((-1, chain.shape[-1]))
 
         corner_kw.setdefault('plot_datapoints', False)
         corner_kw.setdefault('labelpad', 0.25)
 
-        fig = corner.corner(chain, labels=labels, fig=fig, **corner_kw)
+        if label is not None:
+            hist_kwargs = (hist_kwargs or {}) | {'label': label}
+
+        fig = corner.corner(chain, labels=labels, fig=fig,
+                            range=ranges, hist_kwargs=hist_kwargs, **corner_kw)
+
+        # Display legend, if it's labelled
+
+        if label is not None:
+            fig.axes[0].legend(bbox_to_anchor=(1.05, 1),
+                               loc='upper left', borderaxespad=0.)
 
         fig.subplots_adjust(left=0.05, bottom=0.06)
+
+        # Share the axes along row-col
+        # Must be done manually due to corner
+
+        axes = np.reshape(fig.axes, (chain.shape[-1], chain.shape[-1]))
+
+        for ir, row in enumerate(axes):
+            for ax in row[1:ir]:
+                ax.sharey(row[0])
+                ax.label_outer()
+
+        for ic, col in enumerate(axes.T):
+            for ax in col[ic:-1]:
+                ax.sharex(col[-1])
+                ax.label_outer()
 
         return fig
 
@@ -2922,7 +3107,10 @@ class NestedRun(_SingleRunAnalysis):
 
         # ------------------------------------------------------------------
         # Setup axes
+        # (Insanely convoluted)
         # ------------------------------------------------------------------
+
+        # Setup y limits
 
         if ylims is None:
             ylims = [(None, None)] * len(labels)
@@ -2931,21 +3119,83 @@ class NestedRun(_SingleRunAnalysis):
             mssg = "`ylims` must match number of params"
             raise ValueError(mssg)
 
-        gs_kw = {}
+        # gs_kw = {}
 
-        if (shape := (len(labels) + show_weight, 1))[0] > 5 + show_weight:
-            shape = (int(np.ceil(shape[0] / 2)) + show_weight, 2)
+        # Determine shapes for constructing subplots/subfigures
+
+        if len(labels) > 5:
+            # If there are more than 5 params, lets split this in two
+
+            right_cols = (len(labels) // 2)
+            left_cols = (len(labels) - right_cols)
+            shape = ((left_cols + show_weight, right_cols + show_weight), 2)
+
+            total_axes = sum(shape[0])
+
+            # TODO should still do this, but would need diff gskw for each col
+            # if show_weight:
+            #     gs_kw = {"height_ratios": [0.5] + [1] * (shape[0] - 1)}
+
+        else:
+
+            left_cols = len(labels)
+            right_cols = 0
+            total_axes = left_cols + show_weight
+            shape = (total_axes, )
+
+        # Create the figure
+
+        if ((fig is not None) and (len(fig.axes) == 2 * total_axes)):
+            # assume this was made by this method previously (with post. axes)
+            axes = fig.axes
+            new_axes = False
+
+        else:
+            fig, axes = self._setup_multi_artist(fig, shape, sharex=True,
+                                                 gridspec_kw=gs_kw)
+            new_axes = True
+
+        # Determine what axes are what
+
+        if right_cols > 0:
+            left_prm_axes = [ax for ax in fig.subfigs[0].axes[show_weight:]
+                             if 'posterior' not in ax.get_label()]
+
+            right_prm_axes = [ax for ax in fig.subfigs[1].axes[show_weight:]
+                              if 'posterior' not in ax.get_label()]
+
+            prm_axes = np.r_[left_prm_axes, right_prm_axes]
 
             if show_weight:
-                gs_kw = {"height_ratios": [0.5] + [1] * (shape[0] - 1)}
+                wt_axes = [fig.subfigs[0].axes[0], fig.subfigs[1].axes[0]]
 
-        fig, axes = self._setup_multi_artist(fig, shape, sharex=True,
-                                             gridspec_kw=gs_kw)
+            left_prm_axes[-1].set_xlabel(r'$-\ln(X)$')
+            right_prm_axes[-1].set_xlabel(r'$-\ln(X)$')
 
-        axes = axes.reshape(shape)
+        else:
+            prm_axes = [ax for ax in fig.axes[show_weight:]
+                        if 'posterior' not in ax.get_label()]
 
-        for ax in axes[-1]:
-            ax.set_xlabel(r'$-\ln(X)$')
+            if show_weight:
+                wt_axes = [fig.axes[0]]
+
+            prm_axes[-1].set_xlabel(r'$-\ln(X)$')
+
+        # Create the posterior axes, if necessary
+
+        if new_axes:
+            for ind, ax in enumerate(prm_axes):
+
+                lbl = labels[ind]
+
+                ax.set_label(lbl)
+
+                divider = make_axes_locatable(ax)
+                post_ax = divider.append_axes('right', size="25%",
+                                              pad=0, sharey=ax)
+
+                post_ax.set_xticks([])
+                post_ax.set_label(f'{lbl} posterior')
 
         # ------------------------------------------------------------------
         # If showing weights explicitly, format the ax and use the
@@ -2953,7 +3203,7 @@ class NestedRun(_SingleRunAnalysis):
         # ------------------------------------------------------------------
 
         if show_weight:
-            for ax in axes[0]:
+            for ax in wt_axes:
                 # plot weights above scatter plots
                 # TODO figure out what colors to use
                 self.plot_weights(fig=fig, ax=ax, resampled=True, filled=True,
@@ -2963,47 +3213,44 @@ class NestedRun(_SingleRunAnalysis):
                 ax.set_xlabel(None)
                 ax.set_yticklabels([])
                 ax.set_ylabel(None)
+                ax.set_label('weights')
 
                 # Theres probably a cleaner way to do this
                 divider = make_axes_locatable(ax)
                 spacer = divider.append_axes('right', size="25%", pad=0)
                 spacer.set_visible(False)
+                spacer.set_label('weights posterior')
 
         # ------------------------------------------------------------------
         # Plot each parameter
         # ------------------------------------------------------------------
 
-        for ind, ax in enumerate(axes[1:].flatten()):
+        for ind, ax in enumerate(prm_axes):
 
             # --------------------------------------------------------------
             # Get the relevant samples.
             # If necessary, remove any unneeded axes
             # --------------------------------------------------------------
 
-            try:
-                prm, eq_prm = chain[:, ind], eq_chain[:, ind]
-                lbl = labels[ind]
-
-            except IndexError:
-                # If theres an odd number of (>5) params need to delete last one
-                # TODO preferably this would also resize this column of plots
-                ax.remove()
-                continue
+            prm, eq_prm = chain[:, ind], eq_chain[:, ind]
+            lbl = labels[ind]
 
             # --------------------------------------------------------------
             # Divide the ax to accomodate the posterior plot on the right
             # --------------------------------------------------------------
 
-            divider = make_axes_locatable(ax)
-            post_ax = divider.append_axes('right', size="25%", pad=0, sharey=ax)
-
-            post_ax.set_xticks([])
+            for pax in fig.axes:
+                if pax.get_label() == f'{lbl} posterior':
+                    post_ax = pax
+                    break
+            else:
+                mssg = f"No posterior axes made for {lbl}. How did you do this?"
+                raise RuntimeError(mssg)
 
             # --------------------------------------------------------------
             # Plot the samples with respect to ln(X)
             # --------------------------------------------------------------
 
-            # TODO the y tick values have disappeared should be on the last axis
             if initial_batch_only:
                 msk = self.results.samples_batch == 0
                 ax.scatter(-self.results.logvol[msk], prm[msk],
@@ -3044,77 +3291,6 @@ class NestedRun(_SingleRunAnalysis):
                 tk.set_visible(False)
 
             ax.set_ylim(ylims[ind])
-
-        return fig
-
-    def plot_IMF(self, fig=None, ax=None, show_canonical='all', ci=True):
-        '''Plot the IMF, based on the alpha exponents.'''
-        def salpeter(m):
-            return m**-2.35
-
-        def chabrier(m):
-            k = 0.158 * np.exp(-(-np.log10(0.08))**2 / (2 * 0.69**2))
-            imf = k * m**-2.3
-            imf[m <= 1] = (0.158 * (1. / m[m <= 1])
-                           * np.exp(-(np.log10(m[m <= 1]) - np.log10(0.08))**2
-                                    / (2 * 0.69**2)))
-            return imf
-
-        def kroupa(m):
-            imf = 0.08**-0.3 * (0.5 / 0.08)**-1.3 * (m / 0.5)**-2.3
-            imf[m < 0.5] = 0.08**-0.3 * (m[m < 0.5] / 0.08)**-1.3
-            imf[m < 0.08] = m[m < 0.08]**-0.3
-            return imf
-
-        def this_imf(m, perc=50.):
-            '''perc is percentile of alpha chain to use'''
-
-            # TODO this is not valid anymore, since free parameters can change!
-            ch = self._get_equal_weight_chains()[1]
-            a1, a2, a3 = np.percentile(ch[:, 8:11], perc, axis=0)
-
-            imf = 0.5**-a1 * (1 / 0.5)**-a2 * (m / 1)**-a3
-            imf[m < 1] = 0.5**-a1 * (m[m < 1] / 0.5)**-a2
-            imf[m < 0.5] = m[m < 0.5]**-a1
-            return imf
-
-        fig, ax = self._setup_artist(fig, ax)
-
-        m0 = np.array([1])
-        m_domain = np.logspace(-2, 2, 400)
-
-        if show_canonical is True or show_canonical == 'all':
-            show_canonical = {'salpeter', 'chabrier', 'kroupa'}
-
-        if 'salpeter' in show_canonical:
-            norm = salpeter(m0)
-            ax.loglog(m_domain, salpeter(m_domain) / norm, label='Salpeter')
-
-        if 'chabrier' in show_canonical:
-            norm = chabrier(m0)
-            ax.loglog(m_domain, chabrier(m_domain) / norm, label='Chabrier')
-
-        if 'kroupa' in show_canonical:
-            norm = kroupa(m0)
-            ax.loglog(m_domain, kroupa(m_domain) / norm, label='Kroupa')
-
-        # plot median
-        med_plot, = ax.loglog(m_domain, this_imf(m_domain) / this_imf(m0))
-
-        # if ci, plot confidence interval
-        if ci:
-            lower = this_imf(m_domain, perc=15.87) / this_imf(m0, perc=15.87)
-            upper = this_imf(m_domain, perc=84.13) / this_imf(m0, perc=84.13)
-
-            # TODO better label?
-            ax.fill_between(m_domain, upper, lower,
-                            alpha=0.3, color=med_plot.get_color(),
-                            label=getattr(self, 'name', None))
-
-        ax.set_xlabel(r'Mass $[M_{\odot}]$')
-        ax.set_ylabel(r'Mass Function $\xi(m)\Delta m$')
-
-        ax.legend()
 
         return fig
 
@@ -4116,15 +4292,28 @@ class RunCollection(_RunAnalysis):
 
     def _add_colours(self, ax, mappable, cparam, clabel=None, *, alpha=1.,
                      add_colorbar=True, extra_artists=None, math_label=True,
-                     fix_cbar_ticks=True, cbounds=None):
+                     fix_cbar_ticks=True, cbounds=None, part='face'):
         '''Add colours to all artists and add the relevant colorbar to ax.
         Unnecessarily complicated to account for diverse artists (violinplot).
         '''
         import matplotlib.colorbar as mpl_cbar
 
-        def set_colour(art, clr):
+        def set_colour(art, clr, which_part=part):
+
+            match which_part.casefold():
+                case 'face':
+                    setter = art.set_facecolor
+                case 'edge':
+                    setter = art.set_edgecolor
+                case 'both' | 'all' | True:
+                    setter = art.set_color
+                case _:
+                    mssg = "Invalid 'part', must be one of 'both', 'edge', face"
+                    raise ValueError(mssg)
+
             try:
-                art.set_color(clr)
+                setter(clr)
+
             except ValueError as err:
                 mssg = (f"Could not set colour '{clr}'. Colours must be a "
                         "valid model parameter, matplotlib colour or float")
@@ -4180,10 +4369,10 @@ class RunCollection(_RunAnalysis):
         if extra_artists is not None:
             for artist in extra_artists:
 
-                # Set colors normally
+                # Set colors normally (force part='all'')
                 try:
                     # artist.set_color(colors)
-                    set_colour(artist, colors)
+                    set_colour(artist, colors, which_part='all')
 
                 # If fails, attempt to set one colour at a time
                 except (ValueError, AttributeError) as err:
@@ -4194,7 +4383,7 @@ class RunCollection(_RunAnalysis):
                     try:
                         for i, subart in enumerate(artist):
                             # subart.set_color(colors[i])
-                            set_colour(subart, colors[i])
+                            set_colour(subart, colors[i], which_part='all')
 
                     except (ValueError, TypeError):
                         mssg = f'Cannot `set_color` of extra artist "{artist}"'
@@ -4300,6 +4489,9 @@ class RunCollection(_RunAnalysis):
         sc_kwargs = self._dissect_scatter_kwargs(kwargs)
 
         errbar = ax.errorbar(x, y, xerr=xerr, yerr=yerr, fmt='none', **kwargs)
+
+        # TODO markerfacecoloralt is not supported by scatter because it doesnt
+        # get and use the marker.get_alt_path(). This should be fixed in mpl.
 
         points = ax.scatter(x, y, picker=True, label=label, **sc_kwargs)
 
@@ -5087,6 +5279,135 @@ class RunCollection(_RunAnalysis):
 
         return fig
 
+    def plot_lit_residuals(self, param, truths, e_truths=None, src_truths='',
+                           fig=None, ax=None, *,
+                           percentage=True,
+                           annotate=False, annotate_kwargs=None,
+                           clr_param=None, clr_kwargs=None,
+                           force_model=False, label=None, marker='o', **kwargs):
+        '''Plot residuals between parameter values and "truths".
+
+        Plots a scatter plot (with errorbars) of the residuals of this `param`
+        with the given `truths` array, as a function of the `truths`, and using
+        the median and 1σ error values from each run in this collection.
+
+        Parameters
+        ----------
+        param : str
+            Name of the parameter to plot.
+
+        truths : np.ndarray[Nruns]
+            Array of "truth" values, to plot on the y-axis.
+
+        e_truths : np.ndarray[Nruns], optional
+            Array of uncertainties on the "truth" values.
+
+        src_truths : str, optional
+            The source of the "truths", included in the y-axis label.
+
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_RunAnalysis._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this relation. Should be a
+            part of the given `fig`.
+
+        percentage : bool, optional
+            If true (default), will plot residuals as a percentage of the
+            true values.
+
+        annotate : bool, optional
+            Optionally create a hook to this figure allowing the interactive
+            annotating of selected cluster names. See `_Annotator` for more
+            details.
+
+        annotate_kwargs : dict, optional
+            Optional arguments passed to the `_Annotator` instance.
+
+        clr_param : str, optional
+            Defines the colour of the plotted points. If the name of a
+            parameter, will colour each point by the respective value of that
+            parameter in each run, otherwise will accept a single colour, or
+            array of colours for each run.
+
+        clr_kwargs : dict, optional
+            Optional arguments passed to the `_add_colours` function.
+
+        force_model : bool, optional
+            Force these parameter values to be taken from model quantities.
+            Can be useful when some parameter names overlap (e.g. "ra").
+
+        label : str, optional
+            Set a label that will be displayed in the legend.
+
+        marker : str, optional
+            The marker style. See `matplotlib.markers` for more information.
+
+        **kwargs : dict
+            All other arguments are passed to `ax.errorbar` and `ax.scatter`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
+
+        # TODO currently not supporting e_truths, but it should
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        val, *dval = self._get_param(param, force_model=force_model)
+
+        if percentage:
+            res = 100 * (val - truths) / truths
+            res_err = 100 * u.Quantity(dval) / val
+        else:
+            res = val - truths
+            res_err = dval
+
+        points, errbar = self._scatter_error(ax, truths, res,
+                                             xerr=None, yerr=res_err,
+                                             marker=marker, label=label,
+                                             **kwargs)
+
+        xlbl = self._get_latex_labels(param, force_model=force_model)
+        ax.set_xlabel(xlbl + (f' ({src_truths})' if src_truths else ''))
+
+        ylbl = self._get_latex_labels(param, force_model=force_model,
+                                      with_units=False)
+        ax.set_ylabel(Fr'$\Delta${ylbl}{" [%]" if percentage else ""}')
+        # TODO ylabel should look more like that in the "dist" plots
+
+        # ax.set_xlim(0.)
+        # ax.set_ylim(0.)
+
+        if clr_param is not None:
+
+            if clr_kwargs is None:
+                clr_kwargs = {}
+
+            err_artists = itertools.chain.from_iterable(errbar[1:])
+
+            self._add_colours(ax, points, clr_param,
+                              extra_artists=err_artists, **clr_kwargs)
+
+        elif not (kwargs.keys() & {'c', 'color'}):
+            # Ensure that the points and lines are the same colour
+            for ch in errbar.get_children():
+                ch.set_color(points.get_facecolor())
+
+        if annotate:
+
+            if annotate_kwargs is None:
+                annotate_kwargs = {}
+
+            _Annotator(fig, ax, self.runs, truths, res, **annotate_kwargs)
+
+        return fig
+
     def plot_density(self, param1, param2, fig=None, ax=None, method='hex', *,
                      force_model=False, nbins=50, expand_fixed=True, **kwargs):
         '''Plot 2D density of distributions of two parameters across all runs.
@@ -5448,7 +5769,7 @@ class RunCollection(_RunAnalysis):
                            clr_param=None, clr_kwargs=None,
                            color=None, alpha=0.3, edgecolor='k', edgewidth=1.0,
                            quantiles=[0.9772, 0.8413, 0.5, 0.1587, 0.0228],
-                           force_model=False, **kwargs):
+                           force_model=False, xticks=None, **kwargs):
         '''Plot a violin plot showing the parameter distributions for all runs.
 
         Plots a violin plot with the full posterior distributions of a
@@ -5516,7 +5837,7 @@ class RunCollection(_RunAnalysis):
         # filter out all nans (causes violinplot to fail silently)
         chains = [ch[~np.isnan(ch)] for ch in chains]
 
-        xticks = np.arange(len(self.runs))
+        xticks = xticks or np.arange(len(self.runs))
 
         labels = self.names
 
@@ -5589,7 +5910,9 @@ class RunCollection(_RunAnalysis):
         return fig
 
     def plot_param_hist(self, param, fig=None, ax=None, kde=False,
-                        force_model=False, flipped=False, **kwargs):
+                        force_model=False, flipped=False,
+                        quantiles=[0.8413, 0.5, 0.1587], bw_method=None,
+                        **kwargs):
         '''Plot a histogram representing the sum of all distributions of param.
 
         Plots a histogram (or smoothed Gaussian KDE) representing the sum
@@ -5621,6 +5944,13 @@ class RunCollection(_RunAnalysis):
             If True the posterior will be flipped on it's side, attached to the
             left-axis.
 
+        quantiles : list of float
+            Quantiles to show as vertical lines
+
+        bw_method : str, scalar or callable, optional
+            The bandwidth choice method, passed to the `scipy.gaussian_kde`
+            constructor. Only used if `kde=True`.
+
         **kwargs : dict
             All other arguments are passed to `ax.fill_between` or `ax.hist`.
 
@@ -5648,7 +5978,7 @@ class RunCollection(_RunAnalysis):
             if hasattr(chains, 'unit'):
                 chains = chains.value  # erase units for plotting KDE
 
-            distribution = gaussian_kde(chains)(domain)
+            distribution = gaussian_kde(chains, bw_method=bw_method)(domain)
 
             distribution /= interp.UnivariateSpline(
                 domain, distribution, k=1, s=0, ext=1
@@ -5666,6 +5996,11 @@ class RunCollection(_RunAnalysis):
 
             orientation = "horizontal" if flipped else "vertical"
             ax.hist(chains, orientation=orientation, **kwargs)
+
+        for pq in np.quantile(chains, q=quantiles):
+            if hasattr(pq, 'unit'):
+                pq = pq.value
+            (ax.axhline if flipped else ax.axvline)(pq, color=('k', 0.5))
 
         lbl_func = ax.set_ylabel if flipped else ax.set_xlabel
         lbl_func(self._get_latex_labels(param, force_model=force_model))
