@@ -143,6 +143,8 @@ class ModelParameters:
         to the relevant free parameters when given to the one of the argument
         building methods. Necessary if, for example, you wish to vary the log
         of a parameter, rather than the parameter itself.
+        Note that these transforms are only applied to free parameters, not
+        those given in `model_kwargs`.
 
     sympy_transforms : bool, optional
         Flag allowing the passed transforms to be strings parseable by sympy,

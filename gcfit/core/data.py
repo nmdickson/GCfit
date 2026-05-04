@@ -21,7 +21,7 @@ __all__ = ['DEFAULT_FREE_PARAMS', 'DEFAULT_FREE_EV_PARAMS',
 
 DEFAULT_FREE_PARAMS = (
     'W0', 'M', 'rh', 'ra', 'g', 'delta',
-    's2', 'F', 'a1', 'a2', 'a3', 'BHret', 'd',
+    's2', 'F', 'a1', 'a2', 'a3', 'BH_ret_dyn', 'd',
 )
 
 DEFAULT_FREE_EV_PARAMS = (
@@ -800,10 +800,10 @@ class Model(lp.limepy):
         The high-mass IMF exponent (representing masses between
         `m_breaks[2:4]`). Defaults to 2.3, matching Kroupa (2001).
 
-    BHret : float, optional
-        The black hole retention fraction, representing the percentage (between
-        0 and 100) of black holes retained after dynamical ejections and natal
-        kicks.
+    BH_ret_dyn : float, optional
+        The dynamical black hole retention fraction, representing the percentage
+        (between 0 and 100) of black holes retained after dynamical ejections.
+        Note this does *not* include natal kicks. See `ssptools` for details.
 
     d : float or astropy.Quantity, optional
         Distance to the cluster, from Earth, in kiloparsecs. Mainly used for any
@@ -992,7 +992,7 @@ class Model(lp.limepy):
             return "Model"
 
     def _evolve_mf(self, m_breaks, a1, a2, a3, nbins, FeH, age, esc_rate, tcc,
-                   NS_ret, BH_ret_int, BHret, natal_kicks, vesc,
+                   NS_ret, BH_ret_dyn, natal_kicks, vesc,
                    kick_method, f_kick, SNe_method, kick_vdisp,
                    kick_slope,  kick_scale, **kwargs):
         '''Compute an evolved mass function using `ssptools.EvolvedMF`'''
@@ -1010,8 +1010,7 @@ class Model(lp.limepy):
             esc_rate=esc_rate,
             tcc=tcc,
             NS_ret=NS_ret,
-            BH_ret_int=BH_ret_int,
-            BH_ret_dyn=BHret / 100.,
+            BH_ret_dyn=BH_ret_dyn / 100.,
             natal_kicks=natal_kicks,
             vesc=vesc.value,
             kick_method=kick_method,
@@ -1102,7 +1101,7 @@ class Model(lp.limepy):
                            rhoj=rhoj, Sigmaj=Sigmaj, f=f, rh=rh)
 
     def __init__(self, W0, M, rh, g=1.5, delta=0.45, ra=1e8,
-                 a1=1.3, a2=2.3, a3=2.3, BHret=5.0, d=5,
+                 a1=1.3, a2=2.3, a3=2.3, BH_ret_dyn=5.0, d=5,
                  s2=0., F=1., J=1., *, observations=None, age=None, FeH=None,
                  m_breaks=[0.1, 0.5, 1.0, 150], nbins=[5, 5, 20],
                  tracer_masses=None, tcc=0.0, NS_ret=0.1, BH_ret_int=1.0,
@@ -1131,7 +1130,7 @@ class Model(lp.limepy):
 
         self.theta = dict(W0=W0.value, M=M.to_value('1e6 Msun'), rh=rh.value,
                           ra=np.log10(ra.value), g=g, delta=delta,
-                          a1=a1, a2=a2, a3=a3, BHret=BHret,
+                          a1=a1, a2=a2, a3=a3, BH_ret_dyn=BH_ret_dyn,
                           s2=s2, F=F, J=J, d=d.value)
 
         self.d = d
@@ -1181,7 +1180,7 @@ class Model(lp.limepy):
 
         self._mf = self._evolve_mf(m_breaks, a1, a2, a3, nbins,
                                    self.FeH, self.age, esc_rate, tcc,
-                                   NS_ret, BH_ret_int, BHret,
+                                   NS_ret, BH_ret_dyn,
                                    natal_kicks, self.vesc0,
                                    kick_method, f_kick, SNe_method, kick_vdisp,
                                    kick_slope,  kick_scale, **MF_kwargs)
@@ -1265,6 +1264,7 @@ class Model(lp.limepy):
 
                 mssg = (f"Model extent is not finite (rt>{self.rt:.2f}). "
                         "Model parameters must be adjusted")
+
                 raise ValueError(mssg) from err
 
             elif "ode not successful" in cause:
@@ -1756,7 +1756,7 @@ class EvolvedModel(Model):
     '''
 
     def _evolve_mf(self, m_breaks, a1, a2, a3, nbins, FeH, age, esc_rate, tcc,
-                   NS_ret, BH_ret_int, BHret, natal_kicks, vesc,
+                   NS_ret, BH_ret_dyn, natal_kicks, vesc,
                    kick_method, f_kick, SNe_method, kick_vdisp,
                    kick_slope,  kick_scale, **kwargs):
         '''Alternative MF init using prior-computed IMF and clusterBH outputs'''
@@ -1772,7 +1772,6 @@ class EvolvedModel(Model):
             N0=self._clusterbh.N,  # N is N0
             tcc=tcc,
             NS_ret=NS_ret,
-            BH_ret_int=BH_ret_int,
             natal_kicks=natal_kicks,
             vesc=vesc.value,
             esc_norm='M',
@@ -1976,11 +1975,11 @@ class EvolvedModel(Model):
             mssg = f'Too few clusterBH timesteps created: t={self._clusterbh.t}'
             raise ValueError(mssg)
 
-        BHret = -1  # Spoof unneeded BH retention fraction for `Model`
+        BH_ret_dyn = -1  # Spoof unneeded BH retention fraction for `Model`
 
         # Explicitly specify everything so we can get the correct Signature
         super().__init__(W0, M, rh, g=g, delta=delta, ra=ra,
-                         a1=a1, a2=a2, a3=a3, BHret=BHret, d=d,
+                         a1=a1, a2=a2, a3=a3, BH_ret_dyn=BH_ret_dyn, d=d,
                          meq=meq, eta=eta, zeta=zeta,
                          s2=s2, F=F, J=J, observations=observations, age=age,
                          FeH=FeH, m_breaks=m_breaks, nbins=nbins,
@@ -1998,7 +1997,7 @@ class EvolvedModel(Model):
         # reset theta to use initial values
         self.theta = dict(W0=W0, M0=M0.to_value('1e6 Msun'), rh0=rh0.value,
                           ra=np.log10(ra), g=g, delta=delta,
-                          a1=a1, a2=a2, a3=a3, BHret=BHret,
+                          a1=a1, a2=a2, a3=a3, BH_ret_dyn=BH_ret_dyn,
                           s2=s2, F=F, J=J, d=d.value)
 
     def get_visualizer(self):

@@ -1287,7 +1287,7 @@ def posterior(theta, observations, model_params,
     ----------
     theta : np.ndarray
         An array of model input parameters, which must be in the expected order
-        (W0, M, rh, ra, g, delta, a1, a2, a3, BHret, s2, F and d).
+        (W0, M, rh, ra, g, delta, a1, a2, a3, BH_ret_dyn, s2, F and d).
         Only parameters which are specified in `fixed_initials` may be excluded
         here. A dictionary of parameters is not allowed.
 
