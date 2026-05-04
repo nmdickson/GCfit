@@ -724,6 +724,10 @@ class _SingleRunAnalysis(_RunAnalysis):
                 mssg = "No valid fitting state was stored. Is this an old run?"
                 raise RuntimeError(mssg) from err
 
+    @property
+    def chains(self):
+        raise NotImplementedError()
+
     def __str__(self):
         try:
             return f'{self._filename} - Run Results'
@@ -864,6 +868,12 @@ class _SingleRunAnalysis(_RunAnalysis):
 
         return labels
 
+    def _get_labelled_chains(self, math_labels=False) -> dict:
+        return dict(zip(
+            self._get_labels(math_labels=math_labels),
+            self.chains.T
+        ))
+
     def _get_model_kwargs(self):
         '''Return the `model_kwargs` metadata (backwards compatible)'''
 
@@ -896,6 +906,89 @@ class _SingleRunAnalysis(_RunAnalysis):
                 mdata['model_kwargs'].visititems(_gather_attrs)
 
         return model_kw
+
+    # ----------------------------------------------------------------------
+    # Shared plots
+    # ----------------------------------------------------------------------
+
+    def plot_IMF(self, fig=None, ax=None, show_canonical='all', ci=True):
+        '''Plot the IMF, based on the alpha exponents.'''
+        # TODO should this be switched to use ssptools.PowerLawIMF?
+        #   Would allow easier plotting and normalization to mass
+
+        def salpeter(m):
+            return m**-2.35
+
+        def chabrier(m):
+            k = 0.158 * np.exp(-(-np.log10(0.08))**2 / (2 * 0.69**2))
+            imf = k * m**-2.3
+            imf[m <= 1] = (0.158 * (1. / m[m <= 1])
+                           * np.exp(-(np.log10(m[m <= 1]) - np.log10(0.08))**2
+                                    / (2 * 0.69**2)))
+            return imf
+
+        def kroupa(m):
+            imf = 0.08**-0.3 * (0.5 / 0.08)**-1.3 * (m / 0.5)**-2.3
+            imf[m < 0.5] = 0.08**-0.3 * (m[m < 0.5] / 0.08)**-1.3
+            imf[m < 0.08] = m[m < 0.08]**-0.3
+            return imf
+
+        def this_imf(m, perc=50.):
+            '''perc is percentile of alpha chain to use'''
+
+            _, mb12, mb23, _ = self._modelparams.fixed_params['m_breaks']
+
+            ch = self._get_labelled_chains()
+            a1 = ch.get('a1', self._modelparams.fixed_params.get('a1'))
+            a2 = ch.get('a2', self._modelparams.fixed_params.get('a2'))
+            a3 = ch.get('a3', self._modelparams.fixed_params.get('a3'))
+
+            a1, a2, a3 = [np.percentile(a, perc) for a in (a1, a2, a3)]
+
+            imf = mb12**-a1 * (mb23 / mb12)**-a2 * (m / mb23)**-a3
+            imf[m < mb23] = mb12**-a1 * (m[m < mb23] / mb12)**-a2
+            imf[m < mb12] = m[m < mb12]**-a1
+
+            return imf
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        m0 = np.array([1])
+        m_domain = np.logspace(-2, 2, 400)  # TODO this isn't the same for all
+
+        if show_canonical is True or show_canonical == 'all':
+            show_canonical = {'salpeter', 'chabrier', 'kroupa'}
+
+        if 'salpeter' in show_canonical:
+            norm = salpeter(m0)
+            ax.loglog(m_domain, salpeter(m_domain) / norm, label='Salpeter')
+
+        if 'chabrier' in show_canonical:
+            norm = chabrier(m0)
+            ax.loglog(m_domain, chabrier(m_domain) / norm, label='Chabrier')
+
+        if 'kroupa' in show_canonical:
+            norm = kroupa(m0)
+            ax.loglog(m_domain, kroupa(m_domain) / norm, label='Kroupa')
+
+        # plot median
+        med_plot, = ax.loglog(m_domain, this_imf(m_domain) / this_imf(m0))
+
+        # if ci, plot confidence interval
+        if ci:
+            lower = this_imf(m_domain, perc=15.87) / this_imf(m0, perc=15.87)
+            upper = this_imf(m_domain, perc=84.13) / this_imf(m0, perc=84.13)
+
+            ax.fill_between(m_domain, upper, lower,
+                            alpha=0.3, color=med_plot.get_color(),
+                            label=getattr(self, 'name', None))
+
+        ax.set_xlabel(r'Mass $[M_{\odot}]$')
+        ax.set_ylabel(r'Mass Function $\xi(m)\Delta m$')
+
+        ax.legend()
+
+        return fig
 
 
 class MCMCRun(_SingleRunAnalysis):
