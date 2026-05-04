@@ -620,6 +620,13 @@ class _RunAnalysis:
         res_ax.set_ylabel(r"% difference")
 
         # plot residuals (in percent)
+
+        if np.ndim(e2):
+            e2 = np.median(e2, axis=0)
+
+        if np.ndim(e1):
+            e1 = np.median(e1, axis=0)
+
         res = 100 * (y2 - y1) / y1
         res_err = 100 * np.sqrt(e1**2 + e2**2) / y1
         res_ax.errorbar(y1, res, yerr=res_err, fmt='none', ecolor=clrs)
@@ -3100,7 +3107,10 @@ class NestedRun(_SingleRunAnalysis):
 
         # ------------------------------------------------------------------
         # Setup axes
+        # (Insanely convoluted)
         # ------------------------------------------------------------------
+
+        # Setup y limits
 
         if ylims is None:
             ylims = [(None, None)] * len(labels)
@@ -3109,21 +3119,83 @@ class NestedRun(_SingleRunAnalysis):
             mssg = "`ylims` must match number of params"
             raise ValueError(mssg)
 
-        gs_kw = {}
+        # gs_kw = {}
 
-        if (shape := (len(labels) + show_weight, 1))[0] > 5 + show_weight:
-            shape = (int(np.ceil(shape[0] / 2)) + show_weight, 2)
+        # Determine shapes for constructing subplots/subfigures
+
+        if len(labels) > 5:
+            # If there are more than 5 params, lets split this in two
+
+            right_cols = (len(labels) // 2)
+            left_cols = (len(labels) - right_cols)
+            shape = ((left_cols + show_weight, right_cols + show_weight), 2)
+
+            total_axes = sum(shape[0])
+
+            # TODO should still do this, but would need diff gskw for each col
+            # if show_weight:
+            #     gs_kw = {"height_ratios": [0.5] + [1] * (shape[0] - 1)}
+
+        else:
+
+            left_cols = len(labels)
+            right_cols = 0
+            total_axes = left_cols + show_weight
+            shape = (total_axes, )
+
+        # Create the figure
+
+        if ((fig is not None) and (len(fig.axes) == 2 * total_axes)):
+            # assume this was made by this method previously (with post. axes)
+            axes = fig.axes
+            new_axes = False
+
+        else:
+            fig, axes = self._setup_multi_artist(fig, shape, sharex=True,
+                                                 gridspec_kw=gs_kw)
+            new_axes = True
+
+        # Determine what axes are what
+
+        if right_cols > 0:
+            left_prm_axes = [ax for ax in fig.subfigs[0].axes[show_weight:]
+                             if 'posterior' not in ax.get_label()]
+
+            right_prm_axes = [ax for ax in fig.subfigs[1].axes[show_weight:]
+                              if 'posterior' not in ax.get_label()]
+
+            prm_axes = np.r_[left_prm_axes, right_prm_axes]
 
             if show_weight:
-                gs_kw = {"height_ratios": [0.5] + [1] * (shape[0] - 1)}
+                wt_axes = [fig.subfigs[0].axes[0], fig.subfigs[1].axes[0]]
 
-        fig, axes = self._setup_multi_artist(fig, shape, sharex=True,
-                                             gridspec_kw=gs_kw)
+            left_prm_axes[-1].set_xlabel(r'$-\ln(X)$')
+            right_prm_axes[-1].set_xlabel(r'$-\ln(X)$')
 
-        axes = axes.reshape(shape)
+        else:
+            prm_axes = [ax for ax in fig.axes[show_weight:]
+                        if 'posterior' not in ax.get_label()]
 
-        for ax in axes[-1]:
-            ax.set_xlabel(r'$-\ln(X)$')
+            if show_weight:
+                wt_axes = [fig.axes[0]]
+
+            prm_axes[-1].set_xlabel(r'$-\ln(X)$')
+
+        # Create the posterior axes, if necessary
+
+        if new_axes:
+            for ind, ax in enumerate(prm_axes):
+
+                lbl = labels[ind]
+
+                ax.set_label(lbl)
+
+                divider = make_axes_locatable(ax)
+                post_ax = divider.append_axes('right', size="25%",
+                                              pad=0, sharey=ax)
+
+                post_ax.set_xticks([])
+                post_ax.set_label(f'{lbl} posterior')
 
         # ------------------------------------------------------------------
         # If showing weights explicitly, format the ax and use the
@@ -3131,7 +3203,7 @@ class NestedRun(_SingleRunAnalysis):
         # ------------------------------------------------------------------
 
         if show_weight:
-            for ax in axes[0]:
+            for ax in wt_axes:
                 # plot weights above scatter plots
                 # TODO figure out what colors to use
                 self.plot_weights(fig=fig, ax=ax, resampled=True, filled=True,
@@ -3141,47 +3213,44 @@ class NestedRun(_SingleRunAnalysis):
                 ax.set_xlabel(None)
                 ax.set_yticklabels([])
                 ax.set_ylabel(None)
+                ax.set_label('weights')
 
                 # Theres probably a cleaner way to do this
                 divider = make_axes_locatable(ax)
                 spacer = divider.append_axes('right', size="25%", pad=0)
                 spacer.set_visible(False)
+                spacer.set_label('weights posterior')
 
         # ------------------------------------------------------------------
         # Plot each parameter
         # ------------------------------------------------------------------
 
-        for ind, ax in enumerate(axes[1:].flatten()):
+        for ind, ax in enumerate(prm_axes):
 
             # --------------------------------------------------------------
             # Get the relevant samples.
             # If necessary, remove any unneeded axes
             # --------------------------------------------------------------
 
-            try:
-                prm, eq_prm = chain[:, ind], eq_chain[:, ind]
-                lbl = labels[ind]
-
-            except IndexError:
-                # If theres an odd number of (>5) params need to delete last one
-                # TODO preferably this would also resize this column of plots
-                ax.remove()
-                continue
+            prm, eq_prm = chain[:, ind], eq_chain[:, ind]
+            lbl = labels[ind]
 
             # --------------------------------------------------------------
             # Divide the ax to accomodate the posterior plot on the right
             # --------------------------------------------------------------
 
-            divider = make_axes_locatable(ax)
-            post_ax = divider.append_axes('right', size="25%", pad=0, sharey=ax)
-
-            post_ax.set_xticks([])
+            for pax in fig.axes:
+                if pax.get_label() == f'{lbl} posterior':
+                    post_ax = pax
+                    break
+            else:
+                mssg = f"No posterior axes made for {lbl}. How did you do this?"
+                raise RuntimeError(mssg)
 
             # --------------------------------------------------------------
             # Plot the samples with respect to ln(X)
             # --------------------------------------------------------------
 
-            # TODO the y tick values have disappeared should be on the last axis
             if initial_batch_only:
                 msk = self.results.samples_batch == 0
                 ax.scatter(-self.results.logvol[msk], prm[msk],
