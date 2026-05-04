@@ -1543,7 +1543,8 @@ class MCMCRun(_SingleRunAnalysis):
 
         return fig
 
-    def plot_marginals(self, fig=None, params=None, **corner_kw):
+    def plot_marginals(self, fig=None, params=None, label=None,
+                       hist_kwargs=None, **corner_kw):
         '''Plot a "corner plot" showcasing the relationships between parameters.
 
         Plots a Nparam-Nparam lower-triangular "corner" marginal plot showing
@@ -1610,8 +1611,17 @@ class MCMCRun(_SingleRunAnalysis):
         corner_kw.setdefault('plot_datapoints', False)
         corner_kw.setdefault('labelpad', 0.25)
 
+        if label is not None:
+            hist_kwargs = (hist_kwargs or {}) | {'label': label}
+
         fig = corner.corner(chain, labels=labels, fig=fig,
-                            range=ranges, **corner_kw)
+                            range=ranges, hist_kwargs=hist_kwargs, **corner_kw)
+
+        # Display legend, if it's labelled
+
+        if label is not None:
+            fig.axes[0].legend(bbox_to_anchor=(1.05, 1),
+                               loc='upper left', borderaxespad=0.)
 
         fig.subplots_adjust(left=0.05, bottom=0.06)
 
@@ -2283,7 +2293,7 @@ class NestedRun(_SingleRunAnalysis):
     # ----------------------------------------------------------------------
 
     def plot_marginals(self, fig=None, full_volume=False, params=None,
-                       **corner_kw):
+                       label=None, hist_kwargs=None, **corner_kw):
         '''Plot a "corner plot" showcasing the relationships between parameters.
 
         Plots a Nparam-Nparam lower-triangular "corner" marginal plot showing
@@ -2358,9 +2368,17 @@ class NestedRun(_SingleRunAnalysis):
         corner_kw.setdefault('plot_datapoints', False)
         corner_kw.setdefault('labelpad', 0.25)
 
-        # TODO "label" kwargs dies in corner, need to manually add
+        if label is not None:
+            hist_kwargs = (hist_kwargs or {}) | {'label': label}
+
         fig = corner.corner(chain, labels=labels, fig=fig,
-                            range=ranges, **corner_kw)
+                            range=ranges, hist_kwargs=hist_kwargs, **corner_kw)
+
+        # Display legend, if it's labelled
+
+        if label is not None:
+            fig.axes[0].legend(bbox_to_anchor=(1.05, 1),
+                               loc='upper left', borderaxespad=0.)
 
         fig.subplots_adjust(left=0.05, bottom=0.06)
 
