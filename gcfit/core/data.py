@@ -1110,7 +1110,8 @@ class Model(lp.limepy):
                  f_kick=None, SNe_method='rapid', vesc=90, kick_vdisp=265.,
                  kick_slope=1, kick_scale=20, MF_kwargs=None,
                  meanmassdef='global', ode_maxstep=1e10, ode_rtol=1e-7,
-                 diffcrit=1e-8, max_mf_iter=100, mf_iter_index=0.5):
+                 diffcrit=1e-3, max_mf_iter=100, mf_iter_index=0.5,
+                 diffdef='rel'):
 
         # ------------------------------------------------------------------
         # Add/convert units of some quantities. Supports quantities as inputs
@@ -1252,7 +1253,8 @@ class Model(lp.limepy):
             ode_rtol=ode_rtol,
             diffcrit=diffcrit,
             max_mf_iter=max_mf_iter,
-            mf_iter_index=mf_iter_index
+            mf_iter_index=mf_iter_index,
+            diffdef=diffdef
         )
 
         try:
@@ -1797,8 +1799,8 @@ class EvolvedModel(Model):
                  f_kick=None, SNe_method='rapid', kick_vdisp=265.,
                  kick_slope=1, kick_scale=20,
                  cbh_kwargs=None, MF_kwargs=None, meanmassdef='global',
-                 ode_maxstep=1e10, ode_rtol=1e-7, diffcrit=1e-8,
-                 max_mf_iter=100, mf_iter_index=0.5):
+                 ode_maxstep=1e10, ode_rtol=1e-7, diffcrit=1e-3,
+                 max_mf_iter=100, mf_iter_index=0.5, diffdef='rel'):
         import clusterbh
 
         M0 <<= u.Msun
@@ -1992,7 +1994,8 @@ class EvolvedModel(Model):
                          kick_scale=kick_scale, meanmassdef=meanmassdef,
                          ode_maxstep=ode_maxstep, ode_rtol=ode_rtol,
                          diffcrit=diffcrit, max_mf_iter=max_mf_iter,
-                         mf_iter_index=mf_iter_index, MF_kwargs=MF_kwargs)
+                         mf_iter_index=mf_iter_index, MF_kwargs=MF_kwargs,
+                         diffdef=diffdef)
 
         # reset theta to use initial values
         self.theta = dict(W0=W0, M0=M0.to_value('1e6 Msun'), rh0=rh0.value,
