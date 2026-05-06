@@ -3274,7 +3274,7 @@ class _ClusterVisualizer:
     @_support_units
     def plot_BH_kick_fret(self, fig=None, ax=None, *, x_unit='Msun',
                           label_position='left', verbose_label=True,
-                          stairplot=False, **kwargs):
+                          stairplot=True, **kwargs):
         r'''Plot model BH natal kick retention fraction.
 
         Plots the retention fraction of BHs caused by natal kicks in this
@@ -3395,7 +3395,7 @@ class _ClusterVisualizer:
         else:
             label = r'$\frac{\mathrm{d}\,N}{\mathrm{d}\,m}_{BH}$'
 
-        self._set_ylabel(ax, label, self.BH_kick_ret.unit, label_position)
+        self._set_ylabel(ax, label, None, label_position)
         self._set_xlabel(ax, r'$m_{\mathrm{BH}}$', unit=x_unit)
 
         return fig
@@ -3718,6 +3718,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
         self.r = model.r
         self.t = [model.age] << u.Gyr
+        # TODO uppermost BH bin edge will often be inf, causing plot issues
         self._mbh_edges = np.r_[model._mf.massbins.bins.BH.lower,
                                 model._mf.massbins.bins.BH.upper[-1]] << u.Msun
 
@@ -3993,6 +3994,9 @@ class ModelVisualizer(_ClusterVisualizer):
         b = np.r_[BH_bins.lower, BH_bins.upper[-1]] << u.Msun
         bw = (BH_bins.upper - BH_bins.lower) << u.Msun
 
+        # Spline must have no inf, so just make it large (?)
+        bw[~np.isfinite(bw)] = 1000 << u.Msun
+
         model_dN0dm = model._mf.Nr.BH / bw
 
         bhmf_interp = util.QuantitySpline(b[:-1] + (bw / 2), model_dN0dm, k=1)
@@ -4002,14 +4006,19 @@ class ModelVisualizer(_ClusterVisualizer):
         return bhmf_interp(mbh)
 
     def _init_kicks(self, model):
-        from ssptools import kicks
 
-        ks = model._mf._kick_stats
-        fret = kicks._get_kick_method(model._mf_kwargs['kick_method'])
+        fret = model._mf._kick_stats.retention << u.dimensionless_unscaled
 
-        mbh = 0.5 * (self._mbh_edges[1:] + self._mbh_edges[:-1])
+        return fret
 
-        return fret(mbh.value, **ks.parameters) << u.dimensionless_unscaled
+        # from ssptools import kicks
+
+        # ks = model._mf._kick_stats
+        # fret = kicks._get_kick_method(model._mf_kwargs['kick_method'])
+
+        # mbh = 0.5 * (self._mbh_edges[1:] + self._mbh_edges[:-1])
+
+        # return fret(mbh.value, **ks.parameters) << u.dimensionless_unscaled
 
 
 class CIModelVisualizer(_ClusterVisualizer):
@@ -5082,6 +5091,8 @@ class CIModelVisualizer(_ClusterVisualizer):
         b = np.r_[BH_bins.lower, BH_bins.upper[-1]] << u.Msun
         bw = (BH_bins.upper - BH_bins.lower) << u.Msun
 
+        bw[~np.isfinite(bw)] = 1000 << u.Msun
+
         model_dN0dm = model._mf.Nr.BH / bw
 
         bhmf_interp = util.QuantitySpline(b[:-1] + (bw / 2), model_dN0dm, k=1)
@@ -5091,18 +5102,20 @@ class CIModelVisualizer(_ClusterVisualizer):
         return bhmf_interp(mbh)
 
     def _init_kicks(self, model):
-        from ssptools import kicks
+        # from ssptools import kicks
 
         # This holds nans wherever kicks are not actually done (e.g. 0 BH bins)
-        # model_ret = model._mf._kick_stats['retention']
+        fret = model._mf._kick_stats.retention << u.dimensionless_unscaled
 
         # So instead, recompute the kicks (which are really fast)
-        ks = model._mf._kick_stats
-        fret = kicks._get_kick_method(model._mf_kwargs['kick_method'])
+        # ks = model._mf._kick_stats
+        # fret = kicks._get_kick_method(model._mf_kwargs['kick_method'])
 
-        mbh = 0.5 * (self._mbh_edges[1:] + self._mbh_edges[:-1])
+        # mbh = 0.5 * (self._mbh_edges[1:] + self._mbh_edges[:-1])
 
-        return fret(mbh.value, **ks.parameters) << u.dimensionless_unscaled
+        # return fret(mbh.value, **ks.parameters) << u.dimensionless_unscaled
+
+        return fret
 
     # ----------------------------------------------------------------------
     # Save and load confidence intervals to a file
@@ -5712,9 +5725,12 @@ class EvolvedVisualizer(ModelVisualizer):
 
     def _init_BH_dN0dm(self, model):
 
+        # clusterbh ibh should match mf ibh, but with natal kicks applied
         BH_bins = model._clusterbh.ibh.bins
         b = np.r_[BH_bins.lower, BH_bins.upper[-1]] << u.Msun
         bw = (BH_bins.upper - BH_bins.lower) << u.Msun
+
+        bw[~np.isfinite(bw)] = 1000 << u.Msun
 
         model_dN0dm = model._clusterbh.ibh.N / bw
 
