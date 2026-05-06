@@ -4011,15 +4011,6 @@ class ModelVisualizer(_ClusterVisualizer):
 
         return fret
 
-        # from ssptools import kicks
-
-        # ks = model._mf._kick_stats
-        # fret = kicks._get_kick_method(model._mf_kwargs['kick_method'])
-
-        # mbh = 0.5 * (self._mbh_edges[1:] + self._mbh_edges[:-1])
-
-        # return fret(mbh.value, **ks.parameters) << u.dimensionless_unscaled
-
 
 class CIModelVisualizer(_ClusterVisualizer):
     '''Analysis and visualization of a model, with confidence intervals.
@@ -5102,18 +5093,8 @@ class CIModelVisualizer(_ClusterVisualizer):
         return bhmf_interp(mbh)
 
     def _init_kicks(self, model):
-        # from ssptools import kicks
 
-        # This holds nans wherever kicks are not actually done (e.g. 0 BH bins)
         fret = model._mf._kick_stats.retention << u.dimensionless_unscaled
-
-        # So instead, recompute the kicks (which are really fast)
-        # ks = model._mf._kick_stats
-        # fret = kicks._get_kick_method(model._mf_kwargs['kick_method'])
-
-        # mbh = 0.5 * (self._mbh_edges[1:] + self._mbh_edges[:-1])
-
-        # return fret(mbh.value, **ks.parameters) << u.dimensionless_unscaled
 
         return fret
 
