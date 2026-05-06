@@ -1108,8 +1108,10 @@ class Model(lp.limepy):
                  meq=0.0, eta=0.0, zeta=1.0,
                  esc_rate=0.0, natal_kicks=True, kick_method='maxwellian',
                  f_kick=None, SNe_method='rapid', vesc=90, kick_vdisp=265.,
-                 kick_slope=1, kick_scale=20, MF_kwargs=None,
-                 meanmassdef='global', ode_maxstep=1e10, ode_rtol=1e-7,
+                 kick_slope=1, kick_scale=20,
+                 BH_IFMR_method='banerjee20', BH_IFMR_kwargs=None,
+                 MF_kwargs=None, meanmassdef='global',
+                 ode_maxstep=1e10, ode_rtol=1e-7,
                  diffcrit=1e-3, max_mf_iter=100, mf_iter_index=0.5,
                  diffdef='rel'):
 
@@ -1184,7 +1186,8 @@ class Model(lp.limepy):
                                    NS_ret, BH_ret_dyn,
                                    natal_kicks, self.vesc0,
                                    kick_method, f_kick, SNe_method, kick_vdisp,
-                                   kick_slope,  kick_scale, **MF_kwargs)
+                                   kick_slope,  kick_scale,
+                                   BH_IFMR_method, BH_IFMR_kwargs, **MF_kwargs)
 
         if not self._mf.converged:
             mssg = ("Mass function evolution ODE failed to converge"
@@ -1760,7 +1763,8 @@ class EvolvedModel(Model):
     def _evolve_mf(self, m_breaks, a1, a2, a3, nbins, FeH, age, esc_rate, tcc,
                    NS_ret, BH_ret_dyn, natal_kicks, vesc,
                    kick_method, f_kick, SNe_method, kick_vdisp,
-                   kick_slope,  kick_scale, **kwargs):
+                   kick_slope,  kick_scale, BH_IFMR_method, BH_IFMR_kwargs,
+                   **kwargs):
         '''Alternative MF init using prior-computed IMF and clusterBH outputs'''
         from ssptools import EvolvedMFWithBH
 
@@ -1784,6 +1788,8 @@ class EvolvedModel(Model):
             kick_vdisp=kick_vdisp,
             kick_slope=kick_slope,
             kick_scale=kick_scale,
+            BH_IFMR_method=BH_IFMR_method,
+            BH_IFMR_kwargs=BH_IFMR_kwargs,
             **kwargs  # will error here if MF_kwargs included any of above args
         )
 
@@ -1798,6 +1804,7 @@ class EvolvedModel(Model):
                  natal_kicks=True, kick_method='maxwellian',
                  f_kick=None, SNe_method='rapid', kick_vdisp=265.,
                  kick_slope=1, kick_scale=20,
+                 BH_IFMR_method='banerjee20', BH_IFMR_kwargs=None,
                  cbh_kwargs=None, MF_kwargs=None, meanmassdef='global',
                  ode_maxstep=1e10, ode_rtol=1e-7, diffcrit=1e-3,
                  max_mf_iter=100, mf_iter_index=0.5, diffdef='rel'):
@@ -1821,9 +1828,12 @@ class EvolvedModel(Model):
         # Make sure the relevant kickparams are passed to clusterBH by default
         # but still respect any explicitly passed in `ibh_kwargs` too
 
-        ibh_kwargs = dict(kick_method=kick_method, f_kick=f_kick,
-                          SNe_method=SNe_method, kick_vdisp=kick_vdisp,
-                          kick_slope=kick_slope, kick_scale=kick_scale)
+        ibh_kwargs = dict(
+            kick_method=kick_method, f_kick=f_kick,
+            SNe_method=SNe_method, kick_vdisp=kick_vdisp,
+            kick_slope=kick_slope, kick_scale=kick_scale,
+            BH_IFMR_method=BH_IFMR_method, BH_IFMR_kwargs=BH_IFMR_kwargs
+        )
 
         ibh_kwargs |= cbh_kwargs.get('ibh_kwargs', {}).copy()
 
