@@ -994,7 +994,8 @@ class Model(lp.limepy):
     def _evolve_mf(self, m_breaks, a1, a2, a3, nbins, FeH, age, esc_rate, tcc,
                    NS_ret, BH_ret_dyn, natal_kicks, vesc,
                    kick_method, f_kick, SNe_method, kick_vdisp,
-                   kick_slope,  kick_scale, **kwargs):
+                   kick_slope,  kick_scale, BH_IFMR_method, BH_IFMR_kwargs,
+                   **kwargs):
         '''Compute an evolved mass function using `ssptools.EvolvedMF`'''
 
         # Total mass of this will be wrong due to N0 but Mj is scaled in limepy
@@ -1019,6 +1020,8 @@ class Model(lp.limepy):
             kick_vdisp=kick_vdisp,
             kick_slope=kick_slope,
             kick_scale=kick_scale,
+            BH_IFMR_method=BH_IFMR_method,
+            BH_IFMR_kwargs=BH_IFMR_kwargs,
             **kwargs  # will error here if MF_kwargs included any of above args
         )
 
