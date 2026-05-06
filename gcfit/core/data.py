@@ -1808,7 +1808,8 @@ class EvolvedModel(Model):
                  cbh_kwargs=None, MF_kwargs=None, meanmassdef='global',
                  ode_maxstep=1e10, ode_rtol=1e-7, diffcrit=1e-3,
                  max_mf_iter=100, mf_iter_index=0.5, diffdef='rel'):
-        import clusterbh
+
+        import cbhbd
 
         M0 <<= u.Msun
         rh0 <<= u.pc
@@ -1924,6 +1925,7 @@ class EvolvedModel(Model):
         # clusterBH fit parameters should use defaults, or given in cbh_kwargs
         # ------------------------------------------------------------------
 
+        cbh_kwargs.setdefault('dtout', 2.0)
         cbh_kwargs.setdefault('ssp', True)
         cbh_kwargs.setdefault('kick', True)
         cbh_kwargs.setdefault('tidal', True)
@@ -1944,8 +1946,9 @@ class EvolvedModel(Model):
 
         self.cbh_kwargs = cbh_kwargs
 
-        self._clusterbh = clusterbh.clusterBH(N0, self.rhoh0.value,
-                                              **self.cbh_kwargs)
+        self._clusterbh = cbhbd.cbhbd.CBHBD(N=N0, rhoh0=self.rhoh0.value,
+                                            compute_mergers=False,
+                                            **self.cbh_kwargs).cluster
 
         # Make sure no negative f_BH values are allowed
         self._clusterbh.fbh[self._clusterbh.fbh < 0] = 0.
@@ -1971,7 +1974,8 @@ class EvolvedModel(Model):
                    / self._clusterbh.tev)
 
         # Ejection
-        bf = self._clusterbh.balance_function(self._clusterbh.t)
+        bf = self._clusterbh.balance_function((self._clusterbh.t * 1e3) - tcc)
+
         alpha_c = (self._clusterbh.alpha_ci * bf)
         alpha_c += ((self._clusterbh.alpha_cf * bf - alpha_c)
                     * (1 - self._clusterbh.beta_function(self._clusterbh.S)))
