@@ -3780,7 +3780,8 @@ class ModelVisualizer(_ClusterVisualizer):
         self.N_WD = model.WD.Nj.sum()
         self.BH_massfunc = self.BH0_massfunc = self._init_BH_dNdm(model)[bh_slc]
         self.BH_kick_ret = self._init_kicks(model)[bh_slc]
-        self.M_kicked = model._mf._kick_stats.total_kicked << u.Msun
+        Mscale = model._MS / model._mf.M.sum()  # non-ev models need mf scaled
+        self.M_kicked = (model._mf._kick_stats.total_kicked * Mscale) << u.Msun
         self.Ms_t = model.nonBH.Mj.sum()[t_slc]
         self.mmean_t = model.mmean[t_slc]
         self.rt_t = model.rt[t_slc]
@@ -3997,9 +3998,12 @@ class ModelVisualizer(_ClusterVisualizer):
         # Spline must have no inf, so just make it large (?)
         bw[~np.isfinite(bw)] = 1000 << u.Msun
 
-        model_dN0dm = model._mf.Nr.BH / bw
+        model_dNdm = model._mf.Nr.BH / bw
 
-        bhmf_interp = util.QuantitySpline(b[:-1] + (bw / 2), model_dN0dm, k=1)
+        # Sometimes nans sneak around
+        model_dNdm[~np.isfinite(model_dNdm)] = 0. << model_dNdm.unit
+
+        bhmf_interp = util.QuantitySpline(b[:-1] + (bw / 2), model_dNdm, k=1)
 
         mbh = 0.5 * (self._mbh_edges[1:] + self._mbh_edges[:-1])
 
@@ -4698,7 +4702,9 @@ class CIModelVisualizer(_ClusterVisualizer):
             M_BH0[model_ind] = M_BH[model_ind]
             N_BH0[model_ind] = N_BH[model_ind]
 
-            M_kicked[model_ind] = model._mf._kick_stats.total_kicked << u.Msun
+            Mscale = model._MS / model._mf.M.sum()  # scaling for non-ev eMFs
+            ks = model._mf._kick_stats
+            M_kicked[model_ind] = (ks.total_kicked * Mscale) << u.Msun
 
             bhslc = (slice(None), model_ind, 0)
             BH_massfunc[bhslc] = BH0_massfunc[bhslc] = viz._init_BH_dNdm(model)
@@ -5084,9 +5090,12 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         bw[~np.isfinite(bw)] = 1000 << u.Msun
 
-        model_dN0dm = model._mf.Nr.BH / bw
+        model_dNdm = model._mf.Nr.BH / bw
 
-        bhmf_interp = util.QuantitySpline(b[:-1] + (bw / 2), model_dN0dm, k=1)
+        # Sometimes nans sneak around
+        model_dNdm[~np.isfinite(model_dNdm)] = 0. << model_dNdm.unit
+
+        bhmf_interp = util.QuantitySpline(b[:-1] + (bw / 2), model_dNdm, k=1)
 
         mbh = 0.5 * (self._mbh_edges[1:] + self._mbh_edges[:-1])
 
