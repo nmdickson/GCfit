@@ -4515,7 +4515,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         # number density
 
-        numdens = np.full((1, N, Nr), np.nan) << u.pc**-2
+        numdens = np.full((Nm, N, Nr), np.nan) << u.pc**-2
         # K_scale = np.full((1,), np.nan) << u.dimensionless_unscaled
         K_scale = np.full((Nm), np.nan) << u.dimensionless_unscaled
 
