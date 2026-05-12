@@ -3119,7 +3119,7 @@ class NestedRun(_SingleRunAnalysis):
             mssg = "`ylims` must match number of params"
             raise ValueError(mssg)
 
-        # gs_kw = {}
+        gs_kw = {}
 
         # Determine shapes for constructing subplots/subfigures
 
