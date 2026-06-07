@@ -3780,6 +3780,10 @@ class RunCollection(_RunAnalysis):
         '''List of `.state`s of each run in this collection.'''
         return [r.state for r in self.runs]
 
+    @property
+    def ESSs(self):
+        '''List of `.ESS`s of each run in this collection.'''
+        return np.array([r.ESS for r in self.runs])
 
     def __iter__(self):
         '''Return an iterator over the individual runs in this collection.'''
@@ -3824,7 +3828,7 @@ class RunCollection(_RunAnalysis):
             raise ValueError(mssg)
 
     def filter_runs(self, pattern, sort_by=None, sort=True, filter_out=False,
-                    **kwargs):
+                    min_state=None, **kwargs):
         '''Filter all runs based on names and return a new object with them.
 
         Based on a given string pattern, filters out all runs within this
@@ -3851,6 +3855,10 @@ class RunCollection(_RunAnalysis):
             If True, will return a new object with the filtered runs *removed*,
             rather than with only the filtered runs. Defaults to False.
 
+        min_state : NestedFittingState or int, optional
+            If given, only runs with a `state` greater than or equal to this
+            will be filtered upon.
+
         sort : bool, optional
             Whether or not to sort this run. If `sort_by` is None, this
             argument is passed to the new run collection init.
@@ -3865,13 +3873,19 @@ class RunCollection(_RunAnalysis):
         '''
         import fnmatch
 
+        orig_names = self.names
+
+        if min_state is not None:
+            orig_names = [nm for (nm, state) in zip(orig_names, self.states)
+                          if state >= min_state]
+
         try:
-            filtered_names = fnmatch.filter(self.names, pattern)
+            filtered_names = fnmatch.filter(orig_names, pattern)
 
         except TypeError:
 
             try:
-                filtered_names = list(set(self.names) & set(pattern))
+                filtered_names = list(set(orig_names) & set(pattern))
 
             except TypeError:
 
@@ -3885,11 +3899,11 @@ class RunCollection(_RunAnalysis):
             raise ValueError(mssg)
 
         if filter_out:
-            filtered_names = list(set(self.names) - set(filtered_names))
+            filtered_names = list(set(orig_names) - set(filtered_names))
 
         if sort:
             if sort_by == 'old':
-                filtered_names.sort(key=lambda n: self.names.index(n))
+                filtered_names.sort(key=lambda n: orig_names.index(n))
                 sort = False
 
             elif sort_by == 'new':
