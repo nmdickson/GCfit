@@ -5433,7 +5433,7 @@ class RunCollection(_RunAnalysis):
         return fig
 
     def plot_density(self, param1, param2, fig=None, ax=None, method='hex', *,
-                     force_model=False, nbins=50, expand_fixed=True, **kwargs):
+                     force_model=False, nbins=50, **kwargs):
         '''Plot 2D density of distributions of two parameters across all runs.
 
         Concatenates the distributions of two given parameters across all runs
@@ -5442,6 +5442,9 @@ class RunCollection(_RunAnalysis):
         Generates a density plot (e.g., hexbin, 2D histogram, KDE, or contour)
         to visualize the relationship between two parameters across all runs
         in the collection.
+
+        If either parameter is None, will create a flattened density plot
+        across one axis, similar to a colorbar.
 
         Parameters
         ----------
@@ -5479,11 +5482,6 @@ class RunCollection(_RunAnalysis):
             Passed to 'gridsize' for hex method, 'bins' for hist, and used to
             set equal-sized bins for all others.  Default is 50 bins.
 
-        expand_fixed : bool, optional
-            If True (default), expands any fixed parameters to match the size
-            of any free parameters. Otherwise, plotting free and fixed params
-            will error.
-
         **kwargs : dict
             All other arguments are passed to the relevant plotting function.
 
@@ -5501,52 +5499,94 @@ class RunCollection(_RunAnalysis):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        px = self._get_param_chains(param1, force_model=force_model)
-        py = self._get_param_chains(param2, force_model=force_model)
+        flat_x = flat_y = False
 
-        if expand_fixed:
-            px, py = zip(*[
-                (xi if xi.size > 1 else np.repeat(xi, yi.size),
-                 yi if yi.size > 1 else np.repeat(yi, xi.size))
-                for xi, yi in zip(px, py)
-            ])
+        if param1 is not None:
+            px = self._get_param_chains(param1, force_model=force_model,
+                                        with_units=False)
+        else:
+            # flatten this axis by treating like a fixed value
+            flat_x = True
+            px = np.zeros(len(self.runs))
+
+        if param2 is not None:
+            py = self._get_param_chains(param2, force_model=force_model,
+                                        with_units=False)
+        else:
+            # flatten this axis by treating like a fixed value
+            flat_y = True
+            py = np.zeros(len(self.runs))
+
+        if flat_x and flat_y:
+            raise ValueError("Cannot flatten both axes.")
+
+        # Expand any length-1 values, which represent fixed params
+        px, py = zip(*[
+            (xi if xi.size > 1 else np.repeat(xi, yi.size),
+             yi if yi.size > 1 else np.repeat(yi, xi.size))
+            for xi, yi in zip(px, py)
+        ])
+
+        # mask out any nans (why are there any of these?)
+        px, py = zip(*[
+            (xi[~(np.isnan(xi) | np.isnan(yi))],
+             yi[~(np.isnan(xi) | np.isnan(yi))])
+            for xi, yi in zip(px, py)
+        ])
 
         x = np.hstack(px)
         y = np.hstack(py)
 
+        # If they still dont match sizes, means they weren't fixed, but mixed
         if x.size != y.size:
-            mssg = ("Cannot mix model and run parameters when plotting density."
-                    "If plotting fixed parameter, set `expand_fixed=True`.")
+            mssg = ("Cannot mix model and run parameters when plotting density")
             raise ValueError(mssg)
+
+        # Get weights of each run, in case they have different chain sizes
+        Ns = np.array([xi.size for xi in px])
+        weights = np.repeat(1 / Ns, Ns)
 
         match method.casefold():
 
             case 'hex' | 'hexbin':
 
-                ax.hexbin(x, y, gridsize=nbins, **kwargs)
+                ax.hexbin(x, y, gridsize=nbins,
+                          C=weights, reduce_C_function=np.sum, **kwargs)
 
             case 'hist' | 'hist2d':
 
-                ax.hist2d(x, y, bins=nbins, **kwargs)
+                ax.hist2d(x, y, bins=nbins, weights=weights, **kwargs)
 
             case 'kde':
                 from scipy.stats import gaussian_kde
 
-                # TODO not exactly fast with large collections
-                kde = gaussian_kde([x, y])
-                xg, yg = np.mgrid[
-                   x.min():x.max():nbins*1j,
-                   y.min():y.max():nbins*1j
-                ]
+                if flat_x:
+                    data = y
+                    xg, yg = np.mgrid[0:1:2j, y.min():y.max():nbins*1j]
+                    domain = yg.flatten()
 
-                dens = kde(np.c_[xg.flatten(), yg.flatten()].T)
+                elif flat_y:
+                    data = x
+                    xg, yg = np.mgrid[x.min():x.max():nbins*1j, 0:1:2j]
+                    domain = xg.flatten()
+                else:
+                    data = [x, y]
+                    xg, yg = np.mgrid[
+                       x.min():x.max():nbins*1j,
+                       y.min():y.max():nbins*1j
+                    ]
+                    domain = np.c_[xg.flatten(), yg.flatten()].T
+
+                kde = gaussian_kde(data, weights=weights)
+
+                dens = kde(domain)
 
                 ax.pcolormesh(xg, yg, dens.reshape(xg.shape), **kwargs)
 
             case 'contour':
                 from scipy.stats import gaussian_kde
 
-                kde = gaussian_kde([x, y])
+                kde = gaussian_kde([x, y], weights=weights)
                 xg, yg = np.mgrid[
                    x.min():x.max():nbins*1j,
                    y.min():y.max():nbins*1j
@@ -5555,6 +5595,10 @@ class RunCollection(_RunAnalysis):
                 dens = kde(np.c_[xg.flatten(), yg.flatten()].T)
 
                 ax.contour(xg, yg, dens.reshape(xg.shape), **kwargs)
+
+            case _:
+                raise ValueError("Invalid `method`, must be one of "
+                                 "'hex', 'hist', 'kde', 'contour'.")
 
         ax.set_xlabel(self._get_latex_labels(param1, force_model=force_model))
         ax.set_ylabel(self._get_latex_labels(param2, force_model=force_model))
