@@ -1861,6 +1861,7 @@ class EvolvedModel(Model):
 
         N0 = M0.value / m0
         self.rhoh0 = (3 * M0) / (8 * np.pi * rh0**3)
+        self.Sigmah0 = (M0) / (2 * np.pi * rh0**2)
 
         # ------------------------------------------------------------------
         # Try to read some metadata from the observations
