@@ -4804,14 +4804,21 @@ class RunCollection(_RunAnalysis):
 
         if show_histograms:
 
-            layout = [['x', '.'], ['m', 'y']]
+            # layout = [['x', '.'], ['m', 'y']]
+            layout = [param1, param2]
             gs_kw = {"height_ratios": [0.2, 1.0], "width_ratios": [1.0, 0.2]}
 
             fig, axes = self._setup_mosaic_artist(fig, layout,
                                                   gridspec_kw=gs_kw,
-                                                  sharex='col', sharey='row')
+                                                  triangularize=True,
+                                                  sharex='col')
 
-            ax_x, ax, ax_y = axes['x'], axes['m'], axes['y']
+            ax_x = axes[f'{param1}-{param1}']
+            ax = axes[f'{param1}-{param2}']
+            ax_y = axes[f'{param2}-{param2}']
+
+            # Need to manually sharey because it is flipped
+            ax_y.sharey(ax)
 
         else:
             fig, ax = self._setup_artist(fig, ax)
