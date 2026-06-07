@@ -4250,6 +4250,10 @@ class RunCollection(_RunAnalysis):
 
         One operation (+-*/) can be included to return two different parameters
         combined with said operation.
+
+        Note that, if chains are to be concatenated all together, they must be
+        weighted, as these chains will *not* all have the same size. A weight
+        of 1/Ni should work.
         '''
 
         try:
@@ -5305,7 +5309,7 @@ class RunCollection(_RunAnalysis):
 
     def plot_lit_residuals(self, param, truths, e_truths=None, src_truths='',
                            fig=None, ax=None, *,
-                           percentage=True,
+                           lit_on_x=True, percentage=True,
                            annotate=False, annotate_kwargs=None,
                            clr_param=None, clr_kwargs=None,
                            force_model=False, label=None, marker='o', **kwargs):
@@ -5392,7 +5396,9 @@ class RunCollection(_RunAnalysis):
             res = val - truths
             res_err = dval
 
-        points, errbar = self._scatter_error(ax, truths, res,
+        domain = truths if lit_on_x else val
+
+        points, errbar = self._scatter_error(ax, domain, res,
                                              xerr=None, yerr=res_err,
                                              marker=marker, label=label,
                                              **kwargs)
@@ -5979,8 +5985,8 @@ class RunCollection(_RunAnalysis):
 
     def plot_param_hist(self, param, fig=None, ax=None, kde=False,
                         force_model=False, flipped=False,
-                        quantiles=[0.8413, 0.5, 0.1587], bw_method=None,
-                        **kwargs):
+                        quantiles=[0.8413, 0.5, 0.1587], quantile_clr=('k', .5),
+                        bw_method=None, **kwargs):
         '''Plot a histogram representing the sum of all distributions of param.
 
         Plots a histogram (or smoothed Gaussian KDE) representing the sum
@@ -6013,7 +6019,10 @@ class RunCollection(_RunAnalysis):
             left-axis.
 
         quantiles : list of float
-            Quantiles to show as vertical lines
+            Quantiles to show as vertical lines.
+
+        quantile_clr : color, optional
+            The color used for the given vertical quantiles lines.
 
         bw_method : str, scalar or callable, optional
             The bandwidth choice method, passed to the `scipy.gaussian_kde`
@@ -6027,12 +6036,17 @@ class RunCollection(_RunAnalysis):
         matplotlib.figure.Figure
             The corresponding figure, containing all axes and plot artists.
         '''
-        # TODO is a liiittle bit invalid if chains don't all have same N
 
         fig, ax = self._setup_artist(fig, ax)
 
-        chains = self._get_param_chains(param, force_model=force_model)
+        chains = self._get_param_chains(param, with_units=False,
+                                        force_model=force_model)
         chains = [ch[~np.isnan(ch)] for ch in chains]
+
+        # Get weights of each run, in case they have different chain sizes
+        Ns = np.array([ch.size for ch in chains])
+        weights = np.repeat(1 / Ns, Ns)
+
         chains = np.concatenate(chains)
 
         # Plot a filled KDE distribution
@@ -6046,11 +6060,10 @@ class RunCollection(_RunAnalysis):
             if hasattr(chains, 'unit'):
                 chains = chains.value  # erase units for plotting KDE
 
-            distribution = gaussian_kde(chains, bw_method=bw_method)(domain)
+            kde = gaussian_kde(chains, weights=weights, bw_method=bw_method)
+            distribution = kde(domain)
 
-            distribution /= interp.UnivariateSpline(
-                domain, distribution, k=1, s=0, ext=1
-            ).integral(-np.inf, np.inf)
+            distribution /= kde.integrate_box_1d(domain.min(), domain.max())
 
             if flipped:
                 ax.fill_betweenx(domain, 0, distribution, **kwargs)
@@ -6063,12 +6076,12 @@ class RunCollection(_RunAnalysis):
         else:
 
             orientation = "horizontal" if flipped else "vertical"
-            ax.hist(chains, orientation=orientation, **kwargs)
+            ax.hist(chains, orientation=orientation, weights=weights, **kwargs)
 
-        for pq in np.quantile(chains, q=quantiles):
+        for pq in np.quantile(chains, q=quantiles, weights=weights, method="inverted_cdf"):
             if hasattr(pq, 'unit'):
                 pq = pq.value
-            (ax.axhline if flipped else ax.axvline)(pq, color=('k', 0.5))
+            (ax.axhline if flipped else ax.axvline)(pq, color=quantile_clr)
 
         lbl_func = ax.set_ylabel if flipped else ax.set_xlabel
         lbl_func(self._get_latex_labels(param, force_model=force_model))
