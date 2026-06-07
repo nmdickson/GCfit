@@ -653,6 +653,10 @@ class FunctionalUniformPrior(UniformPrior):
     *not* be applied. This may change how the bounding functions must be
     written, to account for this.
 
+    For example, a prior on `rh0` which sets bounds on the initial
+    density of 1e2<rhoh0<1e7 would look like:
+    "(3*M0*1e6 / (8*pi*1e7))**(1/3)" to "(3*M0*1e6 / (8*pi*1e2))**(1/3)".
+
     This function uses `sympy.lambdify` to convert the symbolic functions to
     python function, and thus is *not* safe for use on unsanitized inputs.
 
@@ -753,10 +757,10 @@ class CromwellUniformPrior(_PriorBase):
 
 # TODO these defaults of course assume `compatibility_transforms=True`
 DEFAULT_PRIORS = {
-    'W0': ('uniform', [(0.1, 20)]),
+    'W0': ('uniform', [(0.001, 100)]),
     'M': ('uniform', [(0.01, 5)]),
     'rh': ('uniform', [(0.5, 15)]),
-    'ra': ('uniform', [(0, 5)]),
+    'ra': ('uniform', [(-2, 8)]),
     'g': ('uniform', [(0, 3.5)]),
     'delta': ('uniform', [(0.1, 0.5)]),
     's2': ('uniform', [(0, 15)]),
@@ -765,7 +769,7 @@ DEFAULT_PRIORS = {
     'a1': ('uniform', [(-1, 2.35)]),
     'a2': ('uniform', [(-1, 2.35), ('a1', np.inf)]),
     'a3': ('uniform', [(1.6, 4), ('a2', np.inf)]),
-    'BHret': ('uniform', [(0, 100)]),
+    'BH_ret_dyn': ('uniform', [(0, 100)]),
     'd': ('uniform', [(2, 18)]),
     #
     'M0': ('uniform', [(0.001, 10)]),

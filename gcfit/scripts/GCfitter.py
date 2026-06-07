@@ -110,7 +110,7 @@ def main():
                                     '(or --model-kwargs) values. By default '
                                     'the 13 typical free parameters will be '
                                     'used (W0, M/1e6, rh, log(ra), g, delta, '
-                                    's2, F, a1, a2, a3, BHret, d).')
+                                    's2, F, a1, a2, a3, BH_ret_dyn, d).')
 
     shared_parser.add_argument('--restrict-to', default=None,
                                choices={None, 'local', 'core'},

@@ -41,6 +41,7 @@ _label_math_mapping = {
     'a2': r'\alpha_2',
     'a3': r'\alpha_3',
     'BHret': r'\mathrm{BH}_{ret}',
+    'BH_ret_dyn': r'\mathrm{BH}_{\mathrm{ret},\mathrm{dyn}}',
     'd': r'd',
     # Evolved Model Parameters
     'M0': r'M_{0}',
@@ -94,6 +95,7 @@ _label_unit_mapping = {
     'rhoh0': r'M_\odot\ \mathrm{pc^{-3}}',
     's2': r'\mathrm{arcmin^{-4}}',
     'BHret': r'\%',
+    'BH_ret_dyn': r'\%',
     'd': r'\mathrm{kpc}',
     'Ndot': r'\dot{N}',
     'RA': r'\deg',
