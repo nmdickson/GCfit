@@ -2042,8 +2042,9 @@ class _ClusterVisualizer:
         return fig
 
     @_support_units
-    def plot_all(self, fig=None, sharex=True, only_PM_RT=False,
-                 nd_scale_to='model', **kwargs):
+    def plot_all(self, fig=None, sharex=True,
+                 only_PM_RT=False, stacked_panels=False,
+                 nd_scale_to='model', unique_kwargs=None, **kwargs):
         '''Plot all primary model radial profiles in one figure.
 
         Plots the six primary radial profile quantities used for fitting
@@ -2074,6 +2075,15 @@ class _ClusterVisualizer:
             If True, will only plot the radial and tangential component proper
             motion profiles, and exclude the total and anisotropy profiles.
 
+        stacked_panels : bool, optional
+            If True, axes will all be stacked into a single column, otherwise
+            will be broken into two columns (default).
+
+        unique_kwargs : dict, optional
+            Optional dictionary with keys of "ND", "LOS", "PM_tot", "PM_ratio",
+            "PM_R", and/or "PM_T", which each correspond to a dictionary of
+            kwargs to be pass to each individual plotting function.
+
         **kwargs : dict
             All other arguments are passed to each plotting function.
 
@@ -2086,22 +2096,27 @@ class _ClusterVisualizer:
         # TODO working with residuals here is hard because constrianed_layout
         #   doesn't seem super aware of them
 
+        if unique_kwargs is None:
+            unique_kwargs = {}
+
         # ------------------------------------------------------------------
         # Setup figure
         # ------------------------------------------------------------------
 
-        # TODO add option to only plot R&T, not ratio and total
-
         if only_PM_RT:
-            arch = ('nd', 't', 'los', 'r')
-            fig, axes = self._setup_multi_artist(fig, (2, 2), sharex=sharex)
-            axes = dict(zip(arch, axes))
-            # axes = axes.reshape((2, 2))
+            if stacked_panels:
+                arch = ('nd', 'los', 't', 'r')
+                axshape = (4, )
+            else:
+                arch = ('nd', 't', 'los', 'r')
+                axshape = (2, 2)
+
         else:
             arch = ('nd', 'tot', 'los', 't', 'rat', 'r')
-            fig, axes = self._setup_multi_artist(fig, (3, 2), sharex=sharex)
-            axes = dict(zip(arch, axes))
-            # axes = axes.reshape((3, 2))
+            axshape = (3, 2) if not stacked_panels else (6,)
+
+        fig, axes = self._setup_multi_artist(fig, axshape, sharex=sharex)
+        axes = dict(zip(arch, axes))
 
         # ------------------------------------------------------------------
         # Left Plots
@@ -2110,6 +2125,7 @@ class _ClusterVisualizer:
         # Number Density
 
         show_numdens_background, bg_lim = False, None
+        # TODO replace specific args with just unique_kwargs now
 
         if self.obs is not None and kwargs.get('show_obs', True):
 
@@ -2124,7 +2140,7 @@ class _ClusterVisualizer:
         self.plot_number_density(fig=fig, ax=axes['nd'], label_position='left',
                                  blank_xaxis=True, scale_to=nd_scale_to,
                                  show_background=show_numdens_background,
-                                 **kwargs)
+                                 **unique_kwargs.get('ND', {}), **kwargs)
 
         if self.numdens is not None and bg_lim is not None:
             bg_lim = min([bg_lim, np.abs(self.numdens[..., :-2].min())])
@@ -2138,7 +2154,8 @@ class _ClusterVisualizer:
         # Line-of-Sight Velocity Dispersion
 
         self.plot_LOS(fig=fig, ax=axes['los'], label_position='left',
-                      blank_xaxis=(not only_PM_RT), **kwargs)
+                      blank_xaxis=(not only_PM_RT) or stacked_panels,
+                      **unique_kwargs.get('LOS', {}), **kwargs)
 
         axes['los'].set_ylim(bottom=0.0)
 
@@ -2147,7 +2164,8 @@ class _ClusterVisualizer:
             # Proper Motion Anisotropy
 
             self.plot_pm_ratio(fig=fig, ax=axes['rat'], label_position='left',
-                               **kwargs)
+                               blank_xaxis=stacked_panels,
+                               **unique_kwargs.get('PM_ratio', {}), **kwargs)
 
             rat_toplim = max(axes['rat'].get_ylim()[1], 1.2)
             axes['rat'].set_ylim(bottom=0.4, top=rat_toplim)
@@ -2159,14 +2177,16 @@ class _ClusterVisualizer:
             # Total Proper Motion Dispersion
 
             self.plot_pm_tot(fig=fig, ax=axes['tot'], label_position='left',
-                             blank_xaxis=True, **kwargs)
+                             blank_xaxis=True,
+                               **unique_kwargs.get('PM_tot', {}), **kwargs)
 
             axes['tot'].set_ylim(bottom=0.0)
 
         # Tangential Proper Motion Dispersion
 
         self.plot_pm_T(fig=fig, ax=axes['t'], label_position='left',
-                       blank_xaxis=True, **kwargs)
+                       blank_xaxis=True,
+                       **unique_kwargs.get('PM_T', {}), **kwargs)
 
         axes['t'].set_ylim(bottom=0.0)
         # axes[0, 1].set_ylim(bottom=0.0)
@@ -2174,7 +2194,7 @@ class _ClusterVisualizer:
         # Radial Proper Motion Dispersion
 
         self.plot_pm_R(fig=fig, ax=axes['r'], label_position='left',
-                       **kwargs)
+                       **unique_kwargs.get('PM_R', {}), **kwargs)
 
         axes['r'].set_ylim(bottom=0.0)
         # axes[1, 1].set_ylim(bottom=0.0)
@@ -2272,7 +2292,7 @@ class _ClusterVisualizer:
             on a single figure.
 
         logscaled : bool, optional
-            If True, applies a log scaling to the the x (i.e. mass) axis.
+            If True, applies a log scaling to the the y (i.e. dNdm) axis.
 
         field_kw : dict, optional
             Optional arguments passed to `plot_MF_fields` if `show_fields` is
@@ -2462,7 +2482,7 @@ class _ClusterVisualizer:
                     )
 
                 if logscaled:
-                    ax.set_xscale('log')
+                    ax.set_yscale('log')
 
                 ax.set_xlabel(None)
 
