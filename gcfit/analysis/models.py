@@ -3795,7 +3795,8 @@ class ModelVisualizer(_ClusterVisualizer):
         self.WD_rh = model.WD.rh
         self.spitzer_chi = model._spitzer_chi
 
-        self.trh = model.trh
+        self.tcc = model._mf.tcc  # should be stored here in all model types
+        self.trh = self.trh0 = model.trh
         self.N_relax = model.N_relax
 
         self.delta_r50 = model.delta_r50
@@ -3845,8 +3846,12 @@ class ModelVisualizer(_ClusterVisualizer):
         self.rh_t = model.rh[t_slc]
         self.rv_t = model.rv[t_slc]
         self.rhoh = self.rhoh0 = (3 * model.M) / (8 * np.pi * model.rh**3)
+        self.rhoh_t = self.rhoh[t_slc]
+        self.Sigmah = self.Sigmah0 = (model.M) / (2 * np.pi * model.rh**2)
+        self.Sigmah_t = self.Sigmah[t_slc]
         self.vesc0 = model.vesc0
         self.vesc_t = model.vesc0[t_slc]
+        self.trh_t = model.trh[t_slc]
         self.psi_t = np.full((1, 1, 1), np.nan) << u.dimensionless_unscaled
         self.E_t = np.full((1, 1, 1), np.nan) << u.dimensionless_unscaled
 
@@ -4633,6 +4638,9 @@ class CIModelVisualizer(_ClusterVisualizer):
         volume = np.full(N, np.nan) << huge_model.volume.unit
 
         rhoh = np.full(N, np.nan) << rho_unit
+        rhoh_t = np.full((1, N, Nt), np.nan) << rho_unit
+        Sigmah = np.full(N, np.nan) << Sigma_unit
+        Sigmah_t = np.full((1, N, Nt), np.nan) << Sigma_unit
 
         vesc0 = np.full(N, np.nan) << vel_unit
         vesc_t = np.full((1, N, Nt), np.nan) << vel_unit
@@ -4654,6 +4662,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         # Relaxation times
 
+        tcc = np.full(N, np.nan) << u.Gyr
         trh = np.full(N, np.nan) << u.Gyr
         N_relax = np.full(N, np.nan) << u.dimensionless_unscaled
         trh_t = np.full((1, N, Nt), np.nan) << u.Gyr
@@ -4790,6 +4799,10 @@ class CIModelVisualizer(_ClusterVisualizer):
             volume[model_ind] = model.volume
 
             rhoh[model_ind] = (3 * model.M) / (8 * np.pi * model.rh**3)
+            rhoh_t[slc] = rhoh[model_ind]
+
+            Sigmah[model_ind] = (model.M) / (2 * np.pi * model.rh**2)
+            Sigmah_t[slc] = Sigmah[model_ind]
 
             vesc0[model_ind] = vesc_t[slc] = model.vesc0
 
@@ -4798,6 +4811,7 @@ class CIModelVisualizer(_ClusterVisualizer):
             WD_rh[model_ind] = model.WD.rh
             spitz_chi[model_ind] = model._spitzer_chi
 
+            tcc[model_ind] = model._mf.tcc << u.Myr  # careful of Myr vs Gyr
             trh[model_ind] = trh_t[slc] = model.trh
             N_relax[model_ind] = model.N_relax
 
@@ -4865,6 +4879,8 @@ class CIModelVisualizer(_ClusterVisualizer):
         viz.psi_t = np.transpose(perc(psi_t, q, axis=1), axes)
         viz.E_t = np.transpose(perc(E_t, q, axis=1), axes)
         viz.trh_t = np.transpose(perc(trh_t, q, axis=1), axes)
+        viz.rhoh_t = np.transpose(perc(rhoh_t, q, axis=1), axes)
+        viz.Sigmah_t = np.transpose(perc(Sigmah_t, q, axis=1), axes)
 
         viz.vesc_t = np.transpose(perc(vesc_t, q, axis=1), axes)
         viz.BH0_massfunc = np.transpose(perc(BH0_massfunc, q, axis=1), axes)
@@ -4897,6 +4913,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         viz.volume = volume
 
         viz.rhoh = viz.rhoh0 = rhoh
+        viz.Sigmah = viz.Sigmah0 = Sigmah
         viz.vesc0 = vesc0
 
         viz.BH_rh = BH_rh
@@ -4905,7 +4922,8 @@ class CIModelVisualizer(_ClusterVisualizer):
         viz.NS_rh = NS_rh
         viz.WD_rh = WD_rh
 
-        viz.trh = trh
+        viz.tcc = tcc
+        viz.trh = viz.trh0 = trh
         viz.N_relax = N_relax
 
         viz.delta_r50 = delta_r50
@@ -5250,7 +5268,8 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             profile_keys += (  # time evolution profiles
                 'f_BH_t', 'M_BH_t', 'M_t', 'Ms_t', 'mmean_t',
-                'rt_t', 'rh_t', 'rv_t', 'psi_t', 'E_t', 'trh_t', 'vesc_t'
+                'rhoh_t', 'Sigmah_t', 'rt_t', 'rh_t', 'rv_t',
+                'psi_t', 'E_t', 'trh_t', 'vesc_t'
             )
 
             profile_keys += (  # comp mass function profiles
@@ -5272,10 +5291,10 @@ class CIModelVisualizer(_ClusterVisualizer):
             quant_keys = (
                 'M', 'f_rem', 'f_BH', 'M_BH', 'N_BH', 'M_NS', 'N_NS',
                 'M_WD', 'N_WD', 'f_BH0', 'M_BH0', 'N_BH0',
-                'r0', 'rc_obs', 'rt', 'rh', 'rhp', 'ra', 'rv', 'rhoh',
-                'mmean', 'volume', 'vesc0', 'rhoh0', 'BH_rh', 'NS_rh', 'WD_rh',
-                'spitzer_chi', 'trh', 'N_relax', 'K_scale',
-                'M_kicked', 'delta_r50', 'delta_A'
+                'r0', 'rc_obs', 'rt', 'rh', 'rhp', 'ra', 'rv', 'rhoh', 'Sigmah',
+                'mmean', 'volume', 'vesc0', 'rhoh0', 'Sigmah0',
+                'BH_rh', 'NS_rh', 'WD_rh', 'spitzer_chi', 'tcc', 'trh', 'trh0',
+                'N_relax', 'K_scale', 'M_kicked', 'delta_r50', 'delta_A'
             )
 
             for key in quant_keys:
@@ -5493,6 +5512,45 @@ class EvolvedVisualizer(ModelVisualizer):
                                       x_unit=x_unit, y_unit=y_unit, **kwargs)
 
         self._set_ylabel(ax, label, y_unit, label_position)
+        self._set_xlabel(ax, 'Time', unit=x_unit, remove_all=blank_xaxis)
+
+        return fig
+
+    @_ClusterVisualizer._support_units
+    def plot_density_evolution(self, fig=None, ax=None, *,
+                               x_unit='Gyr', y_unit='Msun pc-3', legend=False,
+                               label_position='left', verbose_label=True,
+                               blank_xaxis=False, **kwargs):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        ax = self._plot_evolution(ax, self.rhoh_t.to(y_unit),
+                                  x_unit=x_unit, y_unit=y_unit,
+                                  legend=legend, **kwargs)
+
+        label = "Half-mass Density" if verbose_label else r'$\rho_{h}$'
+
+        self._set_ylabel(ax, label, y_unit, label_position)
+        self._set_xlabel(ax, 'Time', unit=x_unit, remove_all=blank_xaxis)
+
+        return fig
+
+    @_ClusterVisualizer._support_units
+    def plot_surface_density_evolution(self, fig=None, ax=None, *,
+                                       x_unit='Gyr', y_unit='Msun pc-2',
+                                       legend=False, label_position='left',
+                                       verbose_label=True, blank_xaxis=False,
+                                       **kwargs):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        ax = self._plot_evolution(ax, self.Sigmah_t.to(y_unit),
+                                  x_unit=x_unit, y_unit=y_unit,
+                                  legend=legend, **kwargs)
+
+        lbl = "Half-mass Surface Density" if verbose_label else r'$\Sigma_{h}$'
+
+        self._set_ylabel(ax, lbl, y_unit, label_position)
         self._set_xlabel(ax, 'Time', unit=x_unit, remove_all=blank_xaxis)
 
         return fig
@@ -5789,16 +5847,17 @@ class EvolvedVisualizer(ModelVisualizer):
 
     def __init__(self, model, observations=None):
 
+        # All present day quantities are set in base ModelVisualizer class
         super().__init__(model, observations=observations)
 
-        # clusterBH quantities
+        # All initial and evolutionary quantities are set here
+
         cbh = model._clusterbh
 
         self.t = cbh.t << u.Gyr
 
         slc = (np.newaxis, np.newaxis, ...)
         bh_slc = (..., np.newaxis, np.newaxis)
-
 
         self.M_t = cbh.M[slc] << u.Msun
         self.Ms_t = cbh.Mst[slc] << u.Msun
@@ -5816,6 +5875,12 @@ class EvolvedVisualizer(ModelVisualizer):
         self.rv_t = (cbh.rh / cbh.r)[slc] << u.pc
 
         self.rhoh0 = model.rhoh0
+        self.rhoh_t = (3 * self.M_t) / (8 * np.pi * self.rh_t**3)
+        self.Sigmah0 = model.Sigmah0
+        self.Sigmah_t = ((self.M_t) / (2 * np.pi * self.rh_t**2))
+
+        self.tcc = (model._mf.tcc << u.Myr).to('Gyr')
+        self.trh0 = (cbh.trh0 << u.Myr).to('Gyr')
 
         self.vesc0 = model.vesc0
         self.vesc_t = cbh.vesc[slc] << (u.km / u.s)
@@ -5823,7 +5888,7 @@ class EvolvedVisualizer(ModelVisualizer):
         # TODO units on these?
         self.psi_t = cbh.psi[slc] << u.dimensionless_unscaled
         self.E_t = cbh.E[slc] << u.dimensionless_unscaled
-        self.trh_t = cbh.trh[slc] << u.Myr
+        self.trh_t = (cbh.trh[slc] << u.Myr).to('Gyr')
 
 
 class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
@@ -6275,6 +6340,10 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
 
         rhoh = np.full(N, np.nan) << rho_unit
         rhoh0 = np.full(N, np.nan) << rho_unit
+        rhoh_t = np.full((1, N, Nt), np.nan) << rho_unit
+        Sigmah = np.full(N, np.nan) << Sigma_unit
+        Sigmah0 = np.full(N, np.nan) << Sigma_unit
+        Sigmah_t = np.full((1, N, Nt), np.nan) << Sigma_unit
 
         vesc0 = np.full(N, np.nan) << vel_unit
         vesc_t = np.full((1, N, Nt), np.nan) << vel_unit
@@ -6296,7 +6365,9 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
 
         # Relaxation times
 
+        tcc = np.full(N, np.nan) << u.Gyr
         trh = np.full(N, np.nan) << u.Gyr
+        trh0 = np.full(N, np.nan) << u.Gyr
         N_relax = np.full(N, np.nan) << u.dimensionless_unscaled
         trh_t = np.full((1, N, Nt), np.nan) << u.Gyr
 
@@ -6441,6 +6512,10 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
 
             rhoh[model_ind] = (3 * model.M) / (8 * np.pi * model.rh**3)
             rhoh0[model_ind] = model.rhoh0
+            rhoh_t[slc] = ((3 * cbh.M) / (8 * np.pi * cbh.rh**3)) << rho_unit
+            Sigmah[model_ind] = (model.M) / (2 * np.pi * model.rh**2)
+            Sigmah0[model_ind] = model.Sigmah0
+            Sigmah_t[slc] = ((cbh.M) / (2 * np.pi * cbh.rh**2)) << Sigma_unit
 
             vesc0[model_ind] = model.vesc0
             vesc_t[slc] = cbh.vesc << vel_unit
@@ -6450,8 +6525,10 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
             WD_rh[model_ind] = model.WD.rh
             spitz_chi[model_ind] = model._spitzer_chi
 
+            tcc[model_ind] = model._mf.tcc << u.Myr
             trh[model_ind] = model.trh
-            trh_t[slc] = cbh.trh << u.Myr  # Myr in cbh, Gyr here
+            trh0[model_ind] = cbh.trh0 << u.Myr  # Myr in cbh, Gyr here
+            trh_t[slc] = cbh.trh << u.Myr
             N_relax[model_ind] = model.N_relax
 
             psi_t[slc] = cbh.psi
@@ -6522,6 +6599,8 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
         viz.E_t = np.transpose(perc(E_t, q, axis=1), axes)
         viz.trh_t = np.transpose(perc(trh_t, q, axis=1), axes)
 
+        viz.rhoh_t = np.transpose(perc(rhoh_t, q, axis=1), axes)
+        viz.Sigmah_t = np.transpose(perc(Sigmah_t, q, axis=1), axes)
         viz.vesc_t = np.transpose(perc(vesc_t, q, axis=1), axes)
         viz.BH_massfunc = np.transpose(perc(BH_massfunc, q, axis=1), axes)
         viz.BH0_massfunc = np.transpose(perc(BH0_massfunc, q, axis=1), axes)
@@ -6554,6 +6633,8 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
 
         viz.rhoh = rhoh
         viz.rhoh0 = rhoh0
+        viz.Sigmah = Sigmah
+        viz.Sigmah0 = Sigmah0
         viz.vesc0 = vesc0
 
         viz.BH_rh = BH_rh
@@ -6562,7 +6643,9 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
         viz.NS_rh = NS_rh
         viz.WD_rh = WD_rh
 
+        viz.tcc = tcc
         viz.trh = trh
+        viz.trh0 = trh0
         viz.N_relax = N_relax
 
         viz.delta_r50 = delta_r50
