@@ -13,6 +13,7 @@ import astropy.visualization as astroviz
 
 import logging
 import pathlib
+import itertools
 import warnings
 from collections import abc
 
@@ -47,10 +48,29 @@ def _get_ev_model(theta, model_params, strict=False):
 # --------------------------------------------------------------------------
 
 
+class _MarkerCycle:
+    '''
+    Allows for a consistent cycle of markers by using this class
+    as an iterator directly (i.e. calling `next(marker_cycle)`) or a fresh,
+    restarted cycle of markers constructed by `fresh_cycle`.
+    '''
+
+    def __init__(self, markers: tuple[str, ...]):
+        self.markers = markers
+        self.cycle = itertools.cycle(markers)
+
+    def __next__(self):
+        return next(self.cycle)
+
+    def fresh_cycle(self):
+        return _MarkerCycle(self.markers)
+
+
 class _ClusterVisualizer:
     '''Base class for all visualizers of all Model types.'''
 
-    _MARKERS = ('o', '^', 'D', '+', 'x', '*', 's', 'p', 'h', 'v', '1', '2')
+    _MARKERS = _MarkerCycle(('o', '^', 'D', '+', 'x', '*', 's', 'p', 'h', 'v'))
+    _RESTART_MARKERS = True
 
     # Default xaxis limits for all profiles. Set by inits, can be reset by user
     rlims = None
@@ -703,7 +723,7 @@ class _ClusterVisualizer:
     def _plot_profile(self, ax, ds_pattern, y_key, model_data, *,
                       y_unit=None, residuals=False, legend=False,
                       color=None, data_color=None, model_color=None,
-                      data_scale=1.0, model_scale=1.0,
+                      data_markers=None, data_scale=1.0, model_scale=1.0,
                       mass_bins=None, model_label=None, label_masses=True,
                       res_kwargs=None, data_kwargs=None, model_kwargs=None,
                       **kwargs):
@@ -770,6 +790,12 @@ class _ClusterVisualizer:
             colours of model profiles will be taken from the corresponding data
             of the same masses.
 
+        data_markers : list of marker style string or MarkerStyle, optional
+            The markers passed to `_plot_data`, defining the markers for all
+            observational data. These will be cycled through, so if the number
+            of markers given is less than the number of datasets, there will
+            be repeats. By default, `self._MARKERS` is used.
+
         mass_bins : list of int, optional
             The mass bins from the model to plot. This should be a list of
             indices corresponding to the desired mass bins in the given
@@ -812,9 +838,6 @@ class _ClusterVisualizer:
 
         strict = kwargs.pop('strict', False)
 
-        # Restart marker styles each plotting call
-        markers = iter(self._MARKERS)
-
         # Get various kwarg dicts, kinda try to avoid altering any dicts
         if res_kwargs is None:
             res_kwargs = {}
@@ -830,6 +853,20 @@ class _ClusterVisualizer:
             model_kwargs = {}
         else:
             model_kwargs = model_kwargs.copy()
+
+        # Use the base marker cycle if none explicitly given
+        if data_markers is None:
+
+            # Optionally restart marker styles each plotting call
+            if self._RESTART_MARKERS:
+                markers = self._MARKERS.fresh_cycle()
+
+            else:
+                markers = self._MARKERS
+
+        # Create a new marker cycle from the specified markers
+        else:
+            markers = _MarkerCycle(data_markers)
 
         # Unless specified, each mass bin should cycle colour from matplotlib
         default_color = color
