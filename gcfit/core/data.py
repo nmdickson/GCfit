@@ -1804,7 +1804,7 @@ class EvolvedModel(Model):
                  s2=0., F=1., J=1., *, observations=None, age=None, FeH=None,
                  Zsun=0.02, m_breaks=[0.1, 0.5, 1.0, 150], nbins=[5, 5, 20],
                  tracer_masses=None, tcc=0.0, NS_ret=0.1, BH_ret_int=1.0,
-                 meq=0.0, eta=0.0, zeta=1.0, md=1.2,
+                 meq=0.0, eta=0.0, zeta=1.0, md=1.2, RG_eff=None,
                  natal_kicks=True, kick_method='maxwellian',
                  f_kick=None, SNe_method='rapid', kick_vdisp=265.,
                  kick_slope=1, kick_scale=20,
@@ -1871,7 +1871,14 @@ class EvolvedModel(Model):
 
             # Try to use the effective radius (circularized orbit)
             try:
-                cbh_kwargs.setdefault('rg', observations.mdata['RG_eff'])
+                if RG_eff is not None:
+                    Rgal = RG_eff
+                    if hasattr(Rgal, 'unit'):
+                        Rgal = Rgal.to_value('kpc')
+                else:
+                    Rgal = observations.mdata['RG_eff']
+
+                cbh_kwargs.setdefault('rg', Rgal)
 
             except KeyError:
 

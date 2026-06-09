@@ -71,6 +71,7 @@ _label_math_mapping = {
     'RA': r'\mathrm{RA}',
     'DEC': r'\mathrm{DEC}',
     'chi2': r'\chi^{2}',
+    'RG_eff': r'R\'_{G}',
     # Derived Model Quantities
     'M_BH': r'\mathrm{M}_{\mathrm{BH}}',
     'BH_mass': r'\mathrm{M}_{\mathrm{BH}}',
@@ -108,6 +109,7 @@ _label_unit_mapping = {
     'Ndot': r'\dot{N}',
     'RA': r'\deg',
     'DEC': r'\deg',
+    'RG_eff': r'\mathrm{kpc}',
     'BH_mass': r'M_\odot',
     'M_BH': r'M_\odot',
     'M_BH0': r'M_\odot',
