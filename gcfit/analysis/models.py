@@ -614,7 +614,7 @@ class _ClusterVisualizer:
         return output
 
     def _plot_data(self, ax, dataset, y_key, *,
-                   x_key='r', x_unit='pc', y_unit=None,
+                   x_key='r', x_unit='pc', y_unit=None, citations=True,
                    err_transform=None, scale=1.0, background=0.0, **kwargs):
         '''Base plotting function for all observed data profiles.
 
@@ -709,7 +709,11 @@ class _ClusterVisualizer:
         kwargs.setdefault('linestyle', 'None')
         kwargs.setdefault('zorder', 10)  # to force marker and bar to be higher
 
-        label = dataset.cite()
+        if citations:
+            label = dataset.cite()
+        else:
+            label = str(dataset)
+
         if 'm' in dataset.mdata:
             label = fr'{label} ($m={dataset.mdata["m"]}\ M_\odot$)'
 
@@ -1944,6 +1948,8 @@ class _ClusterVisualizer:
 
             if data_kwargs is None:
                 data_kwargs = {}
+            else:
+                data_kwargs = data_kwargs.copy()
 
             data_kwargs.setdefault('err_transform', quad_nuisance)
 
