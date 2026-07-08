@@ -5448,7 +5448,8 @@ class RunCollection(_RunAnalysis):
         return fig
 
     def plot_density(self, param1, param2, fig=None, ax=None, method='hex', *,
-                     force_model=False, nbins=50, **kwargs):
+                     force_model=False, nbins=50, bw_method=None,
+                     quantiles=None, quantile_clr='k', **kwargs):
         '''Plot 2D density of distributions of two parameters across all runs.
 
         Concatenates the distributions of two given parameters across all runs
@@ -5592,7 +5593,7 @@ class RunCollection(_RunAnalysis):
                     ]
                     domain = np.c_[xg.flatten(), yg.flatten()].T
 
-                kde = gaussian_kde(data, weights=weights)
+                kde = gaussian_kde(data, weights=weights, bw_method=bw_method)
 
                 dens = kde(domain)
 
@@ -5601,7 +5602,7 @@ class RunCollection(_RunAnalysis):
             case 'contour':
                 from scipy.stats import gaussian_kde
 
-                kde = gaussian_kde([x, y], weights=weights)
+                kde = gaussian_kde([x, y], weights=weights, bw_method=bw_method)
                 xg, yg = np.mgrid[
                    x.min():x.max():nbins*1j,
                    y.min():y.max():nbins*1j
@@ -5614,6 +5615,28 @@ class RunCollection(_RunAnalysis):
             case _:
                 raise ValueError("Invalid `method`, must be one of "
                                  "'hex', 'hist', 'kde', 'contour'.")
+
+        # Optionally plot lines in either direction for quantiles
+
+        if quantiles is not None:
+
+            for pqx in np.quantile(x, q=quantiles,
+                                   weights=weights, method="inverted_cdf"):
+
+                if hasattr(pqx, 'unit'):
+                    pqx = pqx.value
+
+                ax.axvline(pqx, color=quantile_clr)
+
+            for pqy in np.quantile(y, q=quantiles,
+                                   weights=weights, method="inverted_cdf"):
+
+                if hasattr(pqy, 'unit'):
+                    pqy = pqy.value
+
+                ax.axhline(pqy, color=quantile_clr)
+
+
 
         ax.set_xlabel(self._get_latex_labels(param1, force_model=force_model))
         ax.set_ylabel(self._get_latex_labels(param2, force_model=force_model))
@@ -5918,7 +5941,7 @@ class RunCollection(_RunAnalysis):
                                         force_model=force_model)
 
         # filter out all nans (causes violinplot to fail silently)
-        chains = [ch[~np.isnan(ch)] for ch in chains]
+        chains = [np.array(ch)[~np.isnan(ch)] for ch in chains]
 
         xticks = xticks or np.arange(len(self.runs))
 
