@@ -3846,6 +3846,7 @@ class ModelVisualizer(_ClusterVisualizer):
         self.BH_kick_ret = self._init_kicks(model)[bh_slc]
         Mscale = model._MS / model._mf.M.sum()  # non-ev models need mf scaled
         self.M_kicked = (model._mf._kick_stats.total_kicked * Mscale) << u.Msun
+        self.f_kicked = (model._mf._kick_stats.f_kick * 100) << u.pct
         self.Ms_t = model.nonBH.Mj.sum()[t_slc]
         self.mmean_t = model.mmean[t_slc]
         self.rt_t = model.rt[t_slc]
@@ -4387,6 +4388,52 @@ class CIModelVisualizer(_ClusterVisualizer):
         return self._plot_quantity('M_kicked', fig=fig, ax=ax, color=color,
                                    xlabel=label, **kwargs)
 
+    @_ClusterVisualizer._support_units
+    def plot_f_kicked(self, fig=None, ax=None, color='tab:blue',
+                      verbose_label=True, **kwargs):
+        r'''Plot the total amount of BH mass kicked in this model.
+
+        Plots a histogram of the values of the fraction of black holes
+        lost in the given chain of models through the effects of natal kicks.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_ClusterVisualizer._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this quantity. Should be a
+            part of the given `fig`.
+
+        color : color, optional
+            The colour of the plotted histogram. This colour will be applied to
+            the edge (border) of the histogram as is, and to the face at 33%
+            transparency.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "BH Mass Kicked",
+            otherwise "$\mathrm{M}_{\mathrm{BH,kicked}}$".
+
+        **kwargs : dict, optional
+            All other arguments are passed to `plt.hist`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
+
+        if verbose_label:
+            label = "Fraction of BH Mass Kicked"
+        else:
+            label = r"$\mathrm{f}_{\mathrm{BH,kick}}$"
+
+        return self._plot_quantity('f_kicked', fig=fig, ax=ax, color=color,
+                                   xlabel=label, **kwargs)
+
     def __init__(self, observations, name=None):
         self.obs = observations
         self.name = name or observations.cluster
@@ -4616,6 +4663,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         M_BH0 = np.full(N, np.nan) << u.Msun
 
         M_kicked = np.full(N, np.nan) << u.Msun
+        f_kicked = np.full(N, np.nan) << u.pct
         BH_massfunc = np.full((Nbhmf, N, 1), np.nan) << 1 / u.Msun
         BH0_massfunc = np.full((Nbhmf, N, 1), np.nan) << 1 / u.Msun
         BH_kick_ret = np.full((Nbhmf, N, 1), np.nan) << u.dimensionless_unscaled
@@ -4777,6 +4825,7 @@ class CIModelVisualizer(_ClusterVisualizer):
             Mscale = model._MS / model._mf.M.sum()  # scaling for non-ev eMFs
             ks = model._mf._kick_stats
             M_kicked[model_ind] = (ks.total_kicked * Mscale) << u.Msun
+            f_kicked[model_ind] = (ks.f_kick * 100) << u.pct
 
             bhslc = (slice(None), model_ind, 0)
             BH_massfunc[bhslc] = BH0_massfunc[bhslc] = viz._init_BH_dNdm(model)
@@ -4907,6 +4956,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         viz.M_BH0 = M_BH0
         viz.N_BH0 = N_BH0
         viz.M_kicked = M_kicked
+        viz.f_kicked = f_kicked
 
         viz.r0 = r0
         viz.rc_obs = rc_obs
@@ -5300,7 +5350,8 @@ class CIModelVisualizer(_ClusterVisualizer):
                 'r0', 'rc_obs', 'rt', 'rh', 'rhp', 'ra', 'rv', 'rhoh', 'Sigmah',
                 'mmean', 'volume', 'vesc0', 'rhoh0', 'Sigmah0',
                 'BH_rh', 'NS_rh', 'WD_rh', 'spitzer_chi', 'tcc', 'trh', 'trh0',
-                'N_relax', 'K_scale', 'M_kicked', 'delta_r50', 'delta_A'
+                'N_relax', 'K_scale', 'f_kicked', 'M_kicked',
+                'delta_r50', 'delta_A'
             )
 
             for key in quant_keys:
@@ -5471,7 +5522,7 @@ class EvolvedVisualizer(ModelVisualizer):
     def plot_mass_evolution(self, fig=None, ax=None, kind='total', *,
                             x_unit='Gyr', y_unit='Msun', legend=True,
                             label_position='left', verbose_label=True,
-                            blank_xaxis=False, **kwargs):
+                            blank_xaxis=False, model_label=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -5487,7 +5538,7 @@ class EvolvedVisualizer(ModelVisualizer):
             if multi:
                 linelabel = "Total"
             else:
-                linelabel = None
+                linelabel = model_label
 
             ax = self._plot_evolution(ax, self.M_t,
                                       model_label=linelabel, legend=legend,
@@ -5498,7 +5549,7 @@ class EvolvedVisualizer(ModelVisualizer):
             if multi:
                 linelabel = "Stars"
             else:
-                linelabel = None
+                linelabel = model_label
                 label = "Stellar Mass" if verbose_label else r'$M_\ast\,(t)$'
 
             ax = self._plot_evolution(ax, self.Ms_t,
@@ -5510,7 +5561,7 @@ class EvolvedVisualizer(ModelVisualizer):
             if multi:
                 linelabel = "Black Holes"
             else:
-                linelabel = None
+                linelabel = model_label
                 label = "Black Hole Mass" if verbose_label else r'$M_{BH}\,(t)$'
 
             ax = self._plot_evolution(ax, self.M_BH_t,
@@ -6317,6 +6368,7 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
         N_BH0 = np.full(N, np.nan) << u.dimensionless_unscaled
 
         M_kicked = np.full(N, np.nan) << u.Msun
+        f_kicked = np.full(N, np.nan) << u.pct
         BH_massfunc = np.full((Nbhmf, N, 1), np.nan) << 1 / u.Msun
         BH0_massfunc = np.full((Nbhmf, N, 1), np.nan) << 1 / u.Msun
         BH_kick_ret = np.full((Nbhmf, N, 1), np.nan) << u.dimensionless_unscaled
@@ -6486,6 +6538,7 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
             M_BH0[model_ind] = cbh.Mbh0 << M_BH_t.unit
 
             M_kicked[model_ind] = model._mf._kick_stats.total_kicked << u.Msun
+            f_kicked[model_ind] = model._mf._kick_stats.f_kick * 100 << u.pct
             BH_massfunc[:, model_ind, 0] = viz._init_BH_dNdm(model)
             BH0_massfunc[:, model_ind, 0] = viz._init_BH_dN0dm(model)
             BH_kick_ret[:, model_ind, 0] = viz._init_kicks(model)
@@ -6616,6 +6669,7 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
         viz.f_BH = f_BH
         viz.f_BH0 = f_BH0
         viz.M_kicked = M_kicked
+        viz.f_kicked = f_kicked
 
         viz.M = M
         viz.M_BH = viz.BH_mass = M_BH
