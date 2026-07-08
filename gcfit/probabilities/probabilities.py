@@ -1,7 +1,7 @@
 from .pulsars import *
 from .priors import Priors
 from .. import util
-from ..core.data import DEFAULT_THETA, FittableModel
+from ..core.data import Model, EvolvedModel
 
 import numpy as np
 import astropy.units as u
@@ -600,13 +600,13 @@ def likelihood_number_density(model, ndensity, *,
 
     # Now nuisance parameter (from θ, not the model velocity scale)
     s2 = model.theta['s2'] << u.arcmin**-4
-    yerr = np.sqrt(obs_err**2 + s2)
+    yerr = model.theta['J'] * np.sqrt(obs_err**2 + s2)
 
-    model_r = model.r.to(obs_r.unit)
+    model_r = model.r
     model_Σ = model.Sigmaj[mass_bin] / model.mj[mass_bin]
 
     # Interpolated the model data at the measurement locations
-    interpolated = np.interp(obs_r, model_r, model_Σ).to(obs_Σ.unit)
+    interpolated = util.QuantitySpline(model_r, model_Σ)(obs_r).to(obs_Σ.unit)
 
     # Calculate K scaling factor
     K = (np.sum(obs_Σ * interpolated / yerr**2)
@@ -986,6 +986,12 @@ def likelihood_mass_func(model, mf, fields, *, hyperparams=False):
     #     cen = (obs.mdata['RA'], obs.mdata['DEC'])
     #     field = mass.Field(mf['fields'], cen)
 
+    if model.nms <= 1:
+        mssg = f"Model must have more than one stellar mass bin ({model.nms=})"
+        logging.debug(mssg)
+        return -np.inf
+        # raise ValueError(mssg)
+
     # ----------------------------------------------------------------------
     # Generate the mass splines before the loops, to save repetition
     # ----------------------------------------------------------------------
@@ -1029,6 +1035,7 @@ def likelihood_mass_func(model, mf, fields, *, hyperparams=False):
             widthj = (model.mj[j] * model.mbin_widths[j])
             binned_N_model[j] = Nj / widthj
 
+        # TODO if a mass bin is depleted it should be 0, not extrapolated!
         N_spline = util.QuantitySpline(model.mj[:model.nms],
                                        binned_N_model,
                                        ext=0, k=1)
@@ -1045,11 +1052,127 @@ def likelihood_mass_func(model, mf, fields, *, hyperparams=False):
 
 
 # --------------------------------------------------------------------------
+# Special likelihood functions
+# --------------------------------------------------------------------------
+
+
+def likelihood_BH_core_radius(model, *, slope=0.5, scale=-0.5,
+                              width=0.2, threshold=-1.5):
+    '''A probability function based on the rc/rh vs f_BH relationship.
+
+    Computes a log likelihood based on the roughly linear relationship found
+    between log(f_BH) and log(rc/rh).
+    Based on the results of a grid of dynamical models (CMC; Kremer+2020),
+    a linear relationship between these two is defined using the given slope
+    and scale, and a Truncated Gaussian likelihood is evaluated at the model
+    rc/rh. The likelihood is truncated outside 3*width from the relation.
+    In order to account for models with no BHs, a truncation threshold
+    for the linear relation is set at log(rc/rh)=threshold.
+
+    Parameters
+    ----------
+    model : gcfit.FittableModel
+        Cluster model used to compute probability distribution.
+
+    slope : float, optional
+        Slope of the linear relation. Defaults to 0.5, as based (approximately)
+        on fits to the CMC grid.
+
+    scale : float, optional
+        y-intercept of the linear relation. Defaults to -0.5, as based
+        (approximately) on fits to the CMC grid.
+
+    width : float, optional
+        Width of the evaluated Gaussian dsitribution. Defaults to 0.5,
+        roughly representing the spread in the CMC grid.
+
+    threshold : float, optional
+        A lower value of log(rc/rh) to truncate the linear relation at, in order
+        to accomodate 0-BH models. Defaults to -1.5, based approximately on
+        the centre of the distribution of rc/rh in CMC models with no retained
+        BHs.
+
+    Returns
+    -------
+    float
+        Log likelihood value.
+    '''
+
+    lg_fbh = np.log10(model.f_BH.to_value('pct'))
+
+    lg_rcrh = np.log10((model.rc_obs / model.rh).value)
+
+    mu = np.nanmax([slope * lg_fbh + scale, threshold])
+    sigma = width
+
+    # Truncated Gaussian
+    if not ((mu - 3 * width) < lg_rcrh < (mu + 3 * width)):
+        return -np.inf
+
+    else:
+        return util.gaussian_likelihood(X_data=mu, X_model=lg_rcrh, err=sigma)
+
+
+def likelihood_BH_radius_ratio(model, *, slope=0.4, scale=-1.4, width=0.3):
+    '''A probability function based on the BH relations of Breen & Heggie 2013.
+
+    Computes a log likelihood based on the roughly linear relationship found
+    in Breen & Heggie (2013), specifically their equation 4 between
+    log(f_bh^0.6 * mbh/m^0.4) and log(rh_bh/rh).
+    The proportionality constants (given slope and scale) of this relationship
+    was determined based on the results of a grid of dynamical models
+    (CMC; Kremer+2020).  The likelihood is truncated outside 3*width from the
+    relation.
+
+    Parameters
+    ----------
+    model : gcfit.FittableModel
+        Cluster model used to compute probability distribution.
+
+    slope : float, optional
+        Slope of the linear relation. Defaults to 0.4, as based (approximately)
+        on fits to the CMC grid.
+
+    scale : float, optional
+        y-intercept of the linear relation. Defaults to -1.4, as based
+        (approximately) on fits to the CMC grid.
+
+    width : float, optional
+        Width of the evaluated Gaussian dsitribution. Defaults to 0.3,
+        roughly representing the spread in the CMC grid.
+
+    Returns
+    -------
+    float
+        Log likelihood value.
+    '''
+
+    MM = model.BH.Mj.sum() / model.nonBH.Mj.sum()
+    mm = model.BH.mavg / model.nonBH.mavg
+
+    lg_MMmm = np.log10((MM)**0.6 * (mm)**0.4)
+
+    lg_rhrh = np.log10(model.BH.rh / model.nonBH.rh)
+
+    mu = slope * lg_MMmm + scale
+
+    sigma = width
+
+    # Truncated Gaussian
+    if not ((mu - 3 * width) < lg_rhrh < (mu + 3 * width)):
+        return -np.inf
+
+    else:
+        return util.gaussian_likelihood(X_data=mu, X_model=lg_rhrh, err=sigma)
+
+
+# --------------------------------------------------------------------------
 # Composite likelihood functions
 # --------------------------------------------------------------------------
 
 
-def log_likelihood(theta, observations, L_components, hyperparams):
+def log_likelihood(theta, observations, model_params, L_components,
+                   hyperparams, evolved, BH_core_likelihood, BH_rh_likelihood):
     r'''Compute log likelihood of given `theta`, based on component likelihoods.
 
     Main likelihood function, which generates the relevant model based on
@@ -1060,14 +1183,17 @@ def log_likelihood(theta, observations, L_components, hyperparams):
     Parameters
     ----------
     theta : dict
-        The model input parameters (W0, M, rh, ra, g, delta, a1, a2, a3,
-        BHret, s2, F and d). Passed directly to `gcfit.FittableModel` to
+        The model input parameters. Passed directly to `gcfit.Model` to
         generate the model used in all likelihood functions.
 
     observations : Observations
         The `Observations` instance corresponding to this cluster, used to
         initialize the model and to read in all datasets specified by
         `L_components`.
+
+    model_params : ModelParameters
+        The `ModelParameters` instance being used during fitting. Will be used
+        to construct the model class based on `theta`.
 
     L_components : list of lists
         List of likelihood components to compute. Must be a list of lists
@@ -1100,10 +1226,20 @@ def log_likelihood(theta, observations, L_components, hyperparams):
                  = \sum_i \ln(\mathcal{L}_i(\Theta)))
     '''
 
+    # Build model
+    model_cls = EvolvedModel if evolved else Model
+
+    params = model_params.build_args(theta)
+
     try:
-        model = FittableModel(theta, observations)
-    except ValueError:
-        logging.debug(f"Model did not converge with {theta=}")
+        model = model_cls(*params.args, **params.kwargs)
+
+    except ValueError as err:
+
+        mssg = (f"Model did not converge with {theta=} "
+                f"(`Model(*{params.args=}, **{params.kwargs=})`) -> ({err})")
+        logging.debug(mssg)
+
         return -np.inf, -np.inf * np.ones(len(L_components))
 
     # Calculate each log likelihood
@@ -1112,14 +1248,30 @@ def log_likelihood(theta, observations, L_components, hyperparams):
 
         kwargs = {'hyperparams': hyperparams}
 
-        probs[ind] = likelihood(model, observations[key], *args, **kwargs)
+        dset = observations[key]
 
-    return sum(probs), probs
+        probs[ind] = likelihood(model, dset, *args, **kwargs)
+
+        # Optionally apply extra exponential weight to the likelihood
+        if 'weight' in dset.mdata:
+            probs[ind] = probs[ind] * dset.mdata['weight']
+
+    # Calculate other special likelihoods
+    prob_other = 0.0
+
+    if BH_core_likelihood:
+        prob_other += likelihood_BH_core_radius(model)
+
+    if BH_rh_likelihood:
+        prob_other += likelihood_BH_radius_ratio(model)
+
+    return sum(probs) + prob_other, probs
 
 
-def posterior(theta, observations, fixed_initials=None,
+def posterior(theta, observations, model_params,
               L_components=None, prior_likelihood=None, *,
-              hyperparams=False, return_indiv=True):
+              hyperparams=False, return_indiv=True,
+              evolved=False, BH_core_likelihood=False, BH_rh_likelihood=False):
     '''Compute the full posterior probability given `theta` and `observations`.
 
     Combines the various likelihood functions (through `log_likelihood`)
@@ -1135,7 +1287,7 @@ def posterior(theta, observations, fixed_initials=None,
     ----------
     theta : np.ndarray
         An array of model input parameters, which must be in the expected order
-        (W0, M, rh, ra, g, delta, a1, a2, a3, BHret, s2, F and d).
+        (W0, M, rh, ra, g, delta, a1, a2, a3, BH_ret_dyn, s2, F and d).
         Only parameters which are specified in `fixed_initials` may be excluded
         here. A dictionary of parameters is not allowed.
 
@@ -1143,11 +1295,9 @@ def posterior(theta, observations, fixed_initials=None,
         The `Observations` instance corresponding to this cluster, to provide
         the "data" for this posterior calculation.
 
-    fixed_initials : dict, optional
-        An optional dictionary of parameters which provides fixed values for
-        specific parameters used to fill out the `theta` array. This is useful
-        for allowing samplers to explore a smaller set of parameters by fixing
-        certain usually free ones.
+    model_params : ModelParameters
+        The `ModelParameters` instance being used during fitting. Will be used
+        to construct the model class based on `theta`.
 
     L_components : list of lists, optional
         List of likelihood components to compute. Must be a list of lists
@@ -1179,14 +1329,11 @@ def posterior(theta, observations, fixed_initials=None,
         individual log likelihood values for each likelihood function.
     '''
 
-    if fixed_initials is None:
-        fixed_initials = {}
-
     if L_components is None:
         L_components = observations.valid_likelihoods
 
     if prior_likelihood is None:
-        prior_likelihood = Priors(dict())
+        prior_likelihood = Priors(dict(), model_params=model_params)
 
     # Check if any values of theta are not finite, probably caused by invalid
     # prior transforms, and indicating we should return -inf
@@ -1196,13 +1343,6 @@ def posterior(theta, observations, fixed_initials=None,
             return -np.inf, *(-np.inf * np.ones(len(L_components)))
         else:
             return -np.inf
-
-    # get a list of variable params, sorted for the unpacking of theta
-    variable_params = DEFAULT_THETA.keys() - fixed_initials.keys()
-    params = sorted(variable_params, key=list(DEFAULT_THETA).index)
-
-    # TODO add type check on theta, cause those exceptions aren't very pretty
-    theta = dict(zip(params, theta)) | fixed_initials
 
     # prior likelihoods
     if prior_likelihood != 'ignore':
@@ -1217,12 +1357,17 @@ def posterior(theta, observations, fixed_initials=None,
     else:
         log_Pθ = 0
 
-    log_L, individuals = log_likelihood(theta, observations,
-                                        L_components, hyperparams)
+    log_L, individuals = log_likelihood(theta, observations, model_params,
+                                        L_components=L_components,
+                                        hyperparams=hyperparams,
+                                        evolved=evolved,
+                                        BH_core_likelihood=BH_core_likelihood,
+                                        BH_rh_likelihood=BH_rh_likelihood)
 
     probability = log_L + log_Pθ
 
     if return_indiv:
+        # TODO this `individuals` does not include any prior likelihood
         return probability, *individuals
     else:
         return probability

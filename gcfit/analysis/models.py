@@ -1,6 +1,6 @@
 from .. import util
 from ..util import mass
-from ..core.data import Observations, FittableModel
+from ..core.data import Observations, Model, EvolvedModel
 
 import h5py
 import numpy as np
@@ -13,30 +13,64 @@ import astropy.visualization as astroviz
 
 import logging
 import pathlib
+import itertools
+import warnings
 from collections import abc
 
 
 __all__ = ['ModelVisualizer', 'CIModelVisualizer', 'ObservationsVisualizer',
-           'SampledVisualizer', 'ModelCollection']
+           'EvolvedVisualizer', 'SampledVisualizer', 'ModelCollection']
 
 
-def _get_model(theta, observations):
-    '''Compute a model based on `theta` and fail quietly'''
+def _get_model(theta, model_params, *, strict=False, cls=Model):
+    '''Compute a model based on `theta` and optionally fail quietly.'''
+
+    params = model_params.build_args(theta)
+
     try:
-        return FittableModel(theta, observations=observations)
+        return cls(*params.args, **params.kwargs)
+
     except ValueError:
-        logging.warning(f"Model did not converge with {theta=}")
-        return None
+        mssg = f"{cls} did not converge with {theta=}"
+        if strict:
+            raise ValueError(mssg)
+        else:
+            logging.warning(mssg)
+            return None
+
+
+def _get_ev_model(theta, model_params, strict=False):
+    return _get_model(theta, model_params, strict=strict, cls=EvolvedModel)
+
 
 # --------------------------------------------------------------------------
 # Individual model visualizers
 # --------------------------------------------------------------------------
 
 
+class _MarkerCycle:
+    '''
+    Allows for a consistent cycle of markers by using this class
+    as an iterator directly (i.e. calling `next(marker_cycle)`) or a fresh,
+    restarted cycle of markers constructed by `fresh_cycle`.
+    '''
+
+    def __init__(self, markers: tuple[str, ...]):
+        self.markers = markers
+        self.cycle = itertools.cycle(markers)
+
+    def __next__(self):
+        return next(self.cycle)
+
+    def fresh_cycle(self):
+        return _MarkerCycle(self.markers)
+
+
 class _ClusterVisualizer:
     '''Base class for all visualizers of all Model types.'''
 
-    _MARKERS = ('o', '^', 'D', '+', 'x', '*', 's', 'p', 'h', 'v', '1', '2')
+    _MARKERS = _MarkerCycle(('o', '^', 'D', '+', 'x', '*', 's', 'p', 'h', 'v'))
+    _RESTART_MARKERS = True
 
     # Default xaxis limits for all profiles. Set by inits, can be reset by user
     rlims = None
@@ -343,10 +377,15 @@ class _ClusterVisualizer:
         ax.yaxis.set_ticks_position('both')
 
     def _set_xlabel(self, ax, label='Distance from centre', unit=None, *,
-                    residual_ax=None, remove_all=False, inline_latex=True):
+                    residual_ax=None, res_ax_method='inset',
+                    remove_all=False, inline_latex=True):
         '''Set the label for the quantity on the x axis of this plot.'''
 
-        bottom_ax = ax if residual_ax is None else residual_ax
+        # bottom_ax = ax if residual_ax is None else residual_ax
+        if residual_ax is not None and res_ax_method != 'inset':
+            bottom_ax = ax
+        else:
+            bottom_ax = ax
 
         if unit is not None:
 
@@ -365,14 +404,17 @@ class _ClusterVisualizer:
             except ValueError:
                 pass
 
-        bottom_ax.set_xlabel(label)
+        ax.set_xlabel(label)
 
-        # if has residual ax, remove the ticks/labels on the top ax
         if residual_ax is not None:
-            ax.set_xlabel('')
-            ax.xaxis.set_tick_params(bottom=False, labelbottom=False)
+            residual_ax.set_xlabel(label)
 
-        # if desired, simply remove everything
+            # If an appended residual ax, only set that
+            if res_ax_method != 'inset':
+                ax.set_xlabel('')
+                ax.xaxis.set_tick_params(bottom=False, labelbottom=False)
+
+        # if desired, simply remove everything from main ax
         if remove_all:
             bottom_ax.set_xlabel('')
             bottom_ax.xaxis.set_tick_params(bottom=False, labelbottom=False)
@@ -388,10 +430,27 @@ class _ClusterVisualizer:
         @functools.wraps(method)
         def _unit_decorator(self, *args, **kwargs):
 
+            # TODO there are no checks here for bad distances (e.g. nan, -tive)
+
             # convert based on median distance parameter
             eqvs = util.angular_width(self.d)
 
-            with astroviz.quantity_support(), u.set_enabled_equivalencies(eqvs):
+            # Define radius-based units
+            # TODO this starts breaking if you close a plot within the context
+            rad_units = {
+                u.def_unit('r_h', np.median(self.rh)),
+                u.def_unit('r_0', np.median(self.r0)),
+                u.def_unit('r_v', np.median(self.rv)),
+                u.def_unit('r_t', np.median(self.rt))
+            }
+
+            rad_units = {ur for ur in rad_units if ur.name not in
+                         [equ.name for equ in u.pc.find_equivalent_units()]}
+
+            with (astroviz.quantity_support(),
+                  u.set_enabled_equivalencies(eqvs),
+                  u.add_enabled_units(rad_units)):
+
                 return method(self, *args, **kwargs)
 
         return _unit_decorator
@@ -417,7 +476,7 @@ class _ClusterVisualizer:
     def _plot_model(self, ax, data, intervals=None, *,
                     x_data=None, x_unit='pc', y_unit=None,
                     scale=1.0, background=0.0,
-                    CI_kwargs=None, **kwargs):
+                    CI_kwargs=None, stairplot=False, **kwargs):
         '''Base plotting function for all model profiles.
 
         Plots a given array of y-values representing a radial profile
@@ -496,7 +555,7 @@ class _ClusterVisualizer:
         # Convert any units desired
         # ------------------------------------------------------------------
 
-        data *= scale
+        data = data * scale
 
         x_domain = self.r if x_data is None else x_data
 
@@ -518,7 +577,12 @@ class _ClusterVisualizer:
 
         median = data[midpoint]
 
-        med_plot, = ax.plot(x_domain, median, **kwargs)
+        if not stairplot:
+            med_plot, = ax.plot(x_domain, median, **kwargs)
+            med_color = med_plot.get_color()
+        else:
+            med_plot = ax.stairs(median, x_domain, **kwargs)
+            med_color = med_plot.get_edgecolor()
 
         # ------------------------------------------------------------------
         # Plot confidence intervals successively from the midpoint
@@ -526,15 +590,22 @@ class _ClusterVisualizer:
 
         output = [med_plot]
 
-        CI_kwargs.setdefault('color', med_plot.get_color())
+        CI_kwargs.setdefault('color', med_color)
 
         alpha = 0.8 / (intervals + 1)
         for sigma in range(1, intervals + 1):
 
-            CI = ax.fill_between(
-                x_domain, data[midpoint + sigma], data[midpoint - sigma],
-                alpha=(1 - alpha), **CI_kwargs
-            )
+            if not stairplot:
+                CI = ax.fill_between(
+                    x_domain, data[midpoint + sigma], data[midpoint - sigma],
+                    alpha=(1 - alpha), **CI_kwargs
+                )
+            else:
+                CI = ax.stairs(
+                    data[midpoint + sigma], x_domain,
+                    baseline=data[midpoint - sigma],
+                    fill=True, alpha=(1 - alpha), **CI_kwargs
+                )
 
             output.append(CI)
 
@@ -543,7 +614,7 @@ class _ClusterVisualizer:
         return output
 
     def _plot_data(self, ax, dataset, y_key, *,
-                   x_key='r', x_unit='pc', y_unit=None,
+                   x_key='r', x_unit='pc', y_unit=None, citations=True,
                    err_transform=None, scale=1.0, background=0.0, **kwargs):
         '''Base plotting function for all observed data profiles.
 
@@ -638,9 +709,13 @@ class _ClusterVisualizer:
         kwargs.setdefault('linestyle', 'None')
         kwargs.setdefault('zorder', 10)  # to force marker and bar to be higher
 
-        label = dataset.cite()
+        if citations:
+            label = dataset.cite()
+        else:
+            label = str(dataset)
+
         if 'm' in dataset.mdata:
-            label += fr' ($m={dataset.mdata["m"]}\ M_\odot$)'
+            label = fr'{label} ($m={dataset.mdata["m"]}\ M_\odot$)'
 
         # ------------------------------------------------------------------
         # Plot
@@ -652,6 +727,7 @@ class _ClusterVisualizer:
     def _plot_profile(self, ax, ds_pattern, y_key, model_data, *,
                       y_unit=None, residuals=False, legend=False,
                       color=None, data_color=None, model_color=None,
+                      data_markers=None, data_scale=1.0, model_scale=1.0,
                       mass_bins=None, model_label=None, label_masses=True,
                       res_kwargs=None, data_kwargs=None, model_kwargs=None,
                       **kwargs):
@@ -718,6 +794,12 @@ class _ClusterVisualizer:
             colours of model profiles will be taken from the corresponding data
             of the same masses.
 
+        data_markers : list of marker style string or MarkerStyle, optional
+            The markers passed to `_plot_data`, defining the markers for all
+            observational data. These will be cycled through, so if the number
+            of markers given is less than the number of datasets, there will
+            be repeats. By default, `self._MARKERS` is used.
+
         mass_bins : list of int, optional
             The mass bins from the model to plot. This should be a list of
             indices corresponding to the desired mass bins in the given
@@ -760,9 +842,6 @@ class _ClusterVisualizer:
 
         strict = kwargs.pop('strict', False)
 
-        # Restart marker styles each plotting call
-        markers = iter(self._MARKERS)
-
         # Get various kwarg dicts, kinda try to avoid altering any dicts
         if res_kwargs is None:
             res_kwargs = {}
@@ -778,6 +857,20 @@ class _ClusterVisualizer:
             model_kwargs = {}
         else:
             model_kwargs = model_kwargs.copy()
+
+        # Use the base marker cycle if none explicitly given
+        if data_markers is None:
+
+            # Optionally restart marker styles each plotting call
+            if self._RESTART_MARKERS:
+                markers = self._MARKERS.fresh_cycle()
+
+            else:
+                markers = self._MARKERS
+
+        # Create a new marker cycle from the specified markers
+        else:
+            markers = _MarkerCycle(data_markers)
 
         # Unless specified, each mass bin should cycle colour from matplotlib
         default_color = color
@@ -837,11 +930,16 @@ class _ClusterVisualizer:
             mrk = next(markers)
 
             # get mass bin of this dataset, for later model plotting
-            if 'm' in dset.mdata:
-                m = dset.mdata['m'] * u.Msun
+            if ('m' in dset.mdata) and (model_data is not None):
+                m = dset.mdata['m'] << u.Msun
                 mass_bin = np.where(self.mj == m)[0][0]
             else:
                 mass_bin = self.star_bin
+
+            if np.ndim(data_scale) > 0:
+                data_scl = data_scale[mass_bin]
+            else:
+                data_scl = data_scale
 
             if mass_bin in masses and not list_of_clr:
                 clr = masses[mass_bin][0][0].get_color()
@@ -851,7 +949,8 @@ class _ClusterVisualizer:
             # plot the data
             try:
                 line = self._plot_data(ax, dset, y_key, marker=mrk, color=clr,
-                                       y_unit=y_unit, **data_kwargs, **kwargs)
+                                       y_unit=y_unit, scale=data_scl,
+                                       **data_kwargs, **kwargs)
 
             except KeyError as err:
                 if strict:
@@ -862,6 +961,9 @@ class _ClusterVisualizer:
 
             masses.setdefault(mass_bin, [])
 
+            # TODO really don't think this is how should store this lol
+            line.logl_weight = dset.mdata.get('weight', 1.0)
+
             masses[mass_bin].append(line)
 
         # ------------------------------------------------------------------
@@ -869,7 +971,13 @@ class _ClusterVisualizer:
         # the model data, calling `_plot_model`
         # ------------------------------------------------------------------
 
-        res_ax = None
+        # Attempt to find the residuals axes already present here
+        try:
+            res_ax = [child for child in ax.get_children()
+                      if child.get_label() == 'residuals'][0]
+
+        except IndexError:
+            res_ax = None
 
         if model_data is not None:
 
@@ -894,6 +1002,11 @@ class _ClusterVisualizer:
                             f"range (0-{self.mj.size - 1})")
                     raise ValueError(mssg)
 
+                if np.ndim(model_scale) > 0:
+                    mdl_scl = model_scale[mbin]
+                else:
+                    mdl_scl = model_scale
+
                 # if no model color specified *and* multiple masses exists, use
                 #   corresponding data colours, otherwise use default
                 if (model_color is None and errbars is not None
@@ -907,7 +1020,8 @@ class _ClusterVisualizer:
                     label += fr' ($m={self.mj[mbin].value:.2f}\ M_\odot$)'
 
                 self._plot_model(ax, ymodel, color=clr, y_unit=y_unit,
-                                 label=label, **model_kwargs, **kwargs)
+                                 label=label, scale=mdl_scl,
+                                 **model_kwargs, **kwargs)
 
                 if residuals:
                     res_ax = self._add_residuals(ax, ymodel, errbars,
@@ -930,13 +1044,78 @@ class _ClusterVisualizer:
 
         return ax, res_ax
 
+    def _plot_evolution(self, ax, model_data, *,
+                        x_unit='Gyr', y_unit=None, legend=False,
+                        color=None, model_color=None,
+                        mass_bins=None, model_label=None, **kwargs):
+        '''Plot a model quantity with time on the x axis. only available for
+        evolved models obviously'''
+        # TODO make it still plot a point if only one datapoint given
+
+        # Unless specified, each mass bin should cycle colour from matplotlib
+        default_color = color
+
+        model_color = model_color or default_color
+
+        if 'label' in kwargs:
+            if model_label is None:
+                # I'll let you get away with it this time.
+                model_label = kwargs.pop('label')
+            else:
+                mssg = ("Multiple labels provided. "
+                        "Must specify only a `model_label`")
+                raise ValueError(mssg)
+
+        # ------------------------------------------------------------------
+        # Based on the masses of data plotted, plot the corresponding axes of
+        # the model data, calling `_plot_model`
+        # ------------------------------------------------------------------
+
+        # ensure that the data is (mass bin, intervals, r domain)
+        if len(model_data.shape) != 3:
+            raise ValueError("invalid model data shape")
+
+        # No mass bins supplied, default to star_bin
+        if mass_bins is None:
+            mass_bins = (0, )
+
+        for mbin in mass_bins:  # currently only global quantities so no mbins
+
+            try:
+                ymodel = model_data[mbin, :, :]
+            except IndexError:
+                mssg = (f"Mass bin index {mbin} is out of "
+                        f"range (0-{self.mj.size - 1})")
+                raise ValueError(mssg)
+
+            clr = model_color
+
+            label = model_label
+
+            self._plot_model(ax, x_data=self.t, data=ymodel, color=clr,
+                             x_unit=x_unit, y_unit=y_unit, label=label,
+                             **kwargs)
+
+        # Create legend (remove if no handles found)
+        if legend:
+
+            # The empty legends warning is apparently impossible to catch, so
+            # we'll do it ourselves, and save the stdout clutter
+            handles, labels = mpl_leg._get_legend_handles_labels([ax])
+
+            if len(handles) > 0:
+                ax.legend(handles, labels)
+
+        return ax
+
     # -----------------------------------------------------------------------
     # Plot extras
     # -----------------------------------------------------------------------
 
     def _add_residuals(self, ax, ymodel, errorbars, percentage=False, *,
-                       show_chi2=False, xmodel=None, y_unit=None, size="15%",
-                       res_ax=None, divider_kwargs=None):
+                       show_logl=True, hyperparams=False, xmodel=None,
+                       y_unit=None, padding=0.1, size=0.25,
+                       res_ax=None, ax_method='inset', divider_kwargs=None):
         '''Append an extra axis to `ax` for plotting residuals.
 
         Automatically appends a new axis to the the bottom of the given `ax`,
@@ -958,17 +1137,17 @@ class _ClusterVisualizer:
             Array of model profile data to plot. Must be equivalent to
             that plotted on `ax` using `_plot_model`.
 
-        errorbars : matplotlib.ErrorbarContainer
-            The outputs from a call to `plt.errorbars`, as returned from
+        errorbars : list of matplotlib.ErrorbarContainer
+            The outputs from calls to `plt.errorbars`, as returned from
             `_plot_data`.
 
         percentage : bool, optional
             Whether to plot the residuals in physical units (model - data;
             default) or in percentages (100 * (model - data) / data).
 
-        show_chi2 : bool, optional
-            If True, will add an annotation with the computed Chi-squared
-            value between all data and the plotted model median.
+        show_logl : bool, optional
+            If True, will add an annotation with the computed gaussian
+            likelihood value between all data and the plotted model median.
 
         x_model : u.Quantity[Nr], optional
             Alternative x-axis data to use instead of `self.r`.
@@ -979,26 +1158,37 @@ class _ClusterVisualizer:
         size : str or float, optional
             The size of the appended residuals axes, with respect to the
             primary axes.
-            See `mpl_toolkits.axes_grid1.axes_divider.AxesDivider.append_axes`
-            for more information. Defaults to "15%".
+            See `Axes.append_axes` or
+            `mpl_toolkits.axes_grid1.axes_divider.AxesDivider.append_axes`
+            for more information. Defaults to 0.25 (e.g. 25%).
 
         res_ax : matplotlib.axes.Axes, optional
             Optionally provide an already created axis to plot residuals on.
             This is useful for overplotting multiple residuals (i.e. for
             multiple datasets).
 
+        ax_method : {'inset', 'append'}, optional
+            How to create the `res_ax`, if necessary. "inset" (default) will
+            create an inset child axes in the bottom left corner of the main
+            axes, while "append" will create a new axes on the bottom of
+            the main axes, using `append_axes`.
+
         Returns
         -------
         matplotlib.axes.Axes
             The created axes instance containing the residuals plot.
         '''
-        from mpl_toolkits.axes_grid1 import make_axes_locatable
 
         if errorbars is None:
             errorbars = []
 
         if divider_kwargs is None:
             divider_kwargs = {}
+
+        if hyperparams:
+            likelihood_func = util.hyperparam_likelihood
+        else:
+            likelihood_func = util.gaussian_likelihood
 
         # ------------------------------------------------------------------
         # Get model data and spline
@@ -1021,14 +1211,37 @@ class _ClusterVisualizer:
 
         if res_ax is None:
 
-            divider = make_axes_locatable(ax)
-            res_ax = divider.append_axes('bottom', size=size, pad=0, sharex=ax)
+            if ax_method == 'inset':
+                bounds = [padding, padding, size, size]
+                res_ax = ax.inset_axes(bounds)
+
+                res_ax.sharex(ax)
+
+            elif ax_method == 'append':
+                from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+                # TODO if append, padding should probably always = 0.
+                divider = make_axes_locatable(ax)
+                res_ax = divider.append_axes('bottom', size=size,
+                                             # pad=padding, sharex=ax)
+                                             pad=0, sharex=ax)
+
+                # TODO I think need to remove this from fig.axes, so setup works
+                ax.add_child_axes(res_ax)  # is this allowed?
+
+            res_ax.set_label('residuals')
 
             res_ax.grid()
 
             res_ax.set_xscale(ax.get_xscale())
 
             res_ax.spines['top'].set(**divider_kwargs)
+
+            if percentage:
+                res_ax.set_ylabel(r'Residuals')
+                res_ax.yaxis.set_major_formatter(mpl_tick.PercentFormatter())
+            else:
+                res_ax.set_ylabel(f'Residuals [{res_ax.get_ylabel()}]')
 
         # ------------------------------------------------------------------
         # Plot the model line, hopefully centred on zero
@@ -1039,13 +1252,15 @@ class _ClusterVisualizer:
         else:
             baseline = ymodel - ymedian
 
-        self._plot_model(res_ax, baseline, color='k')
+        self._plot_model(res_ax, baseline, x_data=xmodel, x_unit=xmodel.unit,
+                         color='k')
 
         # ------------------------------------------------------------------
         # Get data from the plotted errorbars
         # ------------------------------------------------------------------
 
-        chi2 = 0.
+        # logl = 0.
+        logl = []
 
         for errbar in errorbars:
 
@@ -1092,15 +1307,11 @@ class _ClusterVisualizer:
 
                 yerr_segs = yerr_lines.get_segments() << ydata.unit
 
-                if percentage:
-                    yerr = 100 * np.array([
-                        np.abs(seg[:, 1] - ydata[i]) / ydata[i]
-                        for i, seg in enumerate(yerr_segs)
-                    ]).T
-
-                else:
-                    yerr = u.Quantity([np.abs(seg[:, 1] - ydata[i])
-                                       for i, seg in enumerate(yerr_segs)]).T
+                yerr = u.Quantity(
+                    [np.abs(seg[:, 1] - ydata[i])
+                     for i, seg in enumerate(yerr_segs)],
+                    unit=ydata.unit
+                ).T
 
             # --------------------------------------------------------------
             # Compute the residuals and plot them
@@ -1108,33 +1319,26 @@ class _ClusterVisualizer:
 
             if percentage:
                 res = 100 * (ydata - yspline(xdata)) / yspline(xdata)
+                res_yerr = 100 * yerr / ydata
             else:
                 res = ydata - yspline(xdata)
+                res_yerr = yerr
 
-            res_ax.errorbar(xdata, res, xerr=xerr, yerr=yerr,
+            if show_logl:
+                logl_i = likelihood_func(ydata, yspline(xdata), yerr)
+                logl_i *= getattr(errbar, 'logl_weight', 1.0)
+
+                L_label = fr"$\log\mathcal{{L}}={logl_i:.2f}$"
+                logl.append(logl_i)
+            else:
+                L_label = None
+
+            res_ax.errorbar(xdata, res, xerr=xerr, yerr=res_yerr,
                             color=mfc, mec=mec, mew=mew, marker=mrk, ms=ms,
-                            linestyle='none')
+                            linestyle='none', label=L_label)
 
-            # --------------------------------------------------------------
-            # Optionally compute chi-squared statistic
-            # --------------------------------------------------------------
-
-            if show_chi2:
-                chi2 += np.sum((res / yerr)**2)
-
-        if show_chi2:
-            fake = plt.Line2D([], [], label=fr"$\chi^2={chi2:.2f}$")
-            res_ax.legend(handles=[fake], handlelength=0, handletextpad=0)
-
-        # ------------------------------------------------------------------
-        # Label y-axes
-        # ------------------------------------------------------------------
-
-        if percentage:
-            res_ax.set_ylabel(r'Residuals')
-            res_ax.yaxis.set_major_formatter(mpl_tick.PercentFormatter())
-        else:
-            res_ax.set_ylabel(f'Residuals [{res_ax.get_ylabel()}]')
+        if show_logl:
+            res_ax.legend()
 
         # ------------------------------------------------------------------
         # Set bounds at 100% or less
@@ -1174,7 +1378,7 @@ class _ClusterVisualizer:
     def plot_LOS(self, fig=None, ax=None,
                  show_obs=True, residuals=False, *,
                  x_unit='pc', y_unit='km/s', legend=True,
-                 label_position='top', verbose_label=True, blank_xaxis=False,
+                 label_position='left', verbose_label=True, blank_xaxis=False,
                  res_kwargs=None, **kwargs):
         r'''Plot the line-of-sight velocity dispersion profiles.
 
@@ -1266,8 +1470,8 @@ class _ClusterVisualizer:
     def plot_pm_tot(self, fig=None, ax=None,
                     show_obs=True, residuals=False, *,
                     x_unit='pc', y_unit='mas/yr', legend=True,
-                    label_position='top', verbose_label=True, blank_xaxis=False,
-                    res_kwargs=None, **kwargs):
+                    label_position='left', verbose_label=True,
+                    blank_xaxis=False, res_kwargs=None, **kwargs):
         r'''Plot the total proper motion dispersion profiles.
 
         Plots the `self.pm_tot` model profiles, and the relevant observational
@@ -1358,7 +1562,7 @@ class _ClusterVisualizer:
     def plot_pm_ratio(self, fig=None, ax=None,
                       show_obs=True, residuals=False, *,
                       x_unit='pc', blank_xaxis=False, legend=True,
-                      label_position='top', verbose_label=True,
+                      label_position='left', verbose_label=True,
                       res_kwargs=None, **kwargs):
         r'''Plot the proper motion dispersion anisotropy profiles.
 
@@ -1452,7 +1656,7 @@ class _ClusterVisualizer:
     def plot_pm_T(self, fig=None, ax=None,
                   show_obs=True, residuals=False, *,
                   x_unit='pc', y_unit='mas/yr', legend=True,
-                  label_position='top', verbose_label=True, blank_xaxis=False,
+                  label_position='left', verbose_label=True, blank_xaxis=False,
                   res_kwargs=None, **kwargs):
         r'''Plot the tangential proper motion dispersion profiles.
 
@@ -1544,7 +1748,7 @@ class _ClusterVisualizer:
     def plot_pm_R(self, fig=None, ax=None,
                   show_obs=True, residuals=False, *,
                   x_unit='pc', y_unit='mas/yr', legend=True,
-                  label_position='top', verbose_label=True, blank_xaxis=False,
+                  label_position='left', verbose_label=True, blank_xaxis=False,
                   res_kwargs=None, **kwargs):
         r'''Plot the radial proper motion dispersion profiles.
 
@@ -1637,7 +1841,7 @@ class _ClusterVisualizer:
                             show_background=False, subtract_background=False,
                             show_obs=True, residuals=False, *, legend=True,
                             x_unit='pc', y_unit='1/pc2', scale_to='model',
-                            label_position='top', verbose_label=True,
+                            label_position='left', verbose_label=True,
                             blank_xaxis=False, res_kwargs=None,
                             data_kwargs=None, model_kwargs=None, **kwargs):
         r'''Plot the projected number density profiles.
@@ -1712,12 +1916,18 @@ class _ClusterVisualizer:
         -------
         matplotlib.figure.Figure
             The corresponding figure, containing all axes and plot artists.
+
+        Notes
+        -----
+        If plotting any mass bins here which do not have corresponding datasets,
+        no scaling will be applied (K=1). Therefore, plotting mixed profiles
+        with and without data at the same time is not recommended.
         '''
 
         # TODO add minor ticks to y axis
 
         def quad_nuisance(err):
-            return np.sqrt(err**2 + (self.s2 << u.arcmin**-4))
+            return self.J * np.sqrt(err**2 + (self.s2 << u.arcmin**-4))
 
         # ------------------------------------------------------------------
         # Setup the figures
@@ -1738,6 +1948,8 @@ class _ClusterVisualizer:
 
             if data_kwargs is None:
                 data_kwargs = {}
+            else:
+                data_kwargs = data_kwargs.copy()
 
             data_kwargs.setdefault('err_transform', quad_nuisance)
 
@@ -1749,16 +1961,14 @@ class _ClusterVisualizer:
         # Compute the scaling relations if necessary
         # ------------------------------------------------------------------
 
+        model_scale = data_scale = 1.0
+
         try:
             if scale_to == 'model':
-                if data_kwargs is None:
-                    data_kwargs = {}
-                data_kwargs.setdefault('scale', 1 / self.K_scale[self.star_bin])
+                data_scale = 1 / self.K_scale
 
             elif scale_to == 'data':
-                if model_kwargs is None:
-                    model_kwargs = {}
-                model_kwargs.setdefault('scale', self.K_scale[self.star_bin])
+                model_scale = self.K_scale
 
         except TypeError:
             pass
@@ -1783,6 +1993,7 @@ class _ClusterVisualizer:
                 raise RuntimeError(mssg)
 
             try:
+                # TODO need to do this for every number density dataset
                 nd = list(self.obs.filter_datasets('*number*').values())[-1]
                 background = nd.mdata['background'] << nd['Σ'].unit
 
@@ -1802,7 +2013,7 @@ class _ClusterVisualizer:
             # --------------------------------------------------------------
 
             if show_background:
-                ax.axhline(y=background, ls='--', c='black', alpha=0.66)
+                ax.axhline(y=background << y_unit, ls='--', c='black', alpha=0.66)
 
             elif subtract_background:
                 data_kwargs['background'] = background
@@ -1815,7 +2026,9 @@ class _ClusterVisualizer:
                                         strict=strict, residuals=residuals,
                                         x_unit=x_unit, y_unit=y_unit,
                                         legend=legend,
+                                        model_scale=model_scale,
                                         model_kwargs=model_kwargs,
+                                        data_scale=data_scale,
                                         data_kwargs=data_kwargs,
                                         res_kwargs=res_kwargs, **kwargs)
 
@@ -1835,7 +2048,9 @@ class _ClusterVisualizer:
         return fig
 
     @_support_units
-    def plot_all(self, fig=None, sharex=True, **kwargs):
+    def plot_all(self, fig=None, sharex=True,
+                 only_PM_RT=False, stacked_panels=False,
+                 nd_scale_to='model', unique_kwargs=None, **kwargs):
         '''Plot all primary model radial profiles in one figure.
 
         Plots the six primary radial profile quantities used for fitting
@@ -1843,8 +2058,11 @@ class _ClusterVisualizer:
         That is, clockwise from the top left, number density, total PM,
         tangential PM, radial PM, PM ratio and LOS dispersion profiles.
 
-        Simply sets up a figure with six axes and calls the various relevant
-        profile plotting functions to populate each ax.
+        If `only_PM_RT` is True, will remove the total PM and PM ratio axes
+        from the figure.
+
+        Simply sets up a figure with six (or four) axes and calls the
+        various relevant profile plotting functions to populate each ax.
 
         Parameters
         ----------
@@ -1859,6 +2077,19 @@ class _ClusterVisualizer:
             Will also remove the x axis ticks and labels on all but the bottom
             row.
 
+        only_PM_RT : bool, optional
+            If True, will only plot the radial and tangential component proper
+            motion profiles, and exclude the total and anisotropy profiles.
+
+        stacked_panels : bool, optional
+            If True, axes will all be stacked into a single column, otherwise
+            will be broken into two columns (default).
+
+        unique_kwargs : dict, optional
+            Optional dictionary with keys of "ND", "LOS", "PM_tot", "PM_ratio",
+            "PM_R", and/or "PM_T", which each correspond to a dictionary of
+            kwargs to be pass to each individual plotting function.
+
         **kwargs : dict
             All other arguments are passed to each plotting function.
 
@@ -1871,16 +2102,27 @@ class _ClusterVisualizer:
         # TODO working with residuals here is hard because constrianed_layout
         #   doesn't seem super aware of them
 
+        if unique_kwargs is None:
+            unique_kwargs = {}
+
         # ------------------------------------------------------------------
         # Setup figure
         # ------------------------------------------------------------------
 
-        fig, axes = self._setup_multi_artist(fig, (3, 2), sharex=sharex)
+        if only_PM_RT:
+            if stacked_panels:
+                arch = ('nd', 'los', 't', 'r')
+                axshape = (4, )
+            else:
+                arch = ('nd', 't', 'los', 'r')
+                axshape = (2, 2)
 
-        axes = axes.reshape((3, 2))
+        else:
+            arch = ('nd', 'tot', 'los', 't', 'rat', 'r')
+            axshape = (3, 2) if not stacked_panels else (6,)
 
-        res_kwargs = dict(size="25%", show_chi2=False, percentage=True)
-        kwargs.setdefault('res_kwargs', res_kwargs)
+        fig, axes = self._setup_multi_artist(fig, axshape, sharex=sharex)
+        axes = dict(zip(arch, axes))
 
         # ------------------------------------------------------------------
         # Left Plots
@@ -1889,6 +2131,7 @@ class _ClusterVisualizer:
         # Number Density
 
         show_numdens_background, bg_lim = False, None
+        # TODO replace specific args with just unique_kwargs now
 
         if self.obs is not None and kwargs.get('show_obs', True):
 
@@ -1900,10 +2143,10 @@ class _ClusterVisualizer:
                     show_numdens_background = True
                     bg_lim = 0.9 * nd.mdata['background'] << nd['Σ'].unit
 
-        self.plot_number_density(fig=fig, ax=axes[0, 0], label_position='left',
-                                 blank_xaxis=True,
+        self.plot_number_density(fig=fig, ax=axes['nd'], label_position='left',
+                                 blank_xaxis=True, scale_to=nd_scale_to,
                                  show_background=show_numdens_background,
-                                 **kwargs)
+                                 **unique_kwargs.get('ND', {}), **kwargs)
 
         if self.numdens is not None and bg_lim is not None:
             bg_lim = min([bg_lim, np.abs(self.numdens[..., :-2].min())])
@@ -1912,46 +2155,55 @@ class _ClusterVisualizer:
         if bg_lim is not None and bg_lim <= 0.0:
             bg_lim = 1e-3
 
-        axes[0, 0].set_ylim(bottom=bg_lim)
+        axes['nd'].set_ylim(bottom=bg_lim)
 
         # Line-of-Sight Velocity Dispersion
 
-        self.plot_LOS(fig=fig, ax=axes[1, 0], label_position='left',
-                      blank_xaxis=True, **kwargs)
+        self.plot_LOS(fig=fig, ax=axes['los'], label_position='left',
+                      blank_xaxis=(not only_PM_RT) or stacked_panels,
+                      **unique_kwargs.get('LOS', {}), **kwargs)
 
-        axes[1, 0].set_ylim(bottom=0.0)
+        axes['los'].set_ylim(bottom=0.0)
 
-        # Proper Motion Anisotropy
+        if not only_PM_RT:
 
-        self.plot_pm_ratio(fig=fig, ax=axes[2, 0], label_position='left',
-                           **kwargs)
+            # Proper Motion Anisotropy
 
-        axes[2, 0].set_ylim(bottom=0.4, top=max(axes[2, 0].get_ylim()[1], 1.2))
+            self.plot_pm_ratio(fig=fig, ax=axes['rat'], label_position='left',
+                               blank_xaxis=stacked_panels,
+                               **unique_kwargs.get('PM_ratio', {}), **kwargs)
 
-        # ------------------------------------------------------------------
-        # Right Plots
-        # ------------------------------------------------------------------
+            rat_toplim = max(axes['rat'].get_ylim()[1], 1.2)
+            axes['rat'].set_ylim(bottom=0.4, top=rat_toplim)
 
-        # Total Proper Motion Dispersion
+            # ------------------------------------------------------------------
+            # Right Plots
+            # ------------------------------------------------------------------
 
-        self.plot_pm_tot(fig=fig, ax=axes[0, 1], label_position='left',
-                         blank_xaxis=True, **kwargs)
+            # Total Proper Motion Dispersion
 
-        axes[0, 1].set_ylim(bottom=0.0)
+            self.plot_pm_tot(fig=fig, ax=axes['tot'], label_position='left',
+                             blank_xaxis=True,
+                               **unique_kwargs.get('PM_tot', {}), **kwargs)
+
+            axes['tot'].set_ylim(bottom=0.0)
 
         # Tangential Proper Motion Dispersion
 
-        self.plot_pm_T(fig=fig, ax=axes[1, 1], label_position='left',
-                       blank_xaxis=True, **kwargs)
+        self.plot_pm_T(fig=fig, ax=axes['t'], label_position='left',
+                       blank_xaxis=True,
+                       **unique_kwargs.get('PM_T', {}), **kwargs)
 
-        axes[1, 1].set_ylim(bottom=0.0)
+        axes['t'].set_ylim(bottom=0.0)
+        # axes[0, 1].set_ylim(bottom=0.0)
 
         # Radial Proper Motion Dispersion
 
-        self.plot_pm_R(fig=fig, ax=axes[2, 1], label_position='left',
-                       **kwargs)
+        self.plot_pm_R(fig=fig, ax=axes['r'], label_position='left',
+                       **unique_kwargs.get('PM_R', {}), **kwargs)
 
-        axes[2, 1].set_ylim(bottom=0.0)
+        axes['r'].set_ylim(bottom=0.0)
+        # axes[1, 1].set_ylim(bottom=0.0)
 
         # ------------------------------------------------------------------
         # Style plots
@@ -1973,8 +2225,10 @@ class _ClusterVisualizer:
     @_support_units
     def plot_mass_func(self, fig=None, show_obs=True, show_fields=True, *,
                        PI_legend=False, propid_legend=False,
-                       label_unit='arcmin', model_color=None, model_label=None,
-                       logscaled=False, field_kw=None, **kwargs):
+                       label_unit='arcmin', data_color=None, model_color=None,
+                       model_label=None, logscaled=False, field_kw=None,
+                       residuals=False, res_kwargs=None,
+                       **kwargs):
         """Plot present day mass functions in various radial bins.
 
         Plots each of the stored `self.mass_func` radial (present-day) mass
@@ -1983,8 +2237,8 @@ class _ClusterVisualizer:
         observational datasets.
 
         Each grouping of mass functions bins (i.e. under a certain data
-        source proposal) will be plotted with it's own colour and sorted to be
-        next to one another.
+        source proposal) will be plotted with it's own colour (by default) and
+        sorted to be next to one another.
 
         Optionally, a panel will be added to the left of the figure showing
         the related field outlines on the sky (using `plot_MF_fields`).
@@ -2022,6 +2276,13 @@ class _ClusterVisualizer:
             Does not change anything about what is plotted, only the label.
             Defaults to arcminutes (').
 
+        data_color : str, optional
+            Optionally colour all datasets with a specific colour. This
+            will give the same colour to *all* radial bins, regardless of
+            proposal grouping. By default, the data in each grouping will be
+            given its own colour, as dictated within `self.mass_func`, or
+            as set by the default matplotlib colour cycler, if not set.
+
         model_color : str, optional
             Optionally colour all model profiles with a specific colour. This
             will give the same colour to *all* radial bins, regardless of
@@ -2037,7 +2298,7 @@ class _ClusterVisualizer:
             on a single figure.
 
         logscaled : bool, optional
-            If True, applies a log scaling to the the x (i.e. mass) axis.
+            If True, applies a log scaling to the the y (i.e. dNdm) axis.
 
         field_kw : dict, optional
             Optional arguments passed to `plot_MF_fields` if `show_fields` is
@@ -2062,6 +2323,9 @@ class _ClusterVisualizer:
             #   at which point I'm not sure what you're even trying to plot
             #   (this avoids a very ugly error)
             raise ValueError("No mass function data exists to plot")
+
+        if res_kwargs is None:
+            res_kwargs = {}
 
         # ------------------------------------------------------------------
         # Setup axes, splitting into two columns if necessary and adding the
@@ -2114,11 +2378,14 @@ class _ClusterVisualizer:
         # Iterate over each PI, gathering data to plot
         # ------------------------------------------------------------------
 
+        # TODO y-axis tick labels should be sci-notation at some point
+
         kwargs.setdefault('mfc', None)
         kwargs.setdefault('mec', 'k')
         kwargs.setdefault('mew', 0.3)
         kwargs.setdefault('linestyle', 'None')
         kwargs.setdefault('marker', 'o')
+        kwargs.setdefault('zorder', 10)
 
         for PI in sorted(self.mass_func,
                          key=lambda k: self.mass_func[k][0]['r1']):
@@ -2157,7 +2424,7 @@ class _ClusterVisualizer:
 
                 ax = axes[ax_ind]
 
-                data_clr = rbin.get('colour', None)
+                data_clr = data_color or rbin.get('colour', None)
 
                 # ----------------------------------------------------------
                 # Plot observations
@@ -2168,8 +2435,8 @@ class _ClusterVisualizer:
                     r_mask = ((mf['r1'] == rbin['r1'])
                               & (mf['r2'] == rbin['r2']))
 
-                    N_data = N[r_mask].value
-                    err_data = ΔN[r_mask].value
+                    N_data = N[r_mask]
+                    err_data = ΔN[r_mask]
 
                     err = self.F * err_data
 
@@ -2183,6 +2450,7 @@ class _ClusterVisualizer:
                 # this is *not* a profile, but does use similar, but simpler,
                 # logic
                 # ----------------------------------------------------------
+                # TODO switch to calling _plot_model directly (like evolution)
 
                 # If really desired, don't match model colour to bins
                 model_clr = model_color if model_color is not None else data_clr
@@ -2191,13 +2459,12 @@ class _ClusterVisualizer:
                 # which don't store the entire mass range (e.g. CImodels)
                 mj = rbin['mj']
 
-                dNdm = rbin['dNdm']
+                dNdm = rbin['dNdm'] << u.Msun**(-1)
 
                 midpoint = dNdm.shape[0] // 2
 
                 median = dNdm[midpoint]
 
-                # TODO zorder needs work here, noticeable when colors dont match
                 med_plot, = ax.plot(mj, median, color=model_clr)
 
                 alpha = 0.8 / (midpoint + 1)
@@ -2212,8 +2479,16 @@ class _ClusterVisualizer:
 
                     alpha += alpha
 
+                res_ax = None
+
+                if residuals:
+                    res_ax = self._add_residuals(
+                        ax, dNdm, [pnts], xmodel=mj,
+                        res_ax=res_ax, y_unit=dNdm.unit, **res_kwargs
+                    )
+
                 if logscaled:
-                    ax.set_xscale('log')
+                    ax.set_yscale('log')
 
                 ax.set_xlabel(None)
 
@@ -2439,7 +2714,7 @@ class _ClusterVisualizer:
         # Try to plot the various radii quantities from this model, if desired
         # ------------------------------------------------------------------
 
-        valid_rs = {'rh', 'ra', 'rt', 'r0', 'rhp', 'rv'}
+        valid_rs = {'rh', 'ra', 'rt', 'r0', 'rhp', 'rv', 'rc_obs'}
 
         q = [84.13, 50., 15.87]
 
@@ -2452,7 +2727,15 @@ class _ClusterVisualizer:
 
             r_lbl = f'$r_{{{r_type[1:]}}}$'
 
-            radius = getattr(self, r_type).to(unit)
+            try:
+                radius = getattr(self, r_type) << unit
+
+                if not np.isfinite(radius):
+                    raise AttributeError("radius must be finite.")
+
+            except AttributeError as err:
+                raise ValueError(f"Could not overplot {r_type}: {err}") from err
+
 
             σr_u, r, σr_l = np.nanpercentile(radius, q=q)
 
@@ -2492,7 +2775,8 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_density(self, fig=None, ax=None, kind='all', *,
-                     x_unit='pc', label_position='left', colors=None):
+                     x_unit='pc', label_position='left', colors=None,
+                     ls=None, **kwargs):
         '''Plot model density profiles.
 
         Plots the radial mass density (`self.rho_*`) profiles of the total,
@@ -2538,6 +2822,9 @@ class _ClusterVisualizer:
         if colors is None:
             colors = {}
 
+        if not isinstance(ls, dict):
+            ls = {k: ls for k in kind}
+
         fig, ax = self._setup_artist(fig, ax)
 
         # ax.set_title('Surface Mass Density')
@@ -2547,40 +2834,46 @@ class _ClusterVisualizer:
             self._plot_profile(ax, None, None, self.rho_tot,
                                x_unit=x_unit, model_label="Total",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("tot", "tab:cyan"))
+                               color=colors.get("tot", "tab:cyan"),
+                               ls=ls.get("tot"), **kwargs)
 
         # Total Remnant density
         if 'rem' in kind:
             self._plot_profile(ax, None, None, self.rho_rem,
                                x_unit=x_unit, model_label="Remnants",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("rem", "tab:purple"))
+                               color=colors.get("rem", "tab:purple"),
+                               ls=ls.get("rem"), **kwargs)
 
         # Main sequence density
         if 'MS' in kind:
             self._plot_profile(ax, None, None, self.rho_MS,
                                x_unit=x_unit, model_label="Main-sequence stars",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("MS", "tab:orange"))
+                               color=colors.get("MS", "tab:orange"),
+                               ls=ls.get("MS"), **kwargs)
 
         if 'WD' in kind:
             self._plot_profile(ax, None, None, self.rho_WD,
                                x_unit=x_unit, model_label="White Dwarfs",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("WD", "tab:green"))
+                               color=colors.get("WD", "tab:green"),
+                               ls=ls.get("WD"), **kwargs)
 
         if 'NS' in kind:
             self._plot_profile(ax, None, None, self.rho_NS,
                                x_unit=x_unit, model_label="Neutron Stars",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("NS", "tab:red"))
+                               color=colors.get("NS", "tab:red"),
+                               ls=ls.get("NS"), **kwargs)
 
         # Black hole density
         if 'BH' in kind:
             self._plot_profile(ax, None, None, self.rho_BH,
                                x_unit=x_unit, model_label="Black Holes",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("BH", "tab:gray"))
+                               color=colors.get("BH", "tab:gray"),
+                               ls=ls.get("BH"), **kwargs)
 
         ax.set_yscale("log")
         ax.set_xscale("log")
@@ -2594,7 +2887,8 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_surface_density(self, fig=None, ax=None, kind='all', *,
-                             x_unit='pc', label_position='left', colors=None):
+                             x_unit='pc', label_position='left', colors=None,
+                             ls=None, **kwargs):
         '''Plot model surface density profiles.
 
         Plots the radial surface mass density (`self.Sigma_*`) profiles of the
@@ -2640,6 +2934,9 @@ class _ClusterVisualizer:
         if colors is None:
             colors = {}
 
+        if not isinstance(ls, dict):
+            ls = {k: ls for k in kind}
+
         fig, ax = self._setup_artist(fig, ax)
 
         # ax.set_title('Surface Mass Density')
@@ -2649,40 +2946,46 @@ class _ClusterVisualizer:
             self._plot_profile(ax, None, None, self.Sigma_tot,
                                x_unit=x_unit, model_label="Total",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("tot", "tab:cyan"))
+                               color=colors.get("tot", "tab:cyan"),
+                               ls=ls.get("tot"), **kwargs)
 
         # Total Remnant density
         if 'rem' in kind:
             self._plot_profile(ax, None, None, self.Sigma_rem,
                                x_unit=x_unit, model_label="Remnants",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("rem", "tab:purple"))
+                               color=colors.get("rem", "tab:purple"),
+                               ls=ls.get("rem"), **kwargs)
 
         # Main sequence density
         if 'MS' in kind:
             self._plot_profile(ax, None, None, self.Sigma_MS,
                                x_unit=x_unit, model_label="Main-sequence stars",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("MS", "tab:orange"))
+                               color=colors.get("MS", "tab:orange"),
+                               ls=ls.get("MS"), **kwargs)
 
         if 'WD' in kind:
             self._plot_profile(ax, None, None, self.Sigma_WD,
                                x_unit=x_unit, model_label="White Dwarfs",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("WD", "tab:green"))
+                               color=colors.get("WD", "tab:green"),
+                               ls=ls.get("WD"), **kwargs)
 
         if 'NS' in kind:
             self._plot_profile(ax, None, None, self.Sigma_NS,
                                x_unit=x_unit, model_label="Neutron Stars",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("NS", "tab:red"))
+                               color=colors.get("NS", "tab:red"),
+                               ls=ls.get("NS"), **kwargs)
 
         # Black hole density
         if 'BH' in kind:
             self._plot_profile(ax, None, None, self.Sigma_BH,
                                x_unit=x_unit, model_label="Black Holes",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("BH", "tab:gray"))
+                               color=colors.get("BH", "tab:gray"),
+                               ls=ls.get("BH"), **kwargs)
 
         ax.set_yscale("log")
         ax.set_xscale("log")
@@ -2697,7 +3000,8 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_cumulative_mass(self, fig=None, ax=None, kind='all', *,
-                             x_unit='pc', label_position='left', colors=None):
+                             x_unit='pc', label_position='left', colors=None,
+                             normalize=False, ls=None, **kwargs):
         '''Plot model cumulative mass profiles.
 
         Plots the radial cumulative mass profiles of the total,
@@ -2743,48 +3047,88 @@ class _ClusterVisualizer:
         if colors is None:
             colors = {}
 
+        if not isinstance(ls, dict):
+            # TODO will fail if kind is only one thing, not a list
+            ls = {k: ls for k in kind}
+
         fig, ax = self._setup_artist(fig, ax)
 
         # ax.set_title('Cumulative Mass')
 
         # Total density
         if 'tot' in kind:
-            self._plot_profile(ax, None, None, self.cum_M_tot,
+
+            if normalize:
+                val = self.cum_M_tot / self.cum_M_tot[:, :, -1].T
+            else:
+                val = self.cum_M_tot
+
+            self._plot_profile(ax, None, None, val,
                                x_unit=x_unit, model_label="Total",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("tot", "tab:cyan"))
+                               color=colors.get("tot", "tab:cyan"),
+                               ls=ls.get("tot"), **kwargs)
 
         # Main sequence density
         if 'MS' in kind:
-            self._plot_profile(ax, None, None, self.cum_M_MS,
+
+            if normalize:
+                val = self.cum_M_MS / self.cum_M_MS[:, :, -1].T
+            else:
+                val = self.cum_M_MS
+
+            self._plot_profile(ax, None, None, val,
                                x_unit=x_unit, model_label="Main-sequence stars",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("MS", "tab:orange"))
+                               color=colors.get("MS", "tab:orange"),
+                               ls=ls.get("MS"), **kwargs)
 
         if 'WD' in kind:
-            self._plot_profile(ax, None, None, self.cum_M_WD,
+
+            if normalize:
+                val = self.cum_M_WD / self.cum_M_WD[:, :, -1].T
+            else:
+                val = self.cum_M_WD
+
+            self._plot_profile(ax, None, None, val,
                                x_unit=x_unit, model_label="White Dwarfs",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("WD", "tab:green"))
+                               color=colors.get("WD", "tab:green"),
+                               ls=ls.get("WD"), **kwargs)
 
         if 'NS' in kind:
-            self._plot_profile(ax, None, None, self.cum_M_NS,
+
+            if normalize:
+                val = self.cum_M_NS / self.cum_M_NS[:, :, -1].T
+            else:
+                val = self.cum_M_NS
+
+            self._plot_profile(ax, None, None, val,
                                x_unit=x_unit, model_label="Neutron Stars",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("NS", "tab:red"))
+                               color=colors.get("NS", "tab:red"),
+                               ls=ls.get("NS"), **kwargs)
 
         # Black hole density
         if 'BH' in kind:
-            self._plot_profile(ax, None, None, self.cum_M_BH,
+
+            if normalize:
+                val = self.cum_M_BH / self.cum_M_BH[:, :, -1].T
+            else:
+                val = self.cum_M_BH
+
+            self._plot_profile(ax, None, None, val,
                                x_unit=x_unit, model_label="Black Holes",
                                mass_bins=[0], label_masses=False,
-                               color=colors.get("BH", "tab:gray"))
+                               color=colors.get("BH", "tab:gray"),
+                               ls=ls.get("BH"), **kwargs)
 
-        ax.set_yscale("log")
         ax.set_xscale("log")
+        if not normalize:
+            ax.set_yscale("log")
 
-        self._set_ylabel(ax, rf'$M_{{enc}}$', self.cum_M_tot.unit,
-                         label_position)
+        self._set_ylabel(ax, rf'$M_{{enc}}{" / M(r_t)" if normalize else ""}$',
+                         self.cum_M_tot.unit, label_position)
         self._set_xlabel(ax, unit=x_unit)
 
         ax.legend(loc='lower center', ncol=len(kind), fancybox=True)
@@ -2793,7 +3137,7 @@ class _ClusterVisualizer:
 
     @_support_units
     def plot_remnant_fraction(self, fig=None, ax=None, *, show_total=True,
-                              x_unit='pc', label_position='left'):
+                              x_unit='pc', label_position='left', **kwargs):
         '''Plot model stellar and remnant mass fraction profiles.
 
         Plots the radial mass fraction profile of the main sequence stars
@@ -2838,10 +3182,10 @@ class _ClusterVisualizer:
 
         self._plot_profile(ax, None, None, self.frac_M_MS,
                            x_unit=x_unit, model_label="Main-sequence stars",
-                           mass_bins=[0], label_masses=False)
+                           mass_bins=[0], label_masses=False, **kwargs)
         self._plot_profile(ax, None, None, self.frac_M_rem,
                            x_unit=x_unit, model_label="Remnants",
-                           mass_bins=[0], label_masses=False)
+                           mass_bins=[0], label_masses=False, **kwargs)
 
         label = r"Mass fraction $M_{MS}/M_{tot}$, $M_{remn}/M_{tot}$"
         self._set_ylabel(ax, label, None, label_position)
@@ -2965,6 +3309,14 @@ class _ClusterVisualizer:
         -------
         matplotlib.figure.Figure
             The corresponding figure, containing all axes and plot artists.
+
+        Notes
+        -----
+        This quantity is the *radial* profile of escape velocity in the model.
+        It is not the same quantity as *central* escape velocity `vesc0`
+        (or `vesc_t` in evolutionary models). The central value of `vesc[0]`
+        may be similar to the final values of `vesc_t[-1]`, but they are
+        computed differently and likely won't match exactly.
         '''
 
         fig, ax = self._setup_artist(fig, ax)
@@ -2982,16 +3334,147 @@ class _ClusterVisualizer:
 
         return fig
 
+    @_support_units
+    def plot_BH_kick_fret(self, fig=None, ax=None, *, x_unit='Msun',
+                          label_position='left', verbose_label=True,
+                          stairplot=True, **kwargs):
+        r'''Plot model BH natal kick retention fraction.
+
+        Plots the retention fraction of BHs caused by natal kicks in this
+        model, as a function of BH mass.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot the retention fraction. Should be
+            a part of the given `fig`.
+
+        x_unit : u.Unit, optional
+            Units to convert the x axis to. By default, x-units are in Msun.
+
+        label_position : {'top', 'left', 'right'}, optional
+            Where to place the quantity (y) label. If "top", will be
+            set as the ax title, otherwise will be set to one side. If on a
+            side, will also attempt to correctly append the units to the end
+            of the label. Defaults to the left.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "BH Kick Retention
+            Fraction", otherwise "$f_{\mathrm{ret}}$".
+
+        stairplot : bool, optional
+            If True, plots a stairplot with the real bin sizes represented.
+            Otherwise, by default, plots using mean bin masses.
+
+        **kwargs : dict, optional
+            All other arguments are passed to `_plot_model`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
+        # TODO this is really not smooth cause mbh bins are quite coarse...
+        #   Could show on full mbh range using kickparams but this is whats real
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        if stairplot:
+            mbh = self._mbh_edges
+        else:
+            mbh = 0.5 * (self._mbh_edges[1:] + self._mbh_edges[:-1])
+
+        self._plot_model(ax, x_data=mbh, data=self.BH_kick_ret.T[0, :, :],
+                         x_unit=x_unit, stairplot=stairplot, **kwargs)
+
+        if verbose_label:
+            label = "BH Kick Retention Fraction"
+        else:
+            label = r'$f_{\mathrm{ret}}$'
+
+        self._set_ylabel(ax, label, self.BH_kick_ret.unit, label_position)
+        self._set_xlabel(ax, r'$m_{\mathrm{BH}}$', unit=x_unit)
+
+        return fig
+
+    @_support_units
+    def plot_BH_mass_func(self, fig=None, ax=None, *, initial=False,
+                          x_unit='Msun',
+                          label_position='left', verbose_label=True, **kwargs):
+        r'''Plot model BH mass function.
+
+        Plots the mass function (i.e. :math:`\frac{dN_{\mathrm{BH}}}}{dm}`.)
+        of BHs in this model, as a function of BH mass, as a step-plot.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot the mass function. Should be
+            a part of the given `fig`.
+
+        x_unit : u.Unit, optional
+            Units to convert the x axis to. By default, x-units are in Msun.
+
+        label_position : {'top', 'left', 'right'}, optional
+            Where to place the quantity (y) label. If "top", will be
+            set as the ax title, otherwise will be set to one side. If on a
+            side, will also attempt to correctly append the units to the end
+            of the label. Defaults to the left.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "BH Mass Function",
+            otherwise "$\frac{\mathrm{d}\,N}{\mathrm{d}\,m}_{BH}$".
+
+        **kwargs : dict, optional
+            All other arguments are passed to `_plot_model`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        ymodel = self.BH0_massfunc if initial else self.BH_massfunc
+
+        self._plot_model(ax, data=ymodel[:, :, 0].T, x_data=self._mbh_edges,
+                         x_unit=x_unit, stairplot=True, **kwargs)
+
+        if verbose_label:
+            label = "BH Mass Function"
+        else:
+            label = r'$\frac{\mathrm{d}\,N}{\mathrm{d}\,m}_{BH}$'
+
+        self._set_ylabel(ax, label, None, label_position)
+        self._set_xlabel(ax, r'$m_{\mathrm{BH}}$', unit=x_unit)
+
+        return fig
+
     # -----------------------------------------------------------------------
     # Goodness of fit statistics
     # -----------------------------------------------------------------------
 
     @_support_units
-    def _compute_profile_chi2(self, ds_pattern, y_key, model_data, *,
-                              x_key='r', err_transform=None, reduced=True):
-        '''Compute chi2 for this dataset (pattern)'''
+    def _compute_profile_logl(self, ds_pattern, y_key, model_data, *,
+                              x_key='r', err_transform=None, model_scale=None,
+                              hyperparams=False):
+        '''Compute logl for this dataset (pattern)'''
+        from ..util import gaussian_likelihood, hyperparam_likelihood
 
-        chi2 = 0.
+        logl = 0.
 
         # ensure that the data is (mass bin, intervals, r domain)
         if len(model_data.shape) != 3:
@@ -3006,7 +3489,7 @@ class _ClusterVisualizer:
         datasets = self.obs.filter_datasets(ds_pattern)
 
         # ------------------------------------------------------------------
-        # Iterate over the datasets, computing chi2 for each
+        # Iterate over the datasets, computing logl for each
         # ------------------------------------------------------------------
 
         for dset in datasets.values():
@@ -3052,21 +3535,26 @@ class _ClusterVisualizer:
 
             ymodel = util.QuantitySpline(xmodel, ymedian)(xdata).to(ydata.unit)
 
+            if model_scale is not None:
+                ymodel *= model_scale[mass_bin]
+
             # --------------------------------------------------------------
-            # compute chi2
+            # compute logl
             # --------------------------------------------------------------
 
-            denom = (ydata.size - 13) if reduced else 1.
+            if hyperparams:
+                logl += hyperparam_likelihood(ydata, ymodel, yerr)
+            else:
+                logl += gaussian_likelihood(ydata, ymodel, yerr)
 
-            chi2 += np.nansum(((ymodel - ydata) / yerr)**2) / denom
-
-        return chi2
+        return logl
 
     @_support_units
-    def _compute_massfunc_chi2(self, *, reduced=True):
-        '''Compute chi2 for all mass functions'''
+    def _compute_massfunc_logl(self, *, hyperparams=False):
+        '''Compute logl for all mass functions'''
+        from ..util import gaussian_likelihood, hyperparam_likelihood, hyperparam_effective
 
-        chi2 = 0.
+        logl = 0.
 
         # ------------------------------------------------------------------
         # Iterate over each PI, gathering data
@@ -3115,21 +3603,25 @@ class _ClusterVisualizer:
 
                 ymodel = util.QuantitySpline(xmodel, ymedian)(xdata)
 
-                # TODO really should get this Nparam dynamically, if some fixed
-                denom = (ydata.size - 13) if reduced else 1.
+                # TODO if would be nice to note/return this for each bin
 
-                chi2 += np.sum(((ymodel - ydata) / yerr)**2) / denom
+                if hyperparams:
+                    logl += hyperparam_likelihood(ydata, ymodel, yerr)
+                else:
+                    logl += gaussian_likelihood(ydata, ymodel, yerr)
 
-        return chi2
+        return logl
 
-    @property
-    def chi2(self):
-        '''Compute χ^2 between the median model and all observational data.'''
-
-        # TODO seems to produce alot of infs?
+    def _logl_comps(self, hyperparams=False):
+        '''Compute logl between the median model and all observational data.
+        Not super instructive on a total level like this, just look at the run.
+        '''
+        # TODO why does this not just use obs.valid_likelihoods??
+        # it should be, the VL are arranged by dataset, not component, but that
+        # could be sorted out easily enough
 
         def numdens_nuisance(err):
-            return np.sqrt(err**2 + (self.s2 << u.arcmin**-4))
+            return self.J * np.sqrt(err**2 + (self.s2 << u.arcmin**-4))
 
         all_components = [
             {'ds_pattern': '*velocity_dispersion*', 'y_key': 'σ',
@@ -3143,17 +3635,23 @@ class _ClusterVisualizer:
             {'ds_pattern': '*proper_motion*', 'y_key': 'PM_R',
              'model_data': self.pm_R},
             {'ds_pattern': '*number_density*', 'y_key': 'Σ',
-             'model_data': self.numdens, 'err_transform': numdens_nuisance},
+             'model_data': self.numdens, 'err_transform': numdens_nuisance,
+             'model_scale': self.K_scale},
         ]
 
-        chi2 = 0.
+        logls = {}
 
         for comp in all_components:
-            chi2 += self._compute_profile_chi2(**comp)
+            key = f"{comp['ds_pattern']}/{comp['y_key']}"
+            logls[key] = self._compute_profile_logl(**comp, hyperparams=hyperparams)
 
-        chi2 += self._compute_massfunc_chi2()
+        logls['mass_function'] = self._compute_massfunc_logl(hyperparams=hyperparams)
 
-        return chi2
+        return logls
+
+    @property
+    def logl(self):
+        return sum(self._logl_comps().values())
 
 
 class ModelVisualizer(_ClusterVisualizer):
@@ -3185,7 +3683,7 @@ class ModelVisualizer(_ClusterVisualizer):
     '''
 
     @classmethod
-    def from_chain(cls, chain, observations, method='median'):
+    def from_chain(cls, chain, observations, model_params, method='median'):
         '''Initialize a visualizer based on a full chain of parameters.
 
         Classmethod which creates a single model visualizer object based on a
@@ -3197,7 +3695,7 @@ class ModelVisualizer(_ClusterVisualizer):
         ----------
         chain : np.ndarray[..., Nparams]
             Array containing chain of parameters values. Final axis must be
-            of the size of the number of model parameters (13).
+            of the size of the number of model parameters.
 
         observations : gcfit.Observations
             The `Observations` instance corresponding to this cluster.
@@ -3228,10 +3726,10 @@ class ModelVisualizer(_ClusterVisualizer):
 
         theta = reduc_methods[method](chain, axis=0)
 
-        return cls(FittableModel(theta, observations), observations)
+        return cls(_get_model(theta, model_params, strict=True), observations)
 
     @classmethod
-    def from_theta(cls, theta, observations):
+    def from_theta(cls, theta, observations, model_params):
         '''Initialize a visualizer based on a single set of parameters.
 
         Classmethod which creates a single model visualizer object based on a
@@ -3256,15 +3754,17 @@ class ModelVisualizer(_ClusterVisualizer):
         --------
         gcfit.FittableModel : Model subclass used to initialize the model.
         '''
-        return cls(FittableModel(theta, observations), observations)
+        return cls(_get_model(theta, model_params, strict=True), observations)
 
     def __init__(self, model, observations=None):
         self.model = model
         self.obs = observations if observations else model.observations
-        self.name = getattr(observations, 'cluster', 'Cluster Model')
+        self.name = model.name or getattr(self.obs, 'cluster', 'Cluster Model')
 
         # various structural model attributes
+        self.M = model.M
         self.r0 = model.r0
+        self.rc_obs = model.rc_obs
         self.rh = model.rh
         self.rhp = model.rhp
         self.ra = model.ra
@@ -3275,10 +3775,15 @@ class ModelVisualizer(_ClusterVisualizer):
 
         # various fitting-related attributes
         self.F = model.theta['F']
+        self.J = model.theta['J']
         self.s2 = model.theta['s2']
         self.d = model.d
 
         self.r = model.r
+        self.t = [model.age] << u.Gyr
+        # TODO uppermost BH bin edge will often be inf, causing plot issues
+        self._mbh_edges = np.r_[model._mf.massbins.bins.BH.lower,
+                                model._mf.massbins.bins.BH.upper[-1]] << u.Msun
 
         self.rlims = (9e-3, model.r.max().value + 5) << model.r.unit
 
@@ -3292,9 +3797,12 @@ class ModelVisualizer(_ClusterVisualizer):
         self.f_BH = model.BH.f
 
         self.BH_rh = model.BH.rh
+        self.NS_rh = model.NS.rh
+        self.WD_rh = model.WD.rh
         self.spitzer_chi = model._spitzer_chi
 
-        self.trh = model.trh
+        self.tcc = model._mf.tcc  # should be stored here in all model types
+        self.trh = self.trh0 = model.trh
         self.N_relax = model.N_relax
 
         self.delta_r50 = model.delta_r50
@@ -3319,6 +3827,41 @@ class ModelVisualizer(_ClusterVisualizer):
         self._init_mass_frac(model, self.obs)
         self._init_cum_mass(model, self.obs)
 
+        # Spoof evolutionary quantities
+
+        t_slc = (np.newaxis, np.newaxis, np.newaxis)
+        bh_slc = (..., np.newaxis, np.newaxis)
+
+        self.f_BH_t = self.f_BH[t_slc]
+        self.f_BH0 = self.f_BH
+        self.M_BH_t = model.BH.Mj.sum()[t_slc]
+        self.M_t = model.M[t_slc]
+        self.M_BH = self.M_BH0 = model.BH.Mj.sum()
+        self.N_BH = self.N_BH0 = model.BH.Nj.sum()
+        self.M_NS = model.NS.Mj.sum()
+        self.N_NS = model.NS.Nj.sum()
+        self.M_WD = model.WD.Mj.sum()
+        self.N_WD = model.WD.Nj.sum()
+        self.BH_massfunc = self.BH0_massfunc = self._init_BH_dNdm(model)[bh_slc]
+        self.BH_kick_ret = self._init_kicks(model)[bh_slc]
+        Mscale = model._MS / model._mf.M.sum()  # non-ev models need mf scaled
+        self.M_kicked = (model._mf._kick_stats.total_kicked * Mscale) << u.Msun
+        self.f_kicked = (model._mf._kick_stats.f_kick * 100) << u.pct
+        self.Ms_t = model.nonBH.Mj.sum()[t_slc]
+        self.mmean_t = model.mmean[t_slc]
+        self.rt_t = model.rt[t_slc]
+        self.rh_t = model.rh[t_slc]
+        self.rv_t = model.rv[t_slc]
+        self.rhoh = self.rhoh0 = (3 * model.M) / (8 * np.pi * model.rh**3)
+        self.rhoh_t = self.rhoh[t_slc]
+        self.Sigmah = self.Sigmah0 = (model.M) / (2 * np.pi * model.rh**2)
+        self.Sigmah_t = self.Sigmah[t_slc]
+        self.vesc0 = model.vesc0
+        self.vesc_t = model.vesc0[t_slc]
+        self.trh_t = model.trh[t_slc]
+        self.psi_t = np.full((1, 1, 1), np.nan) << u.dimensionless_unscaled
+        self.E_t = np.full((1, 1, 1), np.nan) << u.dimensionless_unscaled
+
     # TODO alot of these init functions could be more homogenous
     @_ClusterVisualizer._support_units
     def _init_numdens(self, model, observations):
@@ -3326,33 +3869,33 @@ class ModelVisualizer(_ClusterVisualizer):
 
         model_nd = model.Sigmaj / model.mj[:, np.newaxis]
 
-        nd = model_nd[:, np.newaxis, :]
-        K = np.empty(nd.shape[0]) << u.dimensionless_unscaled  # one each mbin
-        # TODO this K is only valid for the same mj as numdens obs anyways...
+        # nd = model_nd[:, np.newaxis, :]
+        K = np.ones(model_nd.shape[0]) << u.dimensionless_unscaled  # one each mbin
 
         # Check for observational numdens profiles, to compute scaling factors K
         #   but do not apply them to the numdens yet.
+        #   Only computing this for mbins with datasets, others are just K=1
         if ((observations is not None)
                 and (obs_nd := observations.filter_datasets('*number*'))):
 
-            if len(obs_nd) > 1:
-                mssg = ('Too many number density datasets, '
-                        'computing scaling factor using only final dataset')
-                logging.warning(mssg)
+            for nd in obs_nd.values():
 
-            obs_nd = list(obs_nd.values())[-1]
-            obs_r = obs_nd['r'].to(model.r.unit)
+                # TODO could have issue if multiple dsets share a tracer mass
+                if 'm' in nd.mdata:
+                    mbin = np.where(model.mj == (nd.mdata['m'] << u.Msun))[0][0]
+                else:
+                    mbin = self.star_bin
 
-            s2 = model.theta['s2'] << u.arcmin**-4
-            obs_err = np.sqrt(obs_nd['ΔΣ']**2 + s2)
+                obs_r = nd['r'].to(model.r.unit)
 
-            for mbin in range(model_nd.shape[0]):
+                s2 = model.theta['s2'] << u.arcmin**-4
+                obs_err = model.theta['J'] * np.sqrt(nd['ΔΣ']**2 + s2)
 
                 nd_interp = util.QuantitySpline(model.r, model_nd[mbin, :])
 
-                interpolated = nd_interp(obs_r).to(obs_nd['Σ'].unit)
+                interpolated = nd_interp(obs_r).to(nd['Σ'].unit)
 
-                Kj = (np.nansum(obs_nd['Σ'] * interpolated / obs_err**2)
+                Kj = (np.nansum(nd['Σ'] * interpolated / obs_err**2)
                       / np.nansum(interpolated**2 / obs_err**2))
 
                 K[mbin] = Kj
@@ -3361,9 +3904,7 @@ class ModelVisualizer(_ClusterVisualizer):
             mssg = 'No number density datasets found, setting K=1'
             logging.info(mssg)
 
-            K[:] = 1
-
-        self.numdens = nd
+        self.numdens = model_nd[:, np.newaxis, :]
         self.K_scale = K
 
     @_ClusterVisualizer._support_units
@@ -3429,7 +3970,7 @@ class ModelVisualizer(_ClusterVisualizer):
 
         base = mass.Field(shapely.Point((0, 0)).buffer(10 * limit), unit='pc')
 
-        domain = np.arange(0, limit, 1) * u.pc
+        domain = np.linspace(0, limit, 10) * u.pc
 
         for r_in, r_out in np.c_[domain[:-1], domain[1:]]:
 
@@ -3509,30 +4050,39 @@ class ModelVisualizer(_ClusterVisualizer):
     def _init_cum_mass(self, model, observations):
         '''Initialize cumulative mass quantities.'''
 
-        int_tot = util.QuantitySpline(self.r, self._2πr * self.Sigma_tot)
-        int_MS = util.QuantitySpline(self.r, self._2πr * self.Sigma_MS)
-        int_BH = util.QuantitySpline(self.r, self._2πr * self.Sigma_BH)
-        int_WD = util.QuantitySpline(self.r, self._2πr * self.Sigma_WD)
-        int_NS = util.QuantitySpline(self.r, self._2πr * self.Sigma_NS)
+        shp = (np.newaxis, np.newaxis, slice(None))
 
-        cum_tot = np.empty((1, 1, self.r.size)) << u.Msun
-        cum_MS = np.empty((1, 1, self.r.size)) << u.Msun
-        cum_BH = np.empty((1, 1, self.r.size)) << u.Msun
-        cum_WD = np.empty((1, 1, self.r.size)) << u.Msun
-        cum_NS = np.empty((1, 1, self.r.size)) << u.Msun
+        self.cum_M_tot = model.mc[shp]
+        self.cum_M_MS = model.MS.mc[shp]
+        self.cum_M_WD = model.WD.mc[shp]
+        self.cum_M_NS = model.NS.mc[shp]
+        self.cum_M_BH = model.BH.mc[shp]
 
-        for i in range(0, self.r.size):
-            cum_tot[0, 0, i] = int_tot.integral(model.r[0], model.r[i])
-            cum_MS[0, 0, i] = int_MS.integral(model.r[0], model.r[i])
-            cum_BH[0, 0, i] = int_BH.integral(model.r[0], model.r[i])
-            cum_WD[0, 0, i] = int_WD.integral(model.r[0], model.r[i])
-            cum_NS[0, 0, i] = int_NS.integral(model.r[0], model.r[i])
+    def _init_BH_dNdm(self, model):
 
-        self.cum_M_tot = cum_tot
-        self.cum_M_MS = cum_MS
-        self.cum_M_WD = cum_WD
-        self.cum_M_NS = cum_NS
-        self.cum_M_BH = cum_BH
+        BH_bins = model._mf.massbins.bins.BH
+        b = np.r_[BH_bins.lower, BH_bins.upper[-1]] << u.Msun
+        bw = (BH_bins.upper - BH_bins.lower) << u.Msun
+
+        # Spline must have no inf, so just make it large (?)
+        bw[~np.isfinite(bw)] = 1000 << u.Msun
+
+        model_dNdm = model._mf.Nr.BH / bw
+
+        # Sometimes nans sneak around
+        model_dNdm[~np.isfinite(model_dNdm)] = 0. << model_dNdm.unit
+
+        bhmf_interp = util.QuantitySpline(b[:-1] + (bw / 2), model_dNdm, k=1)
+
+        mbh = 0.5 * (self._mbh_edges[1:] + self._mbh_edges[:-1])
+
+        return bhmf_interp(mbh)
+
+    def _init_kicks(self, model):
+
+        fret = model._mf._kick_stats.retention << u.dimensionless_unscaled
+
+        return fret
 
 
 class CIModelVisualizer(_ClusterVisualizer):
@@ -3565,12 +4115,17 @@ class CIModelVisualizer(_ClusterVisualizer):
 
     @_ClusterVisualizer._support_units
     def _plot_quantity(self, quant_name, fig=None, ax=None,
-                       color='tab:blue', xlabel=None, **kwargs):
+                       color='tab:blue', xlabel=None, alpha=0.33, kde=False,
+                       logged=False, **kwargs):
         '''Helper function for plotting histograms of singular quantities.'''
 
         fig, ax = self._setup_artist(fig, ax)
 
         quant = getattr(self, quant_name)
+
+        # TODO this needs to change labels as well in below functions
+        if logged:
+            quant = np.log10(quant / getattr(quant, 'unit', 1.0))
 
         if quant.ndim > 1:
             mssg = (f"Invalid shape of quantity array {quant.shape}, "
@@ -3578,10 +4133,27 @@ class CIModelVisualizer(_ClusterVisualizer):
             raise ValueError(mssg)
 
         color = mpl_clr.to_rgb(color)
-        facecolor = color + (0.33, )
+        facecolor = color + (alpha, )
 
-        ax.hist(quant, histtype='stepfilled',
-                ec=color, fc=facecolor, lw=2, **kwargs)
+        if kde:
+            from scipy.stats import gaussian_kde
+            try:
+                gkde = gaussian_kde(quant)
+            except np.linalg.LinAlgError as err:
+                mssg = f"Cannot compute gkde of {quant_name}: {err}"
+                raise ValueError(mssg)
+
+            domain = np.linspace(quant.min(), quant.max(), 500)
+
+            ax.fill_between(domain, 0, gkde(domain),
+                            ec=color, fc=facecolor, **kwargs)
+
+            ax.set_ylim(bottom=0.)
+
+        else:
+
+            ax.hist(quant, histtype='stepfilled',
+                    ec=color, fc=facecolor, **kwargs)
 
         if xlabel is None:
             xlabel = quant_name
@@ -3677,8 +4249,8 @@ class CIModelVisualizer(_ClusterVisualizer):
                                    xlabel=label, **kwargs)
 
     @_ClusterVisualizer._support_units
-    def plot_BH_mass(self, fig=None, ax=None, color='tab:blue',
-                     verbose_label=True, **kwargs):
+    def plot_M_BH(self, fig=None, ax=None, color='tab:blue',
+                  verbose_label=True, **kwargs):
         r'''Plot the BH mass of this model.
 
         Plots a histogram of the values of the total black hole mass in the
@@ -3716,12 +4288,16 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         label = "BH Mass" if verbose_label else r'$\mathrm{M}_{\mathrm{BH}}$'
 
-        return self._plot_quantity('BH_mass', fig=fig, ax=ax, color=color,
+        return self._plot_quantity('M_BH', fig=fig, ax=ax, color=color,
                                    xlabel=label, **kwargs)
 
+    def plot_BH_mass(self, **kwargs):
+        warnings.warn("Deprecated in favour of plot_M_BH", DeprecationWarning)
+        return self.plot_M_BH(**kwargs)
+
     @_ClusterVisualizer._support_units
-    def plot_BH_num(self, fig=None, ax=None, color='tab:blue',
-                    verbose_label=True, **kwargs):
+    def plot_N_BH(self, fig=None, ax=None, color='tab:blue',
+                  verbose_label=True, **kwargs):
         r'''Plot the number of BHs in this model.
 
         Plots a histogram of the values of the total amount of black holes
@@ -3759,16 +4335,113 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         label = "BH Amount" if verbose_label else r'$\mathrm{N}_{\mathrm{BH}}$'
 
-        return self._plot_quantity('BH_num', fig=fig, ax=ax, color=color,
+        return self._plot_quantity('N_BH', fig=fig, ax=ax, color=color,
                                    xlabel=label, **kwargs)
 
-    def __init__(self, observations):
+    def plot_BH_num(self, **kwargs):
+        warnings.warn("Deprecated in favour of plot_N_BH", DeprecationWarning)
+        return self.plot_N_BH(**kwargs)
+
+    @_ClusterVisualizer._support_units
+    def plot_M_kicked(self, fig=None, ax=None, color='tab:blue',
+                      verbose_label=True, **kwargs):
+        r'''Plot the total amount of BH mass kicked in this model.
+
+        Plots a histogram of the values of the total mass of black holes
+        lost in the given chain of models through the effects of natal kicks.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_ClusterVisualizer._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this quantity. Should be a
+            part of the given `fig`.
+
+        color : color, optional
+            The colour of the plotted histogram. This colour will be applied to
+            the edge (border) of the histogram as is, and to the face at 33%
+            transparency.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "BH Mass Kicked",
+            otherwise "$\mathrm{M}_{\mathrm{BH,kicked}}$".
+
+        **kwargs : dict, optional
+            All other arguments are passed to `plt.hist`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
+
+        if verbose_label:
+            label = "BH Mass Kicked"
+        else:
+            label = r"$\mathrm{M}_{\mathrm{BH,kicked}}$"
+
+        return self._plot_quantity('M_kicked', fig=fig, ax=ax, color=color,
+                                   xlabel=label, **kwargs)
+
+    @_ClusterVisualizer._support_units
+    def plot_f_kicked(self, fig=None, ax=None, color='tab:blue',
+                      verbose_label=True, **kwargs):
+        r'''Plot the total amount of BH mass kicked in this model.
+
+        Plots a histogram of the values of the fraction of black holes
+        lost in the given chain of models through the effects of natal kicks.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_ClusterVisualizer._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this quantity. Should be a
+            part of the given `fig`.
+
+        color : color, optional
+            The colour of the plotted histogram. This colour will be applied to
+            the edge (border) of the histogram as is, and to the face at 33%
+            transparency.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "BH Mass Kicked",
+            otherwise "$\mathrm{M}_{\mathrm{BH,kicked}}$".
+
+        **kwargs : dict, optional
+            All other arguments are passed to `plt.hist`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
+
+        if verbose_label:
+            label = "Fraction of BH Mass Kicked"
+        else:
+            label = r"$\mathrm{f}_{\mathrm{BH,kick}}$"
+
+        return self._plot_quantity('f_kicked', fig=fig, ax=ax, color=color,
+                                   xlabel=label, **kwargs)
+
+    def __init__(self, observations, name=None):
         self.obs = observations
-        self.name = observations.cluster
+        self.name = name or observations.cluster
+        self._model_getter = _get_model
 
     @classmethod
-    def from_chain(cls, chain, observations, N=100, *,
-                   verbose=False, pool=None):
+    def from_chain(cls, chain, observations, model_params, N=100, *,
+                   verbose=False, pool=None, name=None):
         '''Initialize a CI visualizer based on a full chain of parameters.
 
         Classmethod which creates a model visualizer object based on a
@@ -3821,7 +4494,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         import functools
 
-        viz = cls(observations)
+        viz = cls(observations, name=name)
 
         # ------------------------------------------------------------------
         # Get info about the chain and set of models
@@ -3837,10 +4510,14 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         median_chain = np.median(chain, axis=0)
 
-        # TODO get these indices more dynamically
-        viz.F = median_chain[7]
-        viz.s2 = median_chain[6]
-        viz.d = median_chain[12] << u.kpc
+        params = model_params.free_params
+
+        ba = model_params.build_args(median_chain, return_dict=True)
+
+        viz.F = ba['F']
+        viz.J = ba['J']
+        viz.s2 = ba['s2']
+        viz.d = ba['d'] << u.kpc
 
         # Setup the radial domain to interpolate everything onto
         # We estimate the maximum radius needed will be given by the model with
@@ -3852,11 +4529,31 @@ class CIModelVisualizer(_ClusterVisualizer):
         # very large rt. I'm not really sure yet how that might affect the CIs
         # or plots
 
-        huge_model = FittableModel(chain[np.argmax(chain[:, 4])], viz.obs)
+        if 'g' in params:
+            huge_theta = chain[np.argmax(chain[:, params.index('g')])]
+        else:
+            # TODO use median or final chain here?
+            huge_theta = median_chain
+
+        try:
+            huge_model = viz._model_getter(huge_theta, model_params,
+                                           strict=True)
+        except ValueError as err:
+            mssg = f"Base model did not converge with {huge_theta=}"
+            raise ValueError(mssg) from err
 
         viz.r = np.r_[0, np.geomspace(1e-5, huge_model.rt.value, 99)] << u.pc
 
         viz.rlims = (9e-3, viz.r.max().value + 5) << viz.r.unit
+
+        viz.t = [huge_model.age] << u.Gyr
+
+        # Average out BH mass bins, for interpolation onto
+        # All models should share these bins, unless using really weird setup
+        viz._mbh_edges = np.r_[
+            huge_model._mf.massbins.bins.BH.lower,
+            huge_model._mf.massbins.bins.BH.upper[-1]
+        ] << u.Msun
 
         # Assume that this example model has same nms bin as all models
         # This approximation isn't exactly correct (especially when Ndot != 0),
@@ -3871,18 +4568,25 @@ class CIModelVisualizer(_ClusterVisualizer):
         viz.mj = np.r_[mj_MS, mj_tracer]
 
         # ------------------------------------------------------------------
-        # Setup the final full parameters arrays with dims of
-        # [mass bins, intervals (from percentile of models), radial bins] for
-        # all "profile" datasets
+        # Setup the final full parameters arrays with dims of:
+        # Profiles:
+        # [mass bins, intervals (from percentile of models), radial bins]
+        # Evolution:
+        # [1, intervals, time bins]
+        # Component Mass Functions:
+        # [mass bins, intervals, 1]
+        # Quantities
+        # [chain size]
         # ------------------------------------------------------------------
 
+        Nm = 1 + len(mj_tracer)
         Nr = viz.r.size
+        Nt = viz.t.size
+        Nbhmf = viz._mbh_edges.size - 1
 
         # velocities
 
         vel_unit = np.sqrt(huge_model.v2Tj).unit
-
-        Nm = 1 + len(mj_tracer)
 
         vpj = np.full((Nm, N, Nr), np.nan) << vel_unit
         vTj, vRj, vtotj = vpj.copy(), vpj.copy(), vpj.copy()
@@ -3925,12 +4629,14 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         f_rem = np.full(N, np.nan) << u.pct
         f_BH = np.full(N, np.nan) << u.pct
+        f_BH_t = np.full((1, N, Nt), np.nan) << u.pct
+        f_BH0 = np.full(N, np.nan) << u.pct
 
         # number density
 
-        numdens = np.full((1, N, Nr), np.nan) << u.pc**-2
-        K_scale = np.full((1,), np.nan) << u.dimensionless_unscaled
-        # K_scale = np.full((Nm), np.nan) << u.Unit('pc2 / arcmin2')
+        numdens = np.full((Nm, N, Nr), np.nan) << u.pc**-2
+        # K_scale = np.full((1,), np.nan) << u.dimensionless_unscaled
+        K_scale = np.full((Nm), np.nan) << u.dimensionless_unscaled
 
         # mass function
 
@@ -3938,19 +4644,45 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         # massfunc = np.empty((N, N_rbins, huge_model.nms))
 
+        mb0 = huge_model._mf.massbins.bins.MS.lower[0]
+        mb1 = huge_model._mf.compute_mto(huge_model.age.to_value('Myr'))
+        viz._mf_domain = np.linspace(mb0, mb1) << u.Msun
+
         for rbins in massfunc.values():
             for rslice in rbins:
-                rslice['mj'] = huge_model.mj[:huge_model.nms]
-                rslice['dNdm'] = np.full((N, huge_model.nms), np.nan)
+                rslice['mj'] = viz._mf_domain
+                rslice['dNdm'] = np.full((N, viz._mf_domain.size), np.nan)
 
-        # BH mass
+        # Remnant masses and numbers
 
-        BH_mass = np.full(N, np.nan) << u.Msun
-        BH_num = np.full(N, np.nan) << u.dimensionless_unscaled
+        M_BH = np.full(N, np.nan) << u.Msun
+        N_BH = np.full(N, np.nan) << u.dimensionless_unscaled
+        N_BH0 = np.full(N, np.nan) << u.dimensionless_unscaled
+
+        M_BH_t = np.full((1, N, Nt), np.nan) << u.Msun
+        M_BH0 = np.full(N, np.nan) << u.Msun
+
+        M_kicked = np.full(N, np.nan) << u.Msun
+        f_kicked = np.full(N, np.nan) << u.pct
+        BH_massfunc = np.full((Nbhmf, N, 1), np.nan) << 1 / u.Msun
+        BH0_massfunc = np.full((Nbhmf, N, 1), np.nan) << 1 / u.Msun
+        BH_kick_ret = np.full((Nbhmf, N, 1), np.nan) << u.dimensionless_unscaled
+
+        M_NS = np.full(N, np.nan) << u.Msun
+        N_NS = np.full(N, np.nan) << u.dimensionless_unscaled
+
+        M_WD = np.full(N, np.nan) << u.Msun
+        N_WD = np.full(N, np.nan) << u.dimensionless_unscaled
 
         # Structural params
 
+        M = np.full(N, np.nan) << huge_model.M.unit
+        M_t = np.full((1, N, Nt), np.nan) << huge_model.M.unit
+        Ms_t = np.full((1, N, Nt), np.nan) << huge_model.M.unit
+        mmean_t = np.full((1, N, Nt), np.nan) << huge_model.mmean.unit
+
         r0 = np.full(N, np.nan) << huge_model.r0.unit
+        rc_obs = np.full(N, np.nan) << huge_model.rc_obs.unit
         rt = np.full(N, np.nan) << huge_model.rt.unit
         rh = np.full(N, np.nan) << huge_model.rh.unit
         rhp = np.full(N, np.nan) << huge_model.rhp.unit
@@ -3959,15 +4691,35 @@ class CIModelVisualizer(_ClusterVisualizer):
         mmean = np.full(N, np.nan) << huge_model.mmean.unit
         volume = np.full(N, np.nan) << huge_model.volume.unit
 
+        rhoh = np.full(N, np.nan) << rho_unit
+        rhoh_t = np.full((1, N, Nt), np.nan) << rho_unit
+        Sigmah = np.full(N, np.nan) << Sigma_unit
+        Sigmah_t = np.full((1, N, Nt), np.nan) << Sigma_unit
+
+        vesc0 = np.full(N, np.nan) << vel_unit
+        vesc_t = np.full((1, N, Nt), np.nan) << vel_unit
+
+        rt_t = np.full((1, N, Nt), np.nan) << huge_model.rt.unit
+        rh_t = np.full((1, N, Nt), np.nan) << huge_model.rh.unit
+        rv_t = np.full((1, N, Nt), np.nan) << huge_model.rv.unit
+
+        psi_t = np.full((1, N, Nt), np.nan) << u.dimensionless_unscaled
+        E_t = np.full((1, N, Nt), np.nan) << u.dimensionless_unscaled
+
         # BH derived quantities
 
         BH_rh = np.full(N, np.nan) << huge_model.BH.rh.unit
+        NS_rh = np.full(N, np.nan) << huge_model.NS.rh.unit
+        WD_rh = np.full(N, np.nan) << huge_model.WD.rh.unit
+
         spitz_chi = np.full(N, np.nan) << u.dimensionless_unscaled
 
         # Relaxation times
 
+        tcc = np.full(N, np.nan) << u.Gyr
         trh = np.full(N, np.nan) << u.Gyr
         N_relax = np.full(N, np.nan) << u.dimensionless_unscaled
+        trh_t = np.full((1, N, Nt), np.nan) << u.Gyr
 
         # Mass segregation
 
@@ -3978,7 +4730,8 @@ class CIModelVisualizer(_ClusterVisualizer):
         # Setup iteration and pooling
         # ------------------------------------------------------------------
 
-        get_model = functools.partial(_get_model, observations=viz.obs)
+        get_model = functools.partial(viz._model_getter,
+                                      model_params=model_params)
 
         try:
             _map = map if pool is None else pool.imap_unordered
@@ -4008,17 +4761,23 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             equivs = util.angular_width(model.d)
 
-            # Velocities
+            # Profiles with potential tracers
 
             # convoluted way of going from a slice to a list of indices
             tracers = list(range(len(model.mj))[model._tracer_bins])
 
             for i, mass_bin in enumerate([model.nms - 1] + tracers):
 
+                # Velocities
+
                 slc = (i, model_ind, slice(None))
 
                 vTj[slc], vRj[slc], vtotj[slc], \
                     vaj[slc], vpj[slc] = viz._init_velocities(model, mass_bin)
+
+                # Number Densities
+
+                numdens[slc] = viz._init_numdens(model, mass_bin, equivs=equivs)
 
             slc = (0, model_ind, slice(None))
 
@@ -4042,10 +4801,6 @@ class CIModelVisualizer(_ClusterVisualizer):
             cum_M_MS[slc], cum_M_tot[slc], cum_M_BH[slc], \
                 cum_M_WD[slc], cum_M_NS[slc] = viz._init_cum_mass(model)
 
-            # Number Densities
-
-            numdens[slc] = viz._init_numdens(model, equivs=equivs)
-
             # Mass Functions
             for rbins in massfunc.values():
                 for rslice in rbins:
@@ -4058,28 +4813,61 @@ class CIModelVisualizer(_ClusterVisualizer):
             frac_M_MS[slc], frac_M_rem[slc] = viz._init_mass_frac(model)
 
             f_rem[model_ind] = model.rem.f
-            f_BH[model_ind] = model.BH.f
+            f_BH[model_ind] = f_BH0[model_ind] = f_BH_t[slc] = model.BH.f
 
-            # Black holes
+            # Remnant masses and numbers
 
-            BH_mass[model_ind] = np.sum(model.BH.Mj)
-            BH_num[model_ind] = np.sum(model.BH.Nj)
+            M_BH[model_ind] = M_BH_t[slc] = np.sum(model.BH.Mj)
+            N_BH[model_ind] = np.sum(model.BH.Nj)
+            M_BH0[model_ind] = M_BH[model_ind]
+            N_BH0[model_ind] = N_BH[model_ind]
+
+            Mscale = model._MS / model._mf.M.sum()  # scaling for non-ev eMFs
+            ks = model._mf._kick_stats
+            M_kicked[model_ind] = (ks.total_kicked * Mscale) << u.Msun
+            f_kicked[model_ind] = (ks.f_kick * 100) << u.pct
+
+            bhslc = (slice(None), model_ind, 0)
+            BH_massfunc[bhslc] = BH0_massfunc[bhslc] = viz._init_BH_dNdm(model)
+            BH_kick_ret[bhslc] = viz._init_kicks(model)
+
+            M_NS[model_ind] = np.sum(model.NS.Mj)
+            N_NS[model_ind] = np.sum(model.NS.Nj)
+
+            M_WD[model_ind] = np.sum(model.WD.Mj)
+            N_WD[model_ind] = np.sum(model.WD.Nj)
 
             # Structural params
 
+            M[model_ind] = M_t[slc] = model.M
+            Ms_t[slc] = model.nonBH.Mj.sum()
+            mmean_t[slc] = model.mmean
+
             r0[model_ind] = model.r0
-            rt[model_ind] = model.rt
-            rh[model_ind] = model.rh
+            rc_obs[model_ind] = model.rc_obs
+            rt[model_ind] = rt_t[slc] = model.rt
+            rh[model_ind] = rh_t[slc] = model.rh
             rhp[model_ind] = model.rhp
             ra[model_ind] = model.ra
-            rv[model_ind] = model.rv
+            rv[model_ind] = rv_t[slc] = model.rv
             mmean[model_ind] = model.mmean
             volume[model_ind] = model.volume
 
+            rhoh[model_ind] = (3 * model.M) / (8 * np.pi * model.rh**3)
+            rhoh_t[slc] = rhoh[model_ind]
+
+            Sigmah[model_ind] = (model.M) / (2 * np.pi * model.rh**2)
+            Sigmah_t[slc] = Sigmah[model_ind]
+
+            vesc0[model_ind] = vesc_t[slc] = model.vesc0
+
             BH_rh[model_ind] = model.BH.rh
+            NS_rh[model_ind] = model.NS.rh
+            WD_rh[model_ind] = model.WD.rh
             spitz_chi[model_ind] = model._spitzer_chi
 
-            trh[model_ind] = model.trh
+            tcc[model_ind] = model._mf.tcc << u.Myr  # careful of Myr vs Gyr
+            trh[model_ind] = trh_t[slc] = model.trh
             N_relax[model_ind] = model.N_relax
 
             delta_r50[model_ind] = model.delta_r50
@@ -4130,19 +4918,48 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         for rbins in viz.mass_func.values():
             for rslice in rbins:
-
                 rslice['dNdm'] = perc(rslice['dNdm'], q, axis=0)
 
         viz.frac_M_MS = perc(frac_M_MS, q, axis=1)
         viz.frac_M_rem = perc(frac_M_rem, q, axis=1)
 
+        viz.f_BH_t = np.transpose(perc(f_BH_t, q, axis=1), axes)
+        viz.M_BH_t = np.transpose(perc(M_BH_t, q, axis=1), axes)
+        viz.M_t = np.transpose(perc(M_t, q, axis=1), axes)
+        viz.Ms_t = np.transpose(perc(Ms_t, q, axis=1), axes)
+        viz.mmean_t = np.transpose(perc(mmean_t, q, axis=1), axes)
+        viz.rt_t = np.transpose(perc(rt_t, q, axis=1), axes)
+        viz.rh_t = np.transpose(perc(rh_t, q, axis=1), axes)
+        viz.rv_t = np.transpose(perc(rv_t, q, axis=1), axes)
+        viz.psi_t = np.transpose(perc(psi_t, q, axis=1), axes)
+        viz.E_t = np.transpose(perc(E_t, q, axis=1), axes)
+        viz.trh_t = np.transpose(perc(trh_t, q, axis=1), axes)
+        viz.rhoh_t = np.transpose(perc(rhoh_t, q, axis=1), axes)
+        viz.Sigmah_t = np.transpose(perc(Sigmah_t, q, axis=1), axes)
+
+        viz.vesc_t = np.transpose(perc(vesc_t, q, axis=1), axes)
+        viz.BH0_massfunc = np.transpose(perc(BH0_massfunc, q, axis=1), axes)
+        viz.BH_massfunc = np.transpose(perc(BH_massfunc, q, axis=1), axes)
+        viz.BH_kick_ret = np.transpose(perc(BH_kick_ret, q, axis=1), axes)
+
         viz.f_rem = f_rem
         viz.f_BH = f_BH
+        viz.f_BH0 = f_BH0
 
-        viz.BH_mass = BH_mass
-        viz.BH_num = BH_num
+        viz.M = M
+        viz.M_BH = viz.BH_mass = M_BH
+        viz.N_BH = viz.BH_num = N_BH
+        viz.M_NS = M_NS
+        viz.N_NS = N_NS
+        viz.M_WD = M_WD
+        viz.N_WD = N_WD
+        viz.M_BH0 = M_BH0
+        viz.N_BH0 = N_BH0
+        viz.M_kicked = M_kicked
+        viz.f_kicked = f_kicked
 
         viz.r0 = r0
+        viz.rc_obs = rc_obs
         viz.rt = rt
         viz.rh = rh
         viz.rhp = rhp
@@ -4151,10 +4968,18 @@ class CIModelVisualizer(_ClusterVisualizer):
         viz.mmean = mmean
         viz.volume = volume
 
+        viz.rhoh = viz.rhoh0 = rhoh
+        viz.Sigmah = viz.Sigmah0 = Sigmah
+        viz.vesc0 = vesc0
+
         viz.BH_rh = BH_rh
         viz.spitzer_chi = spitz_chi
 
-        viz.trh = trh
+        viz.NS_rh = NS_rh
+        viz.WD_rh = WD_rh
+
+        viz.tcc = tcc
+        viz.trh = viz.trh0 = trh
         viz.N_relax = N_relax
 
         viz.delta_r50 = delta_r50
@@ -4241,30 +5066,25 @@ class CIModelVisualizer(_ClusterVisualizer):
     def _init_cum_mass(self, model):
         '''Initialize cumulative mass quantities.'''
 
-        # TODO it seems like the integrated mass is a bit less than total Mj?
-        # TODO why doing all this instead of using model.mc?
+        cum_M_MS = model.MS.mc
+        cum_M_MS_interp = util.QuantitySpline(model.r, cum_M_MS, ext=3)
+        cum_M_MS = cum_M_MS_interp(self.r)
 
-        _2πr = 2 * np.pi * model.r
+        cum_M_tot = model.mc
+        cum_M_tot_interp = util.QuantitySpline(model.r, cum_M_tot, ext=3)
+        cum_M_tot = cum_M_tot_interp(self.r)
 
-        cum_M_MS = _2πr * np.sum(model.MS.Sigmaj, axis=0)
-        cum_M_MS_interp = util.QuantitySpline(model.r, cum_M_MS)
-        cum_M_MS = [cum_M_MS_interp.integral(self.r[0], ri) for ri in self.r]
+        cum_M_BH = model.BH.mc
+        cum_M_BH_interp = util.QuantitySpline(model.r, cum_M_BH, ext=3)
+        cum_M_BH = cum_M_BH_interp(self.r)
 
-        cum_M_tot = _2πr * np.sum(model.Sigmaj, axis=0)
-        cum_M_tot_interp = util.QuantitySpline(model.r, cum_M_tot)
-        cum_M_tot = [cum_M_tot_interp.integral(self.r[0], ri) for ri in self.r]
+        cum_M_WD = model.WD.mc
+        cum_M_WD_interp = util.QuantitySpline(model.r, cum_M_WD, ext=3)
+        cum_M_WD = cum_M_WD_interp(self.r)
 
-        cum_M_BH = _2πr * np.sum(model.BH.Sigmaj, axis=0)
-        cum_M_BH_interp = util.QuantitySpline(model.r, cum_M_BH)
-        cum_M_BH = [cum_M_BH_interp.integral(self.r[0], ri) for ri in self.r]
-
-        cum_M_WD = _2πr * np.sum(model.WD.Sigmaj, axis=0)
-        cum_M_WD_interp = util.QuantitySpline(model.r, cum_M_WD)
-        cum_M_WD = [cum_M_WD_interp.integral(self.r[0], ri) for ri in self.r]
-
-        cum_M_NS = _2πr * np.sum(model.NS.Sigmaj, axis=0)
-        cum_M_NS_interp = util.QuantitySpline(model.r, cum_M_NS)
-        cum_M_NS = [cum_M_NS_interp.integral(self.r[0], ri) for ri in self.r]
+        cum_M_NS = model.NS.mc
+        cum_M_NS_interp = util.QuantitySpline(model.r, cum_M_NS, ext=3)
+        cum_M_NS = cum_M_NS_interp(self.r)
 
         return cum_M_MS, cum_M_tot, cum_M_BH, cum_M_WD, cum_M_NS
 
@@ -4294,10 +5114,11 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         return mass_MS / mass_tot, mass_rem / mass_tot
 
-    def _init_numdens(self, model, equivs=None):
+    def _init_numdens(self, model, mass_bin, equivs=None):
         '''Initialize number density quantities.'''
 
-        model_nd = model.Sigmaj[model.nms - 1] / model.mj[model.nms - 1]
+        # model_nd = model.Sigmaj[model.nms - 1] / model.mj[model.nms - 1]
+        model_nd = model.Sigmaj[mass_bin] / model.mj[mass_bin]
 
         nd_interp = util.QuantitySpline(model.r, model_nd)
 
@@ -4306,34 +5127,37 @@ class CIModelVisualizer(_ClusterVisualizer):
     def _init_K_scale(self, numdens):
         '''Initialize the K scale on the number density.'''
 
-        nd_interp = util.QuantitySpline(self.r, self._get_median(numdens[0]))
-
         equivs = util.angular_width(self.d)
+
+        K = np.ones(numdens.shape[0])
 
         if obs_nd := self.obs.filter_datasets('*number_density*'):
 
-            if len(obs_nd) > 1:
-                mssg = ('Too many number density datasets, '
-                        'computing scaling factor using only final dataset')
-                logging.warning(mssg)
+            # Only have profiles for nms and tracer bins, so this is safe-ish
+            for nd in obs_nd.values():
 
-            obs_nd = list(obs_nd.values())[-1]
-            obs_r = obs_nd['r'].to(self.r.unit, equivs)
+                # TODO could have issue if multiple dsets share a tracer mass
+                if 'm' in nd.mdata:
+                    mbin = np.where(self.mj == (nd.mdata['m'] << u.Msun))[0][0]
+                else:
+                    mbin = self.star_bin
 
-            # TODO this s2 isn't technically 100% accurate here
-            s2 = self.s2 << u.arcmin**-4
-            obs_err = np.sqrt(obs_nd['ΔΣ']**2 + s2)
+                obs_r = nd['r'].to(self.r.unit, equivs)
 
-            interpolated = nd_interp(obs_r).to(obs_nd['Σ'].unit, equivs)
+                # TODO this s2 isn't technically 100% accurate here
+                s2 = self.s2 << u.arcmin**-4
+                obs_err = self.J * np.sqrt(nd['ΔΣ']**2 + s2)
 
-            K = (np.nansum(obs_nd['Σ'] * interpolated / obs_err**2)
-                 / np.nansum(interpolated**2 / obs_err**2))
+                nd_interp = util.QuantitySpline(self.r,
+                                                self._get_median(numdens[mbin]))
+                interpolated = nd_interp(obs_r).to(nd['Σ'].unit, equivs)
+
+                K[mbin] = (np.nansum(nd['Σ'] * interpolated / obs_err**2)
+                           / np.nansum(interpolated**2 / obs_err**2))
 
         else:
             mssg = 'No number density datasets found, setting K=1'
             logging.info(mssg)
-
-            K = 1
 
         return K
 
@@ -4383,7 +5207,36 @@ class CIModelVisualizer(_ClusterVisualizer):
                 widthj = (model.mj[j] * model.mbin_widths[j])
                 dNdm[j] = (Nj / widthj).value
 
-        return dNdm
+            dNdm_interp = util.QuantitySpline(model.mj[:model.nms], dNdm, ext=0)
+
+        return dNdm_interp(self._mf_domain)
+
+    def _init_BH_dNdm(self, model):
+
+        # TODO is is better to interpolate dNdm, or N and then use same bw?
+
+        BH_bins = model._mf.massbins.bins.BH
+        b = np.r_[BH_bins.lower, BH_bins.upper[-1]] << u.Msun
+        bw = (BH_bins.upper - BH_bins.lower) << u.Msun
+
+        bw[~np.isfinite(bw)] = 1000 << u.Msun
+
+        model_dNdm = model._mf.Nr.BH / bw
+
+        # Sometimes nans sneak around
+        model_dNdm[~np.isfinite(model_dNdm)] = 0. << model_dNdm.unit
+
+        bhmf_interp = util.QuantitySpline(b[:-1] + (bw / 2), model_dNdm, k=1)
+
+        mbh = 0.5 * (self._mbh_edges[1:] + self._mbh_edges[:-1])
+
+        return bhmf_interp(mbh)
+
+    def _init_kicks(self, model):
+
+        fret = model._mf._kick_stats.retention << u.dimensionless_unscaled
+
+        return fret
 
     # ----------------------------------------------------------------------
     # Save and load confidence intervals to a file
@@ -4443,11 +5296,14 @@ class CIModelVisualizer(_ClusterVisualizer):
             meta_grp = modelgrp.create_group('metadata')
 
             meta_grp.create_dataset('r', data=self.r)
+            meta_grp.create_dataset('t', data=self.t)
+            meta_grp.create_dataset('mbh_edges', data=self._mbh_edges)
             meta_grp.create_dataset('star_bin', data=self.star_bin)
             meta_grp.create_dataset('mj', data=self.mj)
             meta_grp.attrs['rlims'] = self.rlims.to_value('pc')
             meta_grp.attrs['s2'] = self.s2
             meta_grp.attrs['F'] = self.F
+            meta_grp.attrs['J'] = self.J
             meta_grp.attrs['d'] = self.d.to_value('kpc')
             meta_grp.attrs['N'] = self.N
             meta_grp.attrs['cluster'] = self.obs.cluster
@@ -4458,12 +5314,22 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             prof_grp = modelgrp.create_group('profiles')
 
-            profile_keys = (
+            profile_keys = (  # radial profiles
                 'rho_MS', 'rho_tot', 'rho_BH', 'rho_WD', 'rho_NS',
                 'pm_T', 'pm_R', 'pm_tot', 'pm_ratio', 'LOS', 'phi', 'vesc',
                 'Sigma_MS', 'Sigma_tot', 'Sigma_BH', 'Sigma_WD',
                 'Sigma_NS', 'cum_M_MS', 'cum_M_tot', 'cum_M_BH', 'cum_M_WD',
-                'cum_M_NS', 'frac_M_MS', 'frac_M_rem', 'numdens'
+                'cum_M_NS', 'frac_M_MS', 'frac_M_rem', 'numdens',
+            )
+
+            profile_keys += (  # time evolution profiles
+                'f_BH_t', 'M_BH_t', 'M_t', 'Ms_t', 'mmean_t',
+                'rhoh_t', 'Sigmah_t', 'rt_t', 'rh_t', 'rv_t',
+                'psi_t', 'E_t', 'trh_t', 'vesc_t'
+            )
+
+            profile_keys += (  # comp mass function profiles
+                'BH_massfunc', 'BH0_massfunc', 'BH_kick_ret'
             )
 
             for key in profile_keys:
@@ -4479,9 +5345,12 @@ class CIModelVisualizer(_ClusterVisualizer):
             quant_grp = modelgrp.create_group('quantities')
 
             quant_keys = (
-                'f_rem', 'f_BH', 'BH_mass', 'BH_num',
-                'r0', 'rt', 'rh', 'rhp', 'ra', 'rv', 'mmean', 'volume',
-                'BH_rh', 'spitzer_chi', 'trh', 'N_relax', 'K_scale',
+                'M', 'f_rem', 'f_BH', 'M_BH', 'N_BH', 'M_NS', 'N_NS',
+                'M_WD', 'N_WD', 'f_BH0', 'M_BH0', 'N_BH0',
+                'r0', 'rc_obs', 'rt', 'rh', 'rhp', 'ra', 'rv', 'rhoh', 'Sigmah',
+                'mmean', 'volume', 'vesc0', 'rhoh0', 'Sigmah0',
+                'BH_rh', 'NS_rh', 'WD_rh', 'spitzer_chi', 'tcc', 'trh', 'trh0',
+                'N_relax', 'K_scale', 'f_kicked', 'M_kicked',
                 'delta_r50', 'delta_A'
             )
 
@@ -4521,7 +5390,7 @@ class CIModelVisualizer(_ClusterVisualizer):
                     slc_grp.create_dataset('dNdm', data=rbin['dNdm'])
 
     @classmethod
-    def load(cls, filename, observations=None):
+    def load(cls, filename, observations=None, name=None):
         '''Initialize this class by loading already saved model outputs.
 
         Based on model outputs computed before (by initializing this class
@@ -4565,18 +5434,30 @@ class CIModelVisualizer(_ClusterVisualizer):
                 obs = Observations(modelgrp['metadata'].attrs['cluster'],
                                    restrict_to=restrict)
 
-            viz = cls(obs)
+            viz = cls(obs, name=name)
 
             # Get metadata
             viz.N = modelgrp['metadata'].attrs['N']
             viz.s2 = modelgrp['metadata'].attrs['s2']
             viz.F = modelgrp['metadata'].attrs['F']
+            viz.J = modelgrp['metadata'].attrs.get('J', 1.)
             viz.d = modelgrp['metadata'].attrs['d'] << u.kpc
             viz.rlims = modelgrp['metadata'].attrs['rlims'] << u.pc
 
             viz.r = modelgrp['metadata']['r'][:] << u.pc
             viz.star_bin = modelgrp['metadata']['star_bin'][()]
             viz.mj = modelgrp['metadata']['mj'][:] << u.Msun
+
+            # Backwards compatible
+            try:
+                viz.t = modelgrp['metadata']['t'][:] << u.Gyr
+            except KeyError:
+                viz.t = [] << u.Gyr
+
+            try:
+                viz._mbh_edges = modelgrp['metadata']['mbh_edges'][:] << u.Msun
+            except KeyError:
+                viz._mbh_edges = [] << u.Msun  # for bad backwards compatibility
 
             # Get profile and quantity percentiles
             for grp in ('profiles', 'quantities'):
@@ -4591,6 +5472,16 @@ class CIModelVisualizer(_ClusterVisualizer):
                         pass
 
                     setattr(viz, key, value)
+
+                    # load BH mass and num in backwards compatible way
+                    if key == 'BH_mass':
+                        viz.M_BH = value
+
+                    if key == 'BH_num':
+                        viz.N_BH = value
+
+            viz.BH_mass = viz.M_BH
+            viz.BH_num = viz.N_BH
 
             # get mass func percentiles and generate the fields
 
@@ -4621,6 +5512,1204 @@ class CIModelVisualizer(_ClusterVisualizer):
                     slc['field'] = field.slice_radially(slc['r1'], slc['r2'])
 
                     viz.mass_func[f'mass_function/{PI}'].append(slc)
+
+        return viz
+
+
+class EvolvedVisualizer(ModelVisualizer):
+
+    @_ClusterVisualizer._support_units
+    def plot_mass_evolution(self, fig=None, ax=None, kind='total', *,
+                            x_unit='Gyr', y_unit='Msun', legend=True,
+                            label_position='left', verbose_label=True,
+                            blank_xaxis=False, model_label=None, **kwargs):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        label = "Total Mass" if verbose_label else r'$M\,(t)$'
+
+        if kind == 'all':
+            kind = {'total', 'MS', 'BH'}
+
+        multi = (len(kind) > 1) and not isinstance(kind, str)
+
+        if 'total' in kind:
+
+            if multi:
+                linelabel = "Total"
+            else:
+                linelabel = model_label
+
+            ax = self._plot_evolution(ax, self.M_t,
+                                      model_label=linelabel, legend=legend,
+                                      x_unit=x_unit, y_unit=y_unit, **kwargs)
+
+        if 'MS' in kind:
+
+            if multi:
+                linelabel = "Stars"
+            else:
+                linelabel = model_label
+                label = "Stellar Mass" if verbose_label else r'$M_\ast\,(t)$'
+
+            ax = self._plot_evolution(ax, self.Ms_t,
+                                      model_label=linelabel, legend=legend,
+                                      x_unit=x_unit, y_unit=y_unit, **kwargs)
+
+        if 'BH' in kind:
+
+            if multi:
+                linelabel = "Black Holes"
+            else:
+                linelabel = model_label
+                label = "Black Hole Mass" if verbose_label else r'$M_{BH}\,(t)$'
+
+            ax = self._plot_evolution(ax, self.M_BH_t,
+                                      model_label=linelabel, legend=legend,
+                                      x_unit=x_unit, y_unit=y_unit, **kwargs)
+
+        self._set_ylabel(ax, label, y_unit, label_position)
+        self._set_xlabel(ax, 'Time', unit=x_unit, remove_all=blank_xaxis)
+
+        return fig
+
+    @_ClusterVisualizer._support_units
+    def plot_density_evolution(self, fig=None, ax=None, *,
+                               x_unit='Gyr', y_unit='Msun pc-3', legend=False,
+                               label_position='left', verbose_label=True,
+                               blank_xaxis=False, **kwargs):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        ax = self._plot_evolution(ax, self.rhoh_t.to(y_unit),
+                                  x_unit=x_unit, y_unit=y_unit,
+                                  legend=legend, **kwargs)
+
+        label = "Half-mass Density" if verbose_label else r'$\rho_{h}$'
+
+        self._set_ylabel(ax, label, y_unit, label_position)
+        self._set_xlabel(ax, 'Time', unit=x_unit, remove_all=blank_xaxis)
+
+        return fig
+
+    @_ClusterVisualizer._support_units
+    def plot_surface_density_evolution(self, fig=None, ax=None, *,
+                                       x_unit='Gyr', y_unit='Msun pc-2',
+                                       legend=False, label_position='left',
+                                       verbose_label=True, blank_xaxis=False,
+                                       **kwargs):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        ax = self._plot_evolution(ax, self.Sigmah_t.to(y_unit),
+                                  x_unit=x_unit, y_unit=y_unit,
+                                  legend=legend, **kwargs)
+
+        lbl = "Half-mass Surface Density" if verbose_label else r'$\Sigma_{h}$'
+
+        self._set_ylabel(ax, lbl, y_unit, label_position)
+        self._set_xlabel(ax, 'Time', unit=x_unit, remove_all=blank_xaxis)
+
+        return fig
+
+    @_ClusterVisualizer._support_units
+    def plot_radius_evolution(self, fig=None, ax=None, kind='rh', *,
+                              x_unit='Gyr', y_unit='pc', legend=True,
+                              label_position='left', verbose_label=True,
+                              blank_xaxis=False, **kwargs):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        label = "Radius" if verbose_label else r'$r\,(t)$'
+
+        if kind == 'all':
+            kind = {'rh', 'rt', 'rv'}
+
+        multi = (len(kind) > 1) and not isinstance(kind, str)
+
+        if 'rh' in kind:
+            if multi:
+                linelabel = "Half-mass radius"
+            else:
+                label = "Half-mass radius" if verbose_label else r'$r_h\,(t)$'
+                linelabel = None
+
+            ax = self._plot_evolution(ax, self.rh_t,
+                                      model_label=linelabel,
+                                      x_unit=x_unit, y_unit=y_unit,
+                                      legend=legend, **kwargs)
+
+        if 'rt' in kind:
+            if multi:
+                linelabel = "Tidal radius"
+            else:
+                label = "Tidal radius" if verbose_label else r'$r_t\,(t)$'
+                linelabel = None
+
+            ax = self._plot_evolution(ax, self.rt_t,
+                                      model_label=linelabel,
+                                      x_unit=x_unit, y_unit=y_unit,
+                                      legend=legend, **kwargs)
+
+        if 'rv' in kind:
+            if multi:
+                linelabel = "Virial radius"
+            else:
+                label = "Virial Radius" if verbose_label else r'$r_v\,(t)$'
+                linelabel = None
+
+            ax = self._plot_evolution(ax, self.rv_t,
+                                      model_label=linelabel,
+                                      x_unit=x_unit, y_unit=y_unit,
+                                      legend=legend, **kwargs)
+
+        self._set_ylabel(ax, label, y_unit, label_position)
+        self._set_xlabel(ax, 'Time', unit=x_unit, remove_all=blank_xaxis)
+
+        return fig
+
+    @_ClusterVisualizer._support_units
+    def plot_fbh_evolution(self, fig=None, ax=None, *,
+                           x_unit='Gyr', y_unit='pct', legend=False,
+                           label_position='left', verbose_label=True,
+                           blank_xaxis=False, **kwargs):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        ax = self._plot_evolution(ax, self.f_BH_t.to(y_unit),
+                                  x_unit=x_unit, y_unit=y_unit,
+                                  legend=legend, **kwargs)
+
+        label = "BH Mass Fraction" if verbose_label else r'$f_{\mathrm{BH}}$'
+
+        self._set_ylabel(ax, label, y_unit, label_position)
+        self._set_xlabel(ax, 'Time', unit=x_unit, remove_all=blank_xaxis)
+
+        return fig
+
+    @_ClusterVisualizer._support_units
+    def plot_trh_evolution(self, fig=None, ax=None, *,
+                           x_unit='Gyr', y_unit='Myr', legend=True,
+                           label_position='left', verbose_label=True,
+                           blank_xaxis=False, **kwargs):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        ax = self._plot_evolution(ax, self.trh_t, legend=legend,
+                                  x_unit=x_unit, y_unit=y_unit, **kwargs)
+
+        if verbose_label:
+            label = "Half-mass Relaxation time"
+        else:
+            label = r'$t_{\mathrm{r_h}}$'
+
+        self._set_ylabel(ax, label, y_unit, label_position)
+        self._set_xlabel(ax, 'Time', unit=x_unit, remove_all=blank_xaxis)
+
+        return fig
+
+    @_ClusterVisualizer._support_units
+    def plot_vesc_evolution(self, fig=None, ax=None, *,
+                            x_unit='Gyr', y_unit='km/s', legend=True,
+                            label_position='left', verbose_label=True,
+                            blank_xaxis=False, **kwargs):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        ax = self._plot_evolution(ax, self.vesc_t, legend=legend,
+                                  x_unit=x_unit, y_unit=y_unit, **kwargs)
+
+        if verbose_label:
+            label = "Central Escape Velocity"
+        else:
+            label = r'$v_{\mathrm{esc}}\,(t)$'
+
+        self._set_ylabel(ax, label, y_unit, label_position)
+        self._set_xlabel(ax, 'Time', unit=x_unit, remove_all=blank_xaxis)
+
+        return fig
+
+    @_ClusterVisualizer._support_units
+    def plot_psi_evolution(self, fig=None, ax=None, *,
+                           x_unit='Gyr', y_unit='', legend=True,
+                           label_position='left', verbose_label=True,
+                           blank_xaxis=False, **kwargs):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        ax = self._plot_evolution(ax, self.psi_t, legend=legend,
+                                  x_unit=x_unit, y_unit=y_unit, **kwargs)
+
+        if verbose_label:
+            label = "Psi"
+        else:
+            label = r'$\psi$'
+
+        self._set_ylabel(ax, label, y_unit, label_position)
+        self._set_xlabel(ax, 'Time', unit=x_unit, remove_all=blank_xaxis)
+
+        return fig
+
+    @_ClusterVisualizer._support_units
+    def plot_E_evolution(self, fig=None, ax=None, *,
+                         x_unit='Gyr', y_unit='', legend=True,
+                         label_position='left', verbose_label=True,
+                         blank_xaxis=False, **kwargs):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        ax = self._plot_evolution(ax, self.E_t, legend=legend,
+                                  x_unit=x_unit, y_unit=y_unit, **kwargs)
+
+        if verbose_label:
+            label = "Energy"
+        else:
+            label = r'$E\,(t)$'
+
+        self._set_ylabel(ax, label, y_unit, label_position)
+        self._set_xlabel(ax, 'Time', unit=x_unit, remove_all=blank_xaxis)
+
+        return fig
+
+    def plot_all_evolution(self, fig=None, sharex=True, all_kinds=False,
+                           **kwargs):
+
+        # ------------------------------------------------------------------
+        # Setup figure
+        # ------------------------------------------------------------------
+
+        fig, axes = self._setup_multi_artist(fig, (3, 1), sharex=sharex)
+
+        # ------------------------------------------------------------------
+        # Plots
+        # ------------------------------------------------------------------
+
+        # Mass
+
+        self.plot_mass_evolution(fig=fig, ax=axes[0], label_position='left',
+                                 kind='all' if all_kinds else 'total',
+                                 blank_xaxis=True, **kwargs)
+
+        # Radius
+
+        self.plot_radius_evolution(fig=fig, ax=axes[1], label_position='left',
+                                   kind='all' if all_kinds else 'rh',
+                                   blank_xaxis=True, **kwargs)
+
+        # f_BH
+
+        self.plot_fbh_evolution(fig=fig, ax=axes[2], label_position='left',
+                                **kwargs)
+
+        # ------------------------------------------------------------------
+        # Style plots
+        # ------------------------------------------------------------------
+
+        fig.align_ylabels()
+
+        return fig
+
+    @classmethod
+    def from_chain(cls, chain, observations, model_params, method='median'):
+        '''Initialize a visualizer based on a full chain of parameters.
+
+        Classmethod which creates a single model visualizer object based on a
+        full chain of parameter values, by reducing the chain to a single set
+        of parameters (through the given `method`) and creating a `Model`
+        from that to initialize this class with.
+
+        Parameters
+        ----------
+        chain : np.ndarray[..., Nparams]
+            Array containing chain of parameters values. Final axis must be
+            of the size of the number of model parameters (13).
+
+        observations : gcfit.Observations
+            The `Observations` instance corresponding to this cluster.
+            Will be passed to `FittableModel`.
+
+        method : {"median", "mean", "final"}
+            Method used to reduce the chain to a single set of parameters.
+            "median" and "mean" find the average values, "final" will take the
+            final iteration in the chain.
+
+        Returns
+        -------
+        ModelVisualizer
+            The created model visualization object.
+
+        See Also
+        --------
+        gcfit.FittableModel : Model subclass used to initialize the model.
+        '''
+
+        reduc_methods = {'median': np.median, 'mean': np.mean,
+                         'final': lambda ch, axis: ch[-1]}
+
+        # if 3d (Niters, Nwalkers, Nparams)
+        # if 2d (Nwalkers, Nparams)
+        # if 1d (Nparams)
+        chain = chain.reshape((-1, chain.shape[-1]))
+
+        theta = reduc_methods[method](chain, axis=0)
+
+        return cls(_get_ev_model(theta, model_params, strict=True),
+                   observations)
+
+    @classmethod
+    def from_theta(cls, theta, observations, model_params):
+        '''Initialize a visualizer based on a single set of parameters.
+
+        Classmethod which creates a single model visualizer object based on a
+        set of parameter values, and uses that to initialize this class with.
+
+        Parameters
+        ----------
+        theta : dict or list
+            The set of model input parameters.
+            Must either be a dict, or a full list of all 13 parameters.
+
+        observations : gcfit.Observations
+            The `Observations` instance corresponding to this cluster.
+            Will be passed to `FittableModel`.
+
+        Returns
+        -------
+        ModelVisualizer
+            The created model visualization object.
+
+        See Also
+        --------
+        gcfit.FittableModel : Model subclass used to initialize the model.
+        '''
+        return cls(_get_ev_model(theta, model_params, strict=True),
+                   observations)
+
+    def _init_BH_dN0dm(self, model):
+
+        # clusterbh ibh should match mf ibh, but with natal kicks applied
+        BH_bins = model._clusterbh.ibh.bins
+        b = np.r_[BH_bins.lower, BH_bins.upper[-1]] << u.Msun
+        bw = (BH_bins.upper - BH_bins.lower) << u.Msun
+
+        bw[~np.isfinite(bw)] = 1000 << u.Msun
+
+        model_dN0dm = model._clusterbh.ibh.N / bw
+
+        bhmf_interp = util.QuantitySpline(b[:-1] + (bw / 2), model_dN0dm, k=1)
+
+        mbh = 0.5 * (self._mbh_edges[1:] + self._mbh_edges[:-1])
+
+        return bhmf_interp(mbh)
+
+    def __init__(self, model, observations=None):
+
+        # All present day quantities are set in base ModelVisualizer class
+        super().__init__(model, observations=observations)
+
+        # All initial and evolutionary quantities are set here
+
+        cbh = model._clusterbh
+
+        self.t = cbh.t << u.Gyr
+
+        slc = (np.newaxis, np.newaxis, ...)
+        bh_slc = (..., np.newaxis, np.newaxis)
+
+        self.M_t = cbh.M[slc] << u.Msun
+        self.Ms_t = cbh.Mst[slc] << u.Msun
+        self.M_BH_t = cbh.Mbh[slc] << u.Msun
+        self.M_BH0 = cbh.Mbh0 << u.Msun
+        self.f_BH_t = cbh.fbh[slc] << u.dimensionless_unscaled
+        actual_M0 = cbh.M0 + cbh.Mbh0 - cbh.ibh.Ms_lost
+        self.f_BH0 = (100 * cbh.Mbh0 / actual_M0) << u.pct
+        self.N_BH0 = cbh.Nbh0 << u.dimensionless_unscaled
+        self.BH0_massfunc = self._init_BH_dN0dm(model)[bh_slc]
+        self.mav_t = cbh.mav[slc] << u.Msun
+
+        self.rh_t = cbh.rh[slc] << u.pc
+        self.rt_t = cbh.rt[slc] << u.pc
+        self.rv_t = (cbh.rh / cbh.r)[slc] << u.pc
+
+        self.rhoh0 = model.rhoh0
+        self.rhoh_t = (3 * self.M_t) / (8 * np.pi * self.rh_t**3)
+        self.Sigmah0 = model.Sigmah0
+        self.Sigmah_t = ((self.M_t) / (2 * np.pi * self.rh_t**2))
+
+        self.tcc = (model._mf.tcc << u.Myr).to('Gyr')
+        self.trh0 = (cbh.trh0 << u.Myr).to('Gyr')
+
+        self.vesc0 = model.vesc0
+        self.vesc_t = cbh.vesc[slc] << (u.km / u.s)
+
+        # TODO units on these?
+        self.psi_t = cbh.psi[slc] << u.dimensionless_unscaled
+        self.E_t = cbh.E[slc] << u.dimensionless_unscaled
+        self.trh_t = (cbh.trh[slc] << u.Myr).to('Gyr')
+
+
+class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
+
+    @_ClusterVisualizer._support_units
+    def plot_f_BH0(self, fig=None, ax=None, color='tab:blue',
+                   verbose_label=True, **kwargs):
+        r'''Plot the initial BH fraction of this model.
+
+        Plots a histogram of the values of the total black hole mass fraction
+        (i.e. mass fraction in BH over total mass) initially created (and
+        retained) in the given chain of models.
+
+        Note that this fraction will not match exactly with the initial value
+        of `f_BH_t`. This is because the initial total `M_t` in clusterBH
+        includes the BH mass from the start, and thus computing f_BH is not
+        technically valid. This quantity is based on `clusterBH.M0` and the
+        stellar mass lost to make all of the BHs, and thus avoids any
+        double-counting and is agnostic to the evolution in clusterBH.
+        Be careful when making comparisons with mass fractions.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_ClusterVisualizer._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this quantity. Should be a
+            part of the given `fig`.
+
+        color : color, optional
+            The colour of the plotted histogram. This colour will be applied to
+            the edge (border) of the histogram as is, and to the face at 33%
+            transparency.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "BH Mass Fraction",
+            otherwise "$f_{\mathrm{BH}}$".
+
+        **kwargs : dict, optional
+            All other arguments are passed to `plt.hist`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
+
+        if verbose_label:
+            label = "Initial BH Mass Fraction"
+        else:
+            label = r'$f_{\mathrm{BH},0}$'
+
+        return self._plot_quantity('f_BH0', fig=fig, ax=ax, color=color,
+                                   xlabel=label, **kwargs)
+
+    @_ClusterVisualizer._support_units
+    def plot_M_BH0(self, fig=None, ax=None, color='tab:blue',
+                   verbose_label=True, **kwargs):
+        r'''Plot the initial BH mass of this model.
+
+        Plots a histogram of the values of the total black hole mass initially
+        created (and retained) in the given chain of models.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_ClusterVisualizer._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this quantity. Should be a
+            part of the given `fig`.
+
+        color : color, optional
+            The colour of the plotted histogram. This colour will be applied to
+            the edge (border) of the histogram as is, and to the face at 33%
+            transparency.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "BH Mass",
+            otherwise "$\mathrm{M}_{\mathrm{BH}}$".
+
+        **kwargs : dict, optional
+        All other arguments are passed to `plt.hist`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
+        
+        if verbose_label:
+            label = "Initial BH Mass"
+        else:
+            label = r'$\mathrm{M}_{\mathrm{BH},0}$'
+
+        return self._plot_quantity('M_BH0', fig=fig, ax=ax, color=color,
+                                   xlabel=label, **kwargs)
+
+    @_ClusterVisualizer._support_units
+    def plot_N_BH0(self, fig=None, ax=None, color='tab:blue',
+                   verbose_label=True, **kwargs):
+        r'''Plot the initial number of BHs in this model.
+
+        Plots a histogram of the values of the total amount of black holes
+        initially created (and retained) in the given chain of models.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_ClusterVisualizer._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this quantity. Should be a
+            part of the given `fig`.
+
+        color : color, optional
+            The colour of the plotted histogram. This colour will be applied to
+            the edge (border) of the histogram as is, and to the face at 33%
+            transparency.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "BH Amount",
+            otherwise "$\mathrm{N}_{\mathrm{BH}}$".
+
+        **kwargs : dict, optional
+            All other arguments are passed to `plt.hist`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
+
+        if verbose_label:
+            label = "Initial BH Amount"
+        else:
+            label = r'$\mathrm{N}_{\mathrm{BH},0}$'
+
+        return self._plot_quantity('N_BH0', fig=fig, ax=ax, color=color,
+                                   xlabel=label, **kwargs)
+
+    @_ClusterVisualizer._support_units
+    def plot_rhoh0(self, fig=None, ax=None, color='tab:blue',
+                   verbose_label=True, **kwargs):
+        r'''Plot the initial half-mass density of this model.
+
+        Plots a histogram of the values of the initial half-mass density
+        in the given chain of models. This is computed based on the initial mass
+        and half-mass radius values for each model.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_ClusterVisualizer._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this quantity. Should be a
+            part of the given `fig`.
+
+        color : color, optional
+            The colour of the plotted histogram. This colour will be applied to
+            the edge (border) of the histogram as is, and to the face at 33%
+            transparency.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "Initial Half-Mass
+            Density", otherwise "$\rho_{\mathrm{h},0}$".
+
+        **kwargs : dict, optional
+            All other arguments are passed to `plt.hist`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
+
+        if verbose_label:
+            label = "Initial Half-Mass Density"
+        else:
+            label = r'$\rho_{\mathrm{h},0}$'
+
+        return self._plot_quantity('rhoh0', fig=fig, ax=ax, color=color,
+                                   xlabel=label, **kwargs)
+
+    @_ClusterVisualizer._support_units
+    def plot_vesc0(self, fig=None, ax=None, color='tab:blue',
+                   verbose_label=True, **kwargs):
+        r'''Plot the initial central escape velocity of this model.
+
+        Plots a histogram of the values of the initial central escape velocity
+        in the given chain of models. This is computed based on the initial mass
+        and half-mass radius (density) values for each model.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_ClusterVisualizer._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this quantity. Should be a
+            part of the given `fig`.
+
+        color : color, optional
+            The colour of the plotted histogram. This colour will be applied to
+            the edge (border) of the histogram as is, and to the face at 33%
+            transparency.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "Initial Central Escape
+            Velocity", otherwise "$v_{\mathrm{esc},0}$".
+
+        **kwargs : dict, optional
+            All other arguments are passed to `plt.hist`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
+
+        if verbose_label:
+            label = "Initial Central Escape Velocity"
+        else:
+            label = r'$v_{\mathrm{esc},0}$'
+
+        return self._plot_quantity('vesc0', fig=fig, ax=ax, color=color,
+                                   xlabel=label, **kwargs)
+
+    def __init__(self, observations, name=None):
+        self.obs = observations
+        self.name = name or observations.cluster
+        self._model_getter = _get_ev_model
+
+    @classmethod
+    def from_chain(cls, chain, observations, model_params, N=100, *,
+                   verbose=False, pool=None, name=None, **kwargs):
+
+        import functools
+
+        viz = cls(observations, name=name)
+
+        # ------------------------------------------------------------------
+        # Get info about the chain and set of models
+        # ------------------------------------------------------------------
+
+        # Flatten walkers, if not already
+        chain = chain.reshape((-1, chain.shape[-1]))[-N:]
+
+        # Truncate if N is larger than the given chain size
+        N = chain.shape[0]
+
+        viz.N = N
+
+        median_chain = np.median(chain, axis=0)
+
+        params = model_params.free_params
+
+        ba = model_params.build_args(median_chain, return_dict=True)
+
+        viz.F = ba['F']
+        viz.J = ba['J']
+        viz.s2 = ba['s2']
+        viz.d = ba['d'] << u.kpc
+
+        # Setup the radial domain to interpolate everything onto
+        # We estimate the maximum radius needed will be given by the model with
+        # the largest value of the truncation parameter "g". This should be a
+        # valid enough assumption for our needs. While we have it, we'll also
+        # use this model to grab the other values we need, which shouldn't
+        # change much between models, so using this extreme model is okay.
+        # warning: in very large N samples, this g might be huge, and lead to a
+        # very large rt. I'm not really sure yet how that might affect the CIs
+        # or plots
+
+        if 'g' in params:
+            huge_theta = chain[np.argmax(chain[:, params.index('g')])]
+        else:
+            # TODO use median or final chain here?
+            huge_theta = median_chain
+
+        huge_model = viz._model_getter(huge_theta, model_params)
+
+        if huge_model is None:
+            raise ValueError(f"Base model did not converge with {huge_theta=}")
+
+        viz.r = np.r_[0, np.geomspace(1e-5, huge_model.rt.value, 99)] << u.pc
+
+        viz.rlims = (9e-3, viz.r.max().value + 5) << viz.r.unit
+
+        viz.t = huge_model._clusterbh.t << u.Gyr
+
+        # Average out BH mass bins, for interpolation onto
+        # All models should share these bins, unless using really weird setup
+        viz._mbh_edges = np.r_[
+            huge_model._mf.massbins.bins.BH.lower,
+            huge_model._mf.massbins.bins.BH.upper[-1]
+        ] << u.Msun
+
+        # Assume that this example model has same nms bin as all models
+        # This approximation isn't exactly correct but close enough for plots
+        viz.star_bin = 0
+
+        # mj only contains nms and tracer bins (the only ones we plot anyways)
+        # TODO right now tracers only used for velocities, and not numdens
+        mj_MS = huge_model.mj[huge_model._star_bins][-1]
+        mj_tracer = huge_model.mj[huge_model._tracer_bins]
+
+        viz.mj = np.r_[mj_MS, mj_tracer]
+
+        # ------------------------------------------------------------------
+        # Setup the final full parameters arrays with dims of:
+        # Profiles:
+        # [mass bins, intervals (from percentile of models), radial bins]
+        # Evolution:
+        # [1, intervals, time bins]
+        # Component Mass Functions:
+        # [mass bins, intervals, 1]
+        # Quantities
+        # [chain size]
+        # ------------------------------------------------------------------
+
+        Nm = 1 + len(mj_tracer)
+        Nr = viz.r.size
+        Nt = viz.t.size
+        Nbhmf = viz._mbh_edges.size - 1
+
+        # velocities
+
+        vel_unit = np.sqrt(huge_model.v2Tj).unit
+
+        vpj = np.full((Nm, N, Nr), np.nan) << vel_unit
+        vTj, vRj, vtotj = vpj.copy(), vpj.copy(), vpj.copy()
+
+        vaj = np.full((Nm, N, Nr), np.nan) << u.dimensionless_unscaled
+
+        # Potential
+
+        phi = np.full((1, N, Nr), np.nan) << huge_model.phi.unit
+        vesc = np.full((1, N, Nr), np.nan) << vel_unit
+
+        # mass density
+
+        rho_unit = huge_model.rhoj.unit
+
+        rho_tot = np.full((1, N, Nr), np.nan) << rho_unit
+        rho_MS, rho_BH = rho_tot.copy(), rho_tot.copy()
+        rho_WD, rho_NS = rho_tot.copy(), rho_tot.copy()
+
+        # surface density
+
+        Sigma_unit = huge_model.Sigmaj.unit
+
+        Sigma_tot = np.full((1, N, Nr), np.nan) << Sigma_unit
+        Sigma_MS, Sigma_BH = Sigma_tot.copy(), Sigma_tot.copy()
+        Sigma_WD, Sigma_NS = Sigma_tot.copy(), Sigma_tot.copy()
+
+        # Cumulative mass
+
+        mass_unit = huge_model.M.unit
+
+        cum_M_tot = np.full((1, N, Nr), np.nan) << mass_unit
+        cum_M_MS, cum_M_BH = cum_M_tot.copy(), cum_M_tot.copy()
+        cum_M_WD, cum_M_NS = cum_M_tot.copy(), cum_M_tot.copy()
+
+        # Mass Fraction
+
+        frac_M_MS = np.full((1, N, Nr), np.nan) << u.dimensionless_unscaled
+        frac_M_rem = frac_M_MS.copy()
+
+        f_rem = np.full(N, np.nan) << u.pct
+        f_BH = np.full(N, np.nan) << u.pct
+        f_BH_t = np.full((1, N, Nt), np.nan) << u.pct
+        f_BH0 = np.full(N, np.nan) << u.pct
+
+        # number density
+
+        numdens = np.full((Nm, N, Nr), np.nan) << u.pc**-2
+        # K_scale = np.full((1,), np.nan) << u.dimensionless_unscaled
+        K_scale = np.full((Nm), np.nan) << u.dimensionless_unscaled
+
+        # mass function
+
+        massfunc = viz._prep_massfunc(viz.obs)
+
+        # massfunc = np.empty((N, N_rbins, huge_model.nms))
+
+        mb0 = huge_model._mf.massbins.bins.MS.lower[0]
+        mb1 = huge_model._mf.compute_mto(huge_model.age.to_value('Myr'))
+        viz._mf_domain = np.linspace(mb0, mb1) << u.Msun
+
+        for rbins in massfunc.values():
+            for rslice in rbins:
+                rslice['mj'] = viz._mf_domain
+                rslice['dNdm'] = np.full((N, viz._mf_domain.size), np.nan)
+
+        # Remnant masses and numbers
+
+        M_BH = np.full(N, np.nan) << u.Msun
+        N_BH = np.full(N, np.nan) << u.dimensionless_unscaled
+
+        M_BH_t = np.full((1, N, Nt), np.nan) << u.Msun
+        M_BH0 = np.full(N, np.nan) << u.Msun
+        N_BH0 = np.full(N, np.nan) << u.dimensionless_unscaled
+
+        M_kicked = np.full(N, np.nan) << u.Msun
+        f_kicked = np.full(N, np.nan) << u.pct
+        BH_massfunc = np.full((Nbhmf, N, 1), np.nan) << 1 / u.Msun
+        BH0_massfunc = np.full((Nbhmf, N, 1), np.nan) << 1 / u.Msun
+        BH_kick_ret = np.full((Nbhmf, N, 1), np.nan) << u.dimensionless_unscaled
+
+        M_NS = np.full(N, np.nan) << u.Msun
+        N_NS = np.full(N, np.nan) << u.dimensionless_unscaled
+
+        M_WD = np.full(N, np.nan) << u.Msun
+        N_WD = np.full(N, np.nan) << u.dimensionless_unscaled
+
+        # Structural params
+
+        M = np.full(N, np.nan) << huge_model.M.unit
+        M_t = np.full((1, N, Nt), np.nan) << huge_model.M.unit
+        Ms_t = np.full((1, N, Nt), np.nan) << huge_model.M.unit
+        mmean_t = np.full((1, N, Nt), np.nan) << huge_model.mmean.unit
+
+        r0 = np.full(N, np.nan) << huge_model.r0.unit
+        rc_obs = np.full(N, np.nan) << huge_model.rc_obs.unit
+        rt = np.full(N, np.nan) << huge_model.rt.unit
+        rh = np.full(N, np.nan) << huge_model.rh.unit
+        rhp = np.full(N, np.nan) << huge_model.rhp.unit
+        ra = np.full(N, np.nan) << huge_model.ra.unit
+        rv = np.full(N, np.nan) << huge_model.rv.unit
+        mmean = np.full(N, np.nan) << huge_model.mmean.unit
+        volume = np.full(N, np.nan) << huge_model.volume.unit
+
+        rhoh = np.full(N, np.nan) << rho_unit
+        rhoh0 = np.full(N, np.nan) << rho_unit
+        rhoh_t = np.full((1, N, Nt), np.nan) << rho_unit
+        Sigmah = np.full(N, np.nan) << Sigma_unit
+        Sigmah0 = np.full(N, np.nan) << Sigma_unit
+        Sigmah_t = np.full((1, N, Nt), np.nan) << Sigma_unit
+
+        vesc0 = np.full(N, np.nan) << vel_unit
+        vesc_t = np.full((1, N, Nt), np.nan) << vel_unit
+
+        rt_t = np.full((1, N, Nt), np.nan) << huge_model.rt.unit
+        rh_t = np.full((1, N, Nt), np.nan) << huge_model.rh.unit
+        rv_t = np.full((1, N, Nt), np.nan) << huge_model.rv.unit
+
+        psi_t = np.full((1, N, Nt), np.nan) << u.dimensionless_unscaled
+        E_t = np.full((1, N, Nt), np.nan) << u.dimensionless_unscaled
+
+        # BH derived quantities
+
+        BH_rh = np.full(N, np.nan) << huge_model.BH.rh.unit
+        NS_rh = np.full(N, np.nan) << huge_model.NS.rh.unit
+        WD_rh = np.full(N, np.nan) << huge_model.WD.rh.unit
+
+        spitz_chi = np.full(N, np.nan) << u.dimensionless_unscaled
+
+        # Relaxation times
+
+        tcc = np.full(N, np.nan) << u.Gyr
+        trh = np.full(N, np.nan) << u.Gyr
+        trh0 = np.full(N, np.nan) << u.Gyr
+        N_relax = np.full(N, np.nan) << u.dimensionless_unscaled
+        trh_t = np.full((1, N, Nt), np.nan) << u.Gyr
+
+        # Mass segregation
+
+        delta_r50 = np.full(N, np.nan) << u.dimensionless_unscaled
+        delta_A = np.full(N, np.nan) << u.dimensionless_unscaled
+
+        # ------------------------------------------------------------------
+        # Setup iteration and pooling
+        # ------------------------------------------------------------------
+
+        get_model = functools.partial(viz._model_getter,
+                                      model_params=model_params)
+
+        try:
+            _map = map if pool is None else pool.imap_unordered
+        except AttributeError:
+            mssg = ("Invalid pool, currently only support pools with an "
+                    "`imap_unordered` method")
+            raise ValueError(mssg)
+
+        if verbose:
+            import tqdm
+            loader = tqdm.tqdm(enumerate(_map(get_model, chain)), total=N)
+
+        else:
+            loader = enumerate(_map(get_model, chain))
+
+        # ------------------------------------------------------------------
+        # iterate over all models in the sample and compute/store their
+        # relevant parameters
+        # ------------------------------------------------------------------
+
+        for model_ind, model in loader:
+
+            if model is None:
+                # TODO would be better to extend chain so N are still computed
+                # for now this ind will be filled with nan
+                continue
+
+            equivs = util.angular_width(model.d)
+
+            cbh = model._clusterbh
+
+            # Profiles with potential tracers
+
+            # convoluted way of going from a slice to a list of indices
+            tracers = list(range(len(model.mj))[model._tracer_bins])
+
+            for i, mass_bin in enumerate([model.nms - 1] + tracers):
+
+                # Velocities
+
+                slc = (i, model_ind, slice(None))
+
+                vTj[slc], vRj[slc], vtotj[slc], \
+                    vaj[slc], vpj[slc] = viz._init_velocities(model, mass_bin)
+
+                # Number Densities
+
+                numdens[slc] = viz._init_numdens(model, mass_bin, equivs=equivs)
+
+            slc = (0, model_ind, slice(None))
+
+            # Potential
+
+            phi[slc] = util.QuantitySpline(model.r, model.phi)(viz.r)
+            vesc[slc] = util.QuantitySpline(model.r, model.vesc)(viz.r)
+
+            # Mass Densities
+
+            rho_MS[slc], rho_tot[slc], rho_BH[slc], \
+                rho_WD[slc], rho_NS[slc] = viz._init_dens(model)
+
+            # Surface Densities
+
+            Sigma_MS[slc], Sigma_tot[slc], Sigma_BH[slc], \
+                Sigma_WD[slc], Sigma_NS[slc] = viz._init_surfdens(model)
+
+            # Cumulative Mass distribution
+
+            cum_M_MS[slc], cum_M_tot[slc], cum_M_BH[slc], \
+                cum_M_WD[slc], cum_M_NS[slc] = viz._init_cum_mass(model)
+
+            # Mass Functions
+            for rbins in massfunc.values():
+                for rslice in rbins:
+
+                    mf = rslice['dNdm']
+                    mf[model_ind, ...] = viz._init_dNdm(model, rslice, equivs)
+
+            # Mass Fractions
+
+            frac_M_MS[slc], frac_M_rem[slc] = viz._init_mass_frac(model)
+
+            f_rem[model_ind] = model.rem.f
+            f_BH[model_ind] = model.BH.f
+
+            f_BH_t[slc] = (cbh.fbh * 100) << u.pct
+            actual_M0 = cbh.M0 + cbh.Mbh0 - cbh.ibh.Ms_lost
+            f_BH0[model_ind] = (100 * cbh.Mbh0 / actual_M0) << u.pct
+
+            # Remnant masses and number
+
+            M_BH[model_ind] = np.sum(model.BH.Mj)
+            N_BH[model_ind] = np.sum(model.BH.Nj)
+            N_BH0[model_ind] = cbh.Nbh0 << N_BH.unit
+            M_BH_t[slc] = cbh.Mbh << M_BH_t.unit
+            M_BH0[model_ind] = cbh.Mbh0 << M_BH_t.unit
+
+            M_kicked[model_ind] = model._mf._kick_stats.total_kicked << u.Msun
+            f_kicked[model_ind] = model._mf._kick_stats.f_kick * 100 << u.pct
+            BH_massfunc[:, model_ind, 0] = viz._init_BH_dNdm(model)
+            BH0_massfunc[:, model_ind, 0] = viz._init_BH_dN0dm(model)
+            BH_kick_ret[:, model_ind, 0] = viz._init_kicks(model)
+
+            M_NS[model_ind] = np.sum(model.NS.Mj)
+            N_NS[model_ind] = np.sum(model.NS.Nj)
+
+            M_WD[model_ind] = np.sum(model.WD.Mj)
+            N_WD[model_ind] = np.sum(model.WD.Nj)
+
+            # Structural params
+
+            M[model_ind] = model.M << M.unit
+            M_t[slc] = cbh.M << M_t.unit
+            Ms_t[slc] = cbh.Mst << Ms_t.unit
+            mmean_t[slc] = cbh.mav << mmean_t.unit
+
+            r0[model_ind] = model.r0
+            rc_obs[model_ind] = model.rc_obs
+            rt[model_ind] = model.rt
+            rt_t[slc] = cbh.rt << rt_t.unit
+            rh[model_ind] = model.rh
+            rh_t[slc] = cbh.rh << rh_t.unit
+            rhp[model_ind] = model.rhp
+            ra[model_ind] = model.ra
+            rv[model_ind] = model.rv
+            rv_t[slc] = (cbh.rh / cbh.r) << rv_t.unit
+            mmean[model_ind] = model.mmean
+            volume[model_ind] = model.volume
+
+            rhoh[model_ind] = (3 * model.M) / (8 * np.pi * model.rh**3)
+            rhoh0[model_ind] = model.rhoh0
+            rhoh_t[slc] = ((3 * cbh.M) / (8 * np.pi * cbh.rh**3)) << rho_unit
+            Sigmah[model_ind] = (model.M) / (2 * np.pi * model.rh**2)
+            Sigmah0[model_ind] = model.Sigmah0
+            Sigmah_t[slc] = ((cbh.M) / (2 * np.pi * cbh.rh**2)) << Sigma_unit
+
+            vesc0[model_ind] = model.vesc0
+            vesc_t[slc] = cbh.vesc << vel_unit
+
+            BH_rh[model_ind] = model.BH.rh
+            NS_rh[model_ind] = model.NS.rh
+            WD_rh[model_ind] = model.WD.rh
+            spitz_chi[model_ind] = model._spitzer_chi
+
+            tcc[model_ind] = model._mf.tcc << u.Myr
+            trh[model_ind] = model.trh
+            trh0[model_ind] = cbh.trh0 << u.Myr  # Myr in cbh, Gyr here
+            trh_t[slc] = cbh.trh << u.Myr
+            N_relax[model_ind] = model.N_relax
+
+            psi_t[slc] = cbh.psi
+            E_t[slc] = cbh.E
+
+            delta_r50[model_ind] = model.delta_r50
+            delta_A[model_ind] = model.delta_A
+
+        # ------------------------------------------------------------------
+        # compute and store the percentiles and medians
+        # ------------------------------------------------------------------
+
+        q = [97.72, 84.13, 50., 15.87, 2.28]
+
+        axes = (1, 0, 2)  # `np.percentile` messes up the dimensions
+
+        perc = np.nanpercentile
+
+        viz.pm_T = np.transpose(perc(vTj, q, axis=1), axes)
+        viz.pm_R = np.transpose(perc(vRj, q, axis=1), axes)
+        viz.pm_tot = np.transpose(perc(vtotj, q, axis=1), axes)
+        viz.pm_ratio = np.transpose(perc(vaj, q, axis=1), axes)
+        viz.LOS = np.transpose(perc(vpj, q, axis=1), axes)
+
+        viz.phi = np.transpose(perc(phi, q, axis=1), axes)
+        viz.vesc = np.transpose(perc(vesc, q, axis=1), axes)
+
+        viz.rho_MS = np.transpose(perc(rho_MS, q, axis=1), axes)
+        viz.rho_tot = np.transpose(perc(rho_tot, q, axis=1), axes)
+        viz.rho_BH = np.transpose(perc(rho_BH, q, axis=1), axes)
+        viz.rho_WD = np.transpose(perc(rho_WD, q, axis=1), axes)
+        viz.rho_NS = np.transpose(perc(rho_NS, q, axis=1), axes)
+
+        viz.Sigma_MS = np.transpose(perc(Sigma_MS, q, axis=1), axes)
+        viz.Sigma_tot = np.transpose(perc(Sigma_tot, q, axis=1), axes)
+        viz.Sigma_BH = np.transpose(perc(Sigma_BH, q, axis=1), axes)
+        viz.Sigma_WD = np.transpose(perc(Sigma_WD, q, axis=1), axes)
+        viz.Sigma_NS = np.transpose(perc(Sigma_NS, q, axis=1), axes)
+
+        viz.cum_M_MS = np.transpose(perc(cum_M_MS, q, axis=1), axes)
+        viz.cum_M_tot = np.transpose(perc(cum_M_tot, q, axis=1), axes)
+        viz.cum_M_BH = np.transpose(perc(cum_M_BH, q, axis=1), axes)
+        viz.cum_M_WD = np.transpose(perc(cum_M_WD, q, axis=1), axes)
+        viz.cum_M_NS = np.transpose(perc(cum_M_NS, q, axis=1), axes)
+
+        viz.numdens = np.transpose(perc(numdens, q, axis=1), axes)
+        K_scale[:] = viz._init_K_scale(viz.numdens)
+        viz.K_scale = K_scale
+
+        viz.mass_func = massfunc
+
+        for rbins in viz.mass_func.values():
+            for rslice in rbins:
+                rslice['dNdm'] = perc(rslice['dNdm'], q, axis=0)
+
+        viz.frac_M_MS = perc(frac_M_MS, q, axis=1)
+        viz.frac_M_rem = perc(frac_M_rem, q, axis=1)
+
+        viz.f_BH_t = np.transpose(perc(f_BH_t, q, axis=1), axes)
+        viz.M_BH_t = np.transpose(perc(M_BH_t, q, axis=1), axes)
+        viz.M_t = np.transpose(perc(M_t, q, axis=1), axes)
+        viz.Ms_t = np.transpose(perc(Ms_t, q, axis=1), axes)
+        viz.mmean_t = np.transpose(perc(mmean_t, q, axis=1), axes)
+        viz.rt_t = np.transpose(perc(rt_t, q, axis=1), axes)
+        viz.rh_t = np.transpose(perc(rh_t, q, axis=1), axes)
+        viz.rv_t = np.transpose(perc(rv_t, q, axis=1), axes)
+        viz.psi_t = np.transpose(perc(psi_t, q, axis=1), axes)
+        viz.E_t = np.transpose(perc(E_t, q, axis=1), axes)
+        viz.trh_t = np.transpose(perc(trh_t, q, axis=1), axes)
+
+        viz.rhoh_t = np.transpose(perc(rhoh_t, q, axis=1), axes)
+        viz.Sigmah_t = np.transpose(perc(Sigmah_t, q, axis=1), axes)
+        viz.vesc_t = np.transpose(perc(vesc_t, q, axis=1), axes)
+        viz.BH_massfunc = np.transpose(perc(BH_massfunc, q, axis=1), axes)
+        viz.BH0_massfunc = np.transpose(perc(BH0_massfunc, q, axis=1), axes)
+        viz.BH_kick_ret = np.transpose(perc(BH_kick_ret, q, axis=1), axes)
+
+        viz.f_rem = f_rem
+        viz.f_BH = f_BH
+        viz.f_BH0 = f_BH0
+        viz.M_kicked = M_kicked
+        viz.f_kicked = f_kicked
+
+        viz.M = M
+        viz.M_BH = viz.BH_mass = M_BH
+        viz.N_BH = viz.BH_num = N_BH
+        viz.M_NS = M_NS
+        viz.N_NS = N_NS
+        viz.M_WD = M_WD
+        viz.N_WD = N_WD
+        viz.M_BH0 = M_BH0
+        viz.N_BH0 = N_BH0
+
+        viz.r0 = r0
+        viz.rc_obs = rc_obs
+        viz.rt = rt
+        viz.rh = rh
+        viz.rhp = rhp
+        viz.ra = ra
+        viz.rv = rv
+        viz.mmean = mmean
+        viz.volume = volume
+
+        viz.rhoh = rhoh
+        viz.rhoh0 = rhoh0
+        viz.Sigmah = Sigmah
+        viz.Sigmah0 = Sigmah0
+        viz.vesc0 = vesc0
+
+        viz.BH_rh = BH_rh
+        viz.spitzer_chi = spitz_chi
+
+        viz.NS_rh = NS_rh
+        viz.WD_rh = WD_rh
+
+        viz.tcc = tcc
+        viz.trh = trh
+        viz.trh0 = trh0
+        viz.N_relax = N_relax
+
+        viz.delta_r50 = delta_r50
+        viz.delta_A = delta_A
 
         return viz
 
@@ -4676,6 +6765,7 @@ class ObservationsVisualizer(_ClusterVisualizer):
 
             field = mass.Field.from_dataset(mf, cen=cen)
 
+            # TODO rbins arent actually seeming to be sorted always? see CMC
             rbins = np.unique(np.c_[mf['r1'], mf['r2']], axis=0)
             rbins.sort(axis=0)
 
@@ -4696,18 +6786,26 @@ class ObservationsVisualizer(_ClusterVisualizer):
 
                 self.mass_func[key].append(this_slc)
 
-    def __init__(self, observations, d=None):
+    def __init__(self, observations, d, rh=None):
         self.obs = observations
         self.name = observations.cluster
-
-        self.rh = observations.initials['rh'] << u.pc
 
         self.star_bin = None
         self.mj = [] << u.Msun
 
-        self.d = (d or observations.initials['d']) << u.kpc
+        self.rh = (observations.initials.get('rh', np.nan)
+                   if rh is None else rh) << u.pc
+
+        # Spoof, for unit support
+        self.r0 = 1.0 << u.pc
+        self.rv = 1.0 << u.pc
+        self.rt = 1.0 << u.pc
+
+        self.d = (observations.initials['d'] if d is None else d) << u.kpc
+
         self.s2 = 0.
         self.F = 1.
+        self.J = 1.
 
         self.pm_T = None
         self.pm_R = None
@@ -5093,7 +7191,7 @@ class ModelCollection:
     '''
 
     def __str__(self):
-        return f"Collection of Models"
+        return "Collection of Models"
 
     def __iter__(self):
         '''Return an iterator over the individual model vizualizers.'''
@@ -5106,9 +7204,12 @@ class ModelCollection:
     def __init__(self, visualizers):
         self.visualizers = visualizers
 
-        if all(isinstance(mv, ModelVisualizer) for mv in visualizers):
+        single_viz_cls = (ModelVisualizer, EvolvedVisualizer)
+        ci_viz_cls = (CIModelVisualizer, CIEvolvedVisualizer)
+
+        if all(isinstance(mv, single_viz_cls) for mv in visualizers):
             self._ci = False
-        elif all(isinstance(mv, CIModelVisualizer) for mv in visualizers):
+        elif all(isinstance(mv, ci_viz_cls) for mv in visualizers):
             self._ci = True
         else:
             mssg = ('Invalid modelviz type. All visualizers must be either '
@@ -5116,9 +7217,21 @@ class ModelCollection:
             raise TypeError(mssg)
 
     @classmethod
-    def load(cls, filenames):
+    def load(cls, filenames, *, observations=None, evolved=False):
         '''Load the model outputs previously saved in the a list of files.'''
-        return cls([CIModelVisualizer.load(fn) for fn in filenames])
+
+        if observations is None:
+            observations = [None, ] * len(filenames)
+
+        if isinstance(evolved, bool):
+            evolved = [evolved, ] * len(filenames)
+
+        visualizers = []
+        for fn, obs, ev in zip(filenames, observations, evolved):
+            viz_cls = CIModelVisualizer if not evolved else CIEvolvedVisualizer
+            visualizers.append(viz_cls.load(fn, observations=obs))
+
+        return cls(visualizers)
 
     def save(self, filenames, overwrite=False):
         '''Save the model outputs of all visualizers in the a list of files.'''
@@ -5126,7 +7239,7 @@ class ModelCollection:
             mv.save(fn, overwrite=overwrite)
 
     @classmethod
-    def from_models(cls, models, obs_list=None):
+    def from_models(cls, models, obs_list=None, *, evolved=False):
         '''Initialize from a collection of models.
 
         Initializes a `ModelCollection` instance of single `ModelVisualizer`s
@@ -5152,10 +7265,13 @@ class ModelCollection:
         if obs_list is None:
             obs_list = [None, ] * len(models)
 
-        return cls([ModelVisualizer(m, o) for m, o in zip(models, obs_list)])
+        model_cls = ModelVisualizer if not evolved else EvolvedVisualizer
+
+        return cls([model_cls(m, o) for m, o in zip(models, obs_list)])
 
     @classmethod
-    def from_chains(cls, chains, obs_list, ci=True, *args, **kwargs):
+    def from_chains(cls, chains, obs_list, prms_list,
+                    ci=True, evolved=False, **kwargs):
         '''Initialize from a collection of parameter chains.
 
         Initializes a `ModelCollection` instance of either `ModelVisualizer` or
@@ -5189,19 +7305,25 @@ class ModelCollection:
             The created model collection object.
         '''
 
-        viz = CIModelVisualizer if ci else ModelVisualizer
-
         if obs_list is None:
             obs_list = [None, ] * chains.shape[0]
 
+        if isinstance(evolved, bool):
+            evolved = [evolved, ] * chains.shape[0]
+
         visualizers = []
-        for ch, obs in zip(chains, obs_list):
+        for ch, obs, ev, mprm in zip(chains, obs_list, evolved, prms_list):
+
+            if ev:
+                viz = CIEvolvedVisualizer if ci else EvolvedVisualizer
+            else:
+                viz = CIModelVisualizer if ci else ModelVisualizer
 
             logging.info(f'Initializing {obs.cluster} for ModelCollection')
 
             init = viz.from_chain if ch.ndim == 2 else viz.from_theta
 
-            visualizers.append(init(ch[...], obs, *args, **kwargs))
+            visualizers.append(init(ch[...], obs, mprm, **kwargs))
 
         return cls(visualizers)
 

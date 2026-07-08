@@ -3,7 +3,7 @@ from .units import QuantitySpline
 
 __all__ = ['gaussian', 'RV_transform', 'gaussian_likelihood',
            'hyperparam_likelihood', 'hyperparam_effective', 'div_error',
-           'trim_peaks', 'find_intersections']
+           'ModelParameters', 'trim_peaks', 'find_intersections']
 
 # --------------------------------------------------------------------------
 # Generic Distribution Helpers
@@ -90,6 +90,171 @@ def hyperparam_effective(X_data, X_model, err):
 def div_error(a, a_err, b, b_err):
     '''Gaussian error propagation for division of two quantities with errors.'''
     return abs(a / b) * np.sqrt((a_err / a) ** 2 + (b_err / b) ** 2)
+
+
+# --------------------------------------------------------------------------
+# Theta handling helpers
+# --------------------------------------------------------------------------
+
+
+class ModelParameters:
+    '''Helper class for parsing Model parameters for fitting
+
+    In order to make the handling of free parameters during model fitting more
+    flexible, extensible and secure, this class handles all arguments passed
+    to the initialization of the desired model class. Based on the function
+    signature of `__init__`, it determines which parameters are valid, and
+    provides methods for easily transforming an array of free parameter
+    values to a useable function signature.
+
+    This class eliminates the need for having fixed sets of possible free
+    model parameters, allowing each different fitting run to be its own.
+
+    Models can be initialized by calling:
+    `Model(*modelparams.build_args(θ).args, **modelparams.build_args(θ).kwargs)`
+
+    Parameters
+    ----------
+    free_params : tuple of str
+        The names of which parameters will be freely varied. The order of this
+        must be matched by whatever data is passed to the constructor methods.
+        The parameters must be valid (i.e. appear directly in the signature)
+        for the relevant Model class, and must be parameters which accept a
+        single scalar value.
+
+    model_kwargs : dict, optional
+        Values of any model parameters which will not be freely varying. Any
+        parameters given will override the defaults of the Model class. These
+        parameters are not restricted to scalar arguments. Any model parameters
+        which do not have any defaults must be provided here, if they are
+        not given in `free_params`.
+
+    observations : gcfit.Observations, optional
+        The `Observations` instance to be provided to the Model class. Appears
+        here directly as it is handled specially. Should not be given in
+        `model_kwargs`.
+
+    evolved : bool, optional
+        Whether to use the `Model` or `EvolvedModel` class. Important for
+        determining the correct valid parameters. Defaults to `Model` class.
+
+    transforms : dict, optional
+        Optional dictionaries of scalar->scalar functions which will be applied
+        to the relevant free parameters when given to the one of the argument
+        building methods. Necessary if, for example, you wish to vary the log
+        of a parameter, rather than the parameter itself.
+        Note that these transforms are only applied to free parameters, not
+        those given in `model_kwargs`.
+
+    sympy_transforms : bool, optional
+        Flag allowing the passed transforms to be strings parseable by sympy,
+        rather than callable functions.
+
+    compatibility_transforms : bool, optional
+        By default, use some transforms that have always been used in the past,
+        mostly for backwards compatibility. Namely, `M * 1e6` and `10**ra`.
+    '''
+
+    def __init__(self, free_params: tuple[str, ...],
+                 model_kwargs: dict | None = None, observations=None,
+                 evolved: bool = False,
+                 transforms: dict | None = None, sympy_transforms: bool = False,
+                 compatibility_transforms: bool = True):
+        import inspect
+        from ..core.data import Model, EvolvedModel
+
+        self._signature = inspect.signature(EvolvedModel if evolved else Model)
+
+        self._all_params = list(self._signature.parameters.values())
+
+        self._reqd_params = [prm for prm in self._all_params
+                             if (prm.default is prm.empty)
+                             and (prm.kind is not prm.VAR_KEYWORD)]
+
+        if model_kwargs is None:
+            model_kwargs = dict()
+
+        if extra := (set(free_params) - {prm.name for prm in self._all_params}):
+            raise ValueError(f"Invalid parameters: {extra}")
+
+        if repeated := (set(free_params & model_kwargs.keys())):
+            raise ValueError(f"Parameters {repeated} were both freed and fixed")
+
+        # Some params don't have defaults. It's not that they must be free, but
+        # should be free or specifically given (and thus fixed) (M, W0, rh)
+        given_params = set(free_params) | model_kwargs.keys()
+        if miss := ({prm.name for prm in self._reqd_params} - given_params):
+            raise ValueError(f"Missing required parameters: {miss}")
+
+        if (ndim := len(free_params)) < 1:
+            raise ValueError("Must have at least one free parameter.")
+
+        # Check for sympy transforms (for fun)
+        if transforms is not None and sympy_transforms:
+            # I don't love the idea of making sympy the default, but they're
+            # also the only kind of transforms I could easily store and recreate
+            import sympy
+            for prm, func in transforms.items():
+                if not callable(func):
+                    transforms[prm] = sympy.lambdify(prm, func)
+
+        # For backwards compatibility, add in the historically used transforms
+        if transforms is None and compatibility_transforms:
+            transforms = {'M': lambda M: 1e6 * M,
+                          'M0': lambda M: 1e6 * M,
+                          'ra': lambda ra: 10**ra}
+
+        self.free_params = free_params
+        self.model_kwargs = model_kwargs
+        self.ndim = ndim
+        self._obs = observations  # explicit and special
+        self.transforms = transforms
+
+        fixedargs = self._signature.bind_partial(observations=self._obs,
+                                                 **self.model_kwargs)
+        fixedargs.apply_defaults()
+        self.fixed_params = {k: v for k, v in fixedargs.arguments.items()
+                             if k not in self.free_params}
+
+    def label_theta(self, theta):
+        '''Turn theta into a dict with correct parameter names'''
+        try:
+            return dict(zip(self.free_params, theta, strict=True))
+        except ValueError as err:
+            mssg = (f'Given theta (size {len(theta)}) does not match number '
+                    f'of free parameters (size {self.ndim})')
+            raise ValueError(mssg) from err
+
+    def build_args(self, theta, *, return_dict=False, apply_transforms=True):
+        '''Build the Model arguments required to init a model with theta.'''
+
+        if isinstance(theta, dict):
+
+            if theta.keys() != set(self.free_params):
+                mssg = 'Given `theta` dict does not match the free parameters'
+                raise ValueError(mssg)
+
+            free_theta = theta
+
+        else:
+
+            free_theta = self.label_theta(theta=theta)
+
+        if apply_transforms and (self.transforms is not None):
+            free_theta = {prm: self.transforms.get(prm, lambda v: v)(val)
+                          for prm, val in free_theta.items()}
+
+        kwargs = free_theta | self.model_kwargs | {'observations': self._obs}
+
+        boundargs = self._signature.bind(**kwargs)
+
+        # Fill in given params with Model defaults
+        boundargs.apply_defaults()
+
+        if return_dict:
+            return boundargs.arguments
+        else:
+            return boundargs
 
 
 # --------------------------------------------------------------------------

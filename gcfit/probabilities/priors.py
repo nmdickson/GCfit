@@ -1,4 +1,3 @@
-from ..core.data import DEFAULT_THETA
 
 import numpy as np
 from scipy import stats
@@ -7,7 +6,7 @@ import logging
 import operator
 
 
-__all__ = ["Priors", "DEFAULT_PRIORS", "UniformPrior", "GaussianPrior",
+__all__ = ["DEFAULT_PRIORS", "Priors", "UniformPrior", "GaussianPrior",
            "BoundedGaussianPrior", "CromwellUniformPrior", "ArbitraryPrior"]
 
 
@@ -39,9 +38,10 @@ class Priors:
         of ["prior name", *function args]. Any missing parameters will be filled
         in with `DEFAULT_PRIORS`.
 
-    fixed_initials : dict, optional
-        A dictionary of any parameters which have fixed values, used in cases of
-        dependant priors with these values.
+    model_params : ModelParameters
+        The `ModelParameters` instance being used during fitting. This is
+        necessary to determine which parameters are free, and what values to
+        use for any other required (dependant) parameters during computation.
 
     logged : bool, optional
         Whether to log the returned likelihoods. Defaults to True.
@@ -86,19 +86,26 @@ class Priors:
         '''
 
         if not isinstance(theta, dict):
-            theta = dict(zip(self.var_params, theta), **self.fixed_initials)
+            theta = self._model_params.label_theta(theta)
+
+        # Build args for dependants, but don't apply any transforms
+        full_args = self._model_params.build_args(theta, return_dict=True,
+                                                  apply_transforms=False)
 
         L = {p: 0. for p in theta}
         inv = []
 
-        for param, prior in self.priors.items():
+        # for param, prior in self.priors.items():
+        for param, value in theta.items():
+
+            prior = self.priors[param]
 
             if prior.dependants:
-                deps = {d: theta[d] for d in prior.dependants}
-                P = prior(theta[param], **deps)
+                deps = {d: full_args[d] for d in prior.dependants}
+                P = prior(value, **deps)
 
             else:
-                P = prior(theta[param])
+                P = prior(value)
 
             # if invalid (ie 0, outside of bounds / real bad) record it's reason
             if P <= 0. or np.isnan(P):
@@ -126,36 +133,24 @@ class Priors:
 
         return L
 
-    def __init__(self, priors, fixed_initials=None, *,
-                 logged=True, err_on_fail=False):
+    def __init__(self, priors, model_params, *, logged=True, err_on_fail=False):
 
         self._log = logged
         self._strict = err_on_fail
 
-        if extraneous_params := (priors.keys() - DEFAULT_PRIORS.keys()):
-            raise ValueError(f"Invalid parameters: {extraneous_params}")
-
-        # ------------------------------------------------------------------
-        # Prep for any fixed parameters
-        # ------------------------------------------------------------------
-
-        # In normal prior likelihoods, the fixed values will also be evaled
-
-        if fixed_initials is None:
-            fixed_initials = {}
-
-        self.fixed_initials = fixed_initials
-
-        # get list of variable params, sorted for the later unpacking of theta
-        var_params = DEFAULT_PRIORS.keys() - fixed_initials.keys()
-        self.var_params = sorted(var_params, key=list(DEFAULT_PRIORS).index)
+        self._model_params = model_params
 
         # ------------------------------------------------------------------
         # Initialize all Prior objects
         # ------------------------------------------------------------------
 
         # Fill in unspecified parameters with default priors
+        # TODO this now carries around extra priors but thats probably fine
         self.priors = {**DEFAULT_PRIORS, **priors}
+
+        if extra_params := (set(model_params.free_params) - self.priors.keys()):
+            mssg = f"No priors found for the free parameters {extra_params}"
+            raise ValueError(mssg)
 
         # Fill the dict with actual priors objects
         for param in self.priors:
@@ -202,9 +197,10 @@ class PriorTransforms(Priors):
         of ["prior name", *function args]. Any missing parameters will be filled
         in with `DEFAULT_PRIORS`.
 
-    fixed_initials : dict, optional
-        A dictionary of any parameters which have fixed values, used in cases of
-        dependant priors with these values.
+    model_params : ModelParameters
+        The `ModelParameters` instance being used during fitting. This is
+        necessary to determine which parameters are free, and what values to
+        use for any other required (dependant) parameters during computation.
 
     logged : bool, optional
         Whether to log the returned likelihoods. Defaults to True.
@@ -215,7 +211,7 @@ class PriorTransforms(Priors):
         failure and continue.
     '''
 
-    def _compile_dependants(self, prior, U, theta=None):
+    def _compile_dependants(self, prior, U, theta):
         '''Transform a passed U to theta recursively, so can use dependants'''
 
         # TODO potentially repeating a lot of prior calls by not saving to theta
@@ -239,8 +235,7 @@ class PriorTransforms(Priors):
 
             # assume it's fixed, use its fixed value
             else:
-                # TODO might get hard to understand keyerror here if not fixed?
-                deps[dep_param] = self.fixed_initials[dep_param]
+                deps[dep_param] = self._model_params.fixed_params[dep_param]
 
         return deps
 
@@ -276,23 +271,19 @@ class PriorTransforms(Priors):
             flag was set on initialization.
         '''
 
-        if len(U) != len(self.var_params):
-            mssg = (f"Incorrect number of parameters passed: "
-                    f"expected {len(self.var_params)}, got {len(U)}")
-
-            raise ValueError(mssg)
-
         if not isinstance(U, dict):
-            U = dict(zip(self.var_params, U))
+            U = self._model_params.label_theta(U)
 
         theta = {}
         inv = []
 
-        for param, prior in self.priors.items():
+        for param, value in U.items():
+
+            prior = self.priors[param]
 
             deps = self._compile_dependants(prior, U, theta)
 
-            theta[param] = prior(U[param], **deps)
+            theta[param] = prior(value, **deps)
 
             # if invalid, record it's reason
             if np.isnan(theta[param]):
@@ -312,27 +303,11 @@ class PriorTransforms(Priors):
 
         return theta
 
-    def __init__(self, priors, fixed_initials=None, *, err_on_fail=False):
+    def __init__(self, priors, model_params, *, err_on_fail=False):
 
         self._strict = err_on_fail
 
-        if extraneous_params := (priors.keys() - DEFAULT_PRIORS.keys()):
-            raise ValueError(f"Invalid parameters: {extraneous_params}")
-
-        # ------------------------------------------------------------------
-        # Prep for any fixed parameters
-        # ------------------------------------------------------------------
-
-        # In prior transforms, fixed values will be basically ignored
-
-        if fixed_initials is None:
-            fixed_initials = {}
-
-        self.fixed_initials = fixed_initials
-
-        # get list of variable params, sorted for the later unpacking of U
-        var_params = DEFAULT_PRIORS.keys() - fixed_initials.keys()
-        self.var_params = sorted(var_params, key=list(DEFAULT_PRIORS).index)
+        self._model_params = model_params
 
         # ------------------------------------------------------------------
         # Initialize all Prior objects
@@ -341,8 +316,9 @@ class PriorTransforms(Priors):
         # Fill in unspecified parameters with default priors
         self.priors = {**DEFAULT_PRIORS, **priors}
 
-        for key in self.fixed_initials:
-            del self.priors[key]
+        if extra_params := (set(model_params.free_params) - self.priors.keys()):
+            mssg = f"No priors found for the free parameters {extra_params}"
+            raise ValueError(mssg)
 
         # Fill the dict with actual priors objects
         for param in self.priors:
@@ -416,8 +392,9 @@ class _PriorBase:
         except ValueError:
             # val is a name of a param
 
-            if val not in DEFAULT_THETA:
-                raise ValueError(f'Invalid dependant parameter {val}')
+            # TODO can add check against model_params._all_params
+            # if val not in DEFAULT_THETA:
+            #     raise ValueError(f'Invalid dependant parameter {val}')
 
             self.dependants.append(val)
 
@@ -511,7 +488,7 @@ class UniformPrior(_PriorBase):
         self.param = param
 
         self.bounds = []
-        self.dependants = []
+        self.dependants = []  # TODO should this be a set?
 
         for bounds in edges:
 
@@ -611,20 +588,147 @@ class GaussianPrior(_PriorBase):
                 f'("{self.param}", {self.mu}, {self.sigma}, '
                 f'transform={self._transform})')
 
-    def __call__(self, param_val, *args, **kw):
+    def __call__(self, param_val, *args, **kwargs):
         '''Evaluate this prior function at the value `param_val`.'''
-        return self._caller(param_val)
+
+        # check that all dependants were supplied
+        if (missing_deps := set(self.dependants) - kwargs.keys()):
+            mssg = f"Missing required dependant params: {missing_deps}"
+            raise TypeError(mssg)
+
+        loc = kwargs.get(self.mu, self.mu)
+        scale = kwargs.get(self.sigma, self.sigma)
+
+        return self._caller(param_val, loc=loc, scale=scale)
 
     def __init__(self, param, mu, sigma, *, transform=False):
 
         self._transform = transform
         self.param = param
 
-        self.mu, self.sigma = mu, sigma
+        self.dependants = []
 
-        self.dist = stats.norm(loc=self.mu, scale=self.sigma)
+        self.mu, self.sigma = self._init_val(mu), self._init_val(sigma)
 
-        self._caller = self.dist.pdf if not transform else self.dist.ppf
+        self._caller = stats.norm.pdf if not transform else stats.norm.ppf
+
+
+class FunctionalUniformPrior(UniformPrior):
+    '''Flat uniform prior function, with bounds that are functions.
+
+    Represents a normalized uniform prior likelihood distribution, defined by
+    N bounding pairs which must all overlap smoothly. The returned likelihood
+    value for any point between the minimum and maximum bounds is defined by
+    the size of the distribution, and normalized to 1.
+
+    Unlike the normal UniformPrior, the bounds supplied to this prior must be
+    string representations of functions, and not constant values or the names
+    of dependant model parameters. The functions must be valid functions for
+    use with `sympy`, and only *other* model parameter may be used as free
+    parameters of the function. The functions should return a single value,
+    to be used as the bound on this parameter.
+
+    Bounds are evaluated on each call, in order to support dependant parameters,
+    and the `inv_value` will be returned in the case of bound-pairs which do not
+    overlap.
+
+    Parameters
+    ----------
+    param : str
+        Name of the corresponding parameter.
+
+    edges : list of 2-tuple
+        List of all bound pairs (lower, upper). Bounds must be symbolic string
+        representations of mathematical functions, valid for use by `sympy`.
+
+    transform : bool, optional
+        Whether this is a prior likelihood or a prior transform function.
+        Changes whether the distribution PDF or PPF is evaluated upon calling.
+
+    Notes
+    -----
+    Be aware that the value of dependant parameters will be taken from the
+    input θ (passed through their respective priors) or fixed model parameters
+    directly, and thus any relevant transforms in the `ModelParameters` will
+    *not* be applied. This may change how the bounding functions must be
+    written, to account for this.
+
+    For example, a prior on `rh0` which sets bounds on the initial
+    density of 1e2<rhoh0<1e7 would look like:
+    "(3*M0*1e6 / (8*pi*1e7))**(1/3)" to "(3*M0*1e6 / (8*pi*1e2))**(1/3)".
+
+    This function uses `sympy.lambdify` to convert the symbolic functions to
+    python function, and thus is *not* safe for use on unsanitized inputs.
+
+    See Also
+    --------
+    UniformPrior : Uniform prior with constant bounds.
+    scipy.stats.uniform : Distribution class used for pdf/ppf evaluation.
+    '''
+    # TODO this should also accept functions directly instead of symbolic strs
+
+    def __repr__(self):
+        # TODO this should print the symbolic representations, not the lambdas
+        return (f'{self.__class__.__name__}'
+                f'("{self.param}", {self.bounds}, transform={self._transform})')
+
+    def __call__(self, param_val, *args, **kwargs):
+        '''Evaluate this prior function at the value `param_val`.'''
+
+        # check that all dependants were supplied
+        if (missing_deps := set(self.dependants) - kwargs.keys()):
+            mssg = f"Missing required dependant params: {missing_deps}"
+            raise TypeError(mssg)
+
+        # bounds consist of list of (func, dep_param) pairs for each bound
+        lower_funcs, upper_funcs = zip(*self.bounds)
+
+        lowers = np.array([func(*[kwargs.get(p) for p in dep_params])
+                           for func, dep_params in lower_funcs])
+        uppers = np.array([func(*[kwargs.get(p) for p in dep_params])
+                           for func, dep_params in upper_funcs])
+
+        # Check if the bounds themselves are valid (all overlapping correctly)
+        if not (valid := np.less_equal.outer(lowers, uppers)).all():
+
+            inv_lowers = lowers[np.where(~valid)[0]]
+            inv_uppers = uppers[np.where(~valid)[1]]
+
+            inv_pairs = np.c_[inv_lowers, inv_uppers]
+
+            nlt = u"\u226E"
+
+            self._inv_mssg = (
+                f"Invalid UniformPrior on {self.param}, improper bounds: "
+                + ",".join(f"{li} {nlt} {ui}" for li, ui in inv_pairs)
+            )
+
+            return self.inv_value
+
+        # compute overall bounds, and loc/scale
+        l_bnd, r_bnd = lowers.max(), uppers.min()
+        loc, scale = l_bnd, r_bnd - l_bnd
+
+        # evaluate the dist
+        return self._caller(param_val, loc=loc, scale=scale)
+
+    def _init_val(self, val):
+        '''lambdify given strings representing a function, and note any deps'''
+        import sympy
+
+        # figure out the dependent parameters used in this function
+        sym_func = sympy.sympify(val)
+
+        # TODO probably has weird error if these aren't valid model params
+        func_params = list(map(str, sym_func.free_symbols))
+
+        # lambdify the function
+        func = sympy.lambdify(func_params, sym_func, docstring_limit=0)
+
+        # store the dependents
+        self.dependants.extend(func_params)
+
+        return (func, func_params)
 
 
 class BoundedGaussianPrior(_PriorBase):
@@ -651,25 +755,40 @@ class CromwellUniformPrior(_PriorBase):
     pass
 
 
+# TODO these defaults of course assume `compatibility_transforms=True`
 DEFAULT_PRIORS = {
-    'W0': ('uniform', [(3, 20)]),
+    'W0': ('uniform', [(0.001, 100)]),
     'M': ('uniform', [(0.01, 5)]),
     'rh': ('uniform', [(0.5, 15)]),
-    'ra': ('uniform', [(0, 5)]),
+    'ra': ('uniform', [(-2, 8)]),
     'g': ('uniform', [(0, 3.5)]),
-    'delta': ('uniform', [(0.3, 0.5)]),
+    'delta': ('uniform', [(0.1, 0.5)]),
     's2': ('uniform', [(0, 15)]),
     'F': ('uniform', [(1, 3)]),
+    'J': ('uniform', [(1, 3)]),
     'a1': ('uniform', [(-1, 2.35)]),
     'a2': ('uniform', [(-1, 2.35), ('a1', np.inf)]),
     'a3': ('uniform', [(1.6, 4), ('a2', np.inf)]),
-    'BHret': ('uniform', [(0, 100)]),
-    'd': ('uniform', [(2, 18)])
+    'BH_ret_dyn': ('uniform', [(0, 100)]),
+    'd': ('uniform', [(2, 18)]),
+    #
+    'M0': ('uniform', [(0.001, 10)]),
+    'rh0': ('uniform', [(0.01, 15)]),
+    #
+    'f_kick': ('uniform', [(0.0, 1.0)]),
+    'kick_vdisp': ('uniform', [(50, 265.)]),
+    'kick_slope': ('uniform', [(1e-5, 2)]),
+    'kick_scale': ('uniform', [(5, 100)]),
+    #
+    'zeta': ('uniform', [(0.01, 1.0)]),
+    'eta': ('uniform', [(-5.0, 5.0)]),
+    'meq': ('uniform', [(0.0, 15.0)]),
 }
 
 _PRIORS_MAP = {
     "uniform": UniformPrior,
     "gaussian": GaussianPrior,
+    "functionaluniform": FunctionalUniformPrior,
     "boundedgaussian": BoundedGaussianPrior,
     "cromwelluniform": CromwellUniformPrior,
 }

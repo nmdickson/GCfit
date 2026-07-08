@@ -14,26 +14,20 @@ import itertools
 from collections import namedtuple
 
 
-__all__ = ['DEFAULT_THETA', 'Model', 'FittableModel', 'SingleMassModel',
-           'SampledModel', 'Observations']
+__all__ = ['DEFAULT_FREE_PARAMS', 'DEFAULT_FREE_EV_PARAMS',
+           'Model', 'SingleMassModel', 'EvolvedModel', 'SampledModel',
+           'Observations']
 
 
-# The order of this is important!
-DEFAULT_THETA = {
-    'W0': 6.0,
-    'M': 0.69,
-    'rh': 2.88,
-    'ra': 1.23,
-    'g': 0.75,
-    'delta': 0.45,
-    's2': 0.1,
-    'F': 1.1,
-    'a1': 0.5,
-    'a2': 1.3,
-    'a3': 2.5,
-    'BHret': 0.5,
-    'd': 6.405,
-}
+DEFAULT_FREE_PARAMS = (
+    'W0', 'M', 'rh', 'ra', 'g', 'delta',
+    's2', 'F', 'a1', 'a2', 'a3', 'BH_ret_dyn', 'd',
+)
+
+DEFAULT_FREE_EV_PARAMS = (
+    'W0', 'M0', 'rh0', 'ra', 'g', 'delta',
+    's2', 'F', 'a1', 'a2', 'a3', 'd',
+)
 
 
 # --------------------------------------------------------------------------
@@ -185,6 +179,7 @@ class Dataset:
 
                 except (ValueError, RuntimeError, ModuleNotFoundError):
                     # Failed to get citation, just return raw source
+                    # TODO this isn't catching some errors, like w/o internet
                     self._citation = '; '.join(bibcodes)
 
                 return self._citation
@@ -549,7 +544,6 @@ class Observations:
 
         self.mdata = {}
         self._dict_datasets = {}
-        self.initials = DEFAULT_THETA.copy()
 
         filename = util.get_cluster_path(cluster, standardize_name, restrict_to)
 
@@ -559,21 +553,40 @@ class Observations:
 
             logging.info(f"Observations read from {filename}")
 
+            # --------------------------------------------------------------
+            # Read in all observational data products
+            # --------------------------------------------------------------
+
             for group in self._find_groups(file):
                 self._dict_datasets[group] = Dataset(file[group])
 
+            # --------------------------------------------------------------
+            # Read in initial values of base free parameters
+            # --------------------------------------------------------------
+
+            # I'm only gonna keep whats on file. You want more initials?
+            # Specify them to MCMC_fit yourself
             try:
-                # This updates defaults with data while keeping default sort
-                self.initials = {**self.initials, **file['initials'].attrs}
-
-                if extras := (self.initials.keys() - DEFAULT_THETA.keys()):
-                    mssg = (f"Stored initials do not match expected."
-                            f"Extra values found: {extras}")
-                    raise ValueError(mssg)
-
+                self.initials = dict(file['initials'].attrs)
             except KeyError:
-                logging.info("No initial state stored, using defaults")
+                self.initials = dict()
+                logging.debug("No initial state stored")
                 pass
+
+            # --------------------------------------------------------------
+            # Read in initial values of evolved free parameters
+            # --------------------------------------------------------------
+
+            try:
+                self.ev_initials = dict(file['ev_initials'].attrs)
+            except KeyError:
+                self.ev_initials = dict()
+                logging.debug("No (evolved) initial state stored")
+                pass
+
+            # --------------------------------------------------------------
+            # Read in all other metadata
+            # --------------------------------------------------------------
 
             # TODO need a way to read units for some mdata from file
             self.mdata = dict(file.attrs)
@@ -710,8 +723,8 @@ class Observations:
 # Attributes namespace for storing various attrs for individual stellar types
 _attributes = namedtuple(
     '_attributes',
-    ['mj', 'Mj', 'Nj', 'mavg', 'rhoj', 'Sigmaj', 'f', 'rh'],
-    defaults=[None, ] * 8
+    ['mj', 'Mj', 'Nj', 'mavg', 'mc', 'rhoj', 'Sigmaj', 'f', 'rh'],
+    defaults=[None, ] * 9
 )
 
 # --------------------------------------------------------------------------
@@ -788,10 +801,10 @@ class Model(lp.limepy):
         The high-mass IMF exponent (representing masses between
         `m_breaks[2:4]`). Defaults to 2.3, matching Kroupa (2001).
 
-    BHret : float, optional
-        The black hole retention fraction, representing the percentage (between
-        0 and 100) of black holes retained after dynamical ejections and natal
-        kicks.
+    BH_ret_dyn : float, optional
+        The dynamical black hole retention fraction, representing the percentage
+        (between 0 and 100) of black holes retained after dynamical ejections.
+        Note this does *not* include natal kicks. See `ssptools` for details.
 
     d : float or astropy.Quantity, optional
         Distance to the cluster, from Earth, in kiloparsecs. Mainly used for any
@@ -838,7 +851,7 @@ class Model(lp.limepy):
 
     m_breaks : (4,) numpy.ndarray or astropy.Quantity, optional
         The IMF break-masses (including outer bounds) in Msun, defining the
-        mass ranges of each IMF exponent. Defaults to [0.1, 0.5, 1.0, 100].
+        mass ranges of each IMF exponent. Defaults to [0.1, 0.5, 1.0, 150].
 
     nbins : (3,) numpy.ndarray of int, optional
         Number of mass bins in each regime of the IMF, as defined by `m_breaks`.
@@ -968,6 +981,53 @@ class Model(lp.limepy):
     limepy : Distribution-function model base of this class.
     '''
 
+    name: None | str = None
+
+    def __str__(self):
+
+        if self.name is not None:
+            return f"Model {self.name}"
+        elif self.observations is not None:
+            return f"Model of {self.observations.cluster}"
+        else:
+            return "Model"
+
+    def _evolve_mf(self, m_breaks, a1, a2, a3, nbins, FeH, age, esc_rate, tcc,
+                   NS_ret, BH_ret_dyn, natal_kicks, vesc,
+                   kick_method, f_kick, SNe_method, kick_vdisp,
+                   kick_slope,  kick_scale, BH_IFMR_method, BH_IFMR_kwargs,
+                   **kwargs):
+        '''Compute an evolved mass function using `ssptools.EvolvedMF`'''
+
+        # Total mass of this will be wrong due to N0 but Mj is scaled in limepy
+        self._imf = masses.PowerLawIMF(
+            m_break=m_breaks.value, a=[-a1, -a2, -a3], ext='zeros', N0=5e5
+        )
+
+        self._mf_kwargs = dict(
+            IMF=self._imf,
+            nbins=nbins,
+            FeH=FeH,
+            tout=np.array([age.to_value('Myr')]),
+            esc_rate=esc_rate,
+            tcc=tcc,
+            NS_ret=NS_ret,
+            BH_ret_dyn=BH_ret_dyn / 100.,
+            natal_kicks=natal_kicks,
+            vesc=vesc.value,
+            kick_method=kick_method,
+            f_kick=f_kick,
+            SNe_method=SNe_method,
+            kick_vdisp=kick_vdisp,
+            kick_slope=kick_slope,
+            kick_scale=kick_scale,
+            BH_IFMR_method=BH_IFMR_method,
+            BH_IFMR_kwargs=BH_IFMR_kwargs,
+            **kwargs  # will error here if MF_kwargs included any of above args
+        )
+
+        return EvolvedMF(**self._mf_kwargs)
+
     def _assign_units(self):
         '''Convert most values to `astropy.Quantity` with correct units'''
 
@@ -993,6 +1053,7 @@ class Model(lp.limepy):
         self.mmean <<= M_units
         self.mbin_widths <<= M_units
 
+        # TODO compute some lagrangian radii as well (from mc)
         self.r <<= R_units
         self.r0 <<= R_units
         self.r0j <<= R_units
@@ -1008,6 +1069,7 @@ class Model(lp.limepy):
         # TODO this may be wrong (it's "phase-space" volume)
         self.volume <<= R_units**3
 
+        self.v2 <<= V2_units
         self.v2T <<= V2_units
         self.v2Tj <<= V2_units
         self.v2R <<= V2_units
@@ -1039,16 +1101,23 @@ class Model(lp.limepy):
         mc = self.mcj[mask].sum(axis=0)
         rh = np.interp(0.5 * Mj.sum(), mc, self.r)
 
-        return _attributes(mj=mj, Mj=Mj, Nj=Nj, mavg=mavg,
+        return _attributes(mj=mj, Mj=Mj, Nj=Nj, mavg=mavg, mc=mc,
                            rhoj=rhoj, Sigmaj=Sigmaj, f=f, rh=rh)
 
     def __init__(self, W0, M, rh, g=1.5, delta=0.45, ra=1e8,
-                 a1=1.3, a2=2.3, a3=2.3, BHret=1.0, d=5,
-                 s2=0., F=1., *, observations=None, age=None, FeH=None,
-                 m_breaks=[0.1, 0.5, 1.0, 100], nbins=[5, 5, 20],
+                 a1=1.3, a2=2.3, a3=2.3, BH_ret_dyn=5.0, d=5,
+                 s2=0., F=1., J=1., *, observations=None, age=None, FeH=None,
+                 m_breaks=[0.1, 0.5, 1.0, 150], nbins=[5, 5, 20],
                  tracer_masses=None, tcc=0.0, NS_ret=0.1, BH_ret_int=1.0,
-                 natal_kicks=True, esc_rate=0.0, vesc=90.,
-                 meanmassdef='global', ode_maxstep=1e10, ode_rtol=1e-7):
+                 meq=0.0, eta=0.0, zeta=1.0,
+                 esc_rate=0.0, natal_kicks=True, kick_method='maxwellian',
+                 f_kick=None, SNe_method='rapid', vesc=90, kick_vdisp=265.,
+                 kick_slope=1, kick_scale=20,
+                 BH_IFMR_method='banerjee20', BH_IFMR_kwargs=None,
+                 MF_kwargs=None, meanmassdef='global',
+                 ode_maxstep=1e10, ode_rtol=1e-7,
+                 diffcrit=1e-3, max_mf_iter=100, mf_iter_index=0.5,
+                 diffdef='rel'):
 
         # ------------------------------------------------------------------
         # Add/convert units of some quantities. Supports quantities as inputs
@@ -1068,8 +1137,8 @@ class Model(lp.limepy):
 
         self.theta = dict(W0=W0.value, M=M.to_value('1e6 Msun'), rh=rh.value,
                           ra=np.log10(ra.value), g=g, delta=delta,
-                          a1=a1, a2=a2, a3=a3, BHret=BHret,
-                          s2=s2, F=F, d=d.value)
+                          a1=a1, a2=a2, a3=a3, BH_ret_dyn=BH_ret_dyn,
+                          s2=s2, F=F, J=J, d=d.value)
 
         self.d = d
 
@@ -1114,25 +1183,25 @@ class Model(lp.limepy):
         # Get mass function
         # ------------------------------------------------------------------
 
-        self._imf = masses.PowerLawIMF(
-            m_break=m_breaks.value, a=[-a1, -a2, -a3], ext='zeros', N0=5e5
-        )
+        MF_kwargs = {} if MF_kwargs is None else MF_kwargs.copy()
 
-        self._mf_kwargs = dict(
-            IMF=self._imf,
-            nbins=nbins,
-            FeH=self.FeH,
-            tout=np.array([self.age.to_value('Myr')]),
-            esc_rate=esc_rate,
-            tcc=tcc,
-            NS_ret=NS_ret,
-            BH_ret_int=BH_ret_int,
-            BH_ret_dyn=BHret / 100.,
-            natal_kicks=natal_kicks,
-            vesc=self.vesc0.value
-        )
+        self._mf = self._evolve_mf(m_breaks, a1, a2, a3, nbins,
+                                   self.FeH, self.age, esc_rate, tcc,
+                                   NS_ret, BH_ret_dyn,
+                                   natal_kicks, self.vesc0,
+                                   kick_method, f_kick, SNe_method, kick_vdisp,
+                                   kick_slope,  kick_scale,
+                                   BH_IFMR_method, BH_IFMR_kwargs, **MF_kwargs)
 
-        self._mf = EvolvedMF(**self._mf_kwargs)
+        if not self._mf.converged:
+            mssg = ("Mass function evolution ODE failed to converge"
+                    f" with kwargs={self._mf_kwargs}")
+            raise ValueError(mssg)
+
+        if self._mf.M.size <= 1:
+            mssg = ("Mass function has only one non-empty mass bin. "
+                    "If this is truly desired, must use `SingleMassModel`.")
+            raise ValueError(mssg)
 
         mj, Mj = self._mf.m, self._mf.M
 
@@ -1179,13 +1248,20 @@ class Model(lp.limepy):
             rh=rh.value,
             ra=ra.value,
             delta=delta,
+            eta=eta,
+            zeta=zeta,
             mj=mj,
             Mj=Mj,
+            meq=meq,
             project=True,
             verbose=False,
             meanmassdef=meanmassdef,
             max_step=ode_maxstep,
-            ode_rtol=ode_rtol
+            ode_rtol=ode_rtol,
+            diffcrit=diffcrit,
+            max_mf_iter=max_mf_iter,
+            mf_iter_index=mf_iter_index,
+            diffdef=diffdef
         )
 
         try:
@@ -1193,13 +1269,35 @@ class Model(lp.limepy):
         except ValueError as err:
             cause = err.args[0]
 
-            if ("rmax reached in mf iteration" in cause
-                    or "maximum number of iterations reached" in cause):
+            if "rmax reached in mf iteration" in cause:
 
-                mssg = ("Model solver failed to converge in time. "
+                mssg = (f"Model extent is not finite (rt>{self.rt:.2f}). "
+                        "Model parameters must be adjusted")
+
+                raise ValueError(mssg) from err
+
+            elif "ode not successful" in cause:
+
+                mssg = (f"Model ODE solver was not successful. "
                         "Model parameters must be adjusted")
                 raise ValueError(mssg) from err
 
+            elif "maximum number of iterations reached" in cause:
+
+                mssg = ("Model solver failed to converge in time. "
+                        "Model parameters must be adjusted "
+                        "or max_mf_iter increased")
+                raise ValueError(mssg) from err
+
+            else:
+                raise err
+
+        except IndexError as err:
+            # Can sometimes occur in not converged models
+
+            if not self.converged:
+                mssg = "Model solver failed to converge to a finite extent"
+                raise ValueError(mssg) from err
             else:
                 raise err
 
@@ -1253,6 +1351,37 @@ class Model(lp.limepy):
         # ------------------------------------------------------------------
         # Get some derived quantities
         # ------------------------------------------------------------------
+
+        # King concentration parameter
+
+        self.c = np.log10(self.rt / self.r0)
+
+        # Different core radius definitions
+
+        # Casertano & Hut, 1985 density radius (eq. IV.2)
+        integ = (self.rho**2) * (self.r**3)
+        norm = (self.rho**2) * (self.r**2)
+        self.rc_casertano = (
+            util.QuantitySpline(x=self.r, y=integ).integral(self.r[0], self.rt)
+            / util.QuantitySpline(x=self.r, y=norm).integral(self.r[0], self.rt)
+        )
+
+        # Casertano & Hut, 1985 surface density radius (eq. IV.4)
+        integ = (self.Sigma**2) * (self.r**2)
+        norm = (self.Sigma**2) * (self.r**1)
+        self.rc_casertano_surf = (
+            util.QuantitySpline(x=self.r, y=integ).integral(self.r[0], self.rt)
+            / util.QuantitySpline(x=self.r, y=norm).integral(self.r[0], self.rt)
+        )
+
+        # Spitzer, 1987
+        self.rc_spitzer = ((3 * self.v2[0])
+                           / (4 * np.pi * self.G * self.rho[0]))**0.5
+
+        # "Observable" core radius (analogous to Morscher+2015 / King1962)
+        self.rc_obs = util.QuantitySpline(
+            self.r, self.Sigmaj[self.nms-1] - (0.5 * self.Sigmaj[self.nms-1][0])
+        ).roots()[0]
 
         # Escape Velocity
 
@@ -1566,6 +1695,15 @@ class SingleMassModel(lp.limepy):
             else:
                 raise err
 
+        except IndexError as err:
+            # Can sometimes occur in not converged models
+
+            if not self.converged:
+                mssg = "Model solver failed to converge to a finite extent"
+                raise ValueError(mssg) from err
+            else:
+                raise err
+
         if not self.converged:
             mssg = "Model solver failed to converge to a finite extent"
             raise ValueError(mssg)
@@ -1614,101 +1752,287 @@ class SingleMassModel(lp.limepy):
 
 
 # --------------------------------------------------------------------------
-# Model to be used in fitting to observations
+# Model evolved from initial conditions using evolutionary model `clusterBH`
 # --------------------------------------------------------------------------
 
 
-class FittableModel(Model):
-    '''Model subclass for use in all fitting functions.
-
-    A subclass of the base `Model`, with a simplified and specific
-    initilization signature based on a single `theta` input containing the main
-    13 model parameters, in a specific order, and `observations` which the
-    model should be compared to.
-
-    Unless you have a set of parameters `theta` taken directly from the fitting
-    results, you most likely do not want to use this class directly.
-
-    Parameters
-    ----------
-    theta : dict or list
-        The model input parameters. Must either be a dict, or a full list of
-        all parameters, in the exact same order as `DEFAULT_THETA`.
-        The 13 free parameters used here (W0, M, rh, ra, g, delta, a1, a2, a3,
-        BHret, s2, F and d) are key for defining the model structure, mass
-        evolution algorithm and fitting parameters.
-        See `Model` for further explanation of all possible input parameters.
-
-    observations : Observations
-        The `Observations` instance corresponding to this cluster. Required at
-        initilization so that the models can be compared to these observations
-        in the most consistent way possible.
-
-    **kwargs : dict
-        All other arguments are passed to `Model`.
-
-    Attributes
-    ----------
-    theta : dict
-        Dictionary of input parameters.
-        Some parameters may technically also be accessible directly as
-        attributes, but that interface should not be considered stable.
-        This dictionary should be used as the only direct access to any input
-        parameters that make up theta.
-
-    Notes
-    -----
-    The units of the inputs in `theta` here do not match those in `Model`
-    directly. `M` should be in units of [1e6 Msun] and ra should actually be
-    log10(ra).
-
-    All cluster metadata parameters (such as age, vesc, etc.) will be read from
-    the observations, and should not be provided as arguments here.
+class EvolvedModel(Model):
+    '''
+    modified model that takes in different initial parameters and uses
+    `clusterBH` to evolve them to the present day conditions of a normal model.
+    most importantly, changes M, rh to M0, rh0 (their initial conditions)
+    and removes the need for a BH_ret (gets target M_BH from clusterBH)
     '''
 
-    def __init__(self, theta, observations, **kwargs):
+    def _evolve_mf(self, m_breaks, a1, a2, a3, nbins, FeH, age, esc_rate, tcc,
+                   NS_ret, BH_ret_dyn, natal_kicks, vesc,
+                   kick_method, f_kick, SNe_method, kick_vdisp,
+                   kick_slope,  kick_scale, BH_IFMR_method, BH_IFMR_kwargs,
+                   **kwargs):
+        '''Alternative MF init using prior-computed IMF and clusterBH outputs'''
+        from ssptools import EvolvedMFWithBH
 
-        self.observations = observations
+        self._mf_kwargs = dict(
+            IMF=self._imf,
+            nbins=nbins,
+            FeH=FeH,
+            tout=np.array([age.to_value('Myr')]),
+            esc_rate=esc_rate,
+            f_BH=self._clusterbh.fbh[-1],
+            N0=self._clusterbh.N,  # N is N0
+            tcc=tcc,
+            NS_ret=NS_ret,
+            natal_kicks=natal_kicks,
+            vesc=vesc.value,
+            esc_norm='M',
+            md=self.md,
+            kick_method=kick_method,
+            f_kick=f_kick,
+            SNe_method=SNe_method,
+            kick_vdisp=kick_vdisp,
+            kick_slope=kick_slope,
+            kick_scale=kick_scale,
+            BH_IFMR_method=BH_IFMR_method,
+            BH_IFMR_kwargs=BH_IFMR_kwargs,
+            **kwargs  # will error here if MF_kwargs included any of above args
+        )
+
+        return EvolvedMFWithBH(**self._mf_kwargs)
+
+    def __init__(self, W0, M0, rh0, g=1.5, delta=0.45, ra=1e8,
+                 a1=1.3, a2=2.3, a3=2.3, d=5,
+                 s2=0., F=1., J=1., *, observations=None, age=None, FeH=None,
+                 Zsun=0.02, m_breaks=[0.1, 0.5, 1.0, 150], nbins=[5, 5, 20],
+                 tracer_masses=None, tcc=0.0, NS_ret=0.1, BH_ret_int=1.0,
+                 meq=0.0, eta=0.0, zeta=1.0, md=1.2, RG_eff=None,
+                 natal_kicks=True, kick_method='maxwellian',
+                 f_kick=None, SNe_method='rapid', kick_vdisp=265.,
+                 kick_slope=1, kick_scale=20,
+                 BH_IFMR_method='banerjee20', BH_IFMR_kwargs=None,
+                 cbh_kwargs=None, MF_kwargs=None, meanmassdef='global',
+                 ode_maxstep=1e10, ode_rtol=1e-7, diffcrit=1e-3,
+                 max_mf_iter=100, mf_iter_index=0.5, diffdef='rel'):
+
+        import cbhbd
+
+        M0 <<= u.Msun
+        rh0 <<= u.pc
+        d <<= u.kpc
+
+        self.M0 = M0
+        self.rh0 = rh0
+
+        cbh_kwargs = {} if cbh_kwargs is None else cbh_kwargs.copy()
+
+        cbh_kwargs.setdefault('kick', natal_kicks)
+
+        # TODO sometimes scale found here when using f_kick is very slightly
+        #   different then the scale found in _evolve_mf.
+        #   Should probably not be recomputing it, just re-use this.
+
+        # Make sure the relevant kickparams are passed to clusterBH by default
+        # but still respect any explicitly passed in `ibh_kwargs` too
+
+        ibh_kwargs = dict(
+            kick_method=kick_method, f_kick=f_kick,
+            SNe_method=SNe_method, kick_vdisp=kick_vdisp,
+            kick_slope=kick_slope, kick_scale=kick_scale,
+            BH_IFMR_method=BH_IFMR_method, BH_IFMR_kwargs=BH_IFMR_kwargs
+        )
+
+        ibh_kwargs |= cbh_kwargs.get('ibh_kwargs', {}).copy()
+
+        cbh_kwargs['ibh_kwargs'] = ibh_kwargs
+
+        # Don't overwrite if given explicitly
+        cbh_kwargs.setdefault('ibh_kwargs', ibh_kwargs)
+
+        m_breaks <<= u.Msun
+        a_slopes = [-a1, -a2, -a3]
+
+        self.md = md
+
+        # TODO unfortunately repeating this imf init here and in clusterBH
+        self._imf = masses.PowerLawIMF.from_M0(
+            m_break=m_breaks.value, a=a_slopes, ext='zeros', M0=M0.value
+        )
+
+        m0 = self._imf.mmean
+
+        N0 = M0.value / m0
+        self.rhoh0 = (3 * M0) / (8 * np.pi * rh0**3)
+        self.Sigmah0 = (M0) / (2 * np.pi * rh0**2)
 
         # ------------------------------------------------------------------
-        # Unpack theta
+        # Try to read some metadata from the observations
         # ------------------------------------------------------------------
 
-        if not isinstance(theta, dict):
-            theta = dict(zip(DEFAULT_THETA, theta))
+        if observations is not None:
+
+            # Try to use the effective radius (circularized orbit)
+            try:
+                if RG_eff is not None:
+                    Rgal = RG_eff
+                    if hasattr(Rgal, 'unit'):
+                        Rgal = Rgal.to_value('kpc')
+                else:
+                    Rgal = observations.mdata['RG_eff']
+
+                cbh_kwargs.setdefault('rg', Rgal)
+
+            except KeyError:
+
+                # Try computing the effective orbit now
+                if (('rp' in observations.mdata)
+                        and ('ra' in observations.mdata)):
+
+                    rp = observations.mdata['rp'] << u.kpc
+                    ra = observations.mdata['ra'] << u.kpc
+                    Rgal = 2 * rp * ra / (ra + rp)
+
+                # Fall back to galactocentric radius based on current position
+                else:
+                    mssg = ("Could not get effective galactocentric radius, "
+                            "using present-day Rg instead.")
+                    logging.warning(mssg)
+
+                    Rgal = util.Rhel2Rgal(observations.mdata['l'] << u.deg,
+                                          observations.mdata['b'] << u.deg,
+                                          d << u.kpc)
+
+                cbh_kwargs.setdefault('rg', Rgal.to_value('kpc'))
+
+            # Get age to evolve to
+            if age is None:
+                age = observations.mdata['age'] << u.Gyr
+
+            if FeH is None:
+                FeH = observations.mdata['FeH']
+
+            # cbh_kwargs.setdefault('tend', age.to_value('Myr'))
+
+            # Get metallicity
+            # cbh_kwargs.setdefault('Z', Zsun * 10**observations.mdata['FeH'])
 
         else:
-            theta = theta.copy()
-
-        if missing_params := (DEFAULT_THETA.keys() - theta.keys()):
-            mssg = f"Missing required params: {missing_params}"
-            raise KeyError(mssg)
-
-        self.theta = theta
+            if age is None or FeH is None:
+                # Error here if age, FeH can't be found
+                mssg = ("Must supply either `age` and `FeH` or "
+                        "an `observations`, to read them from")
+                raise ValueError(mssg)
 
         # ------------------------------------------------------------------
-        # Convert a few quantities
+        # Get age and metallicity, if given (TODO make this logic match others)
         # ------------------------------------------------------------------
 
-        theta['M'] = theta['M'] * 1e6
+        age = age << u.Gyr
 
-        theta['ra'] = 10**theta['ra']
+        cbh_kwargs.setdefault('tend', age.to_value('Myr'))
+        cbh_kwargs.setdefault('Z', Zsun * 10**FeH)
+
+        cbh_kwargs.setdefault('Zsolar', Zsun)
 
         # ------------------------------------------------------------------
-        # Create the base model
+        # Set some default clusterBH parameters
+        # clusterBH fit parameters should use defaults, or given in cbh_kwargs
         # ------------------------------------------------------------------
 
-        kwargs = kwargs.copy()
+        cbh_kwargs.setdefault('dtout', 2.0)
+        cbh_kwargs.setdefault('ssp', True)
+        cbh_kwargs.setdefault('kick', True)
+        cbh_kwargs.setdefault('tidal', True)
+        cbh_kwargs.setdefault('escapers', False)
+        cbh_kwargs.setdefault('tsev', 1)  # Myr
 
-        # Extra check if vesc/Ndot exist in obs first, otherwise use default
-        #   Necessary because checks in Model aren't sufficient
-        if ('vesc' not in kwargs) and ('vesc' in observations.mdata):
-            kwargs['vesc'] = observations.mdata['vesc'] << u.km / u.s
+        # ------------------------------------------------------------------
+        # Make sure clusterBH IMF matches this one
+        # ------------------------------------------------------------------
 
-        if ('esc_rate' not in kwargs) and ('esc_rate' in observations.mdata):
-            kwargs['esc_rate'] = observations.mdata['esc_rate']
+        cbh_kwargs.setdefault('m_breaks', m_breaks.value)
+        cbh_kwargs.setdefault('a_slopes', a_slopes)
+        cbh_kwargs.setdefault('nbins', nbins)
 
-        super().__init__(observations=observations, **theta, **kwargs)
+        # ------------------------------------------------------------------
+        # Compute evolutionary model
+        # ------------------------------------------------------------------
+
+        self.cbh_kwargs = cbh_kwargs
+
+        self._clusterbh = cbhbd.cbhbd.CBHBD(N=N0, rhoh0=self.rhoh0.value,
+                                            compute_mergers=False,
+                                            **self.cbh_kwargs).cluster
+
+        # Make sure no negative f_BH values are allowed
+        self._clusterbh.fbh[self._clusterbh.fbh < 0] = 0.
+
+        # ------------------------------------------------------------------
+        # Determine present day values from the model
+        # ------------------------------------------------------------------
+
+        M = self._clusterbh.M[-1] << u.Msun
+        rh = self._clusterbh.rh[-1] << u.pc
+
+        # ------------------------------------------------------------------
+        # Compute some relevant quantities for mass function evolution
+        # ------------------------------------------------------------------
+
+        vesc = self._clusterbh.vesc0 << u.km / u.s
+        tcc = self._clusterbh.tcc
+
+        # Compute Mdot_esc based on the clusterBH formulation, for ssptools
+
+        # Evaporation
+        Mst_dot = (-self._clusterbh.xi * self._clusterbh.Mst
+                   / self._clusterbh.tev)
+
+        # Ejection
+        bf = self._clusterbh.balance_function((self._clusterbh.t * 1e3) - tcc)
+
+        alpha_c = (self._clusterbh.alpha_ci * bf)
+        alpha_c += ((self._clusterbh.alpha_cf * bf - alpha_c)
+                    * (1 - self._clusterbh.beta_function(self._clusterbh.S)))
+
+        Mst_dot -= (alpha_c * self._clusterbh.zeta
+                    * self._clusterbh.M / self._clusterbh.trh)
+
+        if self._clusterbh.t.size > 3:  # Cubic Spline will fail otherwise
+            Mdot_t = util.QuantitySpline(self._clusterbh.t * 1e3, Mst_dot)
+
+        else:
+            # If only 3 timesteps, something has gone terribly wrong.
+            mssg = f'Too few clusterBH timesteps created: t={self._clusterbh.t}'
+            raise ValueError(mssg)
+
+        BH_ret_dyn = -1  # Spoof unneeded BH retention fraction for `Model`
+
+        # Explicitly specify everything so we can get the correct Signature
+        super().__init__(W0, M, rh, g=g, delta=delta, ra=ra,
+                         a1=a1, a2=a2, a3=a3, BH_ret_dyn=BH_ret_dyn, d=d,
+                         meq=meq, eta=eta, zeta=zeta,
+                         s2=s2, F=F, J=J, observations=observations, age=age,
+                         FeH=FeH, m_breaks=m_breaks, nbins=nbins,
+                         vesc=vesc, esc_rate=Mdot_t,
+                         tcc=tcc, tracer_masses=tracer_masses,
+                         NS_ret=NS_ret, BH_ret_int=BH_ret_int,
+                         natal_kicks=natal_kicks, kick_method=kick_method,
+                         f_kick=f_kick, SNe_method=SNe_method,
+                         kick_vdisp=kick_vdisp, kick_slope=kick_slope,
+                         kick_scale=kick_scale, meanmassdef=meanmassdef,
+                         ode_maxstep=ode_maxstep, ode_rtol=ode_rtol,
+                         diffcrit=diffcrit, max_mf_iter=max_mf_iter,
+                         mf_iter_index=mf_iter_index, MF_kwargs=MF_kwargs,
+                         diffdef=diffdef)
+
+        # reset theta to use initial values
+        self.theta = dict(W0=W0, M0=M0.to_value('1e6 Msun'), rh0=rh0.value,
+                          ra=np.log10(ra), g=g, delta=delta,
+                          a1=a1, a2=a2, a3=a3, BH_ret_dyn=BH_ret_dyn,
+                          s2=s2, F=F, J=J, d=d.value)
+
+    def get_visualizer(self):
+        '''Return a `analysis.ModelVisualizer` instance based on this model.'''
+        from ..analysis import EvolvedVisualizer
+        return EvolvedVisualizer(self, observations=self.observations)
 
 
 # --------------------------------------------------------------------------
@@ -1717,10 +2041,11 @@ class FittableModel(Model):
 
 
 # Some helpful namespaces for SampledModel
-_position = namedtuple('position', ['x', 'y', 'z', 'r', 'theta', 'phi'],
-                       defaults=[None, ] * 6)
-_direction = namedtuple('direction', ['x', 'y', 'z', 'r', 't', 'theta', 'phi'],
-                        defaults=[None, ] * 7)
+_position = namedtuple('position', ['x', 'y', 'z', 'r', 'theta', 'phi', 'p'],
+                       defaults=[None, ] * 7)
+_direction = namedtuple('direction', ['x', 'y', 'z', 'r', 't',
+                                      'theta', 'phi', 'p'],
+                        defaults=[None, ] * 8)
 _projection = namedtuple('projection', ['lat', 'lon', 'distance',
                                         'pm_l_cosb', 'pm_b', 'v_los'],
                          defaults=[None, ] * 6)
@@ -1818,8 +2143,15 @@ class SampledModel:
         v_los), based on the given cluster centre.
     '''
 
+    name: str | None = None
     centre = None
     galactic = None
+
+    def __str__(self):
+        if self.name is not None:
+            return self.name
+        else:
+            return self.__repr__()
 
     # ----------------------------------------------------------------------
     # Initial sampling of a given model
@@ -2028,7 +2360,7 @@ class SampledModel:
 
         def _pdf_angle(q, a, R):
             # Sample random values for: q = cos(theta)
-            # P(q) = erfi(sqrt(k)*p*q)/erfi(sqrt(k)*p)
+            # cdf(q) = erfi(sqrt(k)*p*q)/erfi(sqrt(k)*p)
             from scipy.special import erfi
             return R - erfi(a * q) / erfi(a)
 
@@ -2070,7 +2402,8 @@ class SampledModel:
 
         # Compute radial and tangential velocities from sampled angles
 
-        # TODO should q (cos(θ), but not that θ) also be saved? Interesting?
+        self._q = q  # Save to help with debugging
+
         vr = self.v * q * self.rng.choice((-1, 1), size=self.N)
         vt = self.v * np.sqrt(1 - q**2)
 
@@ -2093,6 +2426,10 @@ class SampledModel:
 
         theta = np.arccos(z / self.r)
         phi = np.arctan2(y, x)
+
+        # Project R into the plane of the sky
+
+        p = self.r * np.sin(theta)
 
         # ------------------------------------------------------------------
         # Sampling of velocity in 3D directions, in spherical and cartesian
@@ -2132,14 +2469,19 @@ class SampledModel:
             vy = np.sqrt(self.v**2 - vx**2) * np.cos(2 * np.pi * R2)
             vz = np.sqrt(self.v**2 - vx**2) * np.sin(2 * np.pi * R2)
 
+        # Project R into the plane of the sky
+
+        vp = (vr * np.sin(theta)) + (vtheta * np.cos(theta))
+
         # ------------------------------------------------------------------
         # Place the various positions/velocities into convenient namespaces
         # ------------------------------------------------------------------
 
-        p = _position(x=x, y=y, z=z, r=self.r, theta=theta, phi=phi)
-        v = _direction(x=vx, y=vy, z=vz, r=vr, t=vt, phi=vphi, theta=vtheta)
+        pos = _position(x=x, y=y, z=z, r=self.r, theta=theta, phi=phi, p=p)
+        vel = _direction(x=vx, y=vy, z=vz, r=vr, t=vt,
+                         phi=vphi, theta=vtheta, p=vp)
 
-        return p, v
+        return pos, vel
 
     def _project(self, cen):
         '''return projected-on-sky positions and velocities, given the centre
@@ -2200,6 +2542,7 @@ class SampledModel:
         self.rhj = model.rhj
         self.rhp = model.rhp
         self.rt = model.rt
+        self.r0 = model.r0
 
         self.raj = np.repeat(model.raj, self.Nj)
         self.s2j = np.repeat(model.s2j, self.Nj)
@@ -2215,6 +2558,7 @@ class SampledModel:
         self.m = np.repeat(model.mj, self.Nj)
 
         if distribute_masses:
+            # TODO obviously this would be better using model._mf.alpha slope
             halfwidth = np.repeat(model.mbin_widths / 2., self.Nj)
             low, high = self.m - halfwidth, self.m + halfwidth
             self.m = self.rng.uniform(low, high) << u.Msun
@@ -2470,3 +2814,674 @@ class SampledModel:
                             pixel_scale=pixel_scale, **kwargs)
 
         return (src, (rem_x, rem_y, rem_t)) if return_rem else src
+
+    # ----------------------------------------------------------------------
+    # Mock observations
+    # ----------------------------------------------------------------------
+
+    def _apply_completeness(self, mask, f_comp, weight=True):
+
+        if weight:
+            pbins = np.digitize(self.pos.p[mask], self._basemodel.r)
+            dens_weight = self._basemodel.Sigma[pbins].value
+            dens_weight /= dens_weight.sum()
+        else:
+            dens_weight = None
+
+        incompinds = self.rng.choice(
+            np.arange(mask.sum()), size=np.floor(mask.sum() * (1 - f_comp)),
+            replace=False, p=dens_weight
+        )
+
+        # Feels a bit convoluted
+        mask[np.nonzero(mask)[0][incompinds]] = False
+
+        return mask
+
+    def _select_stars(self, lower_mass, upper_mass, f_comp=None):
+        '''return mask of MS stars satisfying these cuts'''
+        mask = (self.star_mask
+                & ((lower_mass << u.Msun) <= self.m)
+                & (self.m <= (upper_mass << u.Msun)))
+
+        if f_comp is not None:
+            mask = self._apply_completeness(mask, f_comp)
+
+        return mask
+
+    def _select_TO_stars(self, width=2, f_comp=None):
+        '''Select all stars which were sampled from the turn-off bin (nms-1)
+        'width' allows you to take extra, lower star bins, to make
+        up for the fact that the TO bin is sliced by ssptools and thus may
+        contain much fewer stars.
+        i.e. width=2 will select TO bin (nms-1) and the one below it (nms-2).
+        '''
+        nms = self._basemodel.nms
+        mask = np.isin(self.mbins, np.arange(nms - width, nms))
+
+        if f_comp is not None:
+            mask = self._apply_completeness(mask, f_comp)
+
+        return mask
+
+    def _bin_stars(self, R, Nbins, bin_method='linear', mean_cen=True):
+        '''create bins and place each star within them'''
+
+        # Create the bins
+
+        match bin_method.casefold():
+            case 'linear' | 'lin':
+                bins = np.linspace(R.min() * 0.99, R.max() * 1.01, Nbins + 1)
+
+            case 'log':
+                bins = np.geomspace(R.min() * 0.99, R.max() * 1.01, Nbins + 1)
+
+            case 'equal-n' | 'equal':
+                bins = np.quantile(R, q=np.linspace(0, 1, Nbins + 1))
+                bins[-1] *= 1.01  # make sure last bin contains last star
+
+            case 'n-per-bin':
+                Nbins = self.N // Nbins  # treat Nbins as "n per bin"
+                bins = np.quantile(R, q=np.linspace(0, 1, Nbins + 1))
+                bins[-1] *= 1.01
+
+            case _:
+                raise ValueError(f"Invalid bin_method '{bin_method}'")
+
+        # Sort the objects into their bins
+
+        indices = np.digitize(R, bins)
+
+        if np.any(np.unique(indices, return_counts=True)[1] <= 2):
+            mssg = "Too few stars in some bin, choose different method or Nbins"
+            raise ValueError(mssg)
+
+        # Determine the bin centres
+
+        bin_widths = (bins[1:] - bins[:-1])
+
+        if mean_cen:
+            bin_centres = u.Quantity([np.mean(R[indices == i])
+                                      for i in range(1, indices.max()+1)])
+            bin_errs =  u.Quantity([np.std(R[indices == i])
+                                      for i in range(1, indices.max()+1)])
+        else:
+            bin_centres = bins[1:] + (bin_widths / 2)
+            bin_errs = bin_widths / 2  # "bin errors"
+
+        return indices, bins, bin_centres, bin_errs
+
+    def _compute_dispersion(self, values, errors, *, Nwalkers=32,
+                            Niters=5000, Nburn=2000, progress=False):
+        import emcee
+
+        # strip units
+        unit = values.unit
+        values = values.to_value(unit)
+        errors = errors.to_value(unit)
+
+        def logprior(th):
+            if th[1] <= 0.0:
+                return -np.inf
+            else:
+                return 0.0
+
+        def logL(th):
+            return -0.5 * np.sum(
+                np.log(th[1]**2 + errors**2)
+                + (((values - th[0])**2) / (th[1]**2 + errors**2))
+            ) + logprior(th)
+
+        if Nburn > Niters:
+            raise ValueError(f"Nburn ({Nburn}) is larger than Niter ({Niters})")
+
+        init_pos = self.rng.normal(
+            loc=[np.mean(values), np.std(values)],
+            scale=0.1, size=(Nwalkers, 2)
+        )
+
+        sampler = emcee.EnsembleSampler(Nwalkers, 2, logL)
+
+        pkw = dict(desc=f"MCMC (N={values.size})", leave=False, position=1)
+
+        # Initialize the walkers
+        sampler.run_mcmc(init_pos, Niters, progress=progress,
+                         progress_kwargs=pkw)
+
+        # Get the samples
+        samples = sampler.get_chain(flat=True, discard=Nburn) << unit
+
+        # Return dispersions (not means)
+        return np.median(samples[:, 1]), np.std(samples[:, 1]), sampler
+
+    def _compute_multigaussian_dispersion(self, v_r, Δv_r, v_t, Δv_t, *,
+                                          Nwalkers=32, Niters=5000, Nburn=2000,
+                                          progress=False):
+        import emcee
+
+        # strip units
+        unit = v_r.unit
+        v_r = v_r.to_value(unit)
+        Δv_r = Δv_r.to_value(unit)
+        v_t = v_t.to_value(unit)
+        Δv_t = Δv_t.to_value(unit)
+
+        def logprior(th):
+            # Just check that σ>0
+            if (th[1] <= 0.0) or (th[3] <= 0.0):
+                return -np.inf
+            else:
+                return 0.0
+
+        def logL(th):
+            μ_r, σ_r, μ_t, σ_t = th
+            return -0.5 * np.sum(
+                (v_r - μ_r)**2 / (σ_r**2 + Δv_r**2)
+                + np.log(σ_r**2 + Δv_r**2)
+                #
+                + (v_t - μ_t)**2 / (σ_t**2 + Δv_t**2)
+                + np.log(σ_t**2 + Δv_t**2)
+            ) + logprior(th)
+
+        if Nburn > Niters:
+            raise ValueError(f"Nburn ({Nburn}) is larger than Niter ({Niters})")
+
+        init_pos = self.rng.normal(
+            loc=[np.mean(v_r), np.std(v_r), np.mean(v_t), np.std(v_t)],
+            scale=0.1, size=(Nwalkers, 4)
+        )
+
+        sampler = emcee.EnsembleSampler(Nwalkers, 4, logL)
+
+        pkw = dict(desc=f"MCMC (N={v_r.size})", leave=False, position=1)
+
+        # Initialize the walkers
+        sampler.run_mcmc(init_pos, Niters, progress=progress,
+                         progress_kwargs=pkw)
+
+        # Get the samples
+        samples = sampler.get_chain(flat=True, discard=Nburn) << unit
+
+        # Return dispersions (not means)
+        return (
+            np.median(samples[:, 1]), np.std(samples[:, 1]),
+            np.median(samples[:, 3]), np.std(samples[:, 3]),
+            sampler
+        )
+
+    def _mock_numdens(self, Nbins, mass_bounds=None, bin_method='equal',
+                      rad_bounds=None, mean_cen=True, angular_units=True):
+
+        # Get selection of stars
+
+        if mass_bounds is None:
+            sel = self._select_TO_stars()
+        else:
+            sel = self._select_stars(*mass_bounds)
+
+        mean_mass = np.mean(self.m[sel])
+
+        if rad_bounds is not None:
+            rad_bounds = rad_bounds << self.pos.p.unit
+            sel &= (rad_bounds[0] <= self.pos.p) & (self.pos.p <= rad_bounds[1])
+
+        # r = self.r[sel]  <- unprojected
+        r = self.pos.p[sel]  # projected radius
+
+        indices, bins, bin_centres, bin_errs = self._bin_stars(
+            r, Nbins, bin_method=bin_method, mean_cen=mean_cen
+        )
+
+        # Loop over bins and compute numdens in bin
+
+        numdens = np.zeros_like(bin_centres**(-2))
+        Δnumdens = np.zeros_like(bin_centres**(-2))
+
+        for i in np.unique(indices):
+
+            N = (indices == i).sum()
+
+            bin_l, bin_r = bins[[i-1, i]]
+
+            # calculate surface number density, in current annulus
+            numdens[i - 1] = N / (np.pi * (bin_r**2 - bin_l**2))
+
+            # calculate error
+            Δnumdens[i - 1] = np.sqrt(N) / (np.pi * (bin_r**2 - bin_l**2))
+
+        # Convert to angular units
+
+        if angular_units:
+            with u.set_enabled_equivalencies(util.angular_width(self.d)):
+
+                bin_centres = bin_centres.to('arcmin')
+                bin_errs = bin_errs.to('arcmin')
+
+                numdens = numdens.to('arcmin-2')
+                Δnumdens = Δnumdens.to('arcmin-2')
+
+        return bin_centres, bin_errs, numdens, Δnumdens, mean_mass
+
+    def _mock_vels(self, velos, Nbins, mass_bounds=None, vel_err=0.1,
+                   bin_method='equal', rad_bounds=None,
+                   mean_cen=True, angular_units=True,
+                   progress=True, **samp_kw):
+        import tqdm
+
+        # Get selection of stars
+
+        if mass_bounds is None:
+            sel = self._select_TO_stars()
+        else:
+            sel = self._select_stars(*mass_bounds)
+
+        mean_mass = np.mean(self.m[sel])
+
+        if rad_bounds is not None:
+            rad_bounds = rad_bounds << self.pos.p.unit
+            sel &= (rad_bounds[0] <= self.pos.p) & (self.pos.p <= rad_bounds[1])
+
+        # r = self.r[sel]  <- unprojected
+        r = self.pos.p[sel]  # projected radius
+
+        indices, bins, bin_centres, bin_errs = self._bin_stars(
+            r, Nbins, bin_method=bin_method, mean_cen=mean_cen
+        )
+
+        # Resample velocities with uncertainties applied
+
+        vel_unit = velos.unit
+
+        vel = self.rng.normal(loc=velos[sel], scale=vel_err) << vel_unit
+
+        # Loop over bins and compute LOS dispersion in bin
+
+        disp = np.zeros_like(bin_centres.value) << vel_unit
+        Δdisp = np.zeros_like(bin_centres.value) << vel_unit
+
+        for i in tqdm.tqdm(np.unique(indices), position=0, desc="bins",
+                           disable=(not progress)):
+
+            mask = (indices == i)
+
+            v = vel[mask]
+            ve = np.full_like(v, vel_err << vel_unit)
+
+            disp[i-1], Δdisp[i-1], sampler = self._compute_dispersion(
+                v, ve, progress=progress, **samp_kw
+            )
+
+        if angular_units:
+            with u.set_enabled_equivalencies(util.angular_width(self.d)):
+
+                bin_centres = bin_centres.to('arcmin')
+                bin_errs = bin_errs.to('arcmin')
+
+                # TODO does it matter if done before or after sampler?
+                disp = disp.to('mas/yr')
+                Δdisp = Δdisp.to('mas/yr')
+
+        return bin_centres, bin_errs, disp, Δdisp, mean_mass
+
+    def _mock_los(self, Nbins, mass_bounds=None, vel_err=0.1,
+                  bin_method='equal', rad_bounds=None,
+                  mean_cen=True, angular_units=True,
+                  progress=True, **samp_kw):
+
+        bin_centres, bin_errs, disp, Δdisp, mean_mass = self._mock_vels(
+            velos=self.vel.z, Nbins=Nbins,
+            mass_bounds=mass_bounds, vel_err=vel_err, bin_method=bin_method,
+            rad_bounds=rad_bounds, mean_cen=mean_cen,
+            angular_units=angular_units, progress=progress, **samp_kw
+        )
+
+        # Force the LOS to be linear, even if angular_units is True
+        with u.set_enabled_equivalencies(util.angular_width(self.d)):
+            disp <<= u.km / u.s
+            Δdisp <<= u.km / u.s
+
+        return bin_centres, bin_errs, disp, Δdisp, mean_mass
+
+    def _mock_pm_r(self, Nbins, mass_bounds=None, vel_err=0.1,
+                   bin_method='equal', rad_bounds=None,
+                   mean_cen=True, angular_units=True,
+                   progress=True, **samp_kw):
+
+        return self._mock_vels(
+            velos=self.vel.p, Nbins=Nbins,
+            mass_bounds=mass_bounds, vel_err=vel_err, bin_method=bin_method,
+            rad_bounds=rad_bounds, mean_cen=mean_cen,
+            angular_units=angular_units, progress=progress, **samp_kw
+        )
+
+    def _mock_pm_t(self, Nbins, mass_bounds=None, vel_err=0.1,
+                   bin_method='equal', rad_bounds=None,
+                   mean_cen=True, angular_units=True,
+                   progress=True, **samp_kw):
+
+        return self._mock_vels(
+            velos=self.vel.phi, Nbins=Nbins,
+            mass_bounds=mass_bounds, vel_err=vel_err, bin_method=bin_method,
+            rad_bounds=rad_bounds, mean_cen=mean_cen,
+            angular_units=angular_units, progress=progress, **samp_kw
+        )
+
+    def _mock_pm_both(self, Nbins, mass_bounds=None, vel_err=0.1,
+                      bin_method='equal', rad_bounds=None,
+                      mean_cen=True, angular_units=True,
+                      progress=True, **samp_kw):
+        import tqdm
+
+        v_r = self.vel.p
+        v_t = self.vel.phi
+
+        # Get selection of stars
+
+        if mass_bounds is None:
+            sel = self._select_TO_stars()
+        else:
+            sel = self._select_stars(*mass_bounds)
+
+        mean_mass = np.mean(self.m[sel])
+
+        if rad_bounds is not None:
+            rad_bounds = rad_bounds << self.pos.p.unit
+            sel &= (rad_bounds[0] <= self.pos.p) & (self.pos.p <= rad_bounds[1])
+
+        # r = self.r[sel]  <- unprojected
+        r = self.pos.p[sel]  # projected radius
+
+        indices, bins, bin_centres, bin_errs = self._bin_stars(
+            r, Nbins, bin_method=bin_method, mean_cen=mean_cen
+        )
+
+        # Resample velocities with uncertainties applied
+
+        vel_unit = v_r.unit
+
+        # vel_r = v_r[sel]
+        vel_r = self.rng.normal(loc=v_r[sel], scale=vel_err) << vel_unit
+        # vel_t = v_t[sel]
+        vel_t = self.rng.normal(loc=v_t[sel], scale=vel_err) << vel_unit
+
+        # Loop over bins and compute LOS dispersion in bin
+
+        disp_r = np.zeros_like(bin_centres.value) << vel_unit
+        Δdisp_r = np.zeros_like(bin_centres.value) << vel_unit
+        disp_t = np.zeros_like(bin_centres.value) << vel_unit
+        Δdisp_t = np.zeros_like(bin_centres.value) << vel_unit
+
+        for i in tqdm.tqdm(np.unique(indices), position=0, desc="bins",
+                           disable=(not progress)):
+
+            mask = (indices == i)
+
+            v_ri = vel_r[mask]
+            v_ti = vel_t[mask]
+
+            # Share same errors in both directions I guess
+            ve = np.full_like(v_ri, vel_err << vel_unit)
+
+            disp_r[i-1], Δdisp_r[i-1], disp_t[i-1], Δdisp_t[i-1], sampler = self._compute_multigaussian_dispersion(
+                v_ri, ve, v_ti, ve, progress=progress, **samp_kw
+            )
+
+        if angular_units:
+            with u.set_enabled_equivalencies(util.angular_width(self.d)):
+
+                bin_centres = bin_centres.to('arcmin')
+                bin_errs = bin_errs.to('arcmin')
+
+                # TODO does it matter if done before or after sampler?
+                disp_r = disp_r.to('mas/yr')
+                disp_t = disp_t.to('mas/yr')
+                Δdisp_r = Δdisp_r.to('mas/yr')
+                Δdisp_t = Δdisp_t.to('mas/yr')
+
+        return bin_centres, bin_errs, disp_r, Δdisp_r, disp_t, Δdisp_t, mean_mass
+
+    def _mock_mfs(self, N_rbins, N_mbins, limiting_masses, rbin_size=2.0,
+                  angular_units=True):
+
+        F = self._basemodel.theta['F']
+        r = self.pos.p
+
+        # TODO equal-area bins would make more sense
+        # r2=((area/np.pi)+r1**2)**0.5
+        rbins = np.linspace(0.0, N_rbins * rbin_size, N_rbins + 1) << u.pc
+
+        r1 = np.full(N_rbins * N_mbins, np.nan) << u.pc
+        r2 = np.full(N_rbins * N_mbins, np.nan) << u.pc
+
+        m1 = np.full(N_rbins * N_mbins, np.nan) << u.Msun
+        m2 = np.full(N_rbins * N_mbins, np.nan) << u.Msun
+
+        N = np.full(N_rbins * N_mbins, np.nan)
+        Nerrs = np.full(N_rbins * N_mbins, np.nan)
+
+        for rind in range(N_rbins):
+
+            outslc = slice(rind * N_mbins, (rind + 1) * N_mbins)
+
+            # select stars in this radial range and above limiting mass
+
+            rl, ru = rbins[[rind, rind + 1]]
+
+            r1[outslc], r2[outslc] = rl, ru
+
+            ml = limiting_masses[rind] << u.Msun
+            mu = 10. << u.Msun  # just gets all stars (above ml)
+            sel = (rl <= r) & (r < ru) & self._select_stars(ml, mu)
+
+            if sel.sum() < 1:
+                continue
+
+            # TODO could also just use histogram
+            # TODO this will create equal N bins, so different mbin widths
+
+            # Create bins based on mass
+            indices, mbins, _, _ = self._bin_stars(
+                self.m[sel], N_mbins, bin_method='linear'
+            )
+
+            m1[outslc], m2[outslc] = mbins[:-1], mbins[1:]
+
+            # Count number of stars each each mass bin
+            # TODO this will fail if any bins have no stars in them
+            _, counts = np.unique(indices, return_counts=True)
+
+            # Poisson error
+            Nerrs[outslc] = np.sqrt(counts)
+
+            # Resample counts based on scaled poisson error
+            # TODO should also catch N<0 counts after this, in right way
+            N[outslc] = self.rng.normal(loc=counts, scale=Nerrs[outslc] * F)
+
+        # convert radial bins to arcmin
+        if angular_units:
+            with u.set_enabled_equivalencies(util.angular_width(self.d)):
+                r1 = r1 << u.arcmin
+                r2 = r2 << u.arcmin
+
+        # Remove any invalid bins
+
+        val = ~np.isnan(N)
+
+        return r1[val], r2[val], m1[val], m2[val], N[val], Nerrs[val]
+
+    def observe(self, name, Nbins=None, default_Nbins=10,
+                MF_limiting_masses=[0.1,] * 10, tracer_masses=False,
+                PM_split=1.0, return_clusterfile=False):
+        '''make and save a ClusterFile from mocks of this sampled model'''
+        from ..util.data import ClusterFile, Dataset as MockDataset
+
+        if Nbins is None:
+            Nbins = {}
+
+        shared_kw = dict(angular_units=True, bin_method='equal', mean_cen=True)
+
+        cf = ClusterFile(name, force_new=True)
+
+        # metadata
+
+        cf.add_metadata('FeH', self.FeH)
+        cf.add_metadata('age', self.age.to_value('Gyr'))
+
+        # TODO optionally pass or try to read these from self._basemodel.obs
+        cf.add_metadata("l", 0.0)
+        cf.add_metadata("b", 0.0)
+        cf.add_metadata("RA", 0.0)
+        cf.add_metadata("DEC", 0.0)
+        # cf.add_metadata("RG_eff", )
+        cf.add_metadata("μ", 0.0)
+        cf.add_metadata("Ndot", 0.0)
+
+        cf.add_metadata("vesc", self._basemodel.vesc0.to_value('km/s'))
+
+        # number density
+
+        r, er, nd, end, mm = self._mock_numdens(
+            Nbins.get('number_density', default_Nbins), **shared_kw
+        )
+
+        ND = MockDataset('number_density')
+
+        ND.read_data({
+            "r": {'data': r.value, 'unit': r.unit, "metadata": {}},
+            "Δr": {'data': er.value, 'unit': er.unit, 'error_base': "r",
+                   "metadata": {}},
+            "Σ": {'data': nd.value, 'unit': nd.unit, "metadata": {}},
+            "ΔΣ": {'data': end.value, 'unit': end.unit, 'error_base': "Σ",
+                   "metadata": {}},
+            "metadata": {"background": 0} | ({"m": mm} if tracer_masses else {})
+        })
+
+        cf.add_dataset(ND)
+
+        # LOS dispersion
+
+        r, er, los, elos, mm = self._mock_los(
+            Nbins.get('LOS', default_Nbins), **shared_kw
+        )
+
+        LOS = MockDataset('velocity_dispersion')
+
+        LOS.read_data({
+            "r": {'data': r.value, 'unit': r.unit, "metadata": {}},
+            "Δr": {'data': er.value, 'unit': er.unit, 'error_base': "r",
+                   "metadata": {}},
+            "σ": {'data': los.value, 'unit': los.unit, "metadata": {}},
+            "Δσ": {'data': elos.value, 'unit': elos.unit, 'error_base': "σ",
+                   "metadata": {}},
+            "metadata": {"m": mm} if tracer_masses else {}
+        })
+
+        cf.add_dataset(LOS)
+
+        # Proper motion dispersion
+
+        # pm_r and pm_t *should* shared r, mm, but its just kinda assumed here
+        # r, er, pmr, epmr, mm = self._mock_pm_r(
+        #     Nbins.get('PM', default_Nbins), **shared_kw
+        # )
+        # _, _, pmt, epmt, _ = self._mock_pm_t(
+        #     Nbins.get('PM', default_Nbins), **shared_kw
+        # )
+
+        default_pmbins = Nbins.get('PM', default_Nbins)
+
+        # Inner PMs
+        r, er, pmr, epmr, pmt, epmt, mm = self._mock_pm_both(
+            Nbins.get('PM_inner', default_pmbins),
+            rad_bounds=[0.0, PM_split] << u.pc, **shared_kw
+        )
+
+        PM = MockDataset('proper_motion/inner')
+
+        PM.read_data({
+            "r": {'data': r.value, 'unit': r.unit, "metadata": {}},
+            "Δr": {'data': er.value, 'unit': er.unit, 'error_base': "r",
+                   "metadata": {}},
+            "PM_R": {'data': pmr.value, 'unit': pmr.unit, "metadata": {}},
+            "ΔPM_R": {'data': epmr.value, 'unit': epmr.unit,
+                      'error_base': "PM_R", "metadata": {}},
+            "PM_T": {'data': pmt.value, 'unit': pmt.unit, "metadata": {}},
+            "ΔPM_T": {'data': epmt.value, 'unit': epmt.unit,
+                      'error_base': "PM_T", "metadata": {}},
+            "metadata": {"m": mm} if tracer_masses else {}
+        })
+
+        cf.add_dataset(PM)
+
+        # Outer PMs
+        r, er, pmr, epmr, pmt, epmt, mm = self._mock_pm_both(
+            Nbins.get('PM_outer', default_pmbins),
+            rad_bounds=[PM_split, np.inf] << u.pc, **shared_kw
+        )
+
+        PM = MockDataset('proper_motion/outer')
+
+        PM.read_data({
+            "r": {'data': r.value, 'unit': r.unit, "metadata": {}},
+            "Δr": {'data': er.value, 'unit': er.unit, 'error_base': "r",
+                   "metadata": {}},
+            "PM_R": {'data': pmr.value, 'unit': pmr.unit, "metadata": {}},
+            "ΔPM_R": {'data': epmr.value, 'unit': epmr.unit,
+                      'error_base': "PM_R", "metadata": {}},
+            "PM_T": {'data': pmt.value, 'unit': pmt.unit, "metadata": {}},
+            "ΔPM_T": {'data': epmt.value, 'unit': epmt.unit,
+                      'error_base': "PM_T", "metadata": {}},
+            "metadata": {"m": mm} if tracer_masses else {}
+        })
+
+        cf.add_dataset(PM)
+
+        # Mass function
+        # As single dataset
+
+        r1, r2, m1, m2, N, Nerrs = self._mock_mfs(
+            Nbins.get('MF_radius', default_Nbins),
+            Nbins.get('MF_mass', default_Nbins),
+            limiting_masses=MF_limiting_masses,
+            rbin_size=2.0
+        )
+
+        MF = MockDataset("mass_function/mock")
+
+        MF.read_data({
+            "r1": {'data': r1.value, 'unit': r1.unit, "metadata": {}},
+            "r2": {'data': r2.value, 'unit': r2.unit, "metadata": {}},
+            "m1": {'data': m1.value, 'unit': m1.unit, "metadata": {}},
+            "m2": {'data': m2.value, 'unit': m2.unit, "metadata": {}},
+            "N": {'data': N, 'unit': None, "metadata": {}},
+            "ΔN": {'data': Nerrs, 'unit': None, 'error_base': "N",
+                   "metadata": {}},
+        })
+
+        field = {
+            "a": np.array(
+                [[5.0, 5.0], [5.0, -5.0], [-5.0, -5.0], [-5.0, 5.0]], dtype="f"
+            )
+        }
+        MF.add_variable("fields", h5py.Empty("f"), "deg", field)
+        MF.add_metadata("field_unit", "deg")
+
+        MF.add_metadata("proposal", "mock")
+
+        cf.add_dataset(MF)
+
+        cf.save()
+
+        if return_clusterfile:
+            return cf
+        else:
+            return Observations(name, restrict_to='local')
+
+    # ----------------------------------------------------------------------
+    # Model visualizers
+    # ----------------------------------------------------------------------
+
+    def get_visualizer(self):
+        '''Return `analysis.SampledVisualizer` instance based on this model.'''
+        from ..analysis import SampledVisualizer
+        return SampledVisualizer(self)

@@ -1,6 +1,6 @@
 [project]
 name = "GCfit"
-version = "2.0"
+version = "3.3.0"
 description = "Fitting of multimass equilibrium models of globular clusters"
 authors = [
     {name = "Nolan Dickson", email = "nolan.dickson@smu.ca"},
@@ -8,17 +8,18 @@ authors = [
     {name = "Vincent Henault-Brunet", email= "Vincent.Henault@smu.ca"}
 ]
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 keywords = ["GCfit", "Globular Cluster", "Star Cluster"]
 license = {file = "LICENSE"}
 dependencies = [
     "numpy",
     "scipy",
     "astropy",
-    "astro-limepy",
-    "astro-ssptools",
+    "astro-limepy>=1.3.0",
+    "astro-ssptools>=3.1.1",
+    "cbhbd>=1.0.0",
     "emcee",
-    "dynesty",
+    "dynesty>=3.0.0",
     "h5py",
     "tqdm",
     "gala",
@@ -27,7 +28,8 @@ dependencies = [
     "corner",
     "shapely",
     "sphinx-toggleprompt",
-    "ads"
+    "ads",
+    "multiprocess"
 ]
 
 classifiers = [

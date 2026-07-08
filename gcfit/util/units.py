@@ -6,7 +6,7 @@ import astropy.units as u
 from astropy.units.equivalencies import Equivalency
 
 
-__all__ = ['angular_width', 'QuantitySpline', 'q2pv']
+__all__ = ['angular_width', 'QuantitySpline', 'q2pv', 'Rhel2Rgal']
 
 
 def angular_width(D):
@@ -27,22 +27,22 @@ def angular_width(D):
         return np.tan(θ / 2) * (2 * D.value)
 
     # Angular area
-    def pcsq_to_radsq(r):
+    def pcsq_to_radsq(A):
         '''Parsecs squared to radians squared.'''
-        return (1. / rad_to_pc(1)**2) * r
+        return A / D.value**2
 
-    def radsq_to_radsq(θ):
+    def radsq_to_pcsq(Ω):
         '''Radians squared to parsec squared.'''
-        return (1. / pc_to_rad(1)**2) * θ
+        return Ω * D.value**2
 
     # Inverse Angular area
-    def inv_pcsq_to_radsq(r):
+    def inv_pcsq_to_radsq(A_inv):
         '''Parsecs squared reciprocal to radians squared reciprocal.'''
-        return (rad_to_pc(1)**2) * r
+        return A_inv * D.value**2
 
-    def inv_radsq_to_radsq(θ):
+    def inv_radsq_to_radsq(Ω_inv):
         '''Radians squared reciprocal to parsecs squared reciprocal.'''
-        return (pc_to_rad(1)**2) * θ
+        return Ω_inv / D.value**2
 
     # Angular Speed
     def kms_to_asyr(vt):
@@ -55,7 +55,7 @@ def angular_width(D):
 
     return Equivalency([
         (u.pc, u.rad, pc_to_rad, rad_to_pc),
-        (u.pc**2, u.rad**2, pcsq_to_radsq, radsq_to_radsq),
+        (u.pc**2, u.rad**2, pcsq_to_radsq, radsq_to_pcsq),
         (u.pc**-2, u.rad**-2, inv_pcsq_to_radsq, inv_radsq_to_radsq),
         ((u.km / u.s), (u.arcsec / u.yr), kms_to_asyr, asyr_to_kms)
     ], 'angular_width', {"D": D})
@@ -178,3 +178,10 @@ def q2pv(p, v):
     pv = np.rec.fromarrays([p, v], erfa.dt_pv) << pvunit
 
     return pv
+
+
+def Rhel2Rgal(lon, lat, Rhel, *, R0=8.122 << u.kpc):
+    '''convert a heliocentric/galactic distance to a galactocentric distance'''
+    return np.sqrt((Rhel * np.cos(lat) * np.cos(lon) - R0)**2
+                   + (Rhel * np.cos(lat) * np.sin(lon))**2
+                   + (Rhel * np.sin(lat))**2)

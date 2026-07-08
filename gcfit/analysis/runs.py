@@ -1,7 +1,10 @@
-from .. import Observations
+from .. import Observations, DEFAULT_FREE_PARAMS, DEFAULT_FREE_EV_PARAMS
 from ..probabilities import priors
 from ..core.main import MCMCFittingState, NestedFittingState
-from .models import CIModelVisualizer, ModelVisualizer, ModelCollection
+from ..util.probabilities import ModelParameters
+from .models import CIModelVisualizer, ModelVisualizer
+from .models import EvolvedVisualizer, CIEvolvedVisualizer
+from .models import ModelCollection
 
 import sys
 import pathlib
@@ -22,6 +25,120 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 __all__ = ['RunCollection', 'MCMCRun', 'NestedRun']
 
+
+_label_math_mapping = {
+    # Model Base Parameters
+    'W0': r'\hat{\phi}_0',
+    'M': r'M',
+    'rh': r'r_{\mathrm{h}}',
+    'ra': r'\log\left(\hat{r}_\mathrm{a}\right)',
+    'g': r'g',
+    'delta': r'\delta',
+    's2': r's^2',
+    'F': r'F',
+    'J': r'J',
+    'a1': r'\alpha_1',
+    'a2': r'\alpha_2',
+    'a3': r'\alpha_3',
+    'BHret': r'\mathrm{BH}_{ret}',
+    'BH_ret_dyn': r'\mathrm{BH}_{\mathrm{ret},\mathrm{dyn}}',
+    'd': r'd',
+    # Evolved Model Parameters
+    'M0': r'M_{0}',
+    'rh0': r'r_{\mathrm{h},0}',
+    'rhoh0': r'\rho_{\mathrm{h},0}',
+    'Sigma0': r'\Sigma_{\mathrm{h},0}',
+    'rhoh_t': r'\rho_{\mathrm{h}}(t)',
+    'Sigmah_t': r'\Sigma_{\mathrm{h}}(t)',
+    'M_BH0': r'\mathrm{M}_{\mathrm{BH},0}',
+    'N_BH0': r'\mathrm{N}_{\mathrm{BH},0}',
+    'f_BH0': r'\mathrm{f}_{\mathrm{BH},0}',
+    'vesc0': r'v_{\mathrm{esc},0}',
+    'M_t': r'M(t)',
+    'M_BH_t': r'\mathrm{M}_{\mathrm{BH}}(t)',
+    'f_BH_t': r'\mathrm{f}_{\mathrm{BH}}(t)',
+    'rh_t': r'r_{\mathrm{h}}(t)',
+    'rt_t': r'r_{\mathrm{t}}(t)',
+    'rv_t': r'r_{\mathrm{v}}(t)',
+    'vesc_t': r'v_{\mathrm{esc}}(t)',
+    # Flexible BH Parameters
+    'f_kick': r'f_k',
+    'kick_slope': r'u_k',
+    'kick_scale': r'm_k',
+    # Cluster Metadata
+    'FeH': r'[\mathrm{Fe}/\mathrm{H}]',
+    'Ndot': r'\dot{N}',
+    'RA': r'\mathrm{RA}',
+    'DEC': r'\mathrm{DEC}',
+    'chi2': r'\chi^{2}',
+    'RG_eff': r'R^{\prime}_{G}',
+    # Derived Model Quantities
+    'M_BH': r'\mathrm{M}_{\mathrm{BH}}',
+    'BH_mass': r'\mathrm{M}_{\mathrm{BH}}',
+    'N_BH': r'\mathrm{N}_{\mathrm{BH}}',
+    'BH_num': r'\mathrm{N}_{\mathrm{BH}}',
+    'f_rem': r'f_{\mathrm{remn}}',
+    'f_BH': r'f_{\mathrm{BH}}',
+    'spitzer_chi': r'\chi_{\mathrm{Spitzer}}',
+    'trh': r't_{\mathrm{r_h}}',
+    'N_relax': r'N_{\mathrm{relax}}',
+    'rhoh': r'\rho_{\mathrm{h}}',
+    'Sigmah': r'\Sigma_{\mathrm{h}}',
+    'r0': r'r_{0}',
+    'ra_model': r'r_{\mathrm{a}}',
+    'rt': r'r_{\mathrm{t}}',
+    'rv': r'r_{\mathrm{v}}',
+    'rhp': r'r_{\mathrm{hp}}',
+    'mmean': r'\bar{m}',
+}
+
+
+_label_unit_mapping = {
+    'M': r'10^6\ M_\odot',
+    'M0': r'10^6\ M_\odot',
+    'rh': r'\mathrm{pc}',
+    'rh0': r'\mathrm{pc}',
+    'rhoh0': r'M_\odot\ \mathrm{pc^{-3}}',
+    'rhoh': r'M_\odot\ \mathrm{pc^{-3}}',
+    'Sigmah0': r'M_\odot\ \mathrm{pc^{-2}}',
+    'Sigmah': r'M_\odot\ \mathrm{pc^{-2}}',
+    's2': r'\mathrm{arcmin^{-4}}',
+    'BHret': r'\%',
+    'BH_ret_dyn': r'\%',
+    'd': r'\mathrm{kpc}',
+    'Ndot': r'\dot{N}',
+    'RA': r'\deg',
+    'DEC': r'\deg',
+    'RG_eff': r'\mathrm{kpc}',
+    'BH_mass': r'M_\odot',
+    'M_BH': r'M_\odot',
+    'M_BH0': r'M_\odot',
+    'f_rem': r'\%',
+    'f_BH': r'\%',
+    'f_BH0': r'\%',
+    'trh': r'\mathrm{Gyr}',
+    'r0': r'\mathrm{pc}',
+    'ra_model': r'\mathrm{pc}',
+    'rt': r'\mathrm{pc}',
+    'rv': r'\mathrm{pc}',
+    'rhp': r'\mathrm{pc}',
+    'vesc0': r'\mathrm{km}\ \mathrm{s^{-1}}',
+    'mmean': r'M_\odot',
+}
+
+
+def _get_latex_label(param, with_units=True):
+    '''Return param name in latex form, optionally with units.'''
+
+    name = _label_math_mapping.get(param, param)
+    unit = _label_unit_mapping.get(param, None)
+
+    if with_units and unit is not None:
+        label = rf'${name.strip("$")}\ \left[{unit}\right]$'
+    else:
+        label = rf'${name.strip("$")}$' if name else name
+
+    return label
 
 # --------------------------------------------------------------------------
 # Individual Run Analysis
@@ -275,6 +392,190 @@ class _RunAnalysis:
 
         return fig, np.atleast_1d(axarr)
 
+    def _setup_mosaic_artist(self, fig, layout, *, sharex=False, sharey=False,
+                             allow_1d=False, triangularize=False,
+                             use_name=True, constrained_layout=True,
+                             empty_sentinel='.', **kwargs):
+        '''Setup a figure with multiple axes, using a nested list of labels.
+
+        Given a nested list of axis labels, returns a figure with the desired
+        layout as produced by `subplot_mosaic`.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure
+            Given starting figure. If None will create a new figure from
+            scratch. If given an existing `Figure` with existing axes, will
+            simply check that axes labels match and return the figure
+            untouched If `Figure` is empty (no axes), will create new axes
+            within the given figure.
+
+        layout : list of list of str
+            A two-dimensional list/array of strings to be used to assemble the
+            mosaic. See `fig.subplot_mosaic` for more details, but note that
+            the ASCII-art option is *not* accepted here.
+
+        sharex, sharey : bool or {'row', 'col'}
+            If True, the x-axis (sharex) or y-axis (sharey) will be shared
+            among all subplots, otherwise each will be independent.
+            Iff `triangularize` is True, then 'col' (sharex) or 'row' (sharey)
+            will also be accepted and the axis will be shared among each column
+            or row in the triangle. Note that this is not possible in normal
+            mosaics.
+
+        allow_1d : bool, optional
+            If True and a flat list is passed in as layout, will assume this
+            represents a single flat row. Exclusive with `triangularize`.
+
+        triangularize : bool, optional
+            If True and a flat list is passed in as layout, will assume this
+            represents a list of parameters, and will contruct a
+            lower-triangular matrix of axes, corresponding to each pair of
+            parameters. There must be no repeated parameters.
+            Exclusive with `allow_1d`.
+
+        use_name : bool, optional
+            If True (default) add `self.name` to the figure suptitle.
+
+        constrained_layout : bool, optional
+            Passed to `Figure` if a new figure must be created. Defaults to
+            True.
+
+        empty_sentinel : str, optional
+            Entry in the layout to mean "leave this space empty".
+            Defaults to '.'.
+
+        **kwargs : dict, optional
+            Extra arguments passed to all calls to `fig.subplot_mosaic`.
+
+        Returns
+        -------
+        fig : matplotlib.figure.Figure
+            The created figure.
+
+        axes : dict of str, matplotlib.axes.AxesSubplot
+            Dictionary of all axes in `fig`, with corresponding labels as keys.
+        '''
+
+        sharey_row = sharex_col = False
+
+        # ------------------------------------------------------------------
+        # Create figure, if necessary
+        # ------------------------------------------------------------------
+
+        if fig is None:
+            fig = plt.figure()
+
+        # empty if this was new fig
+        axes = {ax.get_label(): ax for ax in fig.axes}
+
+        if constrained_layout:
+            fig.set_layout_engine('constrained')  # TODO compressed may be best
+
+        # ------------------------------------------------------------------
+        # If no shape is provided, just return the figure, probably empty
+        # ------------------------------------------------------------------
+
+        if layout is None:
+            return fig, axes
+
+        # ------------------------------------------------------------------
+        # Do some error checking on inputted layout
+        # ------------------------------------------------------------------
+
+        ndim = np.asanyarray(layout).ndim
+
+        if (ndim < 1) or (ndim > 2):
+
+            if isinstance(layout, str):
+                mssg = "Can't parse string layouts here, pass in list instead"
+
+            else:
+                mssg = "Mosaic layout must be 2D"
+
+            raise ValueError(mssg)
+
+        elif ndim == 1:
+
+            if allow_1d:
+                if triangularize:
+                    mssg = "Both 'allow_1d' and 'triangularize' cannot be True"
+                    raise ValueError(mssg)
+
+                # parse flat list into a layout
+                layout = [layout,]
+
+            elif triangularize:
+                # parse flat list into a triangle
+
+                if len(layout) != len(set(layout)):
+                    mssg = "Cannot triangularize layout with repeated elements"
+                    raise ValueError(mssg)
+
+                layout = [[f"{px}-{py}" if (j < i + 1) else empty_sentinel
+                           for j, px in enumerate(layout)]
+                          for i, py in enumerate(layout)]
+
+                if sharey == 'row':
+                    sharey = False
+                    sharey_row = True
+
+                if sharex == 'col':
+                    sharex = False
+                    sharex_col = True
+
+            else:
+                mssg = "Mosaic layout must be 2D, or 'allow_1d' must be True"
+                raise ValueError(mssg)
+
+        # ------------------------------------------------------------------
+        # Create the mosaic axes
+        # ------------------------------------------------------------------
+
+        # If this fig has axes, check they (maybe) match with given layout
+        if axes:
+
+            unique_keys = set(itertools.chain.from_iterable(layout))
+            if extra := ((unique_keys - {empty_sentinel}) ^ axes.keys()):
+
+                mssg = (f"figure {fig} already contains wrong"
+                        f"unique labels (missing {extra})")
+                raise ValueError(mssg)
+
+        else:
+
+            axes = fig.subplot_mosaic(
+                layout, empty_sentinel=empty_sentinel, **kwargs
+            )
+
+            # If made triangle, go through and maybe manually share the axes
+            if triangularize:
+
+                for i, row in enumerate(layout):
+                    for j, lbl in enumerate(row):
+
+                        if lbl == empty_sentinel:
+                            continue
+
+                        if sharex_col:
+                            axes[lbl].sharex(axes[layout[-1][j]])
+
+                        if sharey_row and (i != j):
+                            axes[lbl].sharey(axes[layout[i][0]])
+
+        # ------------------------------------------------------------------
+        # If desired, default to titling the figure based on it's "name"
+        # ------------------------------------------------------------------
+
+        if hasattr(self, 'name') and use_name:
+            fig.suptitle(self.name)
+
+        # ------------------------------------------------------------------
+        # Ensure the axes are always returned as a dict
+        # ------------------------------------------------------------------
+
+        return fig, axes
+
     def add_residuals(self, ax, y1, y2, e1, e2, clrs=None,
                       res_ax=None, loc='bottom', size='15%', pad=0.1):
         '''Append an extra axis to `ax` for plotting residuals.
@@ -331,6 +632,13 @@ class _RunAnalysis:
         res_ax.set_ylabel(r"% difference")
 
         # plot residuals (in percent)
+
+        if np.ndim(e2):
+            e2 = np.median(e2, axis=0)
+
+        if np.ndim(e1):
+            e1 = np.median(e1, axis=0)
+
         res = 100 * (y2 - y1) / y1
         res_err = 100 * np.sqrt(e1**2 + e2**2) / y1
         res_ax.errorbar(y1, res, yerr=res_err, fmt='none', ecolor=clrs)
@@ -340,6 +648,7 @@ class _RunAnalysis:
 
 
 # TODO a way to plot our priors, probably for both vizs
+# TODO some things in this shared base class are only valid for NestedRun
 class _SingleRunAnalysis(_RunAnalysis):
     '''Base class for all visualizers of single runs, of all types.
 
@@ -379,7 +688,7 @@ class _SingleRunAnalysis(_RunAnalysis):
 
         if value is not None:
 
-            _, ch = self._get_chains(include_fixed=False, apply_mask=False)
+            _, ch = self._get_chains(apply_mask=False)
 
             # flatten chain if necessary (to work with MCMC, mask must be flat)
             if ch.ndim > 2:
@@ -434,6 +743,10 @@ class _SingleRunAnalysis(_RunAnalysis):
                 mssg = "No valid fitting state was stored. Is this an old run?"
                 raise RuntimeError(mssg) from err
 
+    @property
+    def chains(self):
+        raise NotImplementedError()
+
     def __str__(self):
         try:
             return f'{self._filename} - Run Results'
@@ -475,12 +788,52 @@ class _SingleRunAnalysis(_RunAnalysis):
                         "sampling may not be fully converged.")
                 warnings.warn(mssg)
 
+            mdata = file['metadata'].attrs
+
+            # Check if this is an evolved modelling fit or not
+            self._evolved = mdata.get('evolved', False)
+
+            # Load free parameters in a backwards compatible way
+            try:
+                free_params = tuple(fp.decode()
+                                    for fp in file['metadata/free_params'])
+
+                # If any transforms stored, use those (and assume nothing else)
+                # TODO currently can only support sympy-style transforms
+                if 'param_transforms' in mdata:
+                    transforms = dict(mdata['param_transforms'].attrs)
+                    compatibility_transforms = False
+                else:
+                    transforms = None
+                    compatibility_transforms = True
+
+            except KeyError:
+                free_params = (DEFAULT_FREE_EV_PARAMS if self._evolved
+                               else DEFAULT_FREE_PARAMS)
+
+                if 'fixed_params' in file['metadata']:
+                    free_params = tuple(
+                        fp for fp in free_params
+                        if fp not in file['metadata']['fixed_params'].attrs
+                    )
+
+                # This is an old run, can assume these typical transforms
+                transforms = None
+                compatibility_transforms = True
+
+            modelkw = self._get_model_kwargs()
+
+            # backwards compatibility with old --free-kicks
+            if mdata.get('flexible_natal_kicks', False):
+                free_params += ('kick_slope', 'kick_scale')
+                modelkw['kick_method'] = 'sigmoid'
+
+            self._parameters = free_params
+
             # Check if this run seems to have used a local cluster data file
-            restrict_to = file['metadata'].attrs.get('restrict_to', None)
+            restrict_to = mdata.get('restrict_to', None)
 
         # Determine and init cluster observations if necessary
-        if name is not None:
-            self.name = name
 
         if observations is not None:
             self.obs = observations
@@ -496,6 +849,19 @@ class _SingleRunAnalysis(_RunAnalysis):
                 mssg = "No cluster name in metadata, must supply observations"
                 raise ValueError(mssg) from err
 
+        if name is not None:
+            self.name = name
+        elif self.obs is not None:
+            self.name = self.obs.cluster
+        else:
+            self.name = None
+
+        self._modelparams = ModelParameters(
+            self._parameters, modelkw,
+            self.obs, self._evolved, transforms=transforms,
+            compatibility_transforms=compatibility_transforms
+        )
+
     @contextlib.contextmanager
     def _openfile(self, group=None, mode='r'):
         file = h5py.File(self._filename, mode)
@@ -510,6 +876,138 @@ class _SingleRunAnalysis(_RunAnalysis):
 
         finally:
             file.close()
+
+    def _get_labels(self, math_labels=False):
+        '''Retrieve labels for all parameters.'''
+
+        labels = self._parameters
+
+        if math_labels:
+            labels = [_get_latex_label(lbl, with_units=True) for lbl in labels]
+
+        return labels
+
+    def _get_labelled_chains(self, math_labels=False) -> dict:
+        return dict(zip(
+            self._get_labels(math_labels=math_labels),
+            self.chains.T
+        ))
+
+    def _get_model_kwargs(self):
+        '''Return the `model_kwargs` metadata (backwards compatible)'''
+
+        model_kw = dict()
+
+        with self._openfile('metadata') as mdata:
+
+            if 'model_kwargs' in mdata:
+
+                model_kw = dict(mdata['model_kwargs'].attrs)
+
+                def _gather_attrs(key, grp, mkw=model_kw):
+
+                    # is this a nested dict? if so, recurse
+                    if '/' in key:
+                        basekey, subkey = key.split('/', maxsplit=1)
+
+                        _gather_attrs(subkey, mdata['model_kwargs'][key],
+                                      mkw=mkw[basekey])
+
+                    else:
+                        # Is this a dataset, not a group?
+                        try:
+                            mkw[key] = grp[:]
+
+                        # read in the attrs of this group
+                        except TypeError:
+                            mkw[key] = dict(grp.attrs)
+
+                mdata['model_kwargs'].visititems(_gather_attrs)
+
+        return model_kw
+
+    # ----------------------------------------------------------------------
+    # Shared plots
+    # ----------------------------------------------------------------------
+
+    def plot_IMF(self, fig=None, ax=None, show_canonical='all', ci=True):
+        '''Plot the IMF, based on the alpha exponents.'''
+        # TODO should this be switched to use ssptools.PowerLawIMF?
+        #   Would allow easier plotting and normalization to mass
+
+        def salpeter(m):
+            return m**-2.35
+
+        def chabrier(m):
+            k = 0.158 * np.exp(-(-np.log10(0.08))**2 / (2 * 0.69**2))
+            imf = k * m**-2.3
+            imf[m <= 1] = (0.158 * (1. / m[m <= 1])
+                           * np.exp(-(np.log10(m[m <= 1]) - np.log10(0.08))**2
+                                    / (2 * 0.69**2)))
+            return imf
+
+        def kroupa(m):
+            imf = 0.08**-0.3 * (0.5 / 0.08)**-1.3 * (m / 0.5)**-2.3
+            imf[m < 0.5] = 0.08**-0.3 * (m[m < 0.5] / 0.08)**-1.3
+            imf[m < 0.08] = m[m < 0.08]**-0.3
+            return imf
+
+        def this_imf(m, perc=50.):
+            '''perc is percentile of alpha chain to use'''
+
+            _, mb12, mb23, _ = self._modelparams.fixed_params['m_breaks']
+
+            ch = self._get_labelled_chains()
+            a1 = ch.get('a1', self._modelparams.fixed_params.get('a1'))
+            a2 = ch.get('a2', self._modelparams.fixed_params.get('a2'))
+            a3 = ch.get('a3', self._modelparams.fixed_params.get('a3'))
+
+            a1, a2, a3 = [np.percentile(a, perc) for a in (a1, a2, a3)]
+
+            imf = mb12**-a1 * (mb23 / mb12)**-a2 * (m / mb23)**-a3
+            imf[m < mb23] = mb12**-a1 * (m[m < mb23] / mb12)**-a2
+            imf[m < mb12] = m[m < mb12]**-a1
+
+            return imf
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        m0 = np.array([1])
+        m_domain = np.logspace(-2, 2, 400)  # TODO this isn't the same for all
+
+        if show_canonical is True or show_canonical == 'all':
+            show_canonical = {'salpeter', 'chabrier', 'kroupa'}
+
+        if 'salpeter' in show_canonical:
+            norm = salpeter(m0)
+            ax.loglog(m_domain, salpeter(m_domain) / norm, label='Salpeter')
+
+        if 'chabrier' in show_canonical:
+            norm = chabrier(m0)
+            ax.loglog(m_domain, chabrier(m_domain) / norm, label='Chabrier')
+
+        if 'kroupa' in show_canonical:
+            norm = kroupa(m0)
+            ax.loglog(m_domain, kroupa(m_domain) / norm, label='Kroupa')
+
+        # plot median
+        med_plot, = ax.loglog(m_domain, this_imf(m_domain) / this_imf(m0))
+
+        # if ci, plot confidence interval
+        if ci:
+            lower = this_imf(m_domain, perc=15.87) / this_imf(m0, perc=15.87)
+            upper = this_imf(m_domain, perc=84.13) / this_imf(m0, perc=84.13)
+
+            ax.fill_between(m_domain, upper, lower,
+                            alpha=0.3, color=med_plot.get_color(),
+                            label=getattr(self, 'name', None))
+
+        ax.set_xlabel(r'Mass $[M_{\odot}]$')
+        ax.set_ylabel(r'Mass Function $\xi(m)\Delta m$')
+
+        ax.legend()
+
+        return fig
 
 
 class MCMCRun(_SingleRunAnalysis):
@@ -651,67 +1149,15 @@ class MCMCRun(_SingleRunAnalysis):
     # Helpers
     # ----------------------------------------------------------------------
 
-    def _get_labels(self, label_fixed=True, math_labels=False):
-        '''Retrieve labels for all parameters.'''
-
-        labels = list(self.obs.initials)
-
-        if math_labels:
-
-            math_mapping = {
-                'W0': r'$\hat{\phi}_0$',
-                'M': r'$M\ \left[10^6\ M_\odot\right]$',
-                'rh': r'$r_h\ \left[\mathrm{pc}\right]$',
-                'ra': r'$\log\left(\hat{r}_a\right)$',
-                'g': r'$g$',
-                'delta': r'$\delta$',
-                's2': r'$s^2\ \left[\mathrm{arcmin^{-4}}\right]$',
-                'F': r'$F$',
-                'a1': r'$\alpha_1$',
-                'a2': r'$\alpha_2$',
-                'a3': r'$\alpha_3$',
-                'BHret': r'$\mathrm{BH}_{ret}\ \left[\%\right]$',
-                'd': r'$d\ \left[\mathrm{kpc}\right]$',
-            }
-
-            labels = [math_mapping[lbl] for lbl in labels]
-
-        if label_fixed:
-
-            with self._openfile('metadata') as mdata:
-
-                fixed = sorted(
-                    ((k, labels.index(k)) for k in
-                     mdata['fixed_params'].attrs),
-                    key=lambda item: labels.index(item[0])
-                )
-
-            for k, i in fixed:
-                labels[i] += ' (fixed)'
-
-        return labels
-
     def _get_chains(self, flatten=False):
         '''Get the MCMC chains, properly using the iterations and walkers
         slices, and accounting for fixed params'''
 
         with self._openfile() as file:
 
-            labels = list(self.obs.initials)
+            labels = self._parameters
 
             chain = self._reduce(file[self._gname]['chain'])
-
-            # Handle fixed parameters
-
-            fixed = sorted(
-                ((k, v, labels.index(k)) for k, v in
-                 file['metadata']['fixed_params'].attrs.items()),
-                key=lambda item: labels.index(item[0])
-            )
-
-            for k, v, i in fixed:
-                labels[i] += ' (fixed)'
-                chain = np.insert(chain, i, v, axis=-1)
 
         if flatten:
             chain = chain.reshape((-1, chain.shape[-1]))
@@ -723,24 +1169,24 @@ class MCMCRun(_SingleRunAnalysis):
 
         with self._openfile('metadata') as mdata:
 
-            stored_priors = dict(mdata['specified_priors'].attrs)
-            fixed = dict(mdata['fixed_params'].attrs)
+            stored_priors = mdata['specified_priors']
 
-        prior_params = {}
+            prior_params = {}
 
-        for key in list(self.obs.initials):
-            try:
-                type_ = stored_priors[f'{key}_type'].decode('utf-8')
-                args = stored_priors[f'{key}_args']
+            for key in self._parameters:
+                try:
+                    type_ = stored_priors[key].attrs['type']
+                    args = stored_priors[key]['args']
 
-                if args.dtype.kind == 'S':
-                    args = args.astype('U')
+                    if args.dtype.kind == 'S':
+                        args = args.astype('U')
 
-                prior_params[key] = (type_, *args)
-            except KeyError:
-                continue
+                    prior_params[key] = (type_, *args)
+                except KeyError:
+                    continue
 
-        prior_kwargs = {'fixed_initials': fixed, 'err_on_fail': False}
+        prior_kwargs = {'model_params': self._modelparams, 'err_on_fail': False}
+
         return priors.Priors(prior_params, **prior_kwargs)
 
     # ----------------------------------------------------------------------
@@ -765,11 +1211,14 @@ class MCMCRun(_SingleRunAnalysis):
             The created model visualization object.
         '''
 
-        labels, chain = self._get_chains()
+        _, chain = self._get_chains()
 
-        return ModelVisualizer.from_chain(chain, self.obs, method)
+        model_cls = ModelVisualizer if not self._evolved else EvolvedVisualizer
 
-    def get_CImodel(self, N=100, Nprocesses=1, load=False):
+        return model_cls.from_chain(chain, self.obs, self._modelparams,
+                                    method=method)
+
+    def get_CImodel(self, N=100, Nprocesses=1, load=False, progress=False):
         '''Return a `CIModelVisualizer` instance corresponding to this run.
 
         The visualizer is initialized through the `CIModelVisualizer.from_chain`
@@ -791,23 +1240,29 @@ class MCMCRun(_SingleRunAnalysis):
             If True, will attempt to load a CI model, rather than creating a
             new one.
 
+        progress : bool, optional
+            Optionally display a tqdm loading bar when creating CIs, if load is
+            False. Passed to model `from_chain` method as 'verbose' argument.
+
         Returns
         -------
         CIModelVisualizer
             The created model visualization (with confidence intervals) object.
         '''
-        import multiprocessing
+        import multiprocess
+
+        viz_cls = CIEvolvedVisualizer if self._evolved else CIModelVisualizer
 
         if load:
-            return CIModelVisualizer.load(self._filename, observations=self.obs)
+            return viz_cls.load(self._filename, observations=self.obs)
 
         else:
 
-            labels, chain = self._get_chains()
+            _, chain = self._get_chains()
 
-            with multiprocessing.Pool(processes=Nprocesses) as pool:
-                return CIModelVisualizer.from_chain(chain, self.obs,
-                                                    N, pool=pool)
+            with multiprocess.Pool(processes=Nprocesses) as pool:
+                return viz_cls.from_chain(chain, self.obs, self._modelparams,
+                                          N, pool=pool, verbose=progress)
 
     # ----------------------------------------------------------------------
     # Plots
@@ -1107,7 +1562,8 @@ class MCMCRun(_SingleRunAnalysis):
 
         return fig
 
-    def plot_marginals(self, fig=None, **corner_kw):
+    def plot_marginals(self, fig=None, params=None, label=None,
+                       hist_kwargs=None, **corner_kw):
         '''Plot a "corner plot" showcasing the relationships between parameters.
 
         Plots a Nparam-Nparam lower-triangular "corner" marginal plot showing
@@ -1122,6 +1578,12 @@ class MCMCRun(_SingleRunAnalysis):
             have the correct number of axes.
             See `_RunAnalysis._setup_multi_artist` for more details.
 
+        params : None or list of str, optional
+            The parameters to show on this figure. If None (default) all
+            parameters (including fixed params) will be shown.
+            Note that margins may need to be adjusted to show labels when
+            plotting many fewer parameters.
+
         **corner_kw : dict
             All other arguments are passed to `corner.corner`.
 
@@ -1135,29 +1597,73 @@ class MCMCRun(_SingleRunAnalysis):
         fig, ax = self._setup_multi_artist(fig, shape=None,
                                            constrained_layout=False)
 
-        labels = self._get_labels(math_labels=True, label_fixed=False)
+        labels = self._get_labels(math_labels=True)
         _, chain = self._get_chains()
 
-        chain = chain.reshape((-1, chain.shape[-1]))
+        # params is None or a list of string labels
+        if params is not None:
+            raw_labels = self._get_labels(math_labels=False)
 
-        # ugly
-        ranges = [1. if 'fixed' not in lbl
-                  else (chain[0, i] - 1, chain[0, i] + 1)
-                  for i, lbl in enumerate(labels)]
+            spec_chain = np.empty((chain.shape[0], len(params)))
+            spec_labels = []
+
+            # Loop over params so we can catch fixed parameters
+            for i, p in enumerate(params):
+                try:
+                    prm_ind = raw_labels.index(p)
+                    lbl = labels[prm_ind]
+                    vals = chain[..., prm_ind]
+
+                except ValueError:
+                    lbl = _get_latex_label(p, with_units=True)
+                    vals = self._modelparams.fixed_params[p]
+
+                spec_labels.append(lbl)
+                spec_chain[:, i] = vals
+
+            labels, chain = spec_labels, spec_chain
+
+        ranges = [1, ] * chain.shape[-1]
+
+        chain = chain.reshape((-1, chain.shape[-1]))
 
         corner_kw.setdefault('plot_datapoints', False)
         corner_kw.setdefault('labelpad', 0.25)
 
+        if label is not None:
+            hist_kwargs = (hist_kwargs or {}) | {'label': label}
+
         fig = corner.corner(chain, labels=labels, fig=fig,
-                            range=ranges, **corner_kw)
+                            range=ranges, hist_kwargs=hist_kwargs, **corner_kw)
+
+        # Display legend, if it's labelled
+
+        if label is not None:
+            fig.axes[0].legend(bbox_to_anchor=(1.05, 1),
+                               loc='upper left', borderaxespad=0.)
 
         fig.subplots_adjust(left=0.05, bottom=0.06)
+
+        # Share the axes along row-col
+        # Must be done manually due to corner
+
+        axes = np.reshape(fig.axes, (chain.shape[-1], chain.shape[-1]))
+
+        for ir, row in enumerate(axes):
+            for ax in row[1:ir]:
+                ax.sharey(row[0])
+                ax.label_outer()
+
+        for ic, col in enumerate(axes.T):
+            for ax in col[ic:-1]:
+                ax.sharex(col[-1])
+                ax.label_outer()
 
         return fig
 
     def plot_posterior(self, param, fig=None, ax=None, chain=None,
                        flipped=True, truth=None, truth_ci=None,
-                       *args, **kwargs):
+                       truth_color='tab:red', *args, **kwargs):
         '''Plot a smoothed posterior distribution of a single parameter.
 
         Plots a gaussian-KDE smoothed posterior probability distribution of
@@ -1233,10 +1739,10 @@ class MCMCRun(_SingleRunAnalysis):
             ax.fill_betweenx(domain, 0, kde(domain), *args, **kwargs)
 
             if truth is not None:
-                ax.axhline(truth, c='tab:red')
+                ax.axhline(truth, c=truth_color)
 
                 if truth_ci is not None:
-                    ax.axhspan(*truth_ci, color='tab:red', alpha=0.33)
+                    ax.axhspan(*truth_ci, color=truth_color, alpha=0.33)
 
             ax.set_xlim(left=0)
 
@@ -1245,10 +1751,10 @@ class MCMCRun(_SingleRunAnalysis):
             ax.fill_between(domain, 0, kde(domain), *args, **kwargs)
 
             if truth is not None:
-                ax.axvline(truth, c='tab:red')
+                ax.axvline(truth, c=truth_color)
 
                 if truth_ci is not None:
-                    ax.axvspan(*truth_ci, color='tab:red', alpha=0.33)
+                    ax.axvspan(*truth_ci, color=truth_color, alpha=0.33)
 
             ax.set_ylim(bottom=0)
 
@@ -1378,13 +1884,9 @@ class MCMCRun(_SingleRunAnalysis):
 
             for ind, param in enumerate(labels):
 
-                if 'fixed' in param:
-                    mssg += (f'{param[:-8]:>5} = {p50[ind]:.3f} '
-                             f'({"fixed":^14})\n')
-                else:
-                    mssg += (f'{param:>5} = {p50[ind]:.3f} '
-                             f'(+{uncert_plus[ind]:.3f}, '
-                             f'-{uncert_minus[ind]:.3f})\n')
+                mssg += (f'{param:>5} = {p50[ind]:.3f} '
+                         f'(+{uncert_plus[ind]:.3f}, '
+                         f'-{uncert_minus[ind]:.3f})\n')
 
         if content == 'all' or content == 'metadata':
 
@@ -1405,18 +1907,10 @@ class MCMCRun(_SingleRunAnalysis):
 
                 mdata = file['metadata']
 
-                mssg += 'Fixed parameters:\n'
-                fixed = mdata['fixed_params'].attrs
-                if fixed:
-                    for k, v in fixed.items():
-                        mssg += f'    {k} = {v}\n'
-                else:
-                    mssg += '    None\n'
-
                 mssg += 'Excluded components:\n'
-                exc = mdata['excluded_likelihoods'].attrs
-                if exc:
-                    for i, v in exc.items():
+                exc = mdata['excluded_likelihoods']
+                if exc.size > 0:
+                    for i, v in enumerate(exc):
                         mssg += f'    ({i}) {v}\n'
                 else:
                     mssg += '    None\n'
@@ -1475,7 +1969,8 @@ class NestedRun(_SingleRunAnalysis):
 
     @property
     def chains(self):
-        return self._get_equal_weight_chains()[1]
+        # Ensure that this does not change by using a cached version
+        return self._get_equal_weight_chains(reresample=False)[1]
 
     @property
     def ESS(self):
@@ -1491,13 +1986,12 @@ class NestedRun(_SingleRunAnalysis):
 
         with self._openfile() as file:
 
-            exc = [L.decode() for L in
-                   file['metadata/excluded_likelihoods'].attrs.values()]
+            exc = [L.decode() for L in file['metadata/excluded_likelihoods']]
 
             N = sum([self.obs[comp[0]].size for comp in
                      self.obs.filter_likelihoods(exc, True)])
 
-            k = len(self._get_chains(include_fixed=False)[1])
+            k = len(self._get_chains()[1])
             lnL0 = np.max(file[self._gname]['logl'][:])
 
         AIC = -2 * lnL0 + (2 * k) + ((2 * k * (k + 1)) / (N - k - 1))
@@ -1510,13 +2004,12 @@ class NestedRun(_SingleRunAnalysis):
 
         with self._openfile() as file:
 
-            exc = [L.decode() for L in
-                   file['metadata/excluded_likelihoods'].attrs.values()]
+            exc = [L.decode() for L in file['metadata/excluded_likelihoods']]
 
             N = sum([self.obs[comp[0]].size for comp in
                      self.obs.filter_likelihoods(exc, True)])
 
-            k = len(self._get_chains(include_fixed=False)[1])
+            k = len(self._get_chains()[1])
             lnL0 = np.max(file[self._gname]['logl'][:])
 
         BIC = -2 * lnL0 + (k * np.log(N))
@@ -1546,6 +2039,8 @@ class NestedRun(_SingleRunAnalysis):
     # Helpers
     # ----------------------------------------------------------------------
 
+    _resampled_chains = None
+
     def _get_results(self, finite_only=False, *, apply_mask=True):
         '''Return a `dynesty.Results` class reconstructed from this run file.'''
         from dynesty.results import Results
@@ -1566,30 +2061,19 @@ class NestedRun(_SingleRunAnalysis):
                 if k in ('current_batch', 'initial_batch', 'bound'):
                     continue
 
+                if k == 'batch_bounds':  # backwards compatibility w/ dynesty<3
+                    k = 'batch_logl_bounds'
+
                 if d.shape and (d.shape[0] == Niter):
-                    d = np.array(d)[inds]
+                    d = np.asarray(d)[inds]
 
                     if apply_mask and self.mask is not None:
                         d = d[self.mask]
 
                 else:
-                    d = np.array(d)
+                    d = np.asarray(d)
 
                 r[k] = d
-
-            # add in any fixed params, if they exist
-
-            labels = self._get_labels(False, False)
-
-            fixed = sorted(
-                ((k, v, labels.index(k)) for k, v in
-                 file['metadata']['fixed_params'].attrs.items()),
-                key=lambda item: labels.index(item[0])
-            )
-
-            for k, v, i in fixed:
-                r['samples'] = np.insert(r['samples'], i, v, axis=-1)
-                r['samples_u'] = np.insert(r['samples_u'], i, v, axis=-1)
 
         if finite_only:
             # remove the amount of non-finite values we removed from niter
@@ -1601,6 +2085,7 @@ class NestedRun(_SingleRunAnalysis):
         except KeyError:
             r['bound'] = None
 
+        # TODO should be storing and rebuilding blobs and proposal_stats
         r['blob'] = np.full_like(r['logl'], np.nan)  # should be None, but okay
 
         return Results(r)
@@ -1619,28 +2104,29 @@ class NestedRun(_SingleRunAnalysis):
 
                 ds = bnd_grp[str(i)]
                 btype = ds.attrs['type']
+                ndim = ds.attrs.get('ndim', len(self._parameters))  # fallback
 
                 if btype == 'UnitCube':
-                    bnds.append(bounding.UnitCube(ds.attrs['ndim']))
+                    bnds.append(bounding.UnitCube(ndim=ndim))
 
                 elif btype == 'Ellipsoid':
                     ctr = ds['centre'][:]
                     cov = ds['covariance'][:]
-                    bnds.append(bounding.Ellipsoid(ctr=ctr, cov=cov))
+                    bnds.append(bounding.Ellipsoid(ndim=ndim, ctr=ctr, cov=cov))
 
                 elif btype == 'MultiEllipsoid':
                     ctrs = ds['centres'][:]
                     covs = ds['covariances'][:]
-                    bnds.append(bounding.MultiEllipsoid(ctrs=ctrs, covs=covs))
+                    bnds.append(
+                        bounding.MultiEllipsoid(ndim=ndim, ctrs=ctrs, covs=covs)
+                    )
 
                 elif btype == 'RadFriends':
                     cov = ds['covariances'][:]
-                    ndim = ds.attrs['ndim']
                     bnds.append(bounding.RadFriends(ndim=ndim, cov=cov))
 
                 elif btype == 'SupFriends':
                     cov = ds['covariances'][:]
-                    ndim = ds.attrs['ndim']
                     bnds.append(bounding.SupFriends(ndim=ndim, cov=cov))
 
                 else:
@@ -1648,46 +2134,8 @@ class NestedRun(_SingleRunAnalysis):
 
         return bnds
 
-    def _get_labels(self, label_fixed=True, math_labels=False):
-        '''Return full list of labels for all parameters.'''
-
-        labels = list(self.obs.initials)
-
-        if math_labels:
-
-            math_mapping = {
-                'W0': r'$\hat{\phi}_0$',
-                'M': r'$M\ \left[10^6\ M_\odot\right]$',
-                'rh': r'$r_h\ \left[\mathrm{pc}\right]$',
-                'ra': r'$\log\left(\hat{r}_a\right)$',
-                'g': r'$g$',
-                'delta': r'$\delta$',
-                's2': r'$s^2\ \left[\mathrm{arcmin^{-4}}\right]$',
-                'F': r'$F$',
-                'a1': r'$\alpha_1$',
-                'a2': r'$\alpha_2$',
-                'a3': r'$\alpha_3$',
-                'BHret': r'$\mathrm{BH}_{ret}\ \left[\%\right]$',
-                'd': r'$d\ \left[\mathrm{kpc}\right]$',
-            }
-
-            labels = [math_mapping[lbl] for lbl in labels]
-
-        if label_fixed:
-
-            with self._openfile('metadata') as mdata:
-
-                fixed = sorted(
-                    ((k, labels.index(k)) for k in mdata['fixed_params'].attrs),
-                    key=lambda item: labels.index(item[0])
-                )
-
-            for k, i in fixed:
-                labels[i] += ' (fixed)'
-
-        return labels
-
-    def _get_chains(self, include_fixed=True, *, apply_mask=True):
+    # TODO some ways of handling and plotting initial_batch only clusters
+    def _get_chains(self, *, apply_mask=True):
         '''Get the "chains" of all samples from this nested sampling run.'''
 
         with self._openfile() as file:
@@ -1697,29 +2145,21 @@ class NestedRun(_SingleRunAnalysis):
             if apply_mask and self.mask is not None:
                 chain = chain[self.mask, :]
 
-            labels = list(self.obs.initials)
-
-            fixed = sorted(
-                ((k, v, labels.index(k)) for k, v in
-                 file['metadata']['fixed_params'].attrs.items()),
-                key=lambda item: labels.index(item[0])
-            )
-
-            if include_fixed:
-                for k, v, i in fixed:
-                    labels[i] += ' (fixed)'
-                    chain = np.insert(chain, i, v, axis=-1)
-            else:
-                for *_, i in reversed(fixed):
-                    del labels[i]
+            labels = self._parameters
 
         return labels, chain
 
-    def _get_equal_weight_chains(self, include_fixed=True, add_errors=False, *,
-                                 apply_mask=True):
+    def _get_equal_weight_chains(self, add_errors=False, *,
+                                 apply_mask=True, reresample=True):
         '''Get the "chains" of samples resampled to be equally weighted.'''
 
         from dynesty.utils import resample_equal
+
+        labels = self._parameters
+
+        # If desired, re-use cached array, to avoid chains changing each time
+        if (self._resampled_chains is not None) and (reresample is False):
+            return labels, self._resampled_chains
 
         with self._openfile() as file:
 
@@ -1737,22 +2177,9 @@ class NestedRun(_SingleRunAnalysis):
                 sim_wt = weight_function(sim_run, {'pfrac': 1.}, True)[1][2]
                 eq_chain = resample_equal(sim_run.samples, sim_wt)
 
-            labels = list(self.obs.initials)
-
-            fixed = sorted(
-                ((k, v, labels.index(k)) for k, v in
-                 file['metadata']['fixed_params'].attrs.items()),
-                key=lambda item: labels.index(item[0])
-            )
-
-            # TODO allow including fixed without labelling as fixed
-            if include_fixed:
-                for k, v, i in fixed:
-                    labels[i] += ' (fixed)'
-                    eq_chain = np.insert(eq_chain, i, v, axis=-1)
-            else:
-                for *_, i in reversed(fixed):
-                    del labels[i]
+        # store cached version
+        self._resampled_chains = eq_chain
+        self._resampled_chains.flags.writeable = False  # readonly
 
         return labels, eq_chain
 
@@ -1761,24 +2188,24 @@ class NestedRun(_SingleRunAnalysis):
 
         with self._openfile('metadata') as mdata:
 
-            stored_priors = dict(mdata['specified_priors'].attrs)
-            fixed = dict(mdata['fixed_params'].attrs)
+            stored_priors = mdata['specified_priors']
 
-        prior_params = {}
+            prior_params = {}
 
-        for key in list(self.obs.initials):
-            try:
-                type_ = stored_priors[f'{key}_type'].decode('utf-8')
-                args = stored_priors[f'{key}_args']
+            for key in self._parameters:
+                try:
+                    type_ = stored_priors[key].attrs['type']
+                    args = stored_priors[key]['args']
 
-                if args.dtype.kind == 'S':
-                    args = args.astype('U')
+                    if args.dtype.kind == 'S':
+                        args = args[:].astype('U')
 
-                prior_params[key] = (type_, *args)
-            except KeyError:
-                continue
+                    prior_params[key] = (type_, *args)
+                except KeyError:
+                    continue
 
-        prior_kwargs = {'fixed_initials': fixed, 'err_on_fail': False}
+        prior_kwargs = {'model_params': self._modelparams, 'err_on_fail': False}
+
         return priors.PriorTransforms(prior_params, **prior_kwargs)
 
     # ----------------------------------------------------------------------
@@ -1808,16 +2235,19 @@ class NestedRun(_SingleRunAnalysis):
             The created model visualization object.
         '''
 
+        model_cls = ModelVisualizer if not self._evolved else EvolvedVisualizer
+
         if method == 'mean':
             theta = self.parameter_means()[0]
-            return ModelVisualizer.from_theta(theta, self.obs)
+            return model_cls.from_theta(theta, self.obs, self._modelparams)
 
         else:
-            labels, chain = self._get_equal_weight_chains(add_errors=add_errors)
-            return ModelVisualizer.from_chain(chain, self.obs, method)
+            _, chain = self._get_equal_weight_chains(reresample=False, add_errors=add_errors)
+            return model_cls.from_chain(chain, self.obs, self._modelparams,
+                                        method=method)
 
     def get_CImodel(self, N=100, Nprocesses=1, add_errors=False, shuffle=True,
-                    load=False):
+                    load=False, progress=False):
         '''Return a `CIModelVisualizer` instance corresponding to this run.
 
         The visualizer is initialized through the `CIModelVisualizer.from_chain`
@@ -1850,31 +2280,39 @@ class NestedRun(_SingleRunAnalysis):
             If True, will attempt to load a CI model, rather than creating a
             new one.
 
+        progress : bool, optional
+            Optionally display a tqdm loading bar when creating CIs, if load is
+            False. Passed to model `from_chain` method as 'verbose' argument.
+
         Returns
         -------
         CIModelVisualizer
             The created model visualization (with confidence intervals) object.
         '''
-        import multiprocessing
+        import multiprocess
+
+        ci_cls = CIModelVisualizer if not self._evolved else CIEvolvedVisualizer
 
         if load:
-            return CIModelVisualizer.load(self._filename, observations=self.obs)
+            return ci_cls.load(self._filename, observations=self.obs)
 
         else:
-            labels, chain = self._get_equal_weight_chains(add_errors=add_errors)
+            _, chain = self._get_equal_weight_chains(add_errors=add_errors)
 
             if shuffle:
+                chain = chain.copy()  # because chain may be readonly
                 np.random.default_rng().shuffle(chain, axis=0)
 
-            with multiprocessing.Pool(processes=Nprocesses) as pool:
-                return CIModelVisualizer.from_chain(chain, self.obs,
-                                                    N, pool=pool)
+            with multiprocess.Pool(processes=Nprocesses) as pool:
+                return ci_cls.from_chain(chain, self.obs, self._modelparams,
+                                         N, pool=pool, verbose=progress)
 
     # ----------------------------------------------------------------------
     # Plots
     # ----------------------------------------------------------------------
 
-    def plot_marginals(self, fig=None, full_volume=False, **corner_kw):
+    def plot_marginals(self, fig=None, full_volume=False, params=None,
+                       label=None, hist_kwargs=None, **corner_kw):
         '''Plot a "corner plot" showcasing the relationships between parameters.
 
         Plots a Nparam-Nparam lower-triangular "corner" marginal plot showing
@@ -1893,6 +2331,12 @@ class NestedRun(_SingleRunAnalysis):
             Use the entire raw chains, not resampled based on the weights.
             This will not show correct posteriors.
 
+        params : None or list of str, optional
+            The parameters to show on this figure. If None (default) all
+            parameters (including fixed params) will be shown.
+            Note that margins may need to be adjusted to show labels when
+            plotting many fewer parameters.
+
         **corner_kw : dict
             All other arguments are passed to `corner.corner`.
 
@@ -1906,27 +2350,71 @@ class NestedRun(_SingleRunAnalysis):
         fig, ax = self._setup_multi_artist(fig, shape=None,
                                            constrained_layout=False)
 
-        labels = self._get_labels(math_labels=True, label_fixed=False)
+        labels = self._get_labels(math_labels=True)
 
         if full_volume:
             _, chain = self._get_chains()
         else:
             _, chain = self._get_equal_weight_chains()
 
-        chain = chain.reshape((-1, chain.shape[-1]))
+        # params is None or a list of string labels
+        if params is not None:
+            raw_labels = self._get_labels(math_labels=False)
 
-        # ugly
-        ranges = [1. if 'fixed' not in lbl
-                  else (chain[0, i] - 1, chain[0, i] + 1)
-                  for i, lbl in enumerate(labels)]
+            spec_chain = np.empty((chain.shape[0], len(params)))
+            spec_labels = []
+
+            # Loop over params so we can catch fixed parameters
+            for i, p in enumerate(params):
+                try:
+                    prm_ind = raw_labels.index(p)
+                    lbl = labels[prm_ind]
+                    vals = chain[..., prm_ind]
+
+                except ValueError:
+                    lbl = _get_latex_label(p, with_units=True)
+                    vals = self._modelparams.fixed_params[p]
+
+                spec_labels.append(lbl)
+                spec_chain[:, i] = vals
+
+            labels, chain = spec_labels, spec_chain
+
+        ranges = [1, ] * chain.shape[-1]
+
+        chain = chain.reshape((-1, chain.shape[-1]))
 
         corner_kw.setdefault('plot_datapoints', False)
         corner_kw.setdefault('labelpad', 0.25)
 
+        if label is not None:
+            hist_kwargs = (hist_kwargs or {}) | {'label': label}
+
         fig = corner.corner(chain, labels=labels, fig=fig,
-                            range=ranges, **corner_kw)
+                            range=ranges, hist_kwargs=hist_kwargs, **corner_kw)
+
+        # Display legend, if it's labelled
+
+        if label is not None:
+            fig.axes[0].legend(bbox_to_anchor=(1.05, 1),
+                               loc='upper left', borderaxespad=0.)
 
         fig.subplots_adjust(left=0.05, bottom=0.06)
+
+        # Share the axes along row-col
+        # Must be done manually due to corner
+
+        axes = np.reshape(fig.axes, (chain.shape[-1], chain.shape[-1]))
+
+        for ir, row in enumerate(axes):
+            for ax in row[1:ir]:
+                ax.sharey(row[0])
+                ax.label_outer()
+
+        for ic, col in enumerate(axes.T):
+            for ax in col[ic:-1]:
+                ax.sharex(col[-1])
+                ax.label_outer()
 
         return fig
 
@@ -1986,7 +2474,7 @@ class NestedRun(_SingleRunAnalysis):
 
         clr = kw.pop('color', None)
 
-        labels, _ = self._get_chains(include_fixed=False)
+        labels, _ = self._get_chains()
 
         try:
             N = len(iteration)
@@ -2391,8 +2879,8 @@ class NestedRun(_SingleRunAnalysis):
         return fig
 
     def plot_posterior(self, param, fig=None, ax=None, chain=None,
-                       flipped=True, truth=None, truth_ci=None,
-                       *args, **kwargs):
+                       flipped=True, kde=True, truth=None, truth_ci=None,
+                       truth_color='tab:red', *args, **kwargs):
         '''Plot a smoothed posterior distribution of a single parameter.
 
         Plots a gaussian-KDE smoothed posterior probability distribution of
@@ -2423,6 +2911,10 @@ class NestedRun(_SingleRunAnalysis):
         flipped : bool, optional
             If True (default) the posterior will be flipped on it's side,
             attached to the left-axis.
+
+        kde : bool, optional
+            Whether to plot a gaussian-KDE smoothed posterior (default), or a
+            simple histogram.
 
         truth : float, optional
             Optionally indicate the "true" value as horizontal lines on the
@@ -2455,35 +2947,47 @@ class NestedRun(_SingleRunAnalysis):
             prm_ind = labels.index(param)
             chain = self._get_equal_weight_chains()[1][..., prm_ind]
 
-        try:
-            kde = gaussian_kde(chain)
-        except np.linalg.LinAlgError as err:
-            mssg = f"Cannot compute kde of {param}: {err}"
-            raise ValueError(mssg)
+        # ------------------------------------------------------------------
+        # Plot posterior
+        # ------------------------------------------------------------------
 
-        domain = np.linspace(chain.min(), chain.max(), 500)
+        if kde:
+            try:
+                gkde = gaussian_kde(chain)
+            except np.linalg.LinAlgError as err:
+                mssg = f"Cannot compute gkde of {param}: {err}"
+                raise ValueError(mssg)
+
+            domain = np.linspace(chain.min(), chain.max(), 500)
+
+            plot_func = ax.fill_betweenx if flipped else ax.fill_between
+            plot_func(domain, 0, gkde(domain), *args, **kwargs)
+
+        else:
+            orientation = "horizontal" if flipped else "vertical"
+            ax.hist(chain, orientation=orientation, *args, **kwargs)
+
+        # ------------------------------------------------------------------
+        # Plot truths
+        # ------------------------------------------------------------------
 
         if flipped:
 
-            ax.fill_betweenx(domain, 0, kde(domain), *args, **kwargs)
-
             if truth is not None:
-                ax.axhline(truth, c='tab:red')
+                ax.axhline(truth, c=truth_color)
 
                 if truth_ci is not None:
-                    ax.axhspan(*truth_ci, color='tab:red', alpha=0.33)
+                    ax.axhspan(*truth_ci, color=truth_color, alpha=0.33)
 
             ax.set_xlim(left=0)
 
         else:
 
-            ax.fill_between(domain, 0, kde(domain), *args, **kwargs)
-
             if truth is not None:
-                ax.axvline(truth, c='tab:red')
+                ax.axvline(truth, c=truth_color)
 
                 if truth_ci is not None:
-                    ax.axvspan(*truth_ci, color='tab:red', alpha=0.33)
+                    ax.axvspan(*truth_ci, color=truth_color, alpha=0.33)
 
             ax.set_ylim(bottom=0)
 
@@ -2492,7 +2996,7 @@ class NestedRun(_SingleRunAnalysis):
     def plot_params(self, fig=None, params=None, *,
                     posterior_color='tab:blue', posterior_border=True,
                     show_weight=True, fill_type='weights', ylims=None,
-                    truths=None, **kw):
+                    truths=None, initial_batch_only=False, c=None, **kw):
         '''Plot a diagnostic figure of the distributions of parameter samples.
 
         Plots an Nparam-panel figure showcasing the parameter values of all
@@ -2577,6 +3081,9 @@ class NestedRun(_SingleRunAnalysis):
         elif fill_type in ('bound', 'samples_bound'):
             c = self.results.samples_bound
 
+        elif fill_type is None:
+            pass
+
         else:
             mssg = ('Invalid fill type, must be one of '
                     '{weights, iters, id, batch, bound}')
@@ -2612,7 +3119,10 @@ class NestedRun(_SingleRunAnalysis):
 
         # ------------------------------------------------------------------
         # Setup axes
+        # (Insanely convoluted)
         # ------------------------------------------------------------------
+
+        # Setup y limits
 
         if ylims is None:
             ylims = [(None, None)] * len(labels)
@@ -2623,19 +3133,81 @@ class NestedRun(_SingleRunAnalysis):
 
         gs_kw = {}
 
-        if (shape := (len(labels) + show_weight, 1))[0] > 5 + show_weight:
-            shape = (int(np.ceil(shape[0] / 2)) + show_weight, 2)
+        # Determine shapes for constructing subplots/subfigures
+
+        if len(labels) > 5:
+            # If there are more than 5 params, lets split this in two
+
+            right_cols = (len(labels) // 2)
+            left_cols = (len(labels) - right_cols)
+            shape = ((left_cols + show_weight, right_cols + show_weight), 2)
+
+            total_axes = sum(shape[0])
+
+            # TODO should still do this, but would need diff gskw for each col
+            # if show_weight:
+            #     gs_kw = {"height_ratios": [0.5] + [1] * (shape[0] - 1)}
+
+        else:
+
+            left_cols = len(labels)
+            right_cols = 0
+            total_axes = left_cols + show_weight
+            shape = (total_axes, )
+
+        # Create the figure
+
+        if ((fig is not None) and (len(fig.axes) == 2 * total_axes)):
+            # assume this was made by this method previously (with post. axes)
+            axes = fig.axes
+            new_axes = False
+
+        else:
+            fig, axes = self._setup_multi_artist(fig, shape, sharex=True,
+                                                 gridspec_kw=gs_kw)
+            new_axes = True
+
+        # Determine what axes are what
+
+        if right_cols > 0:
+            left_prm_axes = [ax for ax in fig.subfigs[0].axes[show_weight:]
+                             if 'posterior' not in ax.get_label()]
+
+            right_prm_axes = [ax for ax in fig.subfigs[1].axes[show_weight:]
+                              if 'posterior' not in ax.get_label()]
+
+            prm_axes = np.r_[left_prm_axes, right_prm_axes]
 
             if show_weight:
-                gs_kw = {"height_ratios": [0.5] + [1] * (shape[0] - 1)}
+                wt_axes = [fig.subfigs[0].axes[0], fig.subfigs[1].axes[0]]
 
-        fig, axes = self._setup_multi_artist(fig, shape, sharex=True,
-                                             gridspec_kw=gs_kw)
+            left_prm_axes[-1].set_xlabel(r'$-\ln(X)$')
+            right_prm_axes[-1].set_xlabel(r'$-\ln(X)$')
 
-        axes = axes.reshape(shape)
+        else:
+            prm_axes = [ax for ax in fig.axes[show_weight:]
+                        if 'posterior' not in ax.get_label()]
 
-        for ax in axes[-1]:
-            ax.set_xlabel(r'$-\ln(X)$')
+            if show_weight:
+                wt_axes = [fig.axes[0]]
+
+            prm_axes[-1].set_xlabel(r'$-\ln(X)$')
+
+        # Create the posterior axes, if necessary
+
+        if new_axes:
+            for ind, ax in enumerate(prm_axes):
+
+                lbl = labels[ind]
+
+                ax.set_label(lbl)
+
+                divider = make_axes_locatable(ax)
+                post_ax = divider.append_axes('right', size="25%",
+                                              pad=0, sharey=ax)
+
+                post_ax.set_xticks([])
+                post_ax.set_label(f'{lbl} posterior')
 
         # ------------------------------------------------------------------
         # If showing weights explicitly, format the ax and use the
@@ -2643,7 +3215,7 @@ class NestedRun(_SingleRunAnalysis):
         # ------------------------------------------------------------------
 
         if show_weight:
-            for ax in axes[0]:
+            for ax in wt_axes:
                 # plot weights above scatter plots
                 # TODO figure out what colors to use
                 self.plot_weights(fig=fig, ax=ax, resampled=True, filled=True,
@@ -2653,47 +3225,51 @@ class NestedRun(_SingleRunAnalysis):
                 ax.set_xlabel(None)
                 ax.set_yticklabels([])
                 ax.set_ylabel(None)
+                ax.set_label('weights')
 
                 # Theres probably a cleaner way to do this
                 divider = make_axes_locatable(ax)
                 spacer = divider.append_axes('right', size="25%", pad=0)
                 spacer.set_visible(False)
+                spacer.set_label('weights posterior')
 
         # ------------------------------------------------------------------
         # Plot each parameter
         # ------------------------------------------------------------------
 
-        for ind, ax in enumerate(axes[1:].flatten()):
+        for ind, ax in enumerate(prm_axes):
 
             # --------------------------------------------------------------
             # Get the relevant samples.
             # If necessary, remove any unneeded axes
             # --------------------------------------------------------------
 
-            try:
-                prm, eq_prm = chain[:, ind], eq_chain[:, ind]
-                lbl = labels[ind]
-            except IndexError:
-                # If theres an odd number of (>5) params need to delete last one
-                # TODO preferably this would also resize this column of plots
-                ax.remove()
-                continue
+            prm, eq_prm = chain[:, ind], eq_chain[:, ind]
+            lbl = labels[ind]
 
             # --------------------------------------------------------------
             # Divide the ax to accomodate the posterior plot on the right
             # --------------------------------------------------------------
 
-            divider = make_axes_locatable(ax)
-            post_ax = divider.append_axes('right', size="25%", pad=0, sharey=ax)
-
-            post_ax.set_xticks([])
+            for pax in fig.axes:
+                if pax.get_label() == f'{lbl} posterior':
+                    post_ax = pax
+                    break
+            else:
+                mssg = f"No posterior axes made for {lbl}. How did you do this?"
+                raise RuntimeError(mssg)
 
             # --------------------------------------------------------------
             # Plot the samples with respect to ln(X)
             # --------------------------------------------------------------
 
-            # TODO the y tick values have disappeared should be on the last axis
-            ax.scatter(-self.results.logvol, prm, c=c, cmap=self.cmap, **kw)
+            if initial_batch_only:
+                msk = self.results.samples_batch == 0
+                ax.scatter(-self.results.logvol[msk], prm[msk],
+                           c=c[msk], cmap=self.cmap, **kw)
+
+            else:
+                ax.scatter(-self.results.logvol, prm, c=c, cmap=self.cmap, **kw)
 
             ax.set_ylabel(lbl)
             ax.set_xlim(left=0)
@@ -2716,6 +3292,9 @@ class NestedRun(_SingleRunAnalysis):
             except ValueError:
                 post_ax.axhline(np.median(prm), color=color)
 
+            if post_kw['truth'] is not None:
+                ax.axhline(post_kw['truth'], color='r')
+
             if not posterior_border:
                 post_ax.axis('off')
 
@@ -2724,76 +3303,6 @@ class NestedRun(_SingleRunAnalysis):
                 tk.set_visible(False)
 
             ax.set_ylim(ylims[ind])
-
-        return fig
-
-    def plot_IMF(self, fig=None, ax=None, show_canonical='all', ci=True):
-        '''Plot the IMF, based on the alpha exponents.'''
-        def salpeter(m):
-            return m**-2.35
-
-        def chabrier(m):
-            k = 0.158 * np.exp(-(-np.log10(0.08))**2 / (2 * 0.69**2))
-            imf = k * m**-2.3
-            imf[m <= 1] = (0.158 * (1. / m[m <= 1])
-                           * np.exp(-(np.log10(m[m <= 1]) - np.log10(0.08))**2
-                                    / (2 * 0.69**2)))
-            return imf
-
-        def kroupa(m):
-            imf = 0.08**-0.3 * (0.5 / 0.08)**-1.3 * (m / 0.5)**-2.3
-            imf[m < 0.5] = 0.08**-0.3 * (m[m < 0.5] / 0.08)**-1.3
-            imf[m < 0.08] = m[m < 0.08]**-0.3
-            return imf
-
-        def this_imf(m, perc=50):
-            '''perc is percentile of alpha chain to use'''
-
-            ch = self._get_equal_weight_chains()[1]
-            a1, a2, a3 = np.percentile(ch[:, 8:11], perc, axis=0)
-
-            imf = 0.5**-a1 * (1 / 0.5)**-a2 * (m / 1)**-a3
-            imf[m < 1] = 0.5**-a1 * (m[m < 1] / 0.5)**-a2
-            imf[m < 0.5] = m[m < 0.5]**-a1
-            return imf
-
-        fig, ax = self._setup_artist(fig, ax)
-
-        m0 = np.array([1])
-        m_domain = np.logspace(-2, 2, 400)
-
-        if show_canonical is True or show_canonical == 'all':
-            show_canonical = {'salpeter', 'chabrier', 'kroupa'}
-
-        if 'salpeter' in show_canonical:
-            norm = salpeter(m0)
-            ax.loglog(m_domain, salpeter(m_domain) / norm, label='Salpeter')
-
-        if 'chabrier' in show_canonical:
-            norm = chabrier(m0)
-            ax.loglog(m_domain, chabrier(m_domain) / norm, label='Chabrier')
-
-        if 'kroupa' in show_canonical:
-            norm = kroupa(m0)
-            ax.loglog(m_domain, kroupa(m_domain) / norm, label='Kroupa')
-
-        # plot median
-        med_plot, = ax.loglog(m_domain, this_imf(m_domain) / this_imf(m0))
-
-        # if ci, plot confidence interval
-        if ci:
-            lower = this_imf(m_domain, perc=15.87) / this_imf(m0, perc=15.87)
-            upper = this_imf(m_domain, perc=84.13) / this_imf(m0, perc=84.13)
-
-            # TODO better label?
-            ax.fill_between(m_domain, upper, lower,
-                            alpha=0.3, color=med_plot.get_color(),
-                            label=getattr(self, 'name', None))
-
-        ax.set_xlabel(r'Mass $[M_{\odot}]$')
-        ax.set_ylabel(r'Mass Function $\xi(m)\Delta m$')
-
-        ax.legend()
 
         return fig
 
@@ -2933,7 +3442,7 @@ class NestedRun(_SingleRunAnalysis):
     # Summaries
     # ----------------------------------------------------------------------
 
-    def parameter_summary(self, *, N_simruns=100, label_fixed=False):
+    def parameter_summary(self, *, N_simruns=100):
         '''Compute the mean and std.dev. on each parameter.
 
         Computes and returns a dictionary with the mean and standard deviation
@@ -2957,7 +3466,7 @@ class NestedRun(_SingleRunAnalysis):
             deviations.
         '''
 
-        labels = self._get_labels(label_fixed=label_fixed)
+        labels = self._get_labels()
 
         sr = self._sim_errors(N_simruns)
         mns, _ = self.parameter_means(sim_runs=sr, return_samples=False)
@@ -3013,16 +3522,15 @@ class NestedRun(_SingleRunAnalysis):
 
             mssg += f'{" " * 8}{"Mean":^14} | {"Std. Dev.":^14}\n'
 
+            logging.debug(f"printing summary of {labels} -> {mns}")
+
             for ind, param in enumerate(labels):
 
-                if 'fixed' in param:
-                    mssg += (f'{param[:-8]:>5} = {mns[ind]:.3f} '
-                             f'({"fixed":^14}) | ')
-                    mssg += f'{"-" * 14}\n'
-                else:
-                    mssg += (f'{param:>5} = {mns[ind]:.3f} '
-                             f'(±{σ_mns[ind]:.3f}) | ')
-                    mssg += (f'{std[ind]:.3f} (±{σ_std[ind]:.3f})\n')
+                logging.debug(f"---> ({ind}) {param} {mns[ind]}")
+
+                mssg += (f'{param:>5} = {mns[ind]:.3f} '
+                         f'(±{σ_mns[ind]:.3f}) | ')
+                mssg += (f'{std[ind]:.3f} (±{σ_std[ind]:.3f})\n')
 
         if content == 'all' or content == 'setup':
 
@@ -3032,18 +3540,10 @@ class NestedRun(_SingleRunAnalysis):
 
             with self._openfile('metadata') as mdata:
 
-                mssg += 'Fixed parameters:\n'
-                fixed = mdata['fixed_params'].attrs
-                if fixed:
-                    for k, v in fixed.items():
-                        mssg += f'    {k} = {v}\n'
-                else:
-                    mssg += '    None\n'
-
                 mssg += 'Excluded components:\n'
-                exc = mdata['excluded_likelihoods'].attrs
-                if exc:
-                    for i, v in exc.items():
+                exc = mdata['excluded_likelihoods']
+                if exc.size > 0:
+                    for i, v in enumerate(exc):
                         mssg += f'    ({i}) {v}\n'
                 else:
                     mssg += '    None\n'
@@ -3072,6 +3572,55 @@ class NestedRun(_SingleRunAnalysis):
 # --------------------------------------------------------------------------
 # Collections of Runs
 # --------------------------------------------------------------------------
+
+
+def _check_for_operator(func):
+    '''Decorator which parses param str for math operations to apply.'''
+    import functools
+    import operator
+
+    opers = {'+': operator.add, '-': operator.sub,
+             '*': operator.mul, '/': operator.truediv}
+
+    # TODO also need to implement this for latex_label if want that to work
+
+    def _get_param_or_scalar(self, param, *args, **kwargs):
+        '''Check if this is a constant number instead of a parameter.'''
+        try:
+            return func(self, param.strip(), *args, **kwargs)
+        except ValueError as err:
+            try:
+                return [float(param.strip()),] * len(self)
+            except ValueError:
+                raise err
+
+    @functools.wraps(func)
+    def _operator_decorator(self, param, *args, **kwargs):
+
+        if found_op := (set(param) & opers.keys()):
+
+            if len(found_op) > 1:
+                mssg = "More than one operation not supported"
+                raise ValueError(mssg)
+
+            op_name = found_op.pop()
+
+            param1, param2 = param.split(op_name)
+
+            res1 = _get_param_or_scalar(self, param1, *args, **kwargs)
+            # res1 = func(self, param1.strip(), *args, **kwargs)
+
+            res2 = _get_param_or_scalar(self, param2, *args, **kwargs)
+            # res2 = func(self, param2.strip(), *args, **kwargs)
+
+            final = list(map(opers[op_name], res1, res2))
+
+        else:
+            final = func(self, param, *args, **kwargs)
+
+        return final
+
+    return _operator_decorator
 
 
 class _Annotator:
@@ -3228,6 +3777,16 @@ class RunCollection(_RunAnalysis):
         '''List of `.name`s of each run in this collection.'''
         return [r.name for r in self.runs]
 
+    @property
+    def states(self):
+        '''List of `.state`s of each run in this collection.'''
+        return [r.state for r in self.runs]
+
+    @property
+    def ESSs(self):
+        '''List of `.ESS`s of each run in this collection.'''
+        return np.array([r.ESS for r in self.runs])
+
     def __iter__(self):
         '''Return an iterator over the individual runs in this collection.'''
         # Important that the order of self.runs (and thus this iter) is constant
@@ -3270,7 +3829,8 @@ class RunCollection(_RunAnalysis):
             mssg = f"No Run found with name {name}"
             raise ValueError(mssg)
 
-    def filter_runs(self, pattern, sort_by=None, sort=True, **kwargs):
+    def filter_runs(self, pattern, sort_by=None, sort=True, filter_out=False,
+                    min_state=None, **kwargs):
         '''Filter all runs based on names and return a new object with them.
 
         Based on a given string pattern, filters out all runs within this
@@ -3293,6 +3853,14 @@ class RunCollection(_RunAnalysis):
             and sorting is handled there, by name. This argument is only used
             if `sort` is True.
 
+        filter_out : bool, optional
+            If True, will return a new object with the filtered runs *removed*,
+            rather than with only the filtered runs. Defaults to False.
+
+        min_state : NestedFittingState or int, optional
+            If given, only runs with a `state` greater than or equal to this
+            will be filtered upon.
+
         sort : bool, optional
             Whether or not to sort this run. If `sort_by` is None, this
             argument is passed to the new run collection init.
@@ -3307,13 +3875,19 @@ class RunCollection(_RunAnalysis):
         '''
         import fnmatch
 
+        orig_names = self.names
+
+        if min_state is not None:
+            orig_names = [nm for (nm, state) in zip(orig_names, self.states)
+                          if state >= min_state]
+
         try:
-            filtered_names = fnmatch.filter(self.names, pattern)
+            filtered_names = fnmatch.filter(orig_names, pattern)
 
         except TypeError:
 
             try:
-                filtered_names = list(set(self.names) & set(pattern))
+                filtered_names = list(set(orig_names) & set(pattern))
 
             except TypeError:
 
@@ -3326,9 +3900,12 @@ class RunCollection(_RunAnalysis):
             mssg = f"No matched runs found with pattern {pattern}"
             raise ValueError(mssg)
 
+        if filter_out:
+            filtered_names = list(set(orig_names) - set(filtered_names))
+
         if sort:
             if sort_by == 'old':
-                filtered_names.sort(key=lambda n: self.names.index(n))
+                filtered_names.sort(key=lambda n: orig_names.index(n))
                 sort = False
 
             elif sort_by == 'new':
@@ -3356,18 +3933,36 @@ class RunCollection(_RunAnalysis):
 
         self.runs = runs
 
-        labels = runs[0]._get_labels(label_fixed=False)
+        # Note if these runs had different free parameters
+        self._mixed_runs = (
+            len(list(itertools.groupby([r._get_labels() for r in runs]))) > 1
+        )
+
+        if self._mixed_runs:
+            # TODO also raises when same parameters are out of order, which is
+            #   actually fine as _params is a dict
+            mssg = ("These runs do not share the same set of free parameters. "
+                    "Note that some function may produce unexpected results.")
+            warnings.warn(mssg)
 
         # TODO this `equal_weights...` breaks when using MCMCRun's
-        self._params = [dict(zip(labels, r._get_equal_weight_chains()[1].T))
-                        for r in runs]
+        self._params = [
+            dict(zip(r._get_labels(), r._get_equal_weight_chains()[1].T))
+            for r in runs
+        ]
+
+        self._fixedparams = [
+            {k: np.array([v, ]) for k, v in r._modelparams.fixed_params.items()}
+            for r in self.runs
+        ]
 
         self._mdata = [{k: [v, ] for k, v in r.obs.mdata.items()}
                        for r in self.runs]
 
     @classmethod
     def from_dir(cls, directory, pattern='**/*hdf', strict=False,
-                 *args, sampler='nested', run_kwargs=None, **kwargs):
+                 *args, sampler='nested', name_from_file=False, run_kwargs=None,
+                 **kwargs):
         '''Initialize a run collection based on run files found in a directory.
 
         Search for run output files (as created by the relevant fitting
@@ -3396,14 +3991,17 @@ class RunCollection(_RunAnalysis):
         sampler : {'nested', 'mcmc'}, optional
             Whether to initialize each run as either a `NestedRun` or `MCMCRun`.
 
+        name_from_file : bool, optional
+            If True, sets the `name` of each run to the stem of the
+            corresponding file name. By default will instead use the name of
+            the cluster found in `run.obs.cluster`.
+
         run_kwargs : dict, optional
             Optional arguments passed to all individual run initialization.
 
         *args, **kwargs
             All other arguments are passed to the new RunCollection object.
         '''
-
-        cls._src = f'{directory}/{pattern}'
 
         directory = pathlib.Path(directory)
 
@@ -3424,9 +4022,12 @@ class RunCollection(_RunAnalysis):
 
             try:
                 run = run_cls(fn, **run_kwargs)
-                run.name = run.obs.cluster
+                if name_from_file:
+                    run.name = run._filename.stem
+                else:
+                    run.name = run.obs.cluster
 
-            except KeyError as err:
+            except (KeyError, IndexError) as err:
 
                 mssg = f'Failed to create run for {fn}: {err}'
 
@@ -3442,11 +4043,16 @@ class RunCollection(_RunAnalysis):
             mssg = f"No valid runs found in {directory}"
             raise RuntimeError(mssg)
 
-        return cls(runs, *args, **kwargs)
+        rc = cls(runs, *args, **kwargs)
+
+        rc._src = f'{directory}/{pattern}'
+
+        return rc
 
     @classmethod
     def from_files(cls, file_list, strict=False,
-                   *args, sampler='nested', run_kwargs=None, **kwargs):
+                   *args, sampler='nested', name_from_file=False,
+                   run_kwargs=None, **kwargs):
         '''Initialize a run collection based on a list of run files.
 
         Given a list of paths to a number of run output files (as created by
@@ -3468,6 +4074,11 @@ class RunCollection(_RunAnalysis):
 
         sampler : {'nested', 'mcmc'}, optional
             Whether to initialize each run as either a `NestedRun` or `MCMCRun`.
+
+        name_from_file : bool, optional
+            If True, sets the `name` of each run to the stem of the
+            corresponding file name. By default will instead use the name of
+            the cluster found in `run.obs.cluster`.
 
         run_kwargs : dict, optional
             Optional arguments passed to all individual run initialization.
@@ -3503,7 +4114,10 @@ class RunCollection(_RunAnalysis):
 
             try:
                 run = run_cls(file, **run_kwargs)
-                run.name = run.obs.cluster
+                if name_from_file:
+                    run.name = run._filename.stem
+                else:
+                    run.name = run.obs.cluster
 
             except KeyError as err:
 
@@ -3525,9 +4139,11 @@ class RunCollection(_RunAnalysis):
 
     def _update(self):
         '''Quickly update all run params, in case something has changed.'''
-        labels = self.runs[0]._get_labels(label_fixed=False)
-        self._params = [dict(zip(labels, r._get_equal_weight_chains()[1].T))
-                        for r in self.runs]
+
+        self._params = [
+            dict(zip(r._get_labels(), r._get_equal_weight_chains()[1].T))
+            for r in self.runs
+        ]
 
         self._mdata = [{k: [v, ] for k, v in r.obs.mdata.items()}
                        for r in self.runs]
@@ -3538,7 +4154,8 @@ class RunCollection(_RunAnalysis):
         # try to get it from the best-fit params or metadata
         try:
             chains = [
-                {**self._params[ind], **self._mdata[ind]}[param]
+                {**self._params[ind], **self._fixedparams[ind],
+                 **self._mdata[ind]}[param]
                 for ind, run in enumerate(self.runs)
             ]
 
@@ -3573,6 +4190,7 @@ class RunCollection(_RunAnalysis):
                     self.get_CImodels(load=True, **kwargs)
 
                 except RuntimeError:
+                    logging.debug('No saved CI models found, getting models')
                     self.get_models(**kwargs)
 
         data = getattr(self.models, param)
@@ -3605,44 +4223,21 @@ class RunCollection(_RunAnalysis):
         else:
             raise ValueError(f'Invalid sigma {sigma} (0, 1, 2)')
 
-        out = base([np.nanpercentile(ds, q=q) for ds in chains]).T
-        out[1:] = np.abs(out[1:] - out[0])
+        try:
+            out = base([np.nanpercentile(ds, q=q) for ds in chains]).T
+            out[1:] = np.abs(out[1:] - out[0])
 
-        return out
-
-    def _check_for_operator(func):
-        '''Decorator which parses param str for math operations to apply.'''
-        import functools
-        import operator
-
-        opers = {'+': operator.add, '-': operator.sub,
-                 '*': operator.mul, '/': operator.truediv}
-
-        # TODO also need to implement this for latex_label if want that to work
-
-        @functools.wraps(func)
-        def _operator_decorator(self, param, *args, **kwargs):
-
-            if found_op := (set(param) & opers.keys()):
-
-                if len(found_op) > 1:
-                    mssg = "More than one operation not supported"
-                    raise ValueError(mssg)
-
-                op_name = found_op.pop()
-
-                param1, param2 = param.split(op_name)
-                res1 = func(self, param1.strip(), *args, **kwargs)
-                res2 = func(self, param2.strip(), *args, **kwargs)
-
-                final = list(map(opers[op_name], res1, res2))
+        except TypeError as err:
+            if self._mixed_runs:
+                mssg = (f"Could not compute percentiles for {param}. "
+                        "If all runs do not share this parameter, the fixed "
+                        "values must at least share the same type")
+                raise ValueError(mssg) from err
 
             else:
-                final = func(self, param, *args, **kwargs)
+                raise err
 
-            return final
-
-        return _operator_decorator
+        return out
 
     @_check_for_operator
     def _get_param_chains(self, param, *,
@@ -3657,6 +4252,10 @@ class RunCollection(_RunAnalysis):
 
         One operation (+-*/) can be included to return two different parameters
         combined with said operation.
+
+        Note that, if chains are to be concatenated all together, they must be
+        weighted, as these chains will *not* all have the same size. A weight
+        of 1/Ni should work.
         '''
 
         try:
@@ -3669,7 +4268,7 @@ class RunCollection(_RunAnalysis):
 
         # try to get it from the best-fit params, metadata or run stats
         try:
-            if force_model:
+            if force_model:  # mssg actually only meant to be raised below
                 mssg = '`force_model` is True, must set `allow_model=True`'
                 raise ValueError(mssg)
 
@@ -3710,68 +4309,10 @@ class RunCollection(_RunAnalysis):
             logged = False
             pass
 
-        math_mapping = {
-            'W0': r'\hat{\phi}_0',
-            'M': r'M',
-            'rh': r'r_{\mathrm{h}}',
-            'ra': (r'r_{\mathrm{a}}' if force_model
-                   else r'\log_{10}\left(\hat{r}_{\mathrm{a}}\right)'),
-            'g': r'g',
-            'delta': r'\delta',
-            's2': r's^{2}',
-            'F': r'F',
-            'a1': r'\alpha_{1}',
-            'a2': r'\alpha_{2}',
-            'a3': r'\alpha_{3}',
-            'BHret': r'\mathrm{BH}_{\mathrm{ret}}',
-            'd': r'd',
-            'FeH': r'[\mathrm{Fe}/\mathrm{H}]',
-            'Ndot': r'\dot{N}',
-            'RA': r'\mathrm{RA}',
-            'DEC': r'\mathrm{DEC}',
-            'chi2': r'\chi^{2}',
-            'BH_mass': r'\mathrm{M}_{\mathrm{BH}}',
-            'BH_num': r'\mathrm{N}_{\mathrm{BH}}',
-            'f_rem': r'f_{\mathrm{remn}}',
-            'f_BH': r'f_{\mathrm{BH}}',
-            'spitzer_chi': r'\chi_{\mathrm{Spitzer}}',
-            'trh': r't_{\mathrm{r_h}}',
-            'N_relax': r'N_{\mathrm{relax}}',
-            'r0': r'r_{0}',
-            'rt': r'r_{\mathrm{t}}',
-            'rv': r'r_{\mathrm{v}}',
-            'rhp': r'r_{\mathrm{hp}}',
-            'mmean': r'\bar{m}',
-        }
+        if param == 'ra' and force_model:
+            param = 'ra_model'
 
-        unit_mapping = {
-            'M': r'10^6\ M_\odot',
-            'rh': r'\mathrm{pc}',
-            'ra': r'\mathrm{pc}' if force_model else None,
-            's2': r'\mathrm{arcmin^{-4}}',
-            'BHret': r'\%',
-            'd': r'\mathrm{kpc}',
-            'Ndot': r'\dot{N}',
-            'RA': r'\deg',
-            'DEC': r'\deg',
-            'BH_mass': r'M_\odot',
-            'f_rem': r'\%',
-            'f_BH': r'\%',
-            'trh': r'\mathrm{Gyr}',
-            'r0': r'\mathrm{pc}',
-            'rt': r'\mathrm{pc}',
-            'rv': r'\mathrm{pc}',
-            'rhp': r'\mathrm{pc}',
-            'mmean': r'M_\odot',
-        }
-
-        name = math_mapping.get(param, param)
-        unit = unit_mapping.get(param, None)
-
-        if with_units and unit is not None:
-            label = rf'${name.strip("$")}\ \left[{unit}\right]$'
-        else:
-            label = rf'${name.strip("$")}$' if name else name
+        label = _get_latex_label(param, with_units=with_units)
 
         if logged:
             # TODO obviously currently fails for operation-param pairs
@@ -3781,15 +4322,28 @@ class RunCollection(_RunAnalysis):
 
     def _add_colours(self, ax, mappable, cparam, clabel=None, *, alpha=1.,
                      add_colorbar=True, extra_artists=None, math_label=True,
-                     fix_cbar_ticks=True, cbounds=None):
+                     fix_cbar_ticks=True, cbounds=None, part='face'):
         '''Add colours to all artists and add the relevant colorbar to ax.
         Unnecessarily complicated to account for diverse artists (violinplot).
         '''
         import matplotlib.colorbar as mpl_cbar
 
-        def set_colour(art, clr):
+        def set_colour(art, clr, which_part=part):
+
+            match which_part.casefold():
+                case 'face':
+                    setter = art.set_facecolor
+                case 'edge':
+                    setter = art.set_edgecolor
+                case 'both' | 'all' | True:
+                    setter = art.set_color
+                case _:
+                    mssg = "Invalid 'part', must be one of 'both', 'edge', face"
+                    raise ValueError(mssg)
+
             try:
-                art.set_color(clr)
+                setter(clr)
+
             except ValueError as err:
                 mssg = (f"Could not set colour '{clr}'. Colours must be a "
                         "valid model parameter, matplotlib colour or float")
@@ -3813,7 +4367,9 @@ class RunCollection(_RunAnalysis):
         cvalues = np.atleast_1d(cvalues)
 
         # If cvalues looks like they might be valid plt colours, move on
-        if cvalues.dtype.kind in 'US':
+        if ((cvalues.dtype.kind in 'US') or
+                ((cvalues.ndim == 2) and (cvalues.shape[1] == 4))):
+
             colors = cvalues
 
             add_colorbar = False
@@ -3843,10 +4399,10 @@ class RunCollection(_RunAnalysis):
         if extra_artists is not None:
             for artist in extra_artists:
 
-                # Set colors normally
+                # Set colors normally (force part='all'')
                 try:
                     # artist.set_color(colors)
-                    set_colour(artist, colors)
+                    set_colour(artist, colors, which_part='all')
 
                 # If fails, attempt to set one colour at a time
                 except (ValueError, AttributeError) as err:
@@ -3857,7 +4413,7 @@ class RunCollection(_RunAnalysis):
                     try:
                         for i, subart in enumerate(artist):
                             # subart.set_color(colors[i])
-                            set_colour(subart, colors[i])
+                            set_colour(subart, colors[i], which_part='all')
 
                     except (ValueError, TypeError):
                         mssg = f'Cannot `set_color` of extra artist "{artist}"'
@@ -3925,6 +4481,54 @@ class RunCollection(_RunAnalysis):
 
         return scatter_kw
 
+    def _set_multi_markers(self, pathcoll, markers):
+        '''allow for multiple kinds of markers in plt.scatter
+        pathcoll is the return value from `plt.scatter`, markers is list of
+        markers to use, in correct order.
+
+        Adapted from matplotlib#11155
+        '''
+        import matplotlib.markers as mpl_mrk
+
+        if markers is None:
+            return pathcoll
+
+        markers = np.atleast_1d(markers)
+
+        paths = []
+        for mrk in markers:
+
+            if isinstance(mrk, mpl_mrk.MarkerStyle):
+                marker_obj = mrk
+
+            else:
+                marker_obj = mpl_mrk.MarkerStyle(mrk)
+
+            path = marker_obj.get_path().transformed(
+                        marker_obj.get_transform())
+
+            paths.append(path)
+
+        pathcoll.set_paths(paths)
+
+        return pathcoll
+
+    def _scatter_error(self, ax, x, y, xerr, yerr, marker, label, **kwargs):
+        '''plot scatterplot with errorbars'''
+
+        sc_kwargs = self._dissect_scatter_kwargs(kwargs)
+
+        errbar = ax.errorbar(x, y, xerr=xerr, yerr=yerr, fmt='none', **kwargs)
+
+        # TODO markerfacecoloralt is not supported by scatter because it doesnt
+        # get and use the marker.get_alt_path(). This should be fixed in mpl.
+
+        points = ax.scatter(x, y, picker=True, label=label, **sc_kwargs)
+
+        points = self._set_multi_markers(points, marker)
+
+        return points, errbar
+
     # ----------------------------------------------------------------------
     # Model Collection Visualizers
     # ----------------------------------------------------------------------
@@ -3952,8 +4556,11 @@ class RunCollection(_RunAnalysis):
         chains = [run._get_equal_weight_chains()[1] for run in self.runs]
 
         obs_list = [run.obs for run in self.runs]
+        ev_list = [run._evolved for run in self.runs]
+        prm_list = [run._modelparams for run in self.runs]
 
-        mc = ModelCollection.from_chains(chains, obs_list, ci=False, **kwargs)
+        mc = ModelCollection.from_chains(chains, obs_list, prm_list, ci=False,
+                                         evolved=ev_list)
 
         # save a copy of models here
         self.models = mc
@@ -4000,30 +4607,35 @@ class RunCollection(_RunAnalysis):
         CIModelVisualizer
             The created model visualization (with confidence intervals) object.
         '''
-        import multiprocessing
+        import multiprocess
 
-        # TODO also pass all the obs from the runs here too
+        obs_list = [run.obs for run in self.runs]
+        ev_list = [run._evolved for run in self.runs]
+
         if load:
             filenames = [run._filename for run in self.runs]
-            mc = ModelCollection.load(filenames)
+            mc = ModelCollection.load(filenames, observations=obs_list,
+                                      evolved=ev_list)
 
         else:
             chains = []
-            obs_list = []
+            prm_list = []
 
             for run in self.runs:
                 _, ch = run._get_equal_weight_chains(add_errors=add_errors)
 
                 if shuffle:
+                    ch = ch.copy()  # because chain may be readonly
                     np.random.default_rng().shuffle(ch, axis=0)
 
                 chains.append(ch)
-                obs_list.append(run.obs)
+                prm_list.append(run._modelparams)
 
-            with multiprocessing.Pool(processes=Nprocesses) as pool:
+            with multiprocess.Pool(processes=Nprocesses) as pool:
 
-                mc = ModelCollection.from_chains(chains, obs_list, ci=True,
-                                                 N=N, pool=pool)
+                mc = ModelCollection.from_chains(chains, obs_list, prm_list,
+                                                 ci=True, N=N, pool=pool,
+                                                 evolved=ev_list)
 
         # save a copy of models here
         self.models = mc
@@ -4117,6 +4729,7 @@ class RunCollection(_RunAnalysis):
 
     def plot_relation(self, param1, param2, fig=None, ax=None, *,
                       show_pearsonr=False, force_model=False,
+                      show_histograms=False, histogram_kwargs=None,
                       annotate=False, annotate_kwargs=None,
                       clr_param=None, clr_kwargs=None, label=None, marker='o',
                       **kwargs):
@@ -4151,6 +4764,14 @@ class RunCollection(_RunAnalysis):
             Force these parameter values to be taken from model quantities.
             Can be useful when some parameter names overlap (e.g. "ra").
 
+        show_histograms : bool, optional
+            Optionally plot histograms, using `_plot_param_hist`, for each
+            of the parameters, and append them to the top and right of the
+            plot.
+
+        histogram_kwargs : dict, optional
+            Optional arguments passed to the `_plot_param_hist` function.
+
         annotate : bool, optional
             Optionally create a hook to this figure allowing the interactive
             annotating of selected cluster names. See `_Annotator` for more
@@ -4183,15 +4804,34 @@ class RunCollection(_RunAnalysis):
             The corresponding figure, containing all axes and plot artists.
         '''
 
-        fig, ax = self._setup_artist(fig, ax)
-        sc_kwargs = self._dissect_scatter_kwargs(kwargs)
+        if show_histograms:
+
+            # layout = [['x', '.'], ['m', 'y']]
+            layout = [param1, param2]
+            gs_kw = {"height_ratios": [0.2, 1.0], "width_ratios": [1.0, 0.2]}
+
+            fig, axes = self._setup_mosaic_artist(fig, layout,
+                                                  gridspec_kw=gs_kw,
+                                                  triangularize=True,
+                                                  sharex='col')
+
+            ax_x = axes[f'{param1}-{param1}']
+            ax = axes[f'{param1}-{param2}']
+            ax_y = axes[f'{param2}-{param2}']
+
+            # Need to manually sharey because it is flipped
+            ax_y.sharey(ax)
+
+        else:
+            fig, ax = self._setup_artist(fig, ax)
+            ax_x = ax_y = None
 
         x, *dx = self._get_param(param1, force_model=force_model)
         y, *dy = self._get_param(param2, force_model=force_model)
 
-        errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', **kwargs)
-        points = ax.scatter(x, y, picker=True, marker=marker,
-                            label=label, **sc_kwargs)
+        points, errbar = self._scatter_error(ax, x, y, xerr=dx, yerr=dy,
+                                             marker=marker, label=label,
+                                             **kwargs)
 
         ax.set_xlabel(self._get_latex_labels(param1, force_model=force_model))
         ax.set_ylabel(self._get_latex_labels(param2, force_model=force_model))
@@ -4224,6 +4864,18 @@ class RunCollection(_RunAnalysis):
             r, p = pearsonr(x, y)
             text = '\n'.join((fr'$\rho={r:.2f}$', fr'$p={p:.2%}$%'))
             ax.add_artist(mpl_obx.AnchoredText(text, loc='lower right'))
+
+        if show_histograms:
+
+            if histogram_kwargs is None:
+                histogram_kwargs = {}
+
+            self.plot_param_hist(param1, fig=fig, ax=ax_x, **histogram_kwargs)
+            self.plot_param_hist(param2, fig=fig, ax=ax_y,
+                                 flipped=True, **histogram_kwargs)
+
+            ax_x.set_xlabel(None)
+            ax_y.set_ylabel(None)
 
         return fig
 
@@ -4310,14 +4962,13 @@ class RunCollection(_RunAnalysis):
         '''
 
         fig, ax = self._setup_artist(fig, ax)
-        sc_kwargs = self._dissect_scatter_kwargs(kwargs)
 
         x, *dx = self._get_param(param, force_model=force_model)
         y, dy = truths, e_truths
 
-        errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', **kwargs)
-        points = ax.scatter(x, y, picker=True, marker=marker,
-                            label=label, **sc_kwargs)
+        points, errbar = self._scatter_error(ax, x, y, xerr=dx, yerr=dy,
+                                             marker=marker, label=label,
+                                             **kwargs)
 
         if diagonal:
             grid_kw = {
@@ -4454,7 +5105,6 @@ class RunCollection(_RunAnalysis):
         '''
 
         fig, ax = self._setup_artist(fig, ax)
-        sc_kwargs = self._dissect_scatter_kwargs(kwargs)
 
         x, *dx = self._get_param(param, force_model=force_model)
         y, dy = lit, e_lit
@@ -4469,9 +5119,9 @@ class RunCollection(_RunAnalysis):
             dx, dy = dy, dx
             xlabel, ylabel = ylabel, xlabel
 
-        errbar = ax.errorbar(x, y, xerr=dx, yerr=dy, fmt='none', **kwargs)
-        points = ax.scatter(x, y, picker=True, marker=marker,
-                            label=label, **sc_kwargs)
+        points, errbar = self._scatter_error(ax, x, y, xerr=dx, yerr=dy,
+                                             marker=marker, label=label,
+                                             **kwargs)
 
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
@@ -4666,6 +5316,406 @@ class RunCollection(_RunAnalysis):
 
         return fig
 
+    def plot_lit_residuals(self, param, truths, e_truths=None, src_truths='',
+                           fig=None, ax=None, *,
+                           lit_on_x=True, percentage=True,
+                           annotate=False, annotate_kwargs=None,
+                           clr_param=None, clr_kwargs=None,
+                           force_model=False, label=None, marker='o', **kwargs):
+        '''Plot residuals between parameter values and "truths".
+
+        Plots a scatter plot (with errorbars) of the residuals of this `param`
+        with the given `truths` array, as a function of the `truths`, and using
+        the median and 1σ error values from each run in this collection.
+
+        Parameters
+        ----------
+        param : str
+            Name of the parameter to plot.
+
+        truths : np.ndarray[Nruns]
+            Array of "truth" values, to plot on the y-axis.
+
+        e_truths : np.ndarray[Nruns], optional
+            Array of uncertainties on the "truth" values.
+
+        src_truths : str, optional
+            The source of the "truths", included in the y-axis label.
+
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_RunAnalysis._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this relation. Should be a
+            part of the given `fig`.
+
+        percentage : bool, optional
+            If true (default), will plot residuals as a percentage of the
+            true values.
+
+        annotate : bool, optional
+            Optionally create a hook to this figure allowing the interactive
+            annotating of selected cluster names. See `_Annotator` for more
+            details.
+
+        annotate_kwargs : dict, optional
+            Optional arguments passed to the `_Annotator` instance.
+
+        clr_param : str, optional
+            Defines the colour of the plotted points. If the name of a
+            parameter, will colour each point by the respective value of that
+            parameter in each run, otherwise will accept a single colour, or
+            array of colours for each run.
+
+        clr_kwargs : dict, optional
+            Optional arguments passed to the `_add_colours` function.
+
+        force_model : bool, optional
+            Force these parameter values to be taken from model quantities.
+            Can be useful when some parameter names overlap (e.g. "ra").
+
+        label : str, optional
+            Set a label that will be displayed in the legend.
+
+        marker : str, optional
+            The marker style. See `matplotlib.markers` for more information.
+
+        **kwargs : dict
+            All other arguments are passed to `ax.errorbar` and `ax.scatter`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
+
+        # TODO currently not supporting e_truths, but it should
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        val, *dval = self._get_param(param, force_model=force_model)
+
+        if percentage:
+            res = 100 * (val - truths) / truths
+            res_err = 100 * u.Quantity(dval) / val
+        else:
+            res = val - truths
+            res_err = dval
+
+        domain = truths if lit_on_x else val
+
+        points, errbar = self._scatter_error(ax, domain, res,
+                                             xerr=None, yerr=res_err,
+                                             marker=marker, label=label,
+                                             **kwargs)
+
+        xlbl = self._get_latex_labels(param, force_model=force_model)
+        ax.set_xlabel(xlbl + (f' ({src_truths})' if src_truths else ''))
+
+        ylbl = self._get_latex_labels(param, force_model=force_model,
+                                      with_units=False)
+        ax.set_ylabel(Fr'$\Delta${ylbl}{" [%]" if percentage else ""}')
+        # TODO ylabel should look more like that in the "dist" plots
+
+        # ax.set_xlim(0.)
+        # ax.set_ylim(0.)
+
+        if clr_param is not None:
+
+            if clr_kwargs is None:
+                clr_kwargs = {}
+
+            err_artists = itertools.chain.from_iterable(errbar[1:])
+
+            self._add_colours(ax, points, clr_param,
+                              extra_artists=err_artists, **clr_kwargs)
+
+        elif not (kwargs.keys() & {'c', 'color'}):
+            # Ensure that the points and lines are the same colour
+            for ch in errbar.get_children():
+                ch.set_color(points.get_facecolor())
+
+        if annotate:
+
+            if annotate_kwargs is None:
+                annotate_kwargs = {}
+
+            _Annotator(fig, ax, self.runs, truths, res, **annotate_kwargs)
+
+        return fig
+
+    def plot_density(self, param1, param2, fig=None, ax=None, method='hex', *,
+                     force_model=False, nbins=50, bw_method=None,
+                     quantiles=None, quantile_clr='k', **kwargs):
+        '''Plot 2D density of distributions of two parameters across all runs.
+
+        Concatenates the distributions of two given parameters across all runs
+        and plots the 2D density of the corresponding total distribution.
+
+        Generates a density plot (e.g., hexbin, 2D histogram, KDE, or contour)
+        to visualize the relationship between two parameters across all runs
+        in the collection.
+
+        If either parameter is None, will create a flattened density plot
+        across one axis, similar to a colorbar.
+
+        Parameters
+        ----------
+        param1 : str
+            Name of the parameter to plot on the x-axis.
+
+        param2 : str
+            Name of the parameter to plot on the y-axis.
+
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_RunAnalysis._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this relation. Should be a
+            part of the given `fig`.
+
+        method : {'hex', 'hist', 'kde', 'contour'}, optional
+            The method used to create the density plot. Each uses the same
+            underlying data with different plotting functions. Options are:
+            - 'hex': Hexagonally binned 2D histogram (`ax.hexbin`; default).
+            - 'hist': 2D histogram (`ax.hist2d`).
+            - 'kde': Colour-image plot, based on a KDE (`ax.pcolormesh`).
+            - 'contour': Contour plot, based on KDE (`ax.contour`).
+
+        force_model : bool, optional
+            Force these parameter values to be taken from model quantities.
+            Can be useful when some parameter names overlap (e.g. "ra").
+
+        nbins : int, optional
+            The number of bins used for grid plotting. By default defines the
+            number of bins on x-axis (which may or may not match the y-axis).
+            Passed to 'gridsize' for hex method, 'bins' for hist, and used to
+            set equal-sized bins for all others.  Default is 50 bins.
+
+        **kwargs : dict
+            All other arguments are passed to the relevant plotting function.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+
+        Notes
+        -----
+        To bin or create these density estimates, the two parameter chains must
+        be the same size. This means that run and model parameters can likely
+        not be combined in this function, as they are not aligned.
+        '''
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        flat_x = flat_y = False
+
+        if param1 is not None:
+            px = self._get_param_chains(param1, force_model=force_model,
+                                        with_units=False)
+        else:
+            # flatten this axis by treating like a fixed value
+            flat_x = True
+            px = np.zeros(len(self.runs))
+
+        if param2 is not None:
+            py = self._get_param_chains(param2, force_model=force_model,
+                                        with_units=False)
+        else:
+            # flatten this axis by treating like a fixed value
+            flat_y = True
+            py = np.zeros(len(self.runs))
+
+        if flat_x and flat_y:
+            raise ValueError("Cannot flatten both axes.")
+
+        # Expand any length-1 values, which represent fixed params
+        px, py = zip(*[
+            (xi if xi.size > 1 else np.repeat(xi, yi.size),
+             yi if yi.size > 1 else np.repeat(yi, xi.size))
+            for xi, yi in zip(px, py)
+        ])
+
+        # mask out any nans (why are there any of these?)
+        px, py = zip(*[
+            (xi[~(np.isnan(xi) | np.isnan(yi))],
+             yi[~(np.isnan(xi) | np.isnan(yi))])
+            for xi, yi in zip(px, py)
+        ])
+
+        x = np.hstack(px)
+        y = np.hstack(py)
+
+        # If they still dont match sizes, means they weren't fixed, but mixed
+        if x.size != y.size:
+            mssg = ("Cannot mix model and run parameters when plotting density")
+            raise ValueError(mssg)
+
+        # Get weights of each run, in case they have different chain sizes
+        Ns = np.array([xi.size for xi in px])
+        weights = np.repeat(1 / Ns, Ns)
+
+        match method.casefold():
+
+            case 'hex' | 'hexbin':
+
+                ax.hexbin(x, y, gridsize=nbins,
+                          C=weights, reduce_C_function=np.sum, **kwargs)
+
+            case 'hist' | 'hist2d':
+
+                ax.hist2d(x, y, bins=nbins, weights=weights, **kwargs)
+
+            case 'kde':
+                from scipy.stats import gaussian_kde
+
+                if flat_x:
+                    data = y
+                    xg, yg = np.mgrid[0:1:2j, y.min():y.max():nbins*1j]
+                    domain = yg.flatten()
+
+                elif flat_y:
+                    data = x
+                    xg, yg = np.mgrid[x.min():x.max():nbins*1j, 0:1:2j]
+                    domain = xg.flatten()
+                else:
+                    data = [x, y]
+                    xg, yg = np.mgrid[
+                       x.min():x.max():nbins*1j,
+                       y.min():y.max():nbins*1j
+                    ]
+                    domain = np.c_[xg.flatten(), yg.flatten()].T
+
+                kde = gaussian_kde(data, weights=weights, bw_method=bw_method)
+
+                dens = kde(domain)
+
+                ax.pcolormesh(xg, yg, dens.reshape(xg.shape), **kwargs)
+
+            case 'contour':
+                from scipy.stats import gaussian_kde
+
+                kde = gaussian_kde([x, y], weights=weights, bw_method=bw_method)
+                xg, yg = np.mgrid[
+                   x.min():x.max():nbins*1j,
+                   y.min():y.max():nbins*1j
+                ]
+
+                dens = kde(np.c_[xg.flatten(), yg.flatten()].T)
+
+                ax.contour(xg, yg, dens.reshape(xg.shape), **kwargs)
+
+            case _:
+                raise ValueError("Invalid `method`, must be one of "
+                                 "'hex', 'hist', 'kde', 'contour'.")
+
+        # Optionally plot lines in either direction for quantiles
+
+        if quantiles is not None:
+
+            for pqx in np.quantile(x, q=quantiles,
+                                   weights=weights, method="inverted_cdf"):
+
+                if hasattr(pqx, 'unit'):
+                    pqx = pqx.value
+
+                ax.axvline(pqx, color=quantile_clr)
+
+            for pqy in np.quantile(y, q=quantiles,
+                                   weights=weights, method="inverted_cdf"):
+
+                if hasattr(pqy, 'unit'):
+                    pqy = pqy.value
+
+                ax.axhline(pqy, color=quantile_clr)
+
+
+
+        ax.set_xlabel(self._get_latex_labels(param1, force_model=force_model))
+        ax.set_ylabel(self._get_latex_labels(param2, force_model=force_model))
+
+        return fig
+
+    def plot_contours(self, param1, param2, fig=None, ax=None, *,
+                      force_model=False, levels=2, **kwargs):
+        '''Plot 2D contours of distributions of two parameters for each run.
+
+        Creates a 2D kernel density estimate (KDE) for the given parameters, for
+        each run in the collection, and plots the KDE as contours with the
+        specified levels.
+
+        Parameters
+        ----------
+        param1 : str
+            Name of the parameter to plot on the x-axis.
+
+        param2 : str
+            Name of the parameter to plot on the y-axis.
+
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_RunAnalysis._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this relation. Should be a
+            part of the given `fig`.
+
+        force_model : bool, optional
+            Force these parameter values to be taken from model quantities.
+            Can be useful when some parameter names overlap (e.g. "ra").
+
+        levels : int or array-like, optional
+            The number and positions of the contour levels to draw.
+            See `ax.contour` for more details. Defaults to plotting 2 levels.
+
+        **kwargs : dict
+            All other arguments are passed to `ax.contour`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
+        from scipy.stats import gaussian_kde
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        xs = self._get_param_chains(param1, force_model=force_model)
+        ys = self._get_param_chains(param2, force_model=force_model)
+
+        for run, xi, yi in zip(self.runs, xs, ys):
+
+            if xi.size != yi.size:
+                mssg = "Cannot create contours with a fixed parameter"
+                raise ValueError(mssg)
+
+            # TODO not exactly fast with large collections
+            kde = gaussian_kde([xi, yi])
+            xg, yg = np.mgrid[
+               xi.min():xi.max():100*1j,
+               yi.min():yi.max():100*1j
+            ]
+
+            dens = kde(np.c_[xg.flatten(), yg.flatten()].T).reshape(xg.shape)
+
+            # TODO levels corresponding to quantiles would be nice (SO/37890550)
+            # ax.pcolormesh(xg, yg, dens, **kwargs)
+            ax.contour(xg, yg, dens, levels=levels, **kwargs)
+
+        ax.set_xlabel(self._get_latex_labels(param1, force_model=force_model))
+        ax.set_ylabel(self._get_latex_labels(param2, force_model=force_model))
+
+        return fig
+
     # ----------------------------------------------------------------------
     # Summary plots
     # ----------------------------------------------------------------------
@@ -4715,7 +5765,6 @@ class RunCollection(_RunAnalysis):
             The corresponding figure, containing all axes and plot artists.
         '''
         fig, ax = self._setup_artist(fig, ax)
-        sc_kwargs = self._dissect_scatter_kwargs(kwargs)
 
         mean, *err = self._get_param(param, force_model=force_model)
 
@@ -4723,8 +5772,8 @@ class RunCollection(_RunAnalysis):
 
         labels = self.names
 
-        errbar = ax.errorbar(x=xticks, y=mean, yerr=err, fmt='none', **kwargs)
-        points = ax.scatter(x=xticks, y=mean, picker=True, **sc_kwargs)
+        points, errbar = self._scatter_error(ax, xticks, mean,
+                                             xerr=None, yerr=err, **kwargs)
 
         if clr_param is not None:
 
@@ -4826,7 +5875,7 @@ class RunCollection(_RunAnalysis):
                            clr_param=None, clr_kwargs=None,
                            color=None, alpha=0.3, edgecolor='k', edgewidth=1.0,
                            quantiles=[0.9772, 0.8413, 0.5, 0.1587, 0.0228],
-                           force_model=False, **kwargs):
+                           force_model=False, xticks=None, **kwargs):
         '''Plot a violin plot showing the parameter distributions for all runs.
 
         Plots a violin plot with the full posterior distributions of a
@@ -4892,9 +5941,9 @@ class RunCollection(_RunAnalysis):
                                         force_model=force_model)
 
         # filter out all nans (causes violinplot to fail silently)
-        chains = [ch[~np.isnan(ch)] for ch in chains]
+        chains = [np.array(ch)[~np.isnan(ch)] for ch in chains]
 
-        xticks = np.arange(len(self.runs))
+        xticks = xticks or np.arange(len(self.runs))
 
         labels = self.names
 
@@ -4967,7 +6016,9 @@ class RunCollection(_RunAnalysis):
         return fig
 
     def plot_param_hist(self, param, fig=None, ax=None, kde=False,
-                        force_model=False, **kwargs):
+                        force_model=False, flipped=False,
+                        quantiles=[0.8413, 0.5, 0.1587], quantile_clr=('k', .5),
+                        bw_method=None, **kwargs):
         '''Plot a histogram representing the sum of all distributions of param.
 
         Plots a histogram (or smoothed Gaussian KDE) representing the sum
@@ -4995,6 +6046,20 @@ class RunCollection(_RunAnalysis):
             Force these parameter values to be taken from model quantities.
             Can be useful when some parameter names overlap (e.g. "ra").
 
+        flipped : bool, optional
+            If True the posterior will be flipped on it's side, attached to the
+            left-axis.
+
+        quantiles : list of float
+            Quantiles to show as vertical lines.
+
+        quantile_clr : color, optional
+            The color used for the given vertical quantiles lines.
+
+        bw_method : str, scalar or callable, optional
+            The bandwidth choice method, passed to the `scipy.gaussian_kde`
+            constructor. Only used if `kde=True`.
+
         **kwargs : dict
             All other arguments are passed to `ax.fill_between` or `ax.hist`.
 
@@ -5003,12 +6068,17 @@ class RunCollection(_RunAnalysis):
         matplotlib.figure.Figure
             The corresponding figure, containing all axes and plot artists.
         '''
-        # TODO is a liiittle bit invalid if chains don't all have same N
 
         fig, ax = self._setup_artist(fig, ax)
 
-        chains = self._get_param_chains(param, force_model=force_model)
+        chains = self._get_param_chains(param, with_units=False,
+                                        force_model=force_model)
         chains = [ch[~np.isnan(ch)] for ch in chains]
+
+        # Get weights of each run, in case they have different chain sizes
+        Ns = np.array([ch.size for ch in chains])
+        weights = np.repeat(1 / Ns, Ns)
+
         chains = np.concatenate(chains)
 
         # Plot a filled KDE distribution
@@ -5019,32 +6089,49 @@ class RunCollection(_RunAnalysis):
             # get param distributions
             domain = np.linspace(chains.min(), chains.max(), 500)
 
-            distribution = gaussian_kde(chains)(domain)
+            if hasattr(chains, 'unit'):
+                chains = chains.value  # erase units for plotting KDE
 
-            distribution /= interp.UnivariateSpline(
-                domain, distribution, k=1, s=0, ext=1
-            ).integral(-np.inf, np.inf)
+            kde = gaussian_kde(chains, weights=weights, bw_method=bw_method)
+            distribution = kde(domain)
 
-            ax.fill_between(domain, 0, distribution, **kwargs)
+            distribution /= kde.integrate_box_1d(domain.min(), domain.max())
 
-            ax.set_ylim(bottom=0)
+            if flipped:
+                ax.fill_betweenx(domain, 0, distribution, **kwargs)
+                ax.set_xlim(left=0)
+            else:
+                ax.fill_between(domain, 0, distribution, **kwargs)
+                ax.set_ylim(bottom=0)
 
         # plot a simple histogram
         else:
 
-            ax.hist(chains, **kwargs)
+            orientation = "horizontal" if flipped else "vertical"
+            ax.hist(chains, orientation=orientation, weights=weights, **kwargs)
 
-        ax.set_ylabel(self._get_latex_labels(param, force_model=force_model))
+        for pq in np.quantile(chains, q=quantiles, weights=weights, method="inverted_cdf"):
+            if hasattr(pq, 'unit'):
+                pq = pq.value
+            (ax.axhline if flipped else ax.axvline)(pq, color=quantile_clr)
+
+        lbl_func = ax.set_ylabel if flipped else ax.set_xlabel
+        lbl_func(self._get_latex_labels(param, force_model=force_model))
 
         return fig
 
-    def plot_param_corner(self, params=None, fig=None, *,
+    def plot_param_corner(self, params=None, fig=None, *, density=False,
                           include_FeH=True, include_BH=False, include_rt=False,
-                          log_radii=False, force_model=False, **kwargs):
+                          log_radii=False, force_model=False,
+                          hist_kwargs=None, **kwargs):
         '''Plot a "corner plot" showing relationship between parameters.
 
-        Plots a Nparam-Nparam lower-triangular "corner" plot showing the mean
-        and 1σ values for all parameters for all runs.
+        Plots a Nparam-Nparam lower-triangular "corner" plot showing the
+        relationships between all parameters, for all runs.
+
+        By default, will plot the median and 1σ values for all parameters,
+        unless `density` is True, in which case a total 2D density plot will
+        be shown.
 
         Parameters
         ----------
@@ -5059,11 +6146,15 @@ class RunCollection(_RunAnalysis):
             have the correct number of axes.
             See `_RunAnalysis._setup_multi_artist` for more details.
 
+        density : bool, optional
+            If True, will plot the relationships between parameters using
+            `plot_density` instead of `plot_relation`.
+
         include_FeH : bool, optional
             If True, the metallicity `FeH` is included in the default params.
 
         include_BH : bool, optional
-            If True, the black hole mass `BH_mass` is included in the
+            If True, the black hole mass `M_BH` is included in the
             default params.
 
         include_rt : bool, optional
@@ -5076,8 +6167,13 @@ class RunCollection(_RunAnalysis):
             Force these parameter values to be taken from model quantities.
             Can be useful when some parameter names overlap (e.g. "ra").
 
+        hist_kwargs : dict, optional
+            Optional arguments passed to `plot_param_hist` when making
+            histograms along the diagonal.
+
         **kwargs : dict
-            All other arguments are passed to `plot_relation`.
+            All other arguments are passed to `plot_relation` (or `plot_density`
+            if density is True).
 
         Returns
         -------
@@ -5086,79 +6182,46 @@ class RunCollection(_RunAnalysis):
         '''
 
         if params is None:
-            params = ['W0', 'M', 'log_rh' if log_radii else 'rh', 'ra', 'g',
-                      'delta', 's2', 'F', 'a1', 'a2', 'a3', 'BHret', 'd']
+
+            # assume runs are all of same flavour
+            params = self.runs[0]._get_labels()
+
+            if log_radii:
+                params = [f'log_{p}' if p.startswith('rh') else p
+                          for p in params]
 
             if include_FeH:
-                params += ['FeH']
+                params += ('FeH',)
 
             if include_BH:
-                params += ['BH_mass']
+                params += ('M_BH',)
 
             if include_rt:
-                params += ['log_rt' if log_radii else 'rt']
+                params += ('log_rt' if log_radii else 'rt',)
 
         # setup axes
-        Nparams = len(params)
-        Nrows = Ncols = Nparams - 1
+        fig, axes = self._setup_mosaic_artist(fig, params,
+                                              sharex='col', sharey='row',
+                                              triangularize=True)
 
-        # TODO redo this using the subplot_mosaic logic to make alot easier
-        fig, axes = self._setup_multi_artist(fig, (Nrows, Ncols),
-                                             constrained_layout=False,
-                                             sharex='col', sharey='row')
-        axes = axes.reshape((Nrows, Ncols))
+        plot_func = self.plot_density if density else self.plot_relation
 
-        # TODO these are not ideal, lots of conflicting labels and ticks
-        # Setup axis layout (from `corner`).
-        factor = 2.0  # size of side of one panel
-        lbdim = 0.5 * factor  # size of left/bottom margin
-        trdim = 0.2 * factor  # size of top/right margin
-        whspace = 0.05  # size of width/height margin
-        plotdim = factor * (Nrows - 1) + factor * (Ncols - 2.) * whspace
-        dim = lbdim + plotdim + trdim  # total size
+        if hist_kwargs is None:
+            hist_kwargs = dict()
 
-        # Format figure.
-        lb = lbdim / dim
-        tr = (lbdim + plotdim) / dim
-        fig.subplots_adjust(left=lb,
-                            bottom=lb,
-                            right=tr,
-                            top=tr,
-                            wspace=whspace,
-                            hspace=whspace)
+        for label, ax in axes.items():
+            px, py = label.split('-')
 
-        for i, py in enumerate(params[1:]):
+            if px == py:
 
-            for j, px in enumerate(params[:-1]):
+                self.plot_param_hist(px, fig=fig, ax=ax, **hist_kwargs)
 
-                ax = axes[i, j]
+            else:
 
-                if j > i:
-                    ax.remove()
-                    continue
+                plot_func(px, py, fig=fig, ax=ax,
+                          force_model=force_model, **kwargs)
 
-                else:
-
-                    self.plot_relation(px, py, fig=fig, ax=ax,
-                                       force_model=force_model, **kwargs)
-
-                # set labels on bottom row
-                if i + 1 == Nrows:
-                    xlabel = self._get_latex_labels(px, force_model=force_model)
-                    # rotate_ticks(ax, 'x')
-                    ax.set_xlabel(xlabel)
-                    # ax.xaxis.set_label_coords(0.5, -0.3)
-                else:
-                    ax.set_xlabel('')
-
-                # Set labels on leftmost col
-                if j == 0:
-                    ylabel = self._get_latex_labels(py, force_model=force_model)
-                    # rotate_ticks(ax, 'y')
-                    ax.set_ylabel(ylabel)
-                    # ax.yaxis.set_label_coords(-0.3, 0.5)
-                else:
-                    ax.set_ylabel('')
+            ax.label_outer()
 
         return fig
 
@@ -5182,7 +6245,7 @@ class RunCollection(_RunAnalysis):
             If True, the metallicity `FeH` is included in the default params.
 
         include_BH : bool, optional
-            If True, the black hole related parameters (`BH_mass`, `BH_num`,
+            If True, the black hole related parameters (`M_BH`, `N_BH`,
             `f_BH`, `f_rem`) are included in the default params.
 
         math_labels : bool, optional
@@ -5200,16 +6263,16 @@ class RunCollection(_RunAnalysis):
         # Get name of all desired parameters
 
         if params == 'all':
-            labels = self.runs[0]._get_labels(label_fixed=False)
+            labels = self.runs[0]._get_labels()
 
         else:
-            labels = params
+            labels = tuple(params)
 
         if include_FeH:
-            labels = ['FeH'] + labels
+            labels = ('FeH',) + labels
 
         if include_BH:
-            labels += ['BH_mass', 'BH_num', 'f_BH', 'f_rem']
+            labels += ('M_BH', 'N_BH', 'f_BH', 'f_rem')
 
         # Fill in a dictionary of column data
 
@@ -5258,7 +6321,7 @@ class RunCollection(_RunAnalysis):
             If True, the metallicity `FeH` is included in the default params.
 
         include_BH : bool, optional
-            If True, the black hole related parameters (`BH_mass`, `BH_num`,
+            If True, the black hole related parameters (`M_BH`, `N_BH`,
             `f_BH`, `f_rem`) are included in the default params.
 
         math_labels : bool, optional
