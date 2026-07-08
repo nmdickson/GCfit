@@ -71,7 +71,7 @@ _label_math_mapping = {
     'RA': r'\mathrm{RA}',
     'DEC': r'\mathrm{DEC}',
     'chi2': r'\chi^{2}',
-    'RG_eff': r'R\'_{G}',
+    'RG_eff': r'R^{\prime}_{G}',
     # Derived Model Quantities
     'M_BH': r'\mathrm{M}_{\mathrm{BH}}',
     'BH_mass': r'\mathrm{M}_{\mathrm{BH}}',

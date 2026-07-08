@@ -1,6 +1,6 @@
 [project]
 name = "GCfit"
-version = "3.2.1"
+version = "3.3.0"
 description = "Fitting of multimass equilibrium models of globular clusters"
 authors = [
     {name = "Nolan Dickson", email = "nolan.dickson@smu.ca"},
@@ -16,7 +16,8 @@ dependencies = [
     "scipy",
     "astropy",
     "astro-limepy>=1.3.0",
-    "astro-ssptools>=3.0.0",
+    "astro-ssptools>=3.1.1",
+    "cbhbd>=1.0.0",
     "emcee",
     "dynesty>=3.0.0",
     "h5py",
