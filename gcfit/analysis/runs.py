@@ -47,6 +47,9 @@ _label_math_mapping = {
     'M0': r'M_{0}',
     'rh0': r'r_{\mathrm{h},0}',
     'rhoh0': r'\rho_{\mathrm{h},0}',
+    'Sigma0': r'\Sigma_{\mathrm{h},0}',
+    'rhoh_t': r'\rho_{\mathrm{h}}(t)',
+    'Sigmah_t': r'\Sigma_{\mathrm{h}}(t)',
     'M_BH0': r'\mathrm{M}_{\mathrm{BH},0}',
     'N_BH0': r'\mathrm{N}_{\mathrm{BH},0}',
     'f_BH0': r'\mathrm{f}_{\mathrm{BH},0}',
@@ -68,6 +71,7 @@ _label_math_mapping = {
     'RA': r'\mathrm{RA}',
     'DEC': r'\mathrm{DEC}',
     'chi2': r'\chi^{2}',
+    'RG_eff': r'R^{\prime}_{G}',
     # Derived Model Quantities
     'M_BH': r'\mathrm{M}_{\mathrm{BH}}',
     'BH_mass': r'\mathrm{M}_{\mathrm{BH}}',
@@ -78,6 +82,8 @@ _label_math_mapping = {
     'spitzer_chi': r'\chi_{\mathrm{Spitzer}}',
     'trh': r't_{\mathrm{r_h}}',
     'N_relax': r'N_{\mathrm{relax}}',
+    'rhoh': r'\rho_{\mathrm{h}}',
+    'Sigmah': r'\Sigma_{\mathrm{h}}',
     'r0': r'r_{0}',
     'ra_model': r'r_{\mathrm{a}}',
     'rt': r'r_{\mathrm{t}}',
@@ -93,6 +99,9 @@ _label_unit_mapping = {
     'rh': r'\mathrm{pc}',
     'rh0': r'\mathrm{pc}',
     'rhoh0': r'M_\odot\ \mathrm{pc^{-3}}',
+    'rhoh': r'M_\odot\ \mathrm{pc^{-3}}',
+    'Sigmah0': r'M_\odot\ \mathrm{pc^{-2}}',
+    'Sigmah': r'M_\odot\ \mathrm{pc^{-2}}',
     's2': r'\mathrm{arcmin^{-4}}',
     'BHret': r'\%',
     'BH_ret_dyn': r'\%',
@@ -100,6 +109,7 @@ _label_unit_mapping = {
     'Ndot': r'\dot{N}',
     'RA': r'\deg',
     'DEC': r'\deg',
+    'RG_eff': r'\mathrm{kpc}',
     'BH_mass': r'M_\odot',
     'M_BH': r'M_\odot',
     'M_BH0': r'M_\odot',
@@ -3772,6 +3782,10 @@ class RunCollection(_RunAnalysis):
         '''List of `.state`s of each run in this collection.'''
         return [r.state for r in self.runs]
 
+    @property
+    def ESSs(self):
+        '''List of `.ESS`s of each run in this collection.'''
+        return np.array([r.ESS for r in self.runs])
 
     def __iter__(self):
         '''Return an iterator over the individual runs in this collection.'''
@@ -3816,7 +3830,7 @@ class RunCollection(_RunAnalysis):
             raise ValueError(mssg)
 
     def filter_runs(self, pattern, sort_by=None, sort=True, filter_out=False,
-                    **kwargs):
+                    min_state=None, **kwargs):
         '''Filter all runs based on names and return a new object with them.
 
         Based on a given string pattern, filters out all runs within this
@@ -3843,6 +3857,10 @@ class RunCollection(_RunAnalysis):
             If True, will return a new object with the filtered runs *removed*,
             rather than with only the filtered runs. Defaults to False.
 
+        min_state : NestedFittingState or int, optional
+            If given, only runs with a `state` greater than or equal to this
+            will be filtered upon.
+
         sort : bool, optional
             Whether or not to sort this run. If `sort_by` is None, this
             argument is passed to the new run collection init.
@@ -3857,13 +3875,19 @@ class RunCollection(_RunAnalysis):
         '''
         import fnmatch
 
+        orig_names = self.names
+
+        if min_state is not None:
+            orig_names = [nm for (nm, state) in zip(orig_names, self.states)
+                          if state >= min_state]
+
         try:
-            filtered_names = fnmatch.filter(self.names, pattern)
+            filtered_names = fnmatch.filter(orig_names, pattern)
 
         except TypeError:
 
             try:
-                filtered_names = list(set(self.names) & set(pattern))
+                filtered_names = list(set(orig_names) & set(pattern))
 
             except TypeError:
 
@@ -3877,11 +3901,11 @@ class RunCollection(_RunAnalysis):
             raise ValueError(mssg)
 
         if filter_out:
-            filtered_names = list(set(self.names) - set(filtered_names))
+            filtered_names = list(set(orig_names) - set(filtered_names))
 
         if sort:
             if sort_by == 'old':
-                filtered_names.sort(key=lambda n: self.names.index(n))
+                filtered_names.sort(key=lambda n: orig_names.index(n))
                 sort = False
 
             elif sort_by == 'new':
@@ -4228,6 +4252,10 @@ class RunCollection(_RunAnalysis):
 
         One operation (+-*/) can be included to return two different parameters
         combined with said operation.
+
+        Note that, if chains are to be concatenated all together, they must be
+        weighted, as these chains will *not* all have the same size. A weight
+        of 1/Ni should work.
         '''
 
         try:
@@ -4778,14 +4806,21 @@ class RunCollection(_RunAnalysis):
 
         if show_histograms:
 
-            layout = [['x', '.'], ['m', 'y']]
+            # layout = [['x', '.'], ['m', 'y']]
+            layout = [param1, param2]
             gs_kw = {"height_ratios": [0.2, 1.0], "width_ratios": [1.0, 0.2]}
 
             fig, axes = self._setup_mosaic_artist(fig, layout,
                                                   gridspec_kw=gs_kw,
-                                                  sharex='col', sharey='row')
+                                                  triangularize=True,
+                                                  sharex='col')
 
-            ax_x, ax, ax_y = axes['x'], axes['m'], axes['y']
+            ax_x = axes[f'{param1}-{param1}']
+            ax = axes[f'{param1}-{param2}']
+            ax_y = axes[f'{param2}-{param2}']
+
+            # Need to manually sharey because it is flipped
+            ax_y.sharey(ax)
 
         else:
             fig, ax = self._setup_artist(fig, ax)
@@ -5283,7 +5318,7 @@ class RunCollection(_RunAnalysis):
 
     def plot_lit_residuals(self, param, truths, e_truths=None, src_truths='',
                            fig=None, ax=None, *,
-                           percentage=True,
+                           lit_on_x=True, percentage=True,
                            annotate=False, annotate_kwargs=None,
                            clr_param=None, clr_kwargs=None,
                            force_model=False, label=None, marker='o', **kwargs):
@@ -5370,7 +5405,9 @@ class RunCollection(_RunAnalysis):
             res = val - truths
             res_err = dval
 
-        points, errbar = self._scatter_error(ax, truths, res,
+        domain = truths if lit_on_x else val
+
+        points, errbar = self._scatter_error(ax, domain, res,
                                              xerr=None, yerr=res_err,
                                              marker=marker, label=label,
                                              **kwargs)
@@ -5411,7 +5448,8 @@ class RunCollection(_RunAnalysis):
         return fig
 
     def plot_density(self, param1, param2, fig=None, ax=None, method='hex', *,
-                     force_model=False, nbins=50, expand_fixed=True, **kwargs):
+                     force_model=False, nbins=50, bw_method=None,
+                     quantiles=None, quantile_clr='k', **kwargs):
         '''Plot 2D density of distributions of two parameters across all runs.
 
         Concatenates the distributions of two given parameters across all runs
@@ -5420,6 +5458,9 @@ class RunCollection(_RunAnalysis):
         Generates a density plot (e.g., hexbin, 2D histogram, KDE, or contour)
         to visualize the relationship between two parameters across all runs
         in the collection.
+
+        If either parameter is None, will create a flattened density plot
+        across one axis, similar to a colorbar.
 
         Parameters
         ----------
@@ -5457,11 +5498,6 @@ class RunCollection(_RunAnalysis):
             Passed to 'gridsize' for hex method, 'bins' for hist, and used to
             set equal-sized bins for all others.  Default is 50 bins.
 
-        expand_fixed : bool, optional
-            If True (default), expands any fixed parameters to match the size
-            of any free parameters. Otherwise, plotting free and fixed params
-            will error.
-
         **kwargs : dict
             All other arguments are passed to the relevant plotting function.
 
@@ -5479,52 +5515,94 @@ class RunCollection(_RunAnalysis):
 
         fig, ax = self._setup_artist(fig, ax)
 
-        px = self._get_param_chains(param1, force_model=force_model)
-        py = self._get_param_chains(param2, force_model=force_model)
+        flat_x = flat_y = False
 
-        if expand_fixed:
-            px, py = zip(*[
-                (xi if xi.size > 1 else np.repeat(xi, yi.size),
-                 yi if yi.size > 1 else np.repeat(yi, xi.size))
-                for xi, yi in zip(px, py)
-            ])
+        if param1 is not None:
+            px = self._get_param_chains(param1, force_model=force_model,
+                                        with_units=False)
+        else:
+            # flatten this axis by treating like a fixed value
+            flat_x = True
+            px = np.zeros(len(self.runs))
+
+        if param2 is not None:
+            py = self._get_param_chains(param2, force_model=force_model,
+                                        with_units=False)
+        else:
+            # flatten this axis by treating like a fixed value
+            flat_y = True
+            py = np.zeros(len(self.runs))
+
+        if flat_x and flat_y:
+            raise ValueError("Cannot flatten both axes.")
+
+        # Expand any length-1 values, which represent fixed params
+        px, py = zip(*[
+            (xi if xi.size > 1 else np.repeat(xi, yi.size),
+             yi if yi.size > 1 else np.repeat(yi, xi.size))
+            for xi, yi in zip(px, py)
+        ])
+
+        # mask out any nans (why are there any of these?)
+        px, py = zip(*[
+            (xi[~(np.isnan(xi) | np.isnan(yi))],
+             yi[~(np.isnan(xi) | np.isnan(yi))])
+            for xi, yi in zip(px, py)
+        ])
 
         x = np.hstack(px)
         y = np.hstack(py)
 
+        # If they still dont match sizes, means they weren't fixed, but mixed
         if x.size != y.size:
-            mssg = ("Cannot mix model and run parameters when plotting density."
-                    "If plotting fixed parameter, set `expand_fixed=True`.")
+            mssg = ("Cannot mix model and run parameters when plotting density")
             raise ValueError(mssg)
+
+        # Get weights of each run, in case they have different chain sizes
+        Ns = np.array([xi.size for xi in px])
+        weights = np.repeat(1 / Ns, Ns)
 
         match method.casefold():
 
             case 'hex' | 'hexbin':
 
-                ax.hexbin(x, y, gridsize=nbins, **kwargs)
+                ax.hexbin(x, y, gridsize=nbins,
+                          C=weights, reduce_C_function=np.sum, **kwargs)
 
             case 'hist' | 'hist2d':
 
-                ax.hist2d(x, y, bins=nbins, **kwargs)
+                ax.hist2d(x, y, bins=nbins, weights=weights, **kwargs)
 
             case 'kde':
                 from scipy.stats import gaussian_kde
 
-                # TODO not exactly fast with large collections
-                kde = gaussian_kde([x, y])
-                xg, yg = np.mgrid[
-                   x.min():x.max():nbins*1j,
-                   y.min():y.max():nbins*1j
-                ]
+                if flat_x:
+                    data = y
+                    xg, yg = np.mgrid[0:1:2j, y.min():y.max():nbins*1j]
+                    domain = yg.flatten()
 
-                dens = kde(np.c_[xg.flatten(), yg.flatten()].T)
+                elif flat_y:
+                    data = x
+                    xg, yg = np.mgrid[x.min():x.max():nbins*1j, 0:1:2j]
+                    domain = xg.flatten()
+                else:
+                    data = [x, y]
+                    xg, yg = np.mgrid[
+                       x.min():x.max():nbins*1j,
+                       y.min():y.max():nbins*1j
+                    ]
+                    domain = np.c_[xg.flatten(), yg.flatten()].T
+
+                kde = gaussian_kde(data, weights=weights, bw_method=bw_method)
+
+                dens = kde(domain)
 
                 ax.pcolormesh(xg, yg, dens.reshape(xg.shape), **kwargs)
 
             case 'contour':
                 from scipy.stats import gaussian_kde
 
-                kde = gaussian_kde([x, y])
+                kde = gaussian_kde([x, y], weights=weights, bw_method=bw_method)
                 xg, yg = np.mgrid[
                    x.min():x.max():nbins*1j,
                    y.min():y.max():nbins*1j
@@ -5533,6 +5611,32 @@ class RunCollection(_RunAnalysis):
                 dens = kde(np.c_[xg.flatten(), yg.flatten()].T)
 
                 ax.contour(xg, yg, dens.reshape(xg.shape), **kwargs)
+
+            case _:
+                raise ValueError("Invalid `method`, must be one of "
+                                 "'hex', 'hist', 'kde', 'contour'.")
+
+        # Optionally plot lines in either direction for quantiles
+
+        if quantiles is not None:
+
+            for pqx in np.quantile(x, q=quantiles,
+                                   weights=weights, method="inverted_cdf"):
+
+                if hasattr(pqx, 'unit'):
+                    pqx = pqx.value
+
+                ax.axvline(pqx, color=quantile_clr)
+
+            for pqy in np.quantile(y, q=quantiles,
+                                   weights=weights, method="inverted_cdf"):
+
+                if hasattr(pqy, 'unit'):
+                    pqy = pqy.value
+
+                ax.axhline(pqy, color=quantile_clr)
+
+
 
         ax.set_xlabel(self._get_latex_labels(param1, force_model=force_model))
         ax.set_ylabel(self._get_latex_labels(param2, force_model=force_model))
@@ -5837,7 +5941,7 @@ class RunCollection(_RunAnalysis):
                                         force_model=force_model)
 
         # filter out all nans (causes violinplot to fail silently)
-        chains = [ch[~np.isnan(ch)] for ch in chains]
+        chains = [np.array(ch)[~np.isnan(ch)] for ch in chains]
 
         xticks = xticks or np.arange(len(self.runs))
 
@@ -5913,8 +6017,8 @@ class RunCollection(_RunAnalysis):
 
     def plot_param_hist(self, param, fig=None, ax=None, kde=False,
                         force_model=False, flipped=False,
-                        quantiles=[0.8413, 0.5, 0.1587], bw_method=None,
-                        **kwargs):
+                        quantiles=[0.8413, 0.5, 0.1587], quantile_clr=('k', .5),
+                        bw_method=None, **kwargs):
         '''Plot a histogram representing the sum of all distributions of param.
 
         Plots a histogram (or smoothed Gaussian KDE) representing the sum
@@ -5947,7 +6051,10 @@ class RunCollection(_RunAnalysis):
             left-axis.
 
         quantiles : list of float
-            Quantiles to show as vertical lines
+            Quantiles to show as vertical lines.
+
+        quantile_clr : color, optional
+            The color used for the given vertical quantiles lines.
 
         bw_method : str, scalar or callable, optional
             The bandwidth choice method, passed to the `scipy.gaussian_kde`
@@ -5961,12 +6068,17 @@ class RunCollection(_RunAnalysis):
         matplotlib.figure.Figure
             The corresponding figure, containing all axes and plot artists.
         '''
-        # TODO is a liiittle bit invalid if chains don't all have same N
 
         fig, ax = self._setup_artist(fig, ax)
 
-        chains = self._get_param_chains(param, force_model=force_model)
+        chains = self._get_param_chains(param, with_units=False,
+                                        force_model=force_model)
         chains = [ch[~np.isnan(ch)] for ch in chains]
+
+        # Get weights of each run, in case they have different chain sizes
+        Ns = np.array([ch.size for ch in chains])
+        weights = np.repeat(1 / Ns, Ns)
+
         chains = np.concatenate(chains)
 
         # Plot a filled KDE distribution
@@ -5980,11 +6092,10 @@ class RunCollection(_RunAnalysis):
             if hasattr(chains, 'unit'):
                 chains = chains.value  # erase units for plotting KDE
 
-            distribution = gaussian_kde(chains, bw_method=bw_method)(domain)
+            kde = gaussian_kde(chains, weights=weights, bw_method=bw_method)
+            distribution = kde(domain)
 
-            distribution /= interp.UnivariateSpline(
-                domain, distribution, k=1, s=0, ext=1
-            ).integral(-np.inf, np.inf)
+            distribution /= kde.integrate_box_1d(domain.min(), domain.max())
 
             if flipped:
                 ax.fill_betweenx(domain, 0, distribution, **kwargs)
@@ -5997,12 +6108,12 @@ class RunCollection(_RunAnalysis):
         else:
 
             orientation = "horizontal" if flipped else "vertical"
-            ax.hist(chains, orientation=orientation, **kwargs)
+            ax.hist(chains, orientation=orientation, weights=weights, **kwargs)
 
-        for pq in np.quantile(chains, q=quantiles):
+        for pq in np.quantile(chains, q=quantiles, weights=weights, method="inverted_cdf"):
             if hasattr(pq, 'unit'):
                 pq = pq.value
-            (ax.axhline if flipped else ax.axvline)(pq, color=('k', 0.5))
+            (ax.axhline if flipped else ax.axvline)(pq, color=quantile_clr)
 
         lbl_func = ax.set_ylabel if flipped else ax.set_xlabel
         lbl_func(self._get_latex_labels(param, force_model=force_model))

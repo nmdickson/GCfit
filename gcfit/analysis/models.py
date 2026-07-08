@@ -13,6 +13,7 @@ import astropy.visualization as astroviz
 
 import logging
 import pathlib
+import itertools
 import warnings
 from collections import abc
 
@@ -47,10 +48,29 @@ def _get_ev_model(theta, model_params, strict=False):
 # --------------------------------------------------------------------------
 
 
+class _MarkerCycle:
+    '''
+    Allows for a consistent cycle of markers by using this class
+    as an iterator directly (i.e. calling `next(marker_cycle)`) or a fresh,
+    restarted cycle of markers constructed by `fresh_cycle`.
+    '''
+
+    def __init__(self, markers: tuple[str, ...]):
+        self.markers = markers
+        self.cycle = itertools.cycle(markers)
+
+    def __next__(self):
+        return next(self.cycle)
+
+    def fresh_cycle(self):
+        return _MarkerCycle(self.markers)
+
+
 class _ClusterVisualizer:
     '''Base class for all visualizers of all Model types.'''
 
-    _MARKERS = ('o', '^', 'D', '+', 'x', '*', 's', 'p', 'h', 'v', '1', '2')
+    _MARKERS = _MarkerCycle(('o', '^', 'D', '+', 'x', '*', 's', 'p', 'h', 'v'))
+    _RESTART_MARKERS = True
 
     # Default xaxis limits for all profiles. Set by inits, can be reset by user
     rlims = None
@@ -594,7 +614,7 @@ class _ClusterVisualizer:
         return output
 
     def _plot_data(self, ax, dataset, y_key, *,
-                   x_key='r', x_unit='pc', y_unit=None,
+                   x_key='r', x_unit='pc', y_unit=None, citations=True,
                    err_transform=None, scale=1.0, background=0.0, **kwargs):
         '''Base plotting function for all observed data profiles.
 
@@ -689,7 +709,11 @@ class _ClusterVisualizer:
         kwargs.setdefault('linestyle', 'None')
         kwargs.setdefault('zorder', 10)  # to force marker and bar to be higher
 
-        label = dataset.cite()
+        if citations:
+            label = dataset.cite()
+        else:
+            label = str(dataset)
+
         if 'm' in dataset.mdata:
             label = fr'{label} ($m={dataset.mdata["m"]}\ M_\odot$)'
 
@@ -703,7 +727,7 @@ class _ClusterVisualizer:
     def _plot_profile(self, ax, ds_pattern, y_key, model_data, *,
                       y_unit=None, residuals=False, legend=False,
                       color=None, data_color=None, model_color=None,
-                      data_scale=1.0, model_scale=1.0,
+                      data_markers=None, data_scale=1.0, model_scale=1.0,
                       mass_bins=None, model_label=None, label_masses=True,
                       res_kwargs=None, data_kwargs=None, model_kwargs=None,
                       **kwargs):
@@ -770,6 +794,12 @@ class _ClusterVisualizer:
             colours of model profiles will be taken from the corresponding data
             of the same masses.
 
+        data_markers : list of marker style string or MarkerStyle, optional
+            The markers passed to `_plot_data`, defining the markers for all
+            observational data. These will be cycled through, so if the number
+            of markers given is less than the number of datasets, there will
+            be repeats. By default, `self._MARKERS` is used.
+
         mass_bins : list of int, optional
             The mass bins from the model to plot. This should be a list of
             indices corresponding to the desired mass bins in the given
@@ -812,9 +842,6 @@ class _ClusterVisualizer:
 
         strict = kwargs.pop('strict', False)
 
-        # Restart marker styles each plotting call
-        markers = iter(self._MARKERS)
-
         # Get various kwarg dicts, kinda try to avoid altering any dicts
         if res_kwargs is None:
             res_kwargs = {}
@@ -830,6 +857,20 @@ class _ClusterVisualizer:
             model_kwargs = {}
         else:
             model_kwargs = model_kwargs.copy()
+
+        # Use the base marker cycle if none explicitly given
+        if data_markers is None:
+
+            # Optionally restart marker styles each plotting call
+            if self._RESTART_MARKERS:
+                markers = self._MARKERS.fresh_cycle()
+
+            else:
+                markers = self._MARKERS
+
+        # Create a new marker cycle from the specified markers
+        else:
+            markers = _MarkerCycle(data_markers)
 
         # Unless specified, each mass bin should cycle colour from matplotlib
         default_color = color
@@ -1907,6 +1948,8 @@ class _ClusterVisualizer:
 
             if data_kwargs is None:
                 data_kwargs = {}
+            else:
+                data_kwargs = data_kwargs.copy()
 
             data_kwargs.setdefault('err_transform', quad_nuisance)
 
@@ -2005,8 +2048,9 @@ class _ClusterVisualizer:
         return fig
 
     @_support_units
-    def plot_all(self, fig=None, sharex=True, only_PM_RT=False,
-                 nd_scale_to='model', **kwargs):
+    def plot_all(self, fig=None, sharex=True,
+                 only_PM_RT=False, stacked_panels=False,
+                 nd_scale_to='model', unique_kwargs=None, **kwargs):
         '''Plot all primary model radial profiles in one figure.
 
         Plots the six primary radial profile quantities used for fitting
@@ -2037,6 +2081,15 @@ class _ClusterVisualizer:
             If True, will only plot the radial and tangential component proper
             motion profiles, and exclude the total and anisotropy profiles.
 
+        stacked_panels : bool, optional
+            If True, axes will all be stacked into a single column, otherwise
+            will be broken into two columns (default).
+
+        unique_kwargs : dict, optional
+            Optional dictionary with keys of "ND", "LOS", "PM_tot", "PM_ratio",
+            "PM_R", and/or "PM_T", which each correspond to a dictionary of
+            kwargs to be pass to each individual plotting function.
+
         **kwargs : dict
             All other arguments are passed to each plotting function.
 
@@ -2049,22 +2102,27 @@ class _ClusterVisualizer:
         # TODO working with residuals here is hard because constrianed_layout
         #   doesn't seem super aware of them
 
+        if unique_kwargs is None:
+            unique_kwargs = {}
+
         # ------------------------------------------------------------------
         # Setup figure
         # ------------------------------------------------------------------
 
-        # TODO add option to only plot R&T, not ratio and total
-
         if only_PM_RT:
-            arch = ('nd', 't', 'los', 'r')
-            fig, axes = self._setup_multi_artist(fig, (2, 2), sharex=sharex)
-            axes = dict(zip(arch, axes))
-            # axes = axes.reshape((2, 2))
+            if stacked_panels:
+                arch = ('nd', 'los', 't', 'r')
+                axshape = (4, )
+            else:
+                arch = ('nd', 't', 'los', 'r')
+                axshape = (2, 2)
+
         else:
             arch = ('nd', 'tot', 'los', 't', 'rat', 'r')
-            fig, axes = self._setup_multi_artist(fig, (3, 2), sharex=sharex)
-            axes = dict(zip(arch, axes))
-            # axes = axes.reshape((3, 2))
+            axshape = (3, 2) if not stacked_panels else (6,)
+
+        fig, axes = self._setup_multi_artist(fig, axshape, sharex=sharex)
+        axes = dict(zip(arch, axes))
 
         # ------------------------------------------------------------------
         # Left Plots
@@ -2073,6 +2131,7 @@ class _ClusterVisualizer:
         # Number Density
 
         show_numdens_background, bg_lim = False, None
+        # TODO replace specific args with just unique_kwargs now
 
         if self.obs is not None and kwargs.get('show_obs', True):
 
@@ -2087,7 +2146,7 @@ class _ClusterVisualizer:
         self.plot_number_density(fig=fig, ax=axes['nd'], label_position='left',
                                  blank_xaxis=True, scale_to=nd_scale_to,
                                  show_background=show_numdens_background,
-                                 **kwargs)
+                                 **unique_kwargs.get('ND', {}), **kwargs)
 
         if self.numdens is not None and bg_lim is not None:
             bg_lim = min([bg_lim, np.abs(self.numdens[..., :-2].min())])
@@ -2101,7 +2160,8 @@ class _ClusterVisualizer:
         # Line-of-Sight Velocity Dispersion
 
         self.plot_LOS(fig=fig, ax=axes['los'], label_position='left',
-                      blank_xaxis=(not only_PM_RT), **kwargs)
+                      blank_xaxis=(not only_PM_RT) or stacked_panels,
+                      **unique_kwargs.get('LOS', {}), **kwargs)
 
         axes['los'].set_ylim(bottom=0.0)
 
@@ -2110,7 +2170,8 @@ class _ClusterVisualizer:
             # Proper Motion Anisotropy
 
             self.plot_pm_ratio(fig=fig, ax=axes['rat'], label_position='left',
-                               **kwargs)
+                               blank_xaxis=stacked_panels,
+                               **unique_kwargs.get('PM_ratio', {}), **kwargs)
 
             rat_toplim = max(axes['rat'].get_ylim()[1], 1.2)
             axes['rat'].set_ylim(bottom=0.4, top=rat_toplim)
@@ -2122,14 +2183,16 @@ class _ClusterVisualizer:
             # Total Proper Motion Dispersion
 
             self.plot_pm_tot(fig=fig, ax=axes['tot'], label_position='left',
-                             blank_xaxis=True, **kwargs)
+                             blank_xaxis=True,
+                               **unique_kwargs.get('PM_tot', {}), **kwargs)
 
             axes['tot'].set_ylim(bottom=0.0)
 
         # Tangential Proper Motion Dispersion
 
         self.plot_pm_T(fig=fig, ax=axes['t'], label_position='left',
-                       blank_xaxis=True, **kwargs)
+                       blank_xaxis=True,
+                       **unique_kwargs.get('PM_T', {}), **kwargs)
 
         axes['t'].set_ylim(bottom=0.0)
         # axes[0, 1].set_ylim(bottom=0.0)
@@ -2137,7 +2200,7 @@ class _ClusterVisualizer:
         # Radial Proper Motion Dispersion
 
         self.plot_pm_R(fig=fig, ax=axes['r'], label_position='left',
-                       **kwargs)
+                       **unique_kwargs.get('PM_R', {}), **kwargs)
 
         axes['r'].set_ylim(bottom=0.0)
         # axes[1, 1].set_ylim(bottom=0.0)
@@ -2235,7 +2298,7 @@ class _ClusterVisualizer:
             on a single figure.
 
         logscaled : bool, optional
-            If True, applies a log scaling to the the x (i.e. mass) axis.
+            If True, applies a log scaling to the the y (i.e. dNdm) axis.
 
         field_kw : dict, optional
             Optional arguments passed to `plot_MF_fields` if `show_fields` is
@@ -2425,7 +2488,7 @@ class _ClusterVisualizer:
                     )
 
                 if logscaled:
-                    ax.set_xscale('log')
+                    ax.set_yscale('log')
 
                 ax.set_xlabel(None)
 
@@ -3738,7 +3801,8 @@ class ModelVisualizer(_ClusterVisualizer):
         self.WD_rh = model.WD.rh
         self.spitzer_chi = model._spitzer_chi
 
-        self.trh = model.trh
+        self.tcc = model._mf.tcc  # should be stored here in all model types
+        self.trh = self.trh0 = model.trh
         self.N_relax = model.N_relax
 
         self.delta_r50 = model.delta_r50
@@ -3782,14 +3846,19 @@ class ModelVisualizer(_ClusterVisualizer):
         self.BH_kick_ret = self._init_kicks(model)[bh_slc]
         Mscale = model._MS / model._mf.M.sum()  # non-ev models need mf scaled
         self.M_kicked = (model._mf._kick_stats.total_kicked * Mscale) << u.Msun
+        self.f_kicked = (model._mf._kick_stats.f_kick * 100) << u.pct
         self.Ms_t = model.nonBH.Mj.sum()[t_slc]
         self.mmean_t = model.mmean[t_slc]
         self.rt_t = model.rt[t_slc]
         self.rh_t = model.rh[t_slc]
         self.rv_t = model.rv[t_slc]
         self.rhoh = self.rhoh0 = (3 * model.M) / (8 * np.pi * model.rh**3)
+        self.rhoh_t = self.rhoh[t_slc]
+        self.Sigmah = self.Sigmah0 = (model.M) / (2 * np.pi * model.rh**2)
+        self.Sigmah_t = self.Sigmah[t_slc]
         self.vesc0 = model.vesc0
         self.vesc_t = model.vesc0[t_slc]
+        self.trh_t = model.trh[t_slc]
         self.psi_t = np.full((1, 1, 1), np.nan) << u.dimensionless_unscaled
         self.E_t = np.full((1, 1, 1), np.nan) << u.dimensionless_unscaled
 
@@ -4319,6 +4388,52 @@ class CIModelVisualizer(_ClusterVisualizer):
         return self._plot_quantity('M_kicked', fig=fig, ax=ax, color=color,
                                    xlabel=label, **kwargs)
 
+    @_ClusterVisualizer._support_units
+    def plot_f_kicked(self, fig=None, ax=None, color='tab:blue',
+                      verbose_label=True, **kwargs):
+        r'''Plot the total amount of BH mass kicked in this model.
+
+        Plots a histogram of the values of the fraction of black holes
+        lost in the given chain of models through the effects of natal kicks.
+
+        Parameters
+        ----------
+        fig : None or matplotlib.figure.Figure, optional
+            Figure to place the ax on. If None (default), a new figure will
+            be created, otherwise the given figure should be empty, or already
+            have the correct number of axes.
+            See `_ClusterVisualizer._setup_artist` for more details.
+
+        ax : None or matplotlib.axes.Axes, optional
+            An axes instance on which to plot this quantity. Should be a
+            part of the given `fig`.
+
+        color : color, optional
+            The colour of the plotted histogram. This colour will be applied to
+            the edge (border) of the histogram as is, and to the face at 33%
+            transparency.
+
+        verbose_label : bool, optional
+            If True (default), quantity label will be "BH Mass Kicked",
+            otherwise "$\mathrm{M}_{\mathrm{BH,kicked}}$".
+
+        **kwargs : dict, optional
+            All other arguments are passed to `plt.hist`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The corresponding figure, containing all axes and plot artists.
+        '''
+
+        if verbose_label:
+            label = "Fraction of BH Mass Kicked"
+        else:
+            label = r"$\mathrm{f}_{\mathrm{BH,kick}}$"
+
+        return self._plot_quantity('f_kicked', fig=fig, ax=ax, color=color,
+                                   xlabel=label, **kwargs)
+
     def __init__(self, observations, name=None):
         self.obs = observations
         self.name = name or observations.cluster
@@ -4548,6 +4663,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         M_BH0 = np.full(N, np.nan) << u.Msun
 
         M_kicked = np.full(N, np.nan) << u.Msun
+        f_kicked = np.full(N, np.nan) << u.pct
         BH_massfunc = np.full((Nbhmf, N, 1), np.nan) << 1 / u.Msun
         BH0_massfunc = np.full((Nbhmf, N, 1), np.nan) << 1 / u.Msun
         BH_kick_ret = np.full((Nbhmf, N, 1), np.nan) << u.dimensionless_unscaled
@@ -4576,6 +4692,9 @@ class CIModelVisualizer(_ClusterVisualizer):
         volume = np.full(N, np.nan) << huge_model.volume.unit
 
         rhoh = np.full(N, np.nan) << rho_unit
+        rhoh_t = np.full((1, N, Nt), np.nan) << rho_unit
+        Sigmah = np.full(N, np.nan) << Sigma_unit
+        Sigmah_t = np.full((1, N, Nt), np.nan) << Sigma_unit
 
         vesc0 = np.full(N, np.nan) << vel_unit
         vesc_t = np.full((1, N, Nt), np.nan) << vel_unit
@@ -4597,6 +4716,7 @@ class CIModelVisualizer(_ClusterVisualizer):
 
         # Relaxation times
 
+        tcc = np.full(N, np.nan) << u.Gyr
         trh = np.full(N, np.nan) << u.Gyr
         N_relax = np.full(N, np.nan) << u.dimensionless_unscaled
         trh_t = np.full((1, N, Nt), np.nan) << u.Gyr
@@ -4705,6 +4825,7 @@ class CIModelVisualizer(_ClusterVisualizer):
             Mscale = model._MS / model._mf.M.sum()  # scaling for non-ev eMFs
             ks = model._mf._kick_stats
             M_kicked[model_ind] = (ks.total_kicked * Mscale) << u.Msun
+            f_kicked[model_ind] = (ks.f_kick * 100) << u.pct
 
             bhslc = (slice(None), model_ind, 0)
             BH_massfunc[bhslc] = BH0_massfunc[bhslc] = viz._init_BH_dNdm(model)
@@ -4733,6 +4854,10 @@ class CIModelVisualizer(_ClusterVisualizer):
             volume[model_ind] = model.volume
 
             rhoh[model_ind] = (3 * model.M) / (8 * np.pi * model.rh**3)
+            rhoh_t[slc] = rhoh[model_ind]
+
+            Sigmah[model_ind] = (model.M) / (2 * np.pi * model.rh**2)
+            Sigmah_t[slc] = Sigmah[model_ind]
 
             vesc0[model_ind] = vesc_t[slc] = model.vesc0
 
@@ -4741,6 +4866,7 @@ class CIModelVisualizer(_ClusterVisualizer):
             WD_rh[model_ind] = model.WD.rh
             spitz_chi[model_ind] = model._spitzer_chi
 
+            tcc[model_ind] = model._mf.tcc << u.Myr  # careful of Myr vs Gyr
             trh[model_ind] = trh_t[slc] = model.trh
             N_relax[model_ind] = model.N_relax
 
@@ -4808,6 +4934,8 @@ class CIModelVisualizer(_ClusterVisualizer):
         viz.psi_t = np.transpose(perc(psi_t, q, axis=1), axes)
         viz.E_t = np.transpose(perc(E_t, q, axis=1), axes)
         viz.trh_t = np.transpose(perc(trh_t, q, axis=1), axes)
+        viz.rhoh_t = np.transpose(perc(rhoh_t, q, axis=1), axes)
+        viz.Sigmah_t = np.transpose(perc(Sigmah_t, q, axis=1), axes)
 
         viz.vesc_t = np.transpose(perc(vesc_t, q, axis=1), axes)
         viz.BH0_massfunc = np.transpose(perc(BH0_massfunc, q, axis=1), axes)
@@ -4828,6 +4956,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         viz.M_BH0 = M_BH0
         viz.N_BH0 = N_BH0
         viz.M_kicked = M_kicked
+        viz.f_kicked = f_kicked
 
         viz.r0 = r0
         viz.rc_obs = rc_obs
@@ -4840,6 +4969,7 @@ class CIModelVisualizer(_ClusterVisualizer):
         viz.volume = volume
 
         viz.rhoh = viz.rhoh0 = rhoh
+        viz.Sigmah = viz.Sigmah0 = Sigmah
         viz.vesc0 = vesc0
 
         viz.BH_rh = BH_rh
@@ -4848,7 +4978,8 @@ class CIModelVisualizer(_ClusterVisualizer):
         viz.NS_rh = NS_rh
         viz.WD_rh = WD_rh
 
-        viz.trh = trh
+        viz.tcc = tcc
+        viz.trh = viz.trh0 = trh
         viz.N_relax = N_relax
 
         viz.delta_r50 = delta_r50
@@ -5193,7 +5324,8 @@ class CIModelVisualizer(_ClusterVisualizer):
 
             profile_keys += (  # time evolution profiles
                 'f_BH_t', 'M_BH_t', 'M_t', 'Ms_t', 'mmean_t',
-                'rt_t', 'rh_t', 'rv_t', 'psi_t', 'E_t', 'trh_t', 'vesc_t'
+                'rhoh_t', 'Sigmah_t', 'rt_t', 'rh_t', 'rv_t',
+                'psi_t', 'E_t', 'trh_t', 'vesc_t'
             )
 
             profile_keys += (  # comp mass function profiles
@@ -5215,10 +5347,11 @@ class CIModelVisualizer(_ClusterVisualizer):
             quant_keys = (
                 'M', 'f_rem', 'f_BH', 'M_BH', 'N_BH', 'M_NS', 'N_NS',
                 'M_WD', 'N_WD', 'f_BH0', 'M_BH0', 'N_BH0',
-                'r0', 'rc_obs', 'rt', 'rh', 'rhp', 'ra', 'rv', 'rhoh',
-                'mmean', 'volume', 'vesc0', 'rhoh0', 'BH_rh', 'NS_rh', 'WD_rh',
-                'spitzer_chi', 'trh', 'N_relax', 'K_scale',
-                'M_kicked', 'delta_r50', 'delta_A'
+                'r0', 'rc_obs', 'rt', 'rh', 'rhp', 'ra', 'rv', 'rhoh', 'Sigmah',
+                'mmean', 'volume', 'vesc0', 'rhoh0', 'Sigmah0',
+                'BH_rh', 'NS_rh', 'WD_rh', 'spitzer_chi', 'tcc', 'trh', 'trh0',
+                'N_relax', 'K_scale', 'f_kicked', 'M_kicked',
+                'delta_r50', 'delta_A'
             )
 
             for key in quant_keys:
@@ -5389,7 +5522,7 @@ class EvolvedVisualizer(ModelVisualizer):
     def plot_mass_evolution(self, fig=None, ax=None, kind='total', *,
                             x_unit='Gyr', y_unit='Msun', legend=True,
                             label_position='left', verbose_label=True,
-                            blank_xaxis=False, **kwargs):
+                            blank_xaxis=False, model_label=None, **kwargs):
 
         fig, ax = self._setup_artist(fig, ax)
 
@@ -5405,7 +5538,7 @@ class EvolvedVisualizer(ModelVisualizer):
             if multi:
                 linelabel = "Total"
             else:
-                linelabel = None
+                linelabel = model_label
 
             ax = self._plot_evolution(ax, self.M_t,
                                       model_label=linelabel, legend=legend,
@@ -5416,7 +5549,7 @@ class EvolvedVisualizer(ModelVisualizer):
             if multi:
                 linelabel = "Stars"
             else:
-                linelabel = None
+                linelabel = model_label
                 label = "Stellar Mass" if verbose_label else r'$M_\ast\,(t)$'
 
             ax = self._plot_evolution(ax, self.Ms_t,
@@ -5428,7 +5561,7 @@ class EvolvedVisualizer(ModelVisualizer):
             if multi:
                 linelabel = "Black Holes"
             else:
-                linelabel = None
+                linelabel = model_label
                 label = "Black Hole Mass" if verbose_label else r'$M_{BH}\,(t)$'
 
             ax = self._plot_evolution(ax, self.M_BH_t,
@@ -5436,6 +5569,45 @@ class EvolvedVisualizer(ModelVisualizer):
                                       x_unit=x_unit, y_unit=y_unit, **kwargs)
 
         self._set_ylabel(ax, label, y_unit, label_position)
+        self._set_xlabel(ax, 'Time', unit=x_unit, remove_all=blank_xaxis)
+
+        return fig
+
+    @_ClusterVisualizer._support_units
+    def plot_density_evolution(self, fig=None, ax=None, *,
+                               x_unit='Gyr', y_unit='Msun pc-3', legend=False,
+                               label_position='left', verbose_label=True,
+                               blank_xaxis=False, **kwargs):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        ax = self._plot_evolution(ax, self.rhoh_t.to(y_unit),
+                                  x_unit=x_unit, y_unit=y_unit,
+                                  legend=legend, **kwargs)
+
+        label = "Half-mass Density" if verbose_label else r'$\rho_{h}$'
+
+        self._set_ylabel(ax, label, y_unit, label_position)
+        self._set_xlabel(ax, 'Time', unit=x_unit, remove_all=blank_xaxis)
+
+        return fig
+
+    @_ClusterVisualizer._support_units
+    def plot_surface_density_evolution(self, fig=None, ax=None, *,
+                                       x_unit='Gyr', y_unit='Msun pc-2',
+                                       legend=False, label_position='left',
+                                       verbose_label=True, blank_xaxis=False,
+                                       **kwargs):
+
+        fig, ax = self._setup_artist(fig, ax)
+
+        ax = self._plot_evolution(ax, self.Sigmah_t.to(y_unit),
+                                  x_unit=x_unit, y_unit=y_unit,
+                                  legend=legend, **kwargs)
+
+        lbl = "Half-mass Surface Density" if verbose_label else r'$\Sigma_{h}$'
+
+        self._set_ylabel(ax, lbl, y_unit, label_position)
         self._set_xlabel(ax, 'Time', unit=x_unit, remove_all=blank_xaxis)
 
         return fig
@@ -5732,16 +5904,17 @@ class EvolvedVisualizer(ModelVisualizer):
 
     def __init__(self, model, observations=None):
 
+        # All present day quantities are set in base ModelVisualizer class
         super().__init__(model, observations=observations)
 
-        # clusterBH quantities
+        # All initial and evolutionary quantities are set here
+
         cbh = model._clusterbh
 
         self.t = cbh.t << u.Gyr
 
         slc = (np.newaxis, np.newaxis, ...)
         bh_slc = (..., np.newaxis, np.newaxis)
-
 
         self.M_t = cbh.M[slc] << u.Msun
         self.Ms_t = cbh.Mst[slc] << u.Msun
@@ -5759,6 +5932,12 @@ class EvolvedVisualizer(ModelVisualizer):
         self.rv_t = (cbh.rh / cbh.r)[slc] << u.pc
 
         self.rhoh0 = model.rhoh0
+        self.rhoh_t = (3 * self.M_t) / (8 * np.pi * self.rh_t**3)
+        self.Sigmah0 = model.Sigmah0
+        self.Sigmah_t = ((self.M_t) / (2 * np.pi * self.rh_t**2))
+
+        self.tcc = (model._mf.tcc << u.Myr).to('Gyr')
+        self.trh0 = (cbh.trh0 << u.Myr).to('Gyr')
 
         self.vesc0 = model.vesc0
         self.vesc_t = cbh.vesc[slc] << (u.km / u.s)
@@ -5766,7 +5945,7 @@ class EvolvedVisualizer(ModelVisualizer):
         # TODO units on these?
         self.psi_t = cbh.psi[slc] << u.dimensionless_unscaled
         self.E_t = cbh.E[slc] << u.dimensionless_unscaled
-        self.trh_t = cbh.trh[slc] << u.Myr
+        self.trh_t = (cbh.trh[slc] << u.Myr).to('Gyr')
 
 
 class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
@@ -6189,6 +6368,7 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
         N_BH0 = np.full(N, np.nan) << u.dimensionless_unscaled
 
         M_kicked = np.full(N, np.nan) << u.Msun
+        f_kicked = np.full(N, np.nan) << u.pct
         BH_massfunc = np.full((Nbhmf, N, 1), np.nan) << 1 / u.Msun
         BH0_massfunc = np.full((Nbhmf, N, 1), np.nan) << 1 / u.Msun
         BH_kick_ret = np.full((Nbhmf, N, 1), np.nan) << u.dimensionless_unscaled
@@ -6218,6 +6398,10 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
 
         rhoh = np.full(N, np.nan) << rho_unit
         rhoh0 = np.full(N, np.nan) << rho_unit
+        rhoh_t = np.full((1, N, Nt), np.nan) << rho_unit
+        Sigmah = np.full(N, np.nan) << Sigma_unit
+        Sigmah0 = np.full(N, np.nan) << Sigma_unit
+        Sigmah_t = np.full((1, N, Nt), np.nan) << Sigma_unit
 
         vesc0 = np.full(N, np.nan) << vel_unit
         vesc_t = np.full((1, N, Nt), np.nan) << vel_unit
@@ -6239,7 +6423,9 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
 
         # Relaxation times
 
+        tcc = np.full(N, np.nan) << u.Gyr
         trh = np.full(N, np.nan) << u.Gyr
+        trh0 = np.full(N, np.nan) << u.Gyr
         N_relax = np.full(N, np.nan) << u.dimensionless_unscaled
         trh_t = np.full((1, N, Nt), np.nan) << u.Gyr
 
@@ -6352,6 +6538,7 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
             M_BH0[model_ind] = cbh.Mbh0 << M_BH_t.unit
 
             M_kicked[model_ind] = model._mf._kick_stats.total_kicked << u.Msun
+            f_kicked[model_ind] = model._mf._kick_stats.f_kick * 100 << u.pct
             BH_massfunc[:, model_ind, 0] = viz._init_BH_dNdm(model)
             BH0_massfunc[:, model_ind, 0] = viz._init_BH_dN0dm(model)
             BH_kick_ret[:, model_ind, 0] = viz._init_kicks(model)
@@ -6384,6 +6571,10 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
 
             rhoh[model_ind] = (3 * model.M) / (8 * np.pi * model.rh**3)
             rhoh0[model_ind] = model.rhoh0
+            rhoh_t[slc] = ((3 * cbh.M) / (8 * np.pi * cbh.rh**3)) << rho_unit
+            Sigmah[model_ind] = (model.M) / (2 * np.pi * model.rh**2)
+            Sigmah0[model_ind] = model.Sigmah0
+            Sigmah_t[slc] = ((cbh.M) / (2 * np.pi * cbh.rh**2)) << Sigma_unit
 
             vesc0[model_ind] = model.vesc0
             vesc_t[slc] = cbh.vesc << vel_unit
@@ -6393,8 +6584,10 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
             WD_rh[model_ind] = model.WD.rh
             spitz_chi[model_ind] = model._spitzer_chi
 
+            tcc[model_ind] = model._mf.tcc << u.Myr
             trh[model_ind] = model.trh
-            trh_t[slc] = cbh.trh << u.Myr  # Myr in cbh, Gyr here
+            trh0[model_ind] = cbh.trh0 << u.Myr  # Myr in cbh, Gyr here
+            trh_t[slc] = cbh.trh << u.Myr
             N_relax[model_ind] = model.N_relax
 
             psi_t[slc] = cbh.psi
@@ -6465,6 +6658,8 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
         viz.E_t = np.transpose(perc(E_t, q, axis=1), axes)
         viz.trh_t = np.transpose(perc(trh_t, q, axis=1), axes)
 
+        viz.rhoh_t = np.transpose(perc(rhoh_t, q, axis=1), axes)
+        viz.Sigmah_t = np.transpose(perc(Sigmah_t, q, axis=1), axes)
         viz.vesc_t = np.transpose(perc(vesc_t, q, axis=1), axes)
         viz.BH_massfunc = np.transpose(perc(BH_massfunc, q, axis=1), axes)
         viz.BH0_massfunc = np.transpose(perc(BH0_massfunc, q, axis=1), axes)
@@ -6474,6 +6669,7 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
         viz.f_BH = f_BH
         viz.f_BH0 = f_BH0
         viz.M_kicked = M_kicked
+        viz.f_kicked = f_kicked
 
         viz.M = M
         viz.M_BH = viz.BH_mass = M_BH
@@ -6497,6 +6693,8 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
 
         viz.rhoh = rhoh
         viz.rhoh0 = rhoh0
+        viz.Sigmah = Sigmah
+        viz.Sigmah0 = Sigmah0
         viz.vesc0 = vesc0
 
         viz.BH_rh = BH_rh
@@ -6505,7 +6703,9 @@ class CIEvolvedVisualizer(CIModelVisualizer, EvolvedVisualizer):
         viz.NS_rh = NS_rh
         viz.WD_rh = WD_rh
 
+        viz.tcc = tcc
         viz.trh = trh
+        viz.trh0 = trh0
         viz.N_relax = N_relax
 
         viz.delta_r50 = delta_r50
